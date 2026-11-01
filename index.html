@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Astrarium: Universe Sandbox</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✦</text></svg>" />
+  </head>
+  <body>
+    <div id="app">
+      <canvas id="scene"></canvas>
+      <div id="labels"></div>
+
+      <header id="topbar">
+        <div class="brand">✦ Astrarium</div>
+        <nav class="tabs" role="tablist">
+          <button id="tab-galaxy" role="tab">Galaxy Map</button>
+          <button id="tab-system" role="tab">Sandbox</button>
+        </nav>
+        <div class="clock" data-view="system">
+          <button id="btn-play" class="icon" title="Play / pause (Space)">⏸</button>
+          <span id="sim-time">0 days</span>
+          <span id="lag" class="warn hidden" title="The simulation can't keep up at this speed. Time is being dropped.">lagging</span>
+        </div>
+        <div id="stats"></div>
+      </header>
+
+      <!-- Galaxy map -->
+      <aside id="galaxy-panel" class="panel left" data-view="galaxy">
+        <h2 id="galaxy-name">Galaxy</h2>
+        <p class="muted" id="galaxy-info"></p>
+        <label class="row">
+          <span>Seed</span>
+          <input id="galaxy-seed" type="text" spellcheck="false" />
+        </label>
+        <div class="row buttons">
+          <button id="btn-galaxy-go">Generate</button>
+          <button id="btn-galaxy-random">Random galaxy</button>
+        </div>
+        <p class="muted small">Click any star to inspect its system. Drag to orbit, right-drag to pan, scroll to zoom.</p>
+      </aside>
+
+      <aside id="star-panel" class="panel right hidden" data-view="galaxy">
+        <h2 id="star-name">Star</h2>
+        <dl id="star-facts" class="facts"></dl>
+        <div class="row buttons">
+          <button id="btn-star-fly">Fly to</button>
+          <button id="btn-star-enter" class="primary">Enter system →</button>
+        </div>
+      </aside>
+
+      <!-- System sandbox -->
+      <aside id="system-panel" class="panel left" data-view="system">
+        <section>
+          <h3>Scenario</h3>
+          <div id="origin" class="origin hidden">
+            <span>Exploring <b id="origin-name"></b></span>
+            <button id="btn-back" class="link">← Galaxy map</button>
+          </div>
+          <div class="row">
+            <select id="preset-select"></select>
+            <button id="btn-preset-load">Load</button>
+          </div>
+          <p id="preset-desc" class="muted small"></p>
+        </section>
+
+        <section>
+          <h3>Tools</h3>
+          <div class="segmented">
+            <button id="tool-select" data-tool="select" title="Select tool (V)">Select</button>
+            <button id="tool-spawn" data-tool="spawn" title="Spawn tool (B)">Spawn</button>
+          </div>
+          <div id="spawn-options" class="hidden">
+            <div id="spawn-palette" class="palette"></div>
+            <label class="row slider">
+              <span>Mass ×</span>
+              <input id="spawn-mass" type="range" min="-1" max="1" step="0.01" value="0" />
+              <output id="spawn-mass-out">1×</output>
+            </label>
+            <label class="check"><input id="spawn-orbit" type="checkbox" checked /> Auto-orbit (start in a circular orbit)</label>
+          </div>
+        </section>
+
+        <section>
+          <h3>Simulation</h3>
+          <label class="row slider">
+            <span>Speed</span>
+            <input id="time-scale" type="range" min="-3" max="2" step="0.01" value="-0.4" />
+            <output id="time-scale-out"></output>
+          </label>
+          <label class="row slider">
+            <span>Gravity ×</span>
+            <input id="gravity" type="range" min="0" max="3" step="0.05" value="1" />
+            <output id="gravity-out">1.00</output>
+          </label>
+          <div class="checks">
+            <label class="check"><input id="opt-collisions" type="checkbox" checked /> Collisions</label>
+            <label class="check"><input id="opt-debris" type="checkbox" checked /> Debris</label>
+            <label class="check"><input id="opt-trails" type="checkbox" checked /> Trails</label>
+            <label class="check"><input id="opt-labels" type="checkbox" checked /> Labels</label>
+          </div>
+          <div class="row buttons">
+            <button id="btn-clear-trails">Clear trails</button>
+            <button id="btn-recenter" title="Shift to the centre-of-mass frame">Recenter</button>
+            <button id="btn-reset">Reset</button>
+          </div>
+        </section>
+      </aside>
+
+      <aside id="body-panel" class="panel right hidden" data-view="system">
+        <h2 id="body-name">Body</h2>
+        <dl id="body-facts" class="facts"></dl>
+        <div class="row buttons">
+          <button id="btn-mass-down" title="Halve mass">Mass ÷2</button>
+          <button id="btn-mass-up" title="Double mass">Mass ×2</button>
+        </div>
+        <div class="row buttons">
+          <button id="btn-follow" title="Follow (F)">Follow</button>
+          <button id="btn-delete" class="danger" title="Delete (Del)">Delete</button>
+        </div>
+      </aside>
+
+      <div id="toasts"></div>
+      <footer id="hint"></footer>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

@@ -6,7 +6,7 @@ import type { Simulation } from './simulation';
 import { EARTH_MASS, G, JUPITER_MASS } from './units';
 import { julianDate, planetStates, type PlanetName } from './ephemeris';
 import { setTrueScale } from './trueScale';
-import { getSolarData, realRadiusAu, REAL_COLORS, relativeState, smallBodyState, toScene, type SolarData } from './solarSystemData';
+import { getSolarData, KM_PER_AU, poleScene, realRadiusAu, REAL_COLORS, relativeState, sampleRingRadii, smallBodyState, toScene, type SolarData } from './solarSystemData';
 
 export interface SceneSetup {
   /** Suggested camera distance from the origin (AU). */
@@ -530,6 +530,44 @@ export function loadSolarSystemOnDate(sim: Simulation, date: Date): SceneSetup {
   };
 }
 
+/**
+ * Saturn's real rings as test particles on circular orbits in Saturn's true equatorial plane
+ * (from its IAU pole), at the radii from NASA's ring fact sheet. Returns how many were added.
+ */
+export function addSaturnRings(sim: Simulation, saturn: Body, data: SolarData, count: number): number {
+  const sd = data.byName.get('Saturn');
+  const pole = sd && poleScene(sd);
+  if (!data.rings?.length || !pole) return 0;
+  const [px, py, pz] = pole;
+  // Orthonormal basis (u, w) of the ring plane with w = pole × u.
+  let ux = -pz, uy = 0, uz = px;
+  const ul = Math.hypot(ux, uy, uz) || 1;
+  ux /= ul; uy /= ul; uz /= ul;
+  const wx = py * uz - pz * uy, wy = pz * ux - px * uz, wz = px * uy - py * ux;
+  const mu = G * sim.gravityScale * saturn.mass;
+  let added = 0;
+  for (const { r: rKm, ring } of sampleRingRadii(data.rings, count)) {
+    const r = rKm / KM_PER_AU;
+    const th = Math.random() * Math.PI * 2;
+    const c = Math.cos(th), s = Math.sin(th);
+    const v = Math.sqrt(mu / r);
+    const shade = (0.45 + (ring.albedo ?? 0.4)) * (0.85 + Math.random() * 0.3);
+    const grey = ring.name.startsWith('C') ? 0.9 : 1; // the C ring is greyer
+    const ok = sim.particles.add(
+      saturn.x + r * (ux * c + wx * s),
+      saturn.y + r * (uy * c + wy * s),
+      saturn.z + r * (uz * c + wz * s),
+      saturn.vx + v * (wx * c - ux * s),
+      saturn.vy + v * (wy * c - uy * s),
+      saturn.vz + v * (wz * c - uz * s),
+      [0.86 * shade, 0.79 * shade * grey, 0.66 * shade * grey],
+    );
+    if (ok < 0) break;
+    added++;
+  }
+  return added;
+}
+
 /** Moons shown in the true-scale Solar System: the large ones (with periods of 1.8 days or more). */
 const TRUE_SCALE_MOONS = ['Moon', 'Io', 'Europa', 'Ganymede', 'Callisto', 'Titan', 'Rhea', 'Iapetus', 'Titania', 'Oberon', 'Triton', 'Charon'];
 
@@ -564,6 +602,8 @@ export function loadSolarSystemTrueScale(sim: Simulation, date: Date): SceneSetu
       planet.vz -= vz * f;
     }
   }
+  const saturn = sim.bodies.find((b) => b.name === 'Saturn');
+  if (data && saturn) addSaturnRings(sim, saturn, data, 3000);
   setTrueScale(sim, true);
   return {
     cameraDistance: 0.012,
@@ -642,13 +682,18 @@ export function loadMoonSystem(sim: Simulation, planetName: string, date: Date, 
   for (const m of moons) {
     if ((m.mass ?? 0) >= 0.05 * biggest && m.elements.e < 0.3) regularExtent = Math.max(regularExtent, m.elements.a);
   }
+  const ringCount = planetName === 'Saturn' ? addSaturnRings(sim, planet, data, 6000) : 0;
+  // Moon systems are true scale: this also ticks "Real sizes" and keeps merged bodies real-sized.
+  setTrueScale(sim, true, data);
   sim.recenter();
   const outer = regularExtent || Math.max(...moons.map((m) => m.elements.a));
   return {
     cameraDistance: outer * 2.6,
     timeScale: Math.max(1e-5, innerPeriod / 6),
     elevation: 0.5,
-    tip: `${planetName} and its moons on ${date.toISOString().slice(0, 10)}, at true scale, from JPL Horizons mean orbits. The Sun's pull and the planet's oblateness are left out, so orbits slowly drift from reality.`,
+    tip: `${planetName} and its moons on ${date.toISOString().slice(0, 10)}, at true scale, from JPL Horizons mean orbits.${
+      ringCount ? ` The rings are ${ringCount.toLocaleString('en-US')} particles at the real radii from NASA's ring fact sheet, in Saturn's true equatorial plane.` : ''
+    } The Sun's pull and the planet's oblateness are left out, so orbits slowly drift from reality.`,
   };
 }
 

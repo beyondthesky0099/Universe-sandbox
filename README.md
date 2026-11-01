@@ -26,6 +26,8 @@ Everything except the optional companion server runs in the browser.
 | ![Real Solar System](docs/screenshots/real-solar-system.png) | ![Jupiter's moons](docs/screenshots/jupiter-moons.png) |
 | **Every star within 33 light-years (HYG)** | **The Milky Way (real structure)** |
 | ![Nearby stars](docs/screenshots/nearby-stars.png) | ![Milky Way](docs/screenshots/milky-way.png) |
+| **Saturn's real rings (NASA radii)** | **Solar System at true scale** |
+| ![Saturn's rings](docs/screenshots/saturn-rings.png) | ![True scale](docs/screenshots/true-scale.png) |
 
 ## Run it
 
@@ -70,7 +72,9 @@ need the [companion server](#companion-server). Without one, they explain how to
   Mergers, fragments and supernova remnants keep real sizes, and collisions only happen at
   true contact. **Solar System (true scale)** adds the 12 largest moons to the whole system.
 - **Real moon systems at true scale:** Earth & Moon, Mars, Jupiter, Saturn, Uranus, Neptune and
-  Pluto–Charon. There are 28 moons, each at its real position for today. Moons use mean orbits
+  Pluto–Charon. There are 28 moons, each at its real position for today. Saturn's C, B and A
+  rings, the Cassini Division and the F ring are 6,000 orbiting particles at the radii from
+  NASA's ring fact sheet, with density weighted by optical depth. Moons use mean orbits
   fitted to about 200 orbits of Horizons data, and they stay within 5% of JPL's positions
   (tested).
 - **Real exoplanets:** a browser for 4,847 confirmed systems (6,451 planets) from the NASA
@@ -291,6 +295,9 @@ push and pull request.
   Administration under the Exoplanet Exploration Program.* The catalogue in
   `public/data/exoplanets.json` comes from the `pscomppars` table. Rebuild it with
   `node scripts/build-exoplanets.mjs`.
+- Saturn's ring radii, optical depths and albedos come from the NASA Saturnian Rings Fact
+  Sheet (nssdc.gsfc.nasa.gov/planetary/factsheet/satringfact.html). Rebuild them with
+  `node scripts/build-saturn-rings.mjs`.
 - Star data: **HYG database v4.1** by David Nash (astronexus), licensed **CC BY-SA 4.0**
   (https://codeberg.org/astronexus/hyg). The derived files `public/data/stars-near.json` and
   `public/data/stars-bright.json` are also CC BY-SA 4.0. Rebuild them with

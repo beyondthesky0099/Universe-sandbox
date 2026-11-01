@@ -72,6 +72,18 @@ export interface SolarData {
   bodies: SolarBodyData[];
   byName: Map<string, SolarBodyData>;
   small: SmallBody[];
+  /** Saturn's main rings (NASA ring fact sheet), if loaded. */
+  rings?: SaturnRing[];
+}
+
+export interface SaturnRing {
+  name: string;
+  /** Radii from Saturn's centre, km. */
+  inner: number;
+  outer: number;
+  /** Typical normal optical depth (midpoint of the published range). */
+  tau?: number;
+  albedo?: number;
 }
 
 export const KM_PER_AU = 149597870.7;
@@ -237,8 +249,9 @@ interface RawSmall {
   bodies: [string, number, number, number, number, number, number, number, number][];
 }
 
-export function parseSolarData(solar: RawSolar, small?: RawSmall): SolarData {
+export function parseSolarData(solar: RawSolar, small?: RawSmall, rings?: { rings: SaturnRing[] }): SolarData {
   return {
+    rings: rings?.rings,
     epoch: solar.epoch,
     bodies: solar.bodies,
     byName: new Map(solar.bodies.map((b) => [b.name, b])),
@@ -272,11 +285,34 @@ export function loadSolarData(baseUrl = import.meta.env.BASE_URL): Promise<Solar
     fetch(`${baseUrl}data/small-bodies.json`)
       .then((r) => (r.ok ? (r.json() as Promise<RawSmall>) : undefined))
       .catch(() => undefined),
-  ]).then(([solar, small]) => {
-    cached = parseSolarData(solar, small);
+    fetch(`${baseUrl}data/saturn-rings.json`)
+      .then((r) => (r.ok ? (r.json() as Promise<{ rings: SaturnRing[] }>) : undefined))
+      .catch(() => undefined),
+  ]).then(([solar, small, rings]) => {
+    cached = parseSolarData(solar, small, rings);
     return cached;
   });
   return loading;
+}
+
+/**
+ * Sample ring-particle radii (km): each ring gets particles in proportion to its optical depth
+ * times its area, so the dense B ring is crowded and the Cassini Division is sparse.
+ */
+export function sampleRingRadii(rings: SaturnRing[], count: number, rand: () => number = Math.random): { r: number; ring: SaturnRing }[] {
+  const weights = rings.map((g) => Math.max(0.02, g.tau ?? 0.1) * (g.outer * g.outer - g.inner * g.inner));
+  const total = weights.reduce((a, b) => a + b, 0);
+  const out: { r: number; ring: SaturnRing }[] = [];
+  for (let k = 0; k < count; k++) {
+    let pick = rand() * total;
+    let i = 0;
+    while (i < rings.length - 1 && (pick -= weights[i]) > 0) i++;
+    const g = rings[i];
+    // Uniform per unit area within the ring.
+    const r = Math.sqrt(g.inner * g.inner + rand() * (g.outer * g.outer - g.inner * g.inner));
+    out.push({ r, ring: g });
+  }
+  return out;
 }
 
 /** Display colours for real bodies (approximate true colour). */

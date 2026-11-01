@@ -5,7 +5,8 @@ import { G } from '../src/sim/units';
 
 const solar = JSON.parse(readFileSync(new URL('../public/data/solar-system.json', import.meta.url), 'utf8'));
 const small = JSON.parse(readFileSync(new URL('../public/data/small-bodies.json', import.meta.url), 'utf8'));
-const data: SolarData = parseSolarData(solar, small);
+const rings = JSON.parse(readFileSync(new URL('../public/data/saturn-rings.json', import.meta.url), 'utf8'));
+const data: SolarData = parseSolarData(solar, small, rings);
 
 /** JPL Horizons geometric vectors (ecliptic J2000, AU) on 2027-03-15 00:00 TDB, relative to the parent. */
 const JD = 2461479.5;
@@ -170,4 +171,44 @@ describe('parent bodies', () => {
     expect(sim.parentOf(byName('Mimas'))?.name).toBe('Saturn');
     expect(sim.parentOf(byName('Saturn'))).toBeUndefined();
   });
+});
+
+describe("Saturn's rings", () => {
+  it('lie in the equatorial plane at the real radii, densest in the B ring, and stay there', async () => {
+    const { loadMoonSystem } = await import('../src/sim/presets');
+    const { Simulation } = await import('../src/sim/simulation');
+    const { poleScene, KM_PER_AU } = await import('../src/sim/solarSystemData');
+    const sim = new Simulation();
+    loadMoonSystem(sim, 'Saturn', new Date('2026-11-01T00:00:00Z'), data);
+    const p = sim.particles;
+    expect(p.count).toBe(6000);
+    const pole = poleScene(data.byName.get('Saturn')!)!;
+    const radii = () => {
+      const saturn = sim.bodies.find((b) => b.name === 'Saturn')!;
+      const out: number[] = [];
+      for (let i = 0; i < p.count; i++) {
+        const dx = p.pos[i * 3] - saturn.x, dy = p.pos[i * 3 + 1] - saturn.y, dz = p.pos[i * 3 + 2] - saturn.z;
+        const r = Math.hypot(dx, dy, dz);
+        expect(Math.abs(dx * pole[0] + dy * pole[1] + dz * pole[2]) / r).toBeLessThan(0.01); // in the ring plane
+        out.push(r * KM_PER_AU);
+      }
+      return out;
+    };
+    const before = radii();
+    const within = (r: number, name: string) => {
+      const g = data.rings!.find((x) => x.name === name)!;
+      return r >= g.inner && r <= g.outer;
+    };
+    const count = (name: string) => before.filter((r) => within(r, name)).length;
+    expect(Math.min(...before)).toBeGreaterThanOrEqual(74658);
+    expect(Math.max(...before)).toBeLessThanOrEqual(139851);
+    expect(count('B ring')).toBeGreaterThan(count('A ring'));
+    expect(count('A ring')).toBeGreaterThan(count('C ring'));
+    expect(count('C ring')).toBeGreaterThan(count('Cassini Division'));
+    // Two days (several orbits of the inner rings): particles keep their orbits.
+    sim.advance(2 / 365.25, 1e7, 1e9);
+    expect(p.count).toBe(6000);
+    const after = radii();
+    for (let i = 0; i < after.length; i += 50) expect(Math.abs(after[i] - before[i]) / before[i]).toBeLessThan(0.02);
+  }, 120000);
 });

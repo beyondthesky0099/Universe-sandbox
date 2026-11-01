@@ -13,7 +13,7 @@ const km = (au: number) => au * KM;
 
 beforeAll(() => {
   const read = (f: string) => JSON.parse(readFileSync(new URL(`../public/data/${f}`, import.meta.url), 'utf8'));
-  setSolarData(parseSolarData(read('solar-system.json'), read('small-bodies.json')));
+  setSolarData(parseSolarData(read('solar-system.json'), read('small-bodies.json'), read('saturn-rings.json')));
 });
 afterAll(() => setSolarData(undefined));
 

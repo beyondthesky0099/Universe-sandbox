@@ -42,8 +42,8 @@ Still procedural:
 - every other seeded galaxy
 - the made-up scenarios (Giant Impact, Ring Maker, …), which are deliberately fictional
 
-**Suggested next steps:** A6 ring particles, C3 (exoplanet hosts on the Milky Way map),
-D2 (real planet texture maps).
+**Suggested next steps:** C3 (exoplanet hosts on the Milky Way map), D2 (real planet texture
+maps, which needs a licence-compatible source).
 
 Plan, in priority order:
 
@@ -68,9 +68,11 @@ Plan, in priority order:
 - [x] A5. "Real sizes" toggle (`src/sim/trueScale.ts`, `Simulation.trueScale` and
       `bodyRadius`, `physicalRadius` in `body.ts`). It's saved in state, undoable and shared in
       multiplayer. Real sizes also set softening to 1e-8.
-- [~] A6. Saturn's rings: the ring mesh now lies in Saturn's true equatorial plane (via the
-      IAU pole; tested against Mimas–Rhea orbit normals). Still to do: real ring *particles*
-      (C/B/A rings, 74,658–136,775 km) in moon-system scenes.
+- [x] A6. Saturn's rings: the ring mesh follows Saturn's IAU pole, and real ring particles
+      come from `scripts/build-saturn-rings.mjs` (the NASA ring fact sheet), added by
+      `addSaturnRings` in `presets.ts`. There are 6,000 in the Saturn scene and 3,000 in the
+      true-scale Solar System. The Encke and Keeler gaps are in the data but not carved out,
+      because the sheet gives no widths.
 - [x] A7. "Solar System (true scale)" preset with the 12 largest moons (Phobos, Deimos and the
       small moons are left out to keep the timestep reasonable). It runs at about 26% of a core
       at its default 0.73 days/s.

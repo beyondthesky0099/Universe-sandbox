@@ -168,6 +168,9 @@ need the [companion server](#companion-server). Without one, they explain how to
   - **38,000 more galaxies** from the 2MASS Redshift Survey trace the **cosmic web** out to
     about 700 million light-years. The Virgo, Fornax, Centaurus, Perseus and Coma clusters and
     the Great Attractor are labelled.
+  - **647 bright galaxies beyond the Local Volume** are clickable too, including M87 (Virgo A,
+    home of the first black hole ever imaged), M49, M60, the Sombrero, M77 and Fornax A. They
+    are placed by redshift, and their panels say so.
   - Click a galaxy for its type, distance, size, mass, gas and motion (Andromeda is
     approaching at 296 km/s). Zoom in or press **Visit** to explore it. Visited galaxies are
     procedural stand-ins shaped like the real one (spiral, elliptical, lenticular, irregular

@@ -6,7 +6,7 @@ import { mulberry32, pick, seedFromString } from './procgen/rng';
 import { generateStarSystem, starSummary, type StarSystemSpec } from './procgen/starSystem';
 import { GalaxyView, type GalaxyTarget } from './render/galaxyView';
 import { CosmosView } from './render/cosmosView';
-import { displayName, GALAXY_CREDIT, galaxyForm, loadLocalGalaxies, loadWebGalaxies, LY_PER_MPC, type LocalGalaxy } from './sim/galaxies';
+import { displayName, GALAXY_CREDIT, galaxyForm, loadLocalGalaxies, loadNamedGalaxies, loadWebGalaxies, LY_PER_MPC, type LocalGalaxy } from './sim/galaxies';
 import { equatorialToGalactic, galacticToMap, MILKY_WAY_SEED, type GalaxyOptions } from './procgen/galaxy';
 import { QUALITY_PRESETS, SystemView } from './render/systemView';
 import { createRealSky } from './render/starfield';
@@ -965,7 +965,8 @@ export class App {
       await this.fade(true);
       if (!this.cosmosLoaded) {
         try {
-          this.cosmos.setLocal(await loadLocalGalaxies());
+          const [local, named] = await Promise.all([loadLocalGalaxies(), loadNamedGalaxies()]);
+          this.cosmos.setLocal([...local, ...named]);
           this.cosmosLoaded = true;
           $('cosmos-credit').textContent = GALAXY_CREDIT;
           this.updateCosmosInfo();
@@ -997,10 +998,11 @@ export class App {
   }
 
   private updateCosmosInfo(): void {
-    const n = this.cosmos.local.length;
+    const named = this.cosmos.local.filter((g) => g.zd).length;
+    const n = this.cosmos.local.length - named;
     const web = this.cosmos.webCount;
     $('cosmos-info').textContent =
-      `${n.toLocaleString('en-US')} real galaxies of the Local Volume (out to 85 million light-years) at their measured distances and true sizes` +
+      `${n.toLocaleString('en-US')} real galaxies of the Local Volume (out to 85 million light-years) at their measured distances and true sizes, plus ${named} bright named galaxies beyond it (M87, the Sombrero, Fornax A…) placed by redshift` +
       (web ? `, and ${web.toLocaleString('en-US')} more tracing the cosmic web out to about 700 million light-years, placed by their redshift.` : '. Loading the cosmic web…');
   }
 
@@ -3051,13 +3053,14 @@ function cosmosFacts(g: LocalGalaxy): [string, string][] {
     facts.push(['Distance', 'You are here'], ['Diameter', 'about 100,000 light-years']);
   } else {
     const mly = (g.d * LY_PER_MPC) / 1e6;
-    facts.push(['Distance', `${mly < 1 ? `${Math.round(mly * 1000).toLocaleString('en-US')} thousand` : fmt(mly)} ${mly < 1 ? '' : 'million '}light-years`.replace('  ', ' ')]);
-    if (g.size) facts.push(['Diameter', `${Math.round(g.size * 3261.6).toLocaleString('en-US')} light-years`]);
+    facts.push([g.zd ? 'Distance (from redshift)' : 'Distance', `${mly < 1 ? `${Math.round(mly * 1000).toLocaleString('en-US')} thousand` : fmt(mly)} ${mly < 1 ? '' : 'million '}light-years`.replace('  ', ' ')]);
+    if (g.size && !g.zd) facts.push(['Diameter', `${Math.round(g.size * 3261.6).toLocaleString('en-US')} light-years`]);
+    if (g.name === 'MESSIER087') facts.push(['Central black hole', '6.5 billion M☉: the first black hole ever imaged (Event Horizon Telescope, 2019)']);
   }
   if (g.mass !== undefined) facts.push(['Mass', sciMass(g.mass)]);
   if (g.hi !== undefined) facts.push(['Hydrogen gas', sciMass(g.hi)]);
-  if (g.v !== undefined && g.name !== 'Milky Way') facts.push(['Radial velocity', `${Math.abs(g.v)} km/s ${g.v < 0 ? 'toward us' : 'away from us'}`]);
+  if (g.v !== undefined && g.name !== 'Milky Way') facts.push([g.zd ? 'Recession velocity' : 'Radial velocity', `${Math.abs(g.v)} km/s ${g.v < 0 ? 'toward us' : 'away from us'}`]);
   if (g.md && g.name !== 'Milky Way') facts.push(['Main neighbour', displayName({ name: g.md })]);
-  facts.push(['Data', 'Karachentsev et al. 2013']);
+  facts.push(['Data', g.zd ? '2MASS Redshift Survey (Huchra et al. 2012)' : 'Karachentsev et al. 2013']);
   return facts;
 }

@@ -67,3 +67,20 @@ describe('stand-in galaxies of other forms', () => {
     expect(generateGalaxy(42, 100, 100, 10).form).toBe('spiral');
   });
 });
+
+describe('named galaxies beyond the Local Volume', () => {
+  it('includes M87 and the Sombrero, placed by redshift', async () => {
+    const { namedFromSurvey, displayName, galaxyForm } = await import('../src/sim/galaxies');
+    const raw = JSON.parse(readFileSync(new URL('../public/data/galaxies-named.json', import.meta.url), 'utf8'));
+    const named = namedFromSurvey(raw.galaxies, raw.H0);
+    const m87 = named.find((g) => g.name === 'MESSIER087')!;
+    expect(displayName(m87)).toBe('M87 (Virgo A)');
+    expect(galaxyForm(m87)).toBe('elliptical');
+    expect(m87.zd).toBe(true);
+    expect(m87.d).toBeGreaterThan(15); // ~18.7 Mpc from its redshift (the Virgo Cluster is ~16.5 Mpc)
+    expect(m87.d).toBeLessThan(22);
+    expect(m87.lk!).toBeGreaterThan(11); // one of the most luminous galaxies nearby
+    expect(galaxyForm(named.find((g) => g.name === 'MESSIER104')!)).toBe('spiral');
+    expect(named.every((g) => g.d > 11)).toBe(true); // nearer ones come from the Local Volume catalogue
+  });
+});

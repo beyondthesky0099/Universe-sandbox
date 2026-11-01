@@ -120,6 +120,17 @@ for (const r of tmrs) {
   web.push([round(l, 2), round(b, 2), Math.round(cz), round(num(r.Ktmag), 1)]);
 }
 
+// Named galaxies beyond the Local Volume: the brightest 2MRS galaxies (total Ks < 8.5), with
+// their catalogue names and numeric T-types (leading integer of the ZCAT type code).
+const named = [];
+for (const r of tmrs) {
+  const cz = num(r.cz);
+  const kt = num(r.Ktmag);
+  if (!(cz / H0 > 11) || cz > MAX_CZ || !(kt < 8.5)) continue;
+  const t = r.type.match(/^-?\d+/);
+  named.push([r.CAT.replace(/_/g, ''), round(num(r.GLON), 3), round(num(r.GLAT), 3), Math.round(cz), round(kt, 2), t ? Number(t[0]) : null]);
+}
+
 const credit = {
   local:
     'Updated Nearby Galaxy Catalog: Karachentsev, Makarov & Kaisina 2013, AJ 145, 101 (VizieR J/AJ/145/101). Positions in galactic coordinates; distances in Mpc.',
@@ -131,5 +142,10 @@ writeFileSync(
   new URL('galaxies-2mrs.json', out),
   JSON.stringify({ source: credit.web, H0, fields: ['l_deg', 'b_deg', 'cz_kms', 'Kt_mag'], galaxies: web }) + '\n',
 );
+writeFileSync(
+  new URL('galaxies-named.json', out),
+  JSON.stringify({ source: credit.web, H0, fields: ['name', 'l_deg', 'b_deg', 'cz_kms', 'Kt_mag', 'T_type'], galaxies: named }) + '\n',
+);
+console.log(`Named distant galaxies: ${named.length}`);
 console.log(`Local Volume: ${local.length} galaxies (nearest: ${local.slice(0, 5).map((g) => g.name).join(', ')})`);
 console.log(`2MRS: ${web.length} galaxies with cz ≤ ${MAX_CZ} km/s`);

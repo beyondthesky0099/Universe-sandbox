@@ -33,6 +33,8 @@ export interface LocalGalaxy {
   v?: number;
   /** The neighbour that disturbs it most. */
   md?: string;
+  /** Distance from redshift (Hubble's law) rather than a direct measurement. */
+  zd?: boolean;
 }
 
 /** [galactic l, b (degrees), cz (km/s), total Ks magnitude] */
@@ -110,6 +112,14 @@ const COMMON: Record<string, string> = {
   NGC4945: 'NGC 4945',
   IC1613: 'IC 1613',
   WLM: 'Wolf–Lundmark–Melotte',
+  MESSIER087: 'M87 (Virgo A)',
+  MESSIER049: 'M49',
+  MESSIER060: 'M60',
+  MESSIER084: 'M84',
+  MESSIER086: 'M86',
+  MESSIER077: 'M77 (Cetus A)',
+  NGC1316: 'Fornax A',
+  NGC1399: 'NGC 1399 (Fornax Cluster centre)',
 };
 
 /** Readable name: common names, then "M 31"/"NGC 253"-style catalogue numbers. */
@@ -142,6 +152,41 @@ export const COSMIC_STRUCTURES: { name: string; l: number; b: number; d: number 
   { name: 'Perseus Cluster', l: 150.6, b: -13.3, d: 74 },
   { name: 'Coma Cluster', l: 58.1, b: 88.0, d: 99 },
 ];
+
+/** [name, l, b, cz (km/s), total Ks magnitude, T-type] */
+type NamedRow = [string, number, number, number, number, number | null];
+
+/**
+ * The brightest galaxies beyond the Local Volume (2MRS), as clickable map entries. Distances
+ * are from redshift; luminosities and sizes are estimated from the Ks magnitude.
+ */
+export function namedFromSurvey(rows: NamedRow[], H0: number): LocalGalaxy[] {
+  return rows.map(([name, l, b, cz, kt, t]) => {
+    const d = cz / H0;
+    const absK = kt - 5 * Math.log10(d * 1e6) + 5;
+    const lk = (3.28 - absK) / 2.5; // log10 Ks luminosity, solar units
+    return {
+      name,
+      l,
+      b,
+      d,
+      t: t ?? undefined,
+      lk: Number(lk.toFixed(2)),
+      size: Number((30 * Math.pow(10, (lk - 10.7) / 2.5)).toFixed(1)), // rough diameter (kpc) from luminosity
+      v: cz,
+      zd: true,
+    };
+  });
+}
+
+let namedPromise: Promise<LocalGalaxy[]> | undefined;
+export function loadNamedGalaxies(baseUrl = import.meta.env.BASE_URL): Promise<LocalGalaxy[]> {
+  namedPromise ??= fetch(`${baseUrl}data/galaxies-named.json`)
+    .then((r) => (r.ok ? (r.json() as Promise<{ H0: number; galaxies: NamedRow[] }>) : { H0: 70, galaxies: [] }))
+    .then((d) => namedFromSurvey(d.galaxies, d.H0))
+    .catch(() => []);
+  return namedPromise;
+}
 
 let localPromise: Promise<LocalGalaxy[]> | undefined;
 let webPromise: Promise<WebCatalog> | undefined;

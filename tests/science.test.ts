@@ -159,3 +159,17 @@ describe('orbital analysis', () => {
     void EARTH_MASS;
   });
 });
+
+describe('GPU mega-sim initial conditions', () => {
+  it('builds finite, bound starting states for every scenario', async () => {
+    const { initialConditions } = await import('../src/gpu/megaSim');
+    for (const scenario of ['disk', 'collision', 'collapse'] as const) {
+      const { pos, vel } = initialConditions(4096, scenario);
+      expect(pos.length).toBe(4096 * 4);
+      expect(pos.every(Number.isFinite) && vel.every(Number.isFinite)).toBe(true);
+      let mass = 0;
+      for (let i = 3; i < pos.length; i += 4) mass += pos[i];
+      expect(mass).toBeCloseTo(1000, 3);
+    }
+  });
+});

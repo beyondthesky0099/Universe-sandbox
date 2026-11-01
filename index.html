@@ -112,6 +112,9 @@
             <button id="btn-solar-date" title="Real planet positions from JPL ephemerides">Solar System</button>
           </div>
           <div class="row buttons">
+            <button id="btn-gpu" title="Tens of thousands of mutually gravitating stars on your GPU (WebGPU)">⚡ GPU mega-sim</button>
+          </div>
+          <div class="row buttons">
             <button id="btn-exoplanets" title="Browse 4,800+ real planetary systems">🪐 Real exoplanets</button>
             <button id="btn-neighbourhood" title="Known planet hosts near the Sun">Nearby stars</button>
           </div>
@@ -202,6 +205,12 @@
               <option value="high">High</option>
             </select>
           </label>
+          <div class="checks">
+            <label class="check" title="Bloom glow and black-hole gravitational lensing"><input id="opt-postfx" type="checkbox" checked /> Bloom & lensing</label>
+          </div>
+          <div class="row buttons">
+            <button id="btn-vr" class="hidden" title="View in a VR headset (WebXR)">🥽 Enter VR</button>
+          </div>
           <p id="engine-info" class="muted small"></p>
         </section>
       </aside>
@@ -328,6 +337,46 @@
             <button id="lesson-menu-close" class="icon" aria-label="Close">✕</button>
           </div>
           <div id="lesson-list" class="cards"></div>
+        </div>
+      </div>
+
+      <div id="gpu-view" class="hidden">
+        <canvas id="gpu-canvas"></canvas>
+        <div class="panel left gpu-panel">
+          <h2>⚡ GPU mega-sim</h2>
+          <p class="muted small">Every star pulls on every other star, computed on your graphics card with WebGPU. Drag to orbit, scroll to zoom.</p>
+          <label class="row">
+            <span>Scene</span>
+            <select id="gpu-scenario">
+              <option value="disk">Spiral disk galaxy</option>
+              <option value="collision">Galaxy collision</option>
+              <option value="collapse">Cold cloud collapse</option>
+            </select>
+          </label>
+          <label class="row">
+            <span>Stars</span>
+            <select id="gpu-n">
+              <option value="8192">8,192</option>
+              <option value="16384" selected>16,384</option>
+              <option value="32768">32,768</option>
+              <option value="65536">65,536</option>
+              <option value="131072">131,072</option>
+            </select>
+          </label>
+          <label class="row">
+            <span>Steps/frame</span>
+            <select id="gpu-steps">
+              <option value="1" selected>1</option>
+              <option value="2">2</option>
+              <option value="4">4</option>
+            </select>
+          </label>
+          <div class="row buttons">
+            <button id="gpu-restart" class="primary">Restart</button>
+            <button id="gpu-pause">Pause</button>
+            <button id="gpu-exit">Exit</button>
+          </div>
+          <p id="gpu-stats" class="muted small"></p>
         </div>
       </div>
 

@@ -24,6 +24,8 @@ import { GalaxyStore, prefs } from './ui/galaxyStore';
 import { History } from './ui/history';
 import { decodeScene, downloadJson, encodeScene, readSceneFile, type SceneFile } from './ui/share';
 import { Tutorial } from './ui/tutorial';
+import { PostFX } from './render/postfx';
+import { MegaSim, webgpuAvailable, type MegaScenario } from './gpu/megaSim';
 import { applyNudge, CHALLENGES, dailyChallenge, KMS, newChallengeState, shareText, type Challenge, type ChallengeResult, type ChallengeState } from './game/challenges';
 import { burnDirections, planHohmann } from './game/transfer';
 import { LESSONS, type Lesson } from './game/lessons';
@@ -139,6 +141,9 @@ export class App {
   private graphLastTime = NaN;
   private graphTimer = 0;
   private chart?: LineChart;
+  private postfx!: PostFX;
+  private postfxOn = prefs.get('postfx', true);
+  private mega?: MegaSim;
   private lesson?: { def: Lesson; step: number; events: SimEvent[]; done: Set<number> };
   private nudgeDrag?: { bodyId: number; start: THREE.Vector3; current: THREE.Vector3; lastPredict: number; path?: Float32Array };
   /** Typical camera distance of the loaded scene; zooming far beyond it returns to the galaxy. */
@@ -148,6 +153,8 @@ export class App {
   constructor() {
     this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas, antialias: true, logarithmicDepthBuffer: true });
     this.renderer.setClearColor(0x02030a);
+    this.renderer.xr.enabled = true;
+    this.postfx = new PostFX(this.renderer);
     const params = new URLSearchParams(location.hash.slice(1));
     this.host = new SimHost(params.get('worker') !== '0');
     this.system = new SystemView(this.sim, this.canvas, QUALITY_PRESETS[this.quality]);
@@ -176,14 +183,15 @@ export class App {
     }
     if (!prefs.get('tutorialDone', false) && params.get('tour') !== '0') setTimeout(() => this.openTutorial(), 1200);
 
+    // setAnimationLoop (rather than requestAnimationFrame) also drives WebXR sessions.
     let last = performance.now();
-    const loop = (now: number) => {
+    this.renderer.setAnimationLoop((now: number) => {
       const dt = Math.min(0.1, (now - last) / 1000);
       last = now;
+      if (this.mega) return; // the GPU mega-sim owns the screen
       this.frame(dt);
-      requestAnimationFrame(loop);
-    };
-    requestAnimationFrame(loop);
+    });
+    void this.detectVR();
   }
 
   private get sim() {
@@ -216,7 +224,7 @@ export class App {
         if (this.frames % 3 === 0) this.evaluateChallenge();
       }
       this.system.update(dt, this.height, active, events);
-      this.renderer.render(this.system.scene, this.system.camera);
+      this.renderView(this.system.scene, this.system.camera, this.system.lensesOnScreen(this.height));
       this.labelRenderer.render(this.system.scene, this.system.camera);
 
       if (active) {
@@ -235,7 +243,7 @@ export class App {
       if (!this.transitioning && this.system.cameraDistance > this.exitDistance) void this.exitToGalaxy();
     } else {
       this.galaxy.update(dt);
-      this.renderer.render(this.galaxy.scene, this.galaxy.camera);
+      this.renderView(this.galaxy.scene, this.galaxy.camera, []);
       if (this.frames % 15 === 0) $('stats').textContent = `${Math.round(this.fps)} fps`;
       const sel = this.galaxy.selected;
       if (
@@ -270,6 +278,99 @@ export class App {
     }
   }
 
+  private renderView(scene: THREE.Scene, camera: THREE.Camera, lenses: THREE.Vector3[]): void {
+    // Post-processing isn't supported inside WebXR sessions; low quality skips it too.
+    // The galaxy map is already a sea of additive glow; bloom there only adds haze.
+    if (this.postfxOn && this.quality !== 'low' && !this.renderer.xr.isPresenting && this.view === 'system') {
+      this.postfx.setLenses(lenses);
+      this.postfx.setBloom(this.quality === 'high' ? 0.55 : 0.4);
+      this.postfx.render(scene, camera);
+    } else {
+      this.renderer.render(scene, camera);
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // WebXR
+
+  private async detectVR(): Promise<void> {
+    const xr = (navigator as Navigator & { xr?: XRSystem }).xr;
+    if (!xr) return;
+    try {
+      if (await xr.isSessionSupported('immersive-vr')) $('btn-vr').classList.remove('hidden');
+    } catch {
+      // not supported
+    }
+  }
+
+  private async enterVR(): Promise<void> {
+    const xr = (navigator as Navigator & { xr?: XRSystem }).xr;
+    if (!xr) return;
+    if (this.view !== 'system') this.setView('system');
+    const session = await xr.requestSession('immersive-vr', { optionalFeatures: ['local-floor', 'bounded-floor'] });
+    this.renderer.xr.setReferenceSpaceType('local-floor');
+    await this.renderer.xr.setSession(session);
+    // Tabletop scale: the whole scene fits in about a metre, at waist height in front of you.
+    const scene = this.system.scene;
+    scene.scale.setScalar(0.6 / this.system.sceneExtent());
+    scene.position.set(0, 1.0, -1.0);
+    const controllers = [0, 1].map((i) => this.renderer.xr.getController(i));
+    const onSelect = () => this.setRunning(!this.running);
+    for (const c of controllers) {
+      c.addEventListener('select', onSelect);
+      scene.add(c);
+    }
+    session.addEventListener('end', () => {
+      scene.scale.setScalar(1);
+      scene.position.set(0, 0, 0);
+      for (const c of controllers) {
+        c.removeEventListener('select', onSelect);
+        scene.remove(c);
+      }
+    });
+    toast('VR: pull the trigger to pause or resume.');
+  }
+
+  // ---------------------------------------------------------------------------
+  // GPU mega-sim
+
+  private async openMegaSim(): Promise<void> {
+    if (!webgpuAvailable()) return void toast('WebGPU isn’t available in this browser. Try a recent Chrome, Edge or Safari.');
+    $('gpu-view').classList.remove('hidden');
+    try {
+      this.mega = new MegaSim($<HTMLCanvasElement>('gpu-canvas'));
+      this.mega.onLost = (reason) => {
+        this.closeMegaSim();
+        toast(`The GPU stopped responding (${reason}). Try fewer stars.`);
+      };
+      await this.mega.init();
+      this.restartMegaSim();
+      this.mega.start();
+      const update = () => {
+        if (!this.mega) return;
+        const s = this.mega.stats;
+        $('gpu-stats').textContent = `${s.n.toLocaleString()} stars · ${s.fps.toFixed(0)} fps · ${(s.interactionsPerSecond / 1e9).toFixed(2)} billion interactions/s`;
+        setTimeout(update, 500);
+      };
+      update();
+    } catch (err) {
+      this.closeMegaSim();
+      toast((err as Error).message);
+    }
+  }
+
+  private restartMegaSim(): void {
+    if (!this.mega) return;
+    this.mega.stepsPerFrame = Number($<HTMLSelectElement>('gpu-steps').value);
+    this.mega.reset(Number($<HTMLSelectElement>('gpu-n').value), $<HTMLSelectElement>('gpu-scenario').value as MegaScenario);
+  }
+
+  private closeMegaSim(): void {
+    this.mega?.destroy();
+    this.mega = undefined;
+    $('gpu-view').classList.add('hidden');
+  }
+
   private resize(): void {
     this.width = window.innerWidth;
     this.height = window.innerHeight;
@@ -277,6 +378,7 @@ export class App {
     this.labelRenderer.setSize(this.width, this.height);
     this.system.setViewport(this.width, this.height);
     this.galaxy.setViewport(this.width, this.height, this.renderer.getPixelRatio());
+    this.postfx?.setSize(this.width, this.height);
   }
 
   private applyQuality(q: QualityName): void {
@@ -1790,6 +1892,22 @@ export class App {
     });
     for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) rewind.addEventListener(ev, () => this.stopRewind());
     $('btn-sound').addEventListener('click', () => this.setSound(!this.audio.isEnabled));
+    const postfxBox = $<HTMLInputElement>('opt-postfx');
+    postfxBox.checked = this.postfxOn;
+    postfxBox.addEventListener('change', () => {
+      this.postfxOn = postfxBox.checked;
+      prefs.set('postfx', this.postfxOn);
+    });
+    $('btn-vr').addEventListener('click', () => void this.enterVR().catch((err) => toast(`Couldn't start VR: ${(err as Error).message}`)));
+    $('btn-gpu').addEventListener('click', () => void this.openMegaSim());
+    $('gpu-restart').addEventListener('click', () => this.restartMegaSim());
+    $('gpu-exit').addEventListener('click', () => this.closeMegaSim());
+    $('gpu-steps').addEventListener('change', () => this.mega && (this.mega.stepsPerFrame = Number($<HTMLSelectElement>('gpu-steps').value)));
+    $('gpu-pause').addEventListener('click', () => {
+      if (!this.mega) return;
+      this.mega.paused = !this.mega.paused;
+      $('gpu-pause').textContent = this.mega.paused ? 'Resume' : 'Pause';
+    });
     $('btn-help').addEventListener('click', () => this.openTutorial());
     $('btn-menu').addEventListener('click', () => document.body.classList.toggle('panels-hidden'));
     $<HTMLSelectElement>('quality').addEventListener('change', (e) => this.applyQuality((e.target as HTMLSelectElement).value as QualityName));

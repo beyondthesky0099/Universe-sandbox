@@ -102,6 +102,9 @@ export class SystemView {
     this.controls.minDistance = 0.002;
     this.controls.maxDistance = 2e5;
 
+    // A colour-managed background renders identically with and without post-processing
+    // (the renderer's clear colour is not converted when clearing linear render targets).
+    this.scene.background = new THREE.Color(0x02030a);
     this.scene.add(this.starfield);
     this.scene.add(new THREE.AmbientLight(0xffffff, 0.12));
     for (let i = 0; i < MAX_LIGHTS; i++) {
@@ -254,6 +257,31 @@ export class SystemView {
   zoomOut(factor: number, speed = 1.2): void {
     const offset = this.camera.position.clone().sub(this.controls.target);
     this.cameraAnim = { from: this.camera.position.clone(), to: this.controls.target.clone().add(offset.multiplyScalar(factor)), target: this.controls.target.clone(), t: 0, speed };
+  }
+
+  /** Black holes on screen as lenses: uv position and shadow radius in screen-height units. */
+  lensesOnScreen(viewportHeight: number): THREE.Vector3[] {
+    const out: THREE.Vector3[] = [];
+    const holes = this.sim.bodies.filter((b) => b.kind === 'blackhole').sort((a, b) => b.mass - a.mass);
+    const v = new THREE.Vector3();
+    for (const b of holes) {
+      v.set(b.x, b.y, b.z);
+      const wpp = this.worldPerPixel(v, viewportHeight);
+      v.project(this.camera);
+      if (v.z > 1 || Math.abs(v.x) > 1.5 || Math.abs(v.y) > 1.5) continue;
+      const rs = b.radius / wpp / viewportHeight;
+      if (rs < 0.002) continue;
+      out.push(new THREE.Vector3((v.x + 1) / 2, (v.y + 1) / 2, rs));
+      if (out.length >= 4) break;
+    }
+    return out;
+  }
+
+  /** Rough radius (AU) containing the scene's bodies, for VR "tabletop" scaling. */
+  sceneExtent(): number {
+    let r = 0.1;
+    for (const b of this.sim.bodies) r = Math.max(r, Math.hypot(b.x, b.y, b.z));
+    return Math.min(r, this.cameraDistance * 2);
   }
 
   stopCameraAnimation(): void {

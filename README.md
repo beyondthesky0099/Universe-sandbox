@@ -4,6 +4,12 @@ Explore a procedurally generated galaxy, drop into any of its star systems, and 
 break them: fling planets, ignite stars, and feed black holes. Everything runs in the
 browser with real N-body gravity.
 
+| Galaxy map | Protoplanetary disk |
+| --- | --- |
+| ![Galaxy map](docs/screenshots/galaxy-map.png) | ![Protoplanetary disk](docs/screenshots/protoplanetary.png) |
+| **Solar System** | **Spawn tool & orbit readout** |
+| ![Solar system](docs/screenshots/solar-system.png) | ![Spawn tool](docs/screenshots/spawn.png) |
+
 ```
 npm install
 npm run dev      # http://localhost:5173

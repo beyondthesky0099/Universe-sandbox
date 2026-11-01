@@ -16,7 +16,13 @@ import { Octree } from './octree';
 import { ParticleSet } from './particles';
 import { C_AU_PER_YEAR, EARTH_MASS, G } from './units';
 
-export type SimEventType = 'merge' | 'ignite' | 'collapse' | 'shatter' | 'disrupt' | 'supernova' | 'gwmerger' | 'redgiant' | 'nebula';
+export type SimEventType = 'merge' | 'ignite' | 'collapse' | 'shatter' | 'disrupt' | 'supernova' | 'gwmerger' | 'redgiant' | 'nebula' | 'script';
+
+/** A user-defined force law: the body of `function (body, time, sim)` returning [ax, ay, az] in AU/yr². */
+export interface CustomForce {
+  name: string;
+  code: string;
+}
 
 export interface SimEvent {
   type: SimEventType;
@@ -98,6 +104,10 @@ export class Simulation {
   lightSpeedScale = 1;
   /** Years of stellar aging per simulated year (stellar evolution time-lapse). */
   evolutionRate = 1;
+  /** User-defined force laws (from the scripting console). */
+  customForces: CustomForce[] = [];
+  private compiledForces: { name: string; fn: (body: Body, time: number, sim: Simulation) => unknown }[] = [];
+  private compiledKey = '';
   /** Plummer softening length (AU) to avoid singular forces. */
   softening = 1e-4;
 
@@ -263,7 +273,46 @@ export class Simulation {
     this.usingTree = this.gravityMode === 'tree' || (this.gravityMode === 'auto' && n > this.treeThreshold);
     if (this.usingTree) this.computeForcesTree();
     else this.computeForcesDirect();
+    if (this.customForces.length) this.applyCustomForces();
     this.forcesDirty = false;
+  }
+
+  /** Add user-defined force laws to body accelerations. A law that throws is removed and reported. */
+  private applyCustomForces(): void {
+    const key = JSON.stringify(this.customForces);
+    if (key !== this.compiledKey) {
+      this.compiledKey = key;
+      this.compiledForces = [];
+      for (const f of this.customForces) {
+        try {
+          this.compiledForces.push({ name: f.name, fn: new Function('body', 'time', 'sim', f.code) as (b: Body, t: number, s: Simulation) => unknown });
+        } catch (err) {
+          this.reportScriptError(f.name, err);
+        }
+      }
+    }
+    for (const force of this.compiledForces) {
+      try {
+        for (const b of this.bodies) {
+          const a = force.fn(b, this.time, this) as number[] | undefined;
+          if (!a) continue;
+          const [ax, ay, az] = a;
+          if (Number.isFinite(ax) && Number.isFinite(ay) && Number.isFinite(az)) {
+            b.ax += ax;
+            b.ay += ay;
+            b.az += az;
+          }
+        }
+      } catch (err) {
+        this.reportScriptError(force.name, err);
+      }
+    }
+  }
+
+  private reportScriptError(name: string, err: unknown): void {
+    this.customForces = this.customForces.filter((f) => f.name !== name);
+    this.compiledKey = '';
+    this.events.push({ type: 'script', message: `Force "${name}" failed and was removed: ${err instanceof Error ? err.message : String(err)}`, x: 0, y: 0, z: 0, size: 0 });
   }
 
   private computeForcesDirect(): void {
@@ -1104,22 +1153,22 @@ export class Simulation {
   }
 
   /**
-   * The body `body` is actually orbiting: the heavier body it is gravitationally bound to
-   * with the strongest pull. Falls back to the dominant body.
+   * The body `body` is actually orbiting: the nearest heavier body it is gravitationally bound
+   * to (so a moon reports its planet, not the star whose pull is stronger). Falls back to the
+   * body with the strongest pull.
    */
   parentOf(body: Body): Body | undefined {
     let best: Body | undefined;
-    let bestPull = 0;
+    let bestD2 = Infinity;
     const g = this.effectiveG;
     for (const b of this.bodies) {
       if (b === body || b.mass < body.mass) continue;
       const dx = body.x - b.x, dy = body.y - b.y, dz = body.z - b.z;
       const d2 = dx * dx + dy * dy + dz * dz;
+      if (d2 >= bestD2) continue;
       const v2 = (body.vx - b.vx) ** 2 + (body.vy - b.vy) ** 2 + (body.vz - b.vz) ** 2;
-      const bound = v2 / 2 - (g * (b.mass + body.mass)) / Math.sqrt(d2) < 0;
-      const pull = b.mass / Math.max(d2, 1e-12);
-      if (bound && pull > bestPull) {
-        bestPull = pull;
+      if (v2 / 2 - (g * (b.mass + body.mass)) / Math.sqrt(d2) < 0) {
+        bestD2 = d2;
         best = b;
       }
     }

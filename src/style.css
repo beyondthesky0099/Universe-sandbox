@@ -841,6 +841,124 @@ body.lesson-active #graph-panel {
   top: 14px;
 }
 
+/* Scene builder */
+.describe textarea {
+  width: 100%;
+  resize: vertical;
+  font: inherit;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--panel-border);
+  border-radius: 7px;
+  padding: 6px 8px;
+  margin-top: 6px;
+}
+
+/* Replay bar */
+#replay-bar {
+  position: absolute;
+  left: 50%;
+  bottom: 36px;
+  transform: translateX(-50%);
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: min(760px, calc(100% - 24px));
+  padding: 8px 12px;
+  background: var(--panel);
+  border: 1px solid rgba(255, 120, 120, 0.5);
+  border-radius: 12px;
+  backdrop-filter: blur(10px);
+}
+
+#replay-seek {
+  flex: 1;
+}
+
+#btn-record.recording {
+  color: #ff5a5a;
+  border-color: #ff5a5a;
+  animation: pulse 1s infinite alternate;
+}
+
+@keyframes pulse {
+  to {
+    background: rgba(255, 90, 90, 0.3);
+  }
+}
+
+/* Console */
+#console-panel {
+  position: absolute;
+  left: 14px;
+  bottom: 14px;
+  z-index: 6;
+  width: min(560px, calc(100% - 28px));
+  max-height: 70%;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px;
+  background: rgba(8, 12, 22, 0.96);
+  border: 1px solid var(--panel-border);
+  border-radius: 12px;
+}
+
+#console-code {
+  min-height: 160px;
+  resize: vertical;
+  font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color: #d8e4ff;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid var(--panel-border);
+  border-radius: 7px;
+  padding: 8px;
+  tab-size: 2;
+}
+
+#console-log {
+  margin: 0;
+  max-height: 140px;
+  overflow: auto;
+  font: 11px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color: #a8b4cc;
+  white-space: pre-wrap;
+}
+
+#console-log .error {
+  color: #ff8080;
+}
+
+/* Embed mode: a clean viewport with minimal chrome */
+body.embed #topbar > :not(.clock),
+body.embed .panel,
+body.embed #hint,
+body.embed #btn-record,
+body.embed #btn-undo,
+body.embed #btn-redo,
+body.embed #btn-rewind {
+  display: none !important;
+}
+
+body.embed #topbar {
+  background: none;
+}
+
+#embed-open {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  z-index: 5;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  color: var(--accent);
+  text-decoration: none;
+  font-size: 12px;
+}
+
 .lagrange-label {
   color: #c8a0ff;
   font-weight: 600;

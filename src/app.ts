@@ -26,6 +26,12 @@ import { decodeScene, downloadJson, encodeScene, readSceneFile, type SceneFile }
 import { Tutorial } from './ui/tutorial';
 import { PostFX } from './render/postfx';
 import { MegaSim, webgpuAvailable, type MegaScenario } from './gpu/megaSim';
+import { buildFromSpec } from './game/sceneSpec';
+import { defaultServerUrl, ServerClient } from './net/server';
+import { Multiplayer, type Peer } from './net/multiplayer';
+import { parseReplay, ReplayPlayer, ReplayRecorder, serializeReplay, VideoRecorder } from './ui/replay';
+import { EXAMPLES, SCRIPT_HELP, ScriptRunner } from './ui/console';
+import type { SimState } from './sim/state';
 import { applyNudge, CHALLENGES, dailyChallenge, KMS, newChallengeState, shareText, type Challenge, type ChallengeResult, type ChallengeState } from './game/challenges';
 import { burnDirections, planHohmann } from './game/transfer';
 import { LESSONS, type Lesson } from './game/lessons';
@@ -141,6 +147,15 @@ export class App {
   private graphLastTime = NaN;
   private graphTimer = 0;
   private chart?: LineChart;
+  private server?: ServerClient;
+  private readonly mp: Multiplayer;
+  private mpTimer = 0;
+  private readonly recorder = new ReplayRecorder();
+  private player?: ReplayPlayer;
+  private preReplay?: SimState;
+  private readonly video = new VideoRecorder();
+  private readonly scripts: ScriptRunner;
+  private embed = false;
   private postfx!: PostFX;
   private postfxOn = prefs.get('postfx', true);
   private mega?: MegaSim;
@@ -165,6 +180,34 @@ export class App {
     this.galaxySeed = hashSeed ? seedFromString(hashSeed) : 1;
 
     if (window.innerWidth < 760) document.body.classList.add('panels-hidden');
+    this.mp = new Multiplayer({
+      onState: (state) => this.applyRemoteState(state),
+      onEdit: (state) => this.applyRemoteState(state),
+      onPeers: (peers) => this.renderPeers(peers),
+      onRole: (host) => {
+        $('mp-status').textContent = `Connected to room ${this.mp.room} as ${host ? 'host' : 'guest'}.`;
+        if (host && this.mp.peers.length > 1) toast('You are now hosting this room.');
+      },
+      onChat: (name, text) => toast(`${name}: ${text}`),
+      onClose: (reason) => {
+        $('mp-status').textContent = `Disconnected: ${reason}`;
+        $('btn-mp').classList.remove('active');
+      },
+    });
+    this.scripts = new ScriptRunner({
+      sim: this.host.sim,
+      commit: () => {
+        this.host.commit();
+        this.shareEdit();
+      },
+      setRunning: (on) => this.setRunning(on),
+      setTimeScale: (v) => this.setTimeScale(v),
+      select: (b) => this.selectBody(b),
+      follow: (b) => this.system.follow(b?.id),
+      setForces: (forces) => this.host.setSettings({ customForces: forces }),
+      getForces: () => this.sim.customForces,
+      log: (text, kind) => this.consoleLog(text, kind),
+    });
     this.bindUi();
     this.bindInput();
     window.addEventListener('resize', () => this.resize());
@@ -175,13 +218,29 @@ export class App {
     this.setTool('select');
     if (prefs.get('sound', false)) this.armSoundOnGesture();
 
+    this.embed = params.has('embed');
+    if (this.embed) this.enterEmbedMode();
+    const presetParam = params.get('preset');
+    const presetFromHash = PRESETS.find((p) => p.id === presetParam);
+    if (presetFromHash) this.loadScenario({ name: presetFromHash.name, load: () => presetFromHash.load(this.sim), presetId: presetFromHash.id }, { undoable: false });
+    const room = params.get('room');
+    const serverUrl = params.get('server') ?? defaultServerUrl(prefs.get<string | undefined>('serverUrl', undefined));
+    if (serverUrl) {
+      void this.connectServer(serverUrl, false).then(() => {
+        if (room && this.server) {
+          $<HTMLInputElement>('mp-room').value = room;
+          this.openMultiplayer();
+        }
+      });
+    }
+    this.runAutorunPlugins();
     const scene = params.get('scene');
     if (scene) {
       decodeScene(scene)
         .then((s) => this.applyScene(s, false))
         .catch((err) => toast(`Couldn't open shared scene: ${(err as Error).message}`));
     }
-    if (!prefs.get('tutorialDone', false) && params.get('tour') !== '0') setTimeout(() => this.openTutorial(), 1200);
+    if (!prefs.get('tutorialDone', false) && params.get('tour') !== '0' && !this.embed) setTimeout(() => this.openTutorial(), 1200);
 
     // setAnimationLoop (rather than requestAnimationFrame) also drives WebXR sessions.
     let last = performance.now();
@@ -210,8 +269,29 @@ export class App {
       this.fpsTime = 0;
     }
 
+    if (this.view === 'system' && this.player) {
+      this.player.tick(dt);
+      this.player.apply(this.sim);
+      this.system.update(dt, this.height, false, []);
+      this.renderView(this.system.scene, this.system.camera, this.system.lensesOnScreen(this.height));
+      this.labelRenderer.render(this.system.scene, this.system.camera);
+      if (this.frames % 4 === 0) this.updateReplayBar();
+      return;
+    }
     if (this.view === 'system') {
       const active = this.running && this.rewindTimer === undefined;
+      if (active) this.scripts.frame(dt);
+      if (this.recorder.recording && !this.recorder.tick(this.sim, dt)) {
+        toast('Replay memory limit reached; recording stopped.');
+        this.stopRecording();
+      }
+      if (this.mp.connected && this.mp.host && this.mp.peers.length > 1) {
+        this.mpTimer -= dt;
+        if (this.mpTimer <= 0) {
+          this.mpTimer = 0.25;
+          this.mp.sendState(this.syncState());
+        }
+      }
       const events = this.host.advance(active ? this.timeScale * dt : 0, 12);
       this.handleEvents(events);
       if (this.spawnDrag) this.updateSpawnPreview(performance.now());
@@ -275,6 +355,27 @@ export class App {
       } else {
         toast(e.message, e.type === 'collapse' || e.type === 'supernova' ? 'collapse' : e.type === 'ignite' ? 'ignite' : '');
       }
+    }
+  }
+
+  private enterEmbedMode(): void {
+    document.body.classList.add('embed');
+    const link = $<HTMLAnchorElement>('embed-open');
+    const params = new URLSearchParams(location.hash.slice(1));
+    params.delete('embed');
+    link.href = `${location.origin}${location.pathname}#${params.toString()}`;
+    link.classList.remove('hidden');
+  }
+
+  private async copyEmbed(): Promise<void> {
+    const code = await encodeScene(this.makeSceneFile(false));
+    const src = `${location.origin}${location.pathname}#embed=1&tour=0&scene=${code}`;
+    const html = `<iframe src="${src}" width="800" height="450" style="border:0;border-radius:12px" allow="fullscreen; xr-spatial-tracking" title="Astrarium: ${escapeHtml(this.scenario.name)}"></iframe>`;
+    try {
+      await navigator.clipboard.writeText(html);
+      toast('Embed code copied: paste it into any web page.');
+    } catch {
+      window.prompt('Copy this embed code:', html);
     }
   }
 
@@ -556,6 +657,254 @@ export class App {
     }
     if (setup.tip) setTimeout(() => toast(setup.tip!), 600);
     this.updateUndoButtons();
+    this.shareEdit();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Companion server: scene builder, gallery, multiplayer
+
+  private async connectServer(url: string, announce = true): Promise<void> {
+    const status = $('server-status');
+    try {
+      const client = new ServerClient(url);
+      const features = await client.health();
+      this.server = client;
+      prefs.set('serverUrl', url);
+      $<HTMLInputElement>('server-url').value = url;
+      const on = Object.entries(features).filter(([, v]) => v).map(([k]) => k);
+      status.textContent = `Connected: ${on.join(', ') || 'no features'}.`;
+      $('describe-status').textContent = features.describe ? '' : 'This server has the scene builder turned off.';
+      if (announce) toast('Connected to the Astrarium server');
+    } catch (err) {
+      this.server = undefined;
+      status.textContent = (err as Error).message;
+      if (announce) toast((err as Error).message);
+    }
+  }
+
+  private requireServer(): ServerClient | undefined {
+    if (this.server) return this.server;
+    toast('Connect a companion server first (Settings → Server).');
+    if (document.body.classList.contains('panels-hidden')) document.body.classList.remove('panels-hidden');
+    $('server-url').focus();
+    return undefined;
+  }
+
+  private async describeScene(): Promise<void> {
+    const server = this.requireServer();
+    const prompt = $<HTMLTextAreaElement>('describe-input').value.trim();
+    if (!server) return;
+    if (!prompt) return void toast('Describe the scene you want first.');
+    const btn = $<HTMLButtonElement>('btn-describe');
+    btn.disabled = true;
+    $('describe-status').textContent = 'Claude is designing your scene…';
+    try {
+      const spec = await server.describe(prompt);
+      this.loadScenario({ name: spec.title, description: spec.summary, load: () => buildFromSpec(this.sim, spec) });
+      this.syncSettingsUi();
+      $('describe-status').textContent = `Built “${spec.title}” with ${spec.bodies.length} bodies.`;
+    } catch (err) {
+      $('describe-status').textContent = (err as Error).message;
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  private async openGallery(): Promise<void> {
+    const server = this.requireServer();
+    if (!server) return;
+    $('gallery-modal').classList.remove('hidden');
+    $('gallery-status').textContent = 'Loading…';
+    try {
+      const sort = $<HTMLSelectElement>('gallery-sort').value as 'top' | 'new';
+      const scenes = await server.listScenes(sort);
+      $('gallery-status').textContent = scenes.length ? '' : 'No scenes yet: publish the first one!';
+      $('gallery-list').innerHTML = scenes
+        .map(
+          (s) =>
+            `<div class="card"><h3>${escapeHtml(s.title)}</h3><p>by ${escapeHtml(s.author)} · ${s.bodies} bodies · ${new Date(s.created).toLocaleDateString()}</p><div class="row"><button data-vote="${s.id}" title="Upvote">▲ ${s.votes}</button><span style="flex:1"></span><button class="primary" data-load="${s.id}">Load</button></div></div>`,
+        )
+        .join('');
+    } catch (err) {
+      $('gallery-status').textContent = (err as Error).message;
+    }
+  }
+
+  private async publishScene(): Promise<void> {
+    const server = this.requireServer();
+    if (!server) return;
+    const title = $<HTMLInputElement>('publish-name').value.trim() || this.scenario.name;
+    const author = $<HTMLInputElement>('publish-author').value.trim();
+    prefs.set('author', author);
+    try {
+      await server.publish(title, author, this.makeSceneFile(true));
+      $('publish-modal').classList.add('hidden');
+      toast('Published to the gallery!');
+    } catch (err) {
+      toast((err as Error).message);
+    }
+  }
+
+  private openMultiplayer(): void {
+    $('mp-modal').classList.remove('hidden');
+    const room = $<HTMLInputElement>('mp-room');
+    if (!room.value) room.value = Math.random().toString(36).slice(2, 8).toUpperCase();
+    const name = $<HTMLInputElement>('mp-name');
+    if (!name.value) name.value = prefs.get('author', '') || `Explorer ${Math.floor(Math.random() * 900 + 100)}`;
+    if (this.mp.connected) $('mp-status').textContent = `Connected to room ${this.mp.room} as ${this.mp.host ? 'host' : 'guest'}.`;
+  }
+
+  private async joinRoom(): Promise<void> {
+    const server = this.requireServer();
+    if (!server) return;
+    const room = $<HTMLInputElement>('mp-room').value.trim();
+    const name = $<HTMLInputElement>('mp-name').value.trim();
+    if (!/^[A-Za-z0-9-]{1,24}$/.test(room)) return void toast('Room codes use letters, digits and dashes.');
+    prefs.set('author', name);
+    $('mp-status').textContent = 'Connecting…';
+    try {
+      await this.mp.connect(server.wsUrl, room, name);
+      $('btn-mp').classList.add('active');
+      if (this.view !== 'system') this.setView('system');
+    } catch (err) {
+      $('mp-status').textContent = (err as Error).message;
+    }
+  }
+
+  private renderPeers(peers: Peer[]): void {
+    const before = new Set(($('mp-peers').dataset.ids ?? '').split(',').filter(Boolean));
+    for (const p of peers) if (before.size && !before.has(p.id) && p.id !== this.mp.id) toast(`${p.name} joined`);
+    $('mp-peers').dataset.ids = peers.map((p) => p.id).join(',');
+    $('mp-peers').innerHTML = peers
+      .map((p) => `<li><span>${escapeHtml(p.name)}${p.id === this.mp.id ? ' (you)' : ''}</span><span class="muted">${p.host ? 'host' : 'guest'}</span></li>`)
+      .join('');
+    // A newly joined guest should get the scene right away.
+    if (this.mp.host && peers.length > before.size) this.mpTimer = 0;
+  }
+
+  /** State to broadcast: bodies and a capped set of particles, plus the host's clock settings. */
+  private syncState(): SimState {
+    const state = captureState(this.sim, { json: true, particles: this.sim.particles.count <= 2500 });
+    (state as SimState & { view?: unknown }).view = { timeScale: this.timeScale, running: this.running };
+    return state;
+  }
+
+  private applyRemoteState(state: SimState): void {
+    const view = (state as SimState & { view?: { timeScale: number; running: boolean } }).view;
+    const forces = this.sim.customForces;
+    restoreState(this.sim, state);
+    this.sim.customForces = forces;
+    this.host.commit();
+    if (view && !this.mp.host) {
+      if (Math.abs(view.timeScale - this.timeScale) > 1e-9) this.setTimeScale(view.timeScale);
+      if (view.running !== this.running) this.setRunning(view.running);
+    }
+    if (this.system.selectedId !== undefined && !this.sim.getBody(this.system.selectedId)) this.hideBodyPanel();
+  }
+
+  /** Share a local change with the room (guests' changes go to the host, which rebroadcasts). */
+  private shareEdit(): void {
+    if (this.mp.connected) this.mp.sendEdit(this.syncState());
+  }
+
+  // ---------------------------------------------------------------------------
+  // Replays & video
+
+  private toggleRecording(): void {
+    if (this.recorder.recording) return this.stopRecording();
+    if (this.player) return;
+    this.recorder.start(this.scenario.name);
+    $('btn-record').classList.add('recording');
+    toast('Recording a replay… press ⏺ again to stop.');
+  }
+
+  private stopRecording(): void {
+    const replay = this.recorder.stop();
+    $('btn-record').classList.remove('recording');
+    if (!replay) return void toast('Recording was too short.');
+    this.startReplay(new ReplayPlayer(replay));
+  }
+
+  private startReplay(player: ReplayPlayer): void {
+    this.preReplay = captureState(this.sim);
+    this.wasRunningBeforeRewind = this.running;
+    this.setRunning(false);
+    this.player = player;
+    this.system.clearTrails();
+    $('replay-bar').classList.remove('hidden');
+    $('replay-play').textContent = '⏸';
+  }
+
+  private exitReplay(): void {
+    if (!this.player) return;
+    this.player = undefined;
+    $('replay-bar').classList.add('hidden');
+    if (this.preReplay) {
+      restoreState(this.sim, this.preReplay);
+      this.host.commit();
+    }
+    this.system.clearTrails();
+  }
+
+  private updateReplayBar(): void {
+    const p = this.player;
+    if (!p) return;
+    $<HTMLInputElement>('replay-seek').value = String(Math.round((p.position / Math.max(1, p.replay.frames.length - 1)) * 1000));
+    $('replay-time').textContent = `${p.time.toFixed(1)} / ${p.duration.toFixed(1)} s · ${formatTime(this.sim.time)}`;
+    $('replay-play').textContent = p.playing ? '⏸' : '▶';
+    if (!p.playing && this.video.active) void this.finishVideo();
+  }
+
+  private async toggleVideo(): Promise<void> {
+    if (!VideoRecorder.supported()) return void toast('Video recording is not supported in this browser.');
+    if (this.video.active) return this.finishVideo();
+    this.video.start(this.canvas);
+    $('btn-video').textContent = '⏹ Stop video';
+    toast('Recording video… press Stop video when done.');
+  }
+
+  private async finishVideo(): Promise<void> {
+    if (!this.video.active) return;
+    const blob = await this.video.stop();
+    $('btn-video').textContent = '🎥 Video';
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `astrarium-${this.scenario.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.webm`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+    toast('Video saved');
+  }
+
+  // ---------------------------------------------------------------------------
+  // Scripting console & plugins
+
+  private consoleLog(text: string, kind: 'out' | 'error' = 'out'): void {
+    const log = $('console-log');
+    const line = document.createElement('div');
+    if (kind === 'error') line.className = 'error';
+    line.textContent = text;
+    log.appendChild(line);
+    while (log.childElementCount > 200) log.firstElementChild!.remove();
+    log.scrollTop = log.scrollHeight;
+    if (kind === 'error' && $('console-panel').classList.contains('hidden')) toast(`Script error: ${text}`);
+  }
+
+  private plugins(): { name: string; code: string; autorun: boolean }[] {
+    return prefs.get('plugins', [] as { name: string; code: string; autorun: boolean }[]);
+  }
+
+  private renderPlugins(): void {
+    $('plugin-list').innerHTML = this.plugins()
+      .map(
+        (p, i) =>
+          `<li><span>🧩 ${escapeHtml(p.name)}</span><span><label class="muted small"><input type="checkbox" data-autorun="${i}" ${p.autorun ? 'checked' : ''}/> autorun</label> <button data-run="${i}">Run</button> <button data-edit="${i}">Edit</button> <button data-del="${i}" class="danger">✕</button></span></li>`,
+      )
+      .join('');
+  }
+
+  private runAutorunPlugins(): void {
+    for (const p of this.plugins()) if (p.autorun) this.scripts.run(p.code);
   }
 
   private buildGalaxy(seed: number): void {
@@ -784,6 +1133,7 @@ export class App {
     fn();
     this.host.commit();
     this.updateUndoButtons();
+    this.shareEdit();
   }
 
   private restore(state: ReturnType<typeof captureState>): void {
@@ -1182,6 +1532,7 @@ export class App {
     if (this.challenge) {
       fn();
       this.host.commit();
+      this.shareEdit();
     } else {
       this.mutate(label, fn);
     }
@@ -1810,6 +2161,11 @@ export class App {
         else void this.exitToGalaxy();
       }
       if (key === '?') this.openTutorial();
+      if (key === '`') {
+        e.preventDefault();
+        $('btn-console').click();
+        return;
+      }
       if (this.view === 'galaxy') {
         if (key === 'enter' && this.galaxy.selected !== -1) void this.enterTarget(this.galaxy.selected);
         if (key === 'escape') this.selectTarget(-1);
@@ -1955,7 +2311,10 @@ export class App {
       input.value = '';
       if (!file) return;
       try {
-        this.applyScene(await readSceneFile(file));
+        // The Open button accepts both scene files and replay files.
+        const text = await file.text();
+        if (text.includes('"astrarium-replay"')) this.startReplay(new ReplayPlayer(parseReplay(text)));
+        else this.applyScene(await readSceneFile(file));
       } catch (err) {
         toast((err as Error).message);
       }
@@ -2006,6 +2365,155 @@ export class App {
     $('btn-transfer').addEventListener('click', () => {
       const dv = Number($('btn-transfer').dataset.dv);
       if (Number.isFinite(dv)) this.burn(dv >= 0 ? 'prograde' : 'retrograde', Math.abs(dv));
+    });
+
+    // Companion server, gallery, multiplayer
+    $('btn-server').addEventListener('click', () => {
+      const url = $<HTMLInputElement>('server-url').value.trim();
+      if (url) void this.connectServer(url);
+    });
+    $('btn-describe').addEventListener('click', () => void this.describeScene());
+    $<HTMLTextAreaElement>('describe-input').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) void this.describeScene();
+    });
+    $('btn-gallery').addEventListener('click', () => void this.openGallery());
+    $('gallery-close').addEventListener('click', () => $('gallery-modal').classList.add('hidden'));
+    $('gallery-sort').addEventListener('change', () => void this.openGallery());
+    $('gallery-list').addEventListener('click', async (e) => {
+      const el = e.target as HTMLElement;
+      const load = el.closest<HTMLElement>('[data-load]')?.dataset.load;
+      const vote = el.closest<HTMLElement>('[data-vote]');
+      try {
+        if (load && this.server) {
+          this.applyScene(await this.server.getScene(load));
+          $('gallery-modal').classList.add('hidden');
+        } else if (vote && this.server) {
+          vote.textContent = `▲ ${await this.server.vote(vote.dataset.vote!)}`;
+        }
+      } catch (err) {
+        toast((err as Error).message);
+      }
+    });
+    $('btn-publish').addEventListener('click', () => {
+      if (!this.requireServer()) return;
+      $<HTMLInputElement>('publish-name').value = this.scenario.name;
+      $<HTMLInputElement>('publish-author').value = prefs.get('author', '');
+      $('publish-modal').classList.remove('hidden');
+    });
+    $('publish-cancel').addEventListener('click', () => $('publish-modal').classList.add('hidden'));
+    $('publish-go').addEventListener('click', () => void this.publishScene());
+    $('btn-mp').addEventListener('click', () => (this.requireServer() ? this.openMultiplayer() : undefined));
+    $('mp-close').addEventListener('click', () => $('mp-modal').classList.add('hidden'));
+    $('mp-join').addEventListener('click', () => void this.joinRoom());
+    $('mp-leave').addEventListener('click', () => {
+      this.mp.disconnect();
+      $('mp-status').textContent = 'Left the room.';
+      $('mp-peers').innerHTML = '';
+      $('btn-mp').classList.remove('active');
+    });
+    $('mp-invite').addEventListener('click', async () => {
+      const room = $<HTMLInputElement>('mp-room').value.trim();
+      const link = `${location.origin}${location.pathname}#room=${encodeURIComponent(room)}${this.server ? `&server=${encodeURIComponent(this.server.base)}` : ''}`;
+      try {
+        await navigator.clipboard.writeText(link);
+        toast('Invite link copied');
+      } catch {
+        window.prompt('Copy this invite link:', link);
+      }
+    });
+    $<HTMLInputElement>('mp-chat').addEventListener('keydown', (e) => {
+      const input = e.target as HTMLInputElement;
+      if (e.key === 'Enter' && input.value.trim()) {
+        this.mp.chat(input.value.trim());
+        input.value = '';
+      }
+    });
+
+    // Embeds, video, replays
+    $('btn-embed').addEventListener('click', () => void this.copyEmbed());
+    $('btn-video').addEventListener('click', () => void this.toggleVideo());
+    $('btn-record').addEventListener('click', () => this.toggleRecording());
+    $('replay-play').addEventListener('click', () => {
+      const p = this.player;
+      if (!p) return;
+      if (!p.playing && p.position >= p.replay.frames.length - 1) p.position = 0;
+      p.playing = !p.playing;
+    });
+    $<HTMLInputElement>('replay-seek').addEventListener('input', (e) => this.player?.seek(Number((e.target as HTMLInputElement).value) / 1000));
+    $<HTMLSelectElement>('replay-speed').addEventListener('change', (e) => this.player && (this.player.speed = Number((e.target as HTMLSelectElement).value)));
+    $('replay-exit').addEventListener('click', () => this.exitReplay());
+    $('replay-save').addEventListener('click', () => {
+      if (!this.player) return;
+      const blob = new Blob([serializeReplay(this.player.replay)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `astrarium-replay-${Date.now()}.json`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 2000);
+    });
+    $('replay-video').addEventListener('click', () => {
+      if (!this.player || !VideoRecorder.supported()) return void toast('Video recording is not supported in this browser.');
+      this.player.position = 0;
+      this.player.playing = true;
+      this.video.start(this.canvas);
+      toast('Exporting video: it saves automatically when the replay ends.');
+    });
+    // Console & plugins
+    const examples = $<HTMLSelectElement>('console-examples');
+    examples.innerHTML = `<option value="">Examples…</option>` + EXAMPLES.map((ex, i) => `<option value="${i}">${escapeHtml(ex.name)}</option>`).join('');
+    examples.addEventListener('change', () => {
+      const ex = EXAMPLES[Number(examples.value)];
+      if (ex) $<HTMLTextAreaElement>('console-code').value = ex.code;
+      examples.value = '';
+    });
+    const toggleConsole = () => {
+      $('console-panel').classList.toggle('hidden');
+      this.renderPlugins();
+      if (!$('console-panel').classList.contains('hidden')) $('console-code').focus();
+    };
+    $('btn-console').addEventListener('click', toggleConsole);
+    $('console-close').addEventListener('click', toggleConsole);
+    const runConsole = () => {
+      const code = $<HTMLTextAreaElement>('console-code').value;
+      if (code.trim()) this.scripts.run(code);
+    };
+    $('console-run').addEventListener('click', runConsole);
+    $<HTMLTextAreaElement>('console-code').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        runConsole();
+      }
+      e.stopPropagation(); // keep sandbox shortcuts out of the editor
+    });
+    $('console-stop').addEventListener('click', () => {
+      this.scripts.stop();
+      this.host.setSettings({ customForces: [] });
+      this.consoleLog('Stopped scripts and removed custom forces.');
+    });
+    $('console-help').addEventListener('click', () => this.consoleLog(SCRIPT_HELP));
+    $('console-save').addEventListener('click', () => {
+      const code = $<HTMLTextAreaElement>('console-code').value.trim();
+      if (!code) return;
+      const name = window.prompt('Plugin name:', 'My plugin');
+      if (!name) return;
+      prefs.set('plugins', [...this.plugins().filter((p) => p.name !== name), { name, code, autorun: false }]);
+      this.renderPlugins();
+    });
+    $('plugin-list').addEventListener('click', (e) => {
+      const el = e.target as HTMLElement;
+      const list = this.plugins();
+      const idx = (attr: string) => Number(el.closest<HTMLElement>(`[${attr}]`)?.getAttribute(attr));
+      if (el.closest('[data-run]')) this.scripts.run(list[idx('data-run')].code);
+      else if (el.closest('[data-edit]')) $<HTMLTextAreaElement>('console-code').value = list[idx('data-edit')].code;
+      else if (el.closest('[data-del]')) {
+        list.splice(idx('data-del'), 1);
+        prefs.set('plugins', list);
+        this.renderPlugins();
+      } else if (el.closest('[data-autorun]')) {
+        list[idx('data-autorun')].autorun = (el as HTMLInputElement).checked;
+        prefs.set('plugins', list);
+      }
     });
 
     // Graph & lessons

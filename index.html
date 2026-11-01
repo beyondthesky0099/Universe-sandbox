@@ -26,10 +26,14 @@
           <button id="btn-play" class="icon" title="Play / pause (Space)" aria-label="Play or pause">⏸</button>
           <span id="sim-time">0 days</span>
           <span id="lag" class="warn hidden" title="The simulation can't keep up at this speed. Time is being dropped.">lagging</span>
+          <button id="btn-record" class="icon" title="Record a replay (then play, scrub, save or export it)" aria-label="Record replay">⏺</button>
           <button id="btn-undo" class="icon" title="Undo (Ctrl+Z)" aria-label="Undo" disabled>↶</button>
           <button id="btn-redo" class="icon" title="Redo (Ctrl+Shift+Z)" aria-label="Redo" disabled>↷</button>
         </div>
         <div id="stats"></div>
+        <button id="btn-console" class="icon" title="Scripting console (`)" aria-label="Console">⌨</button>
+        <button id="btn-gallery" class="icon" title="Community gallery" aria-label="Gallery">🌐</button>
+        <button id="btn-mp" class="icon" title="Multiplayer" aria-label="Multiplayer">👥</button>
         <button id="btn-learn" class="icon" title="Interactive lessons" aria-label="Lessons">📚</button>
         <button id="btn-graph" class="icon" title="Live graph (G)" aria-label="Graph">📈</button>
         <button id="btn-challenges" class="icon" title="Challenges & daily puzzle" aria-label="Challenges">🏆</button>
@@ -107,6 +111,13 @@
             <button id="btn-preset-load">Load</button>
           </div>
           <p id="preset-desc" class="muted small"></p>
+          <div class="describe">
+            <textarea id="describe-input" rows="2" maxlength="800" placeholder="✨ Describe a scene… e.g. “a red dwarf with three water worlds and a rogue Jupiter passing through”"></textarea>
+            <div class="row">
+              <button id="btn-describe" class="primary" style="flex: 1">Create with Claude</button>
+            </div>
+            <p id="describe-status" class="muted tiny"></p>
+          </div>
           <div class="row">
             <input id="solar-date" type="date" title="Load the real Solar System on this date" />
             <button id="btn-solar-date" title="Real planet positions from JPL ephemerides">Solar System</button>
@@ -122,6 +133,11 @@
             <button id="btn-save" title="Download this scene as a file">Save</button>
             <button id="btn-open" title="Open a saved scene file">Open</button>
             <button id="btn-share" title="Copy a link to this scene">Share link</button>
+          </div>
+          <div class="row buttons">
+            <button id="btn-embed" title="Copy HTML to embed this scene in a web page">Embed</button>
+            <button id="btn-video" title="Record what you see to a video file">🎥 Video</button>
+            <button id="btn-publish" title="Publish this scene to the community gallery">Publish</button>
           </div>
           <input id="file-input" type="file" accept=".json,application/json" class="hidden" />
         </section>
@@ -211,6 +227,14 @@
           <div class="row buttons">
             <button id="btn-vr" class="hidden" title="View in a VR headset (WebXR)">🥽 Enter VR</button>
           </div>
+          <label class="row">
+            <span>Server</span>
+            <input id="server-url" type="text" placeholder="https://your-astrarium-server" spellcheck="false" />
+          </label>
+          <div class="row buttons">
+            <button id="btn-server">Connect</button>
+          </div>
+          <p id="server-status" class="muted tiny">Optional: a companion server adds the gallery, multiplayer and the Claude scene builder.</p>
           <p id="engine-info" class="muted small"></p>
         </section>
       </aside>
@@ -379,6 +403,91 @@
           <p id="gpu-stats" class="muted small"></p>
         </div>
       </div>
+
+      <div id="replay-bar" class="hidden">
+        <button id="replay-play" class="icon" aria-label="Play or pause replay">⏸</button>
+        <input id="replay-seek" type="range" min="0" max="1000" value="0" aria-label="Replay position" />
+        <span id="replay-time" class="muted small"></span>
+        <select id="replay-speed" aria-label="Replay speed">
+          <option value="0.25">¼×</option>
+          <option value="0.5">½×</option>
+          <option value="1" selected>1×</option>
+          <option value="2">2×</option>
+          <option value="4">4×</option>
+        </select>
+        <button id="replay-video" title="Play from the start and save as video">🎥 Export video</button>
+        <button id="replay-save">Save</button>
+        <button id="replay-exit" class="primary">Exit replay</button>
+      </div>
+
+      <div id="console-panel" class="hidden">
+        <div class="row">
+          <h3 style="flex: 1; margin: 0">⌨ Scripting console</h3>
+          <select id="console-examples" aria-label="Examples"></select>
+          <button id="console-close" class="icon" aria-label="Close console">✕</button>
+        </div>
+        <textarea id="console-code" spellcheck="false" placeholder="// JavaScript with an api object. Ctrl+Enter runs it."></textarea>
+        <div class="row buttons">
+          <button id="console-run" class="primary">Run (Ctrl+Enter)</button>
+          <button id="console-stop" title="Stop onFrame hooks and remove custom forces">Stop</button>
+          <button id="console-help">API help</button>
+          <button id="console-save" title="Save as a plugin">Save plugin</button>
+        </div>
+        <ul id="plugin-list" class="list"></ul>
+        <pre id="console-log"></pre>
+      </div>
+
+      <div id="gallery-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="gallery-title">
+        <div class="modal-card wide">
+          <div class="row">
+            <h2 id="gallery-title" style="flex: 1">🌐 Community gallery</h2>
+            <select id="gallery-sort" aria-label="Sort">
+              <option value="top">Top</option>
+              <option value="new">Newest</option>
+            </select>
+            <button id="gallery-close" class="icon" aria-label="Close">✕</button>
+          </div>
+          <p id="gallery-status" class="muted small"></p>
+          <div id="gallery-list" class="cards"></div>
+        </div>
+      </div>
+
+      <div id="publish-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="publish-title">
+        <div class="modal-card">
+          <h2 id="publish-title">Publish to the gallery</h2>
+          <label class="row"><span>Title</span><input id="publish-name" type="text" maxlength="80" /></label>
+          <label class="row"><span>Your name</span><input id="publish-author" type="text" maxlength="40" /></label>
+          <p class="muted small">Everyone will be able to load this scene (including its particles).</p>
+          <div class="row buttons">
+            <button id="publish-cancel">Cancel</button>
+            <button id="publish-go" class="primary">Publish</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="mp-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="mp-title">
+        <div class="modal-card">
+          <div class="row">
+            <h2 id="mp-title" style="flex: 1">👥 Multiplayer</h2>
+            <button id="mp-close" class="icon" aria-label="Close">✕</button>
+          </div>
+          <p class="muted small">Build together in real time. The first person in a room hosts the simulation; everyone can spawn, nudge and edit.</p>
+          <label class="row"><span>Your name</span><input id="mp-name" type="text" maxlength="24" /></label>
+          <label class="row"><span>Room</span><input id="mp-room" type="text" maxlength="24" /></label>
+          <div class="row buttons">
+            <button id="mp-join" class="primary">Join room</button>
+            <button id="mp-leave">Leave</button>
+            <button id="mp-invite">Copy invite link</button>
+          </div>
+          <p id="mp-status" class="muted small"></p>
+          <ul id="mp-peers" class="list"></ul>
+          <div class="row">
+            <input id="mp-chat" type="text" maxlength="300" placeholder="Say something…" />
+          </div>
+        </div>
+      </div>
+
+      <a id="embed-open" class="hidden" target="_blank" rel="noopener">Open in Astrarium ↗</a>
 
       <div id="toasts"></div>
       <footer id="hint"></footer>

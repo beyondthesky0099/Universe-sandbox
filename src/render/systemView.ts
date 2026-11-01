@@ -667,7 +667,9 @@ export class SystemView {
       gwmerger: 0xb8d4ff,
       redgiant: 0xff7040,
       nebula: 0x60f0d0,
+      script: 0x000000,
     };
+    if (e.type === 'script') return;
     if (e.type === 'gwmerger') {
       for (let k = 0; k < 3; k++) {
         const mesh = new THREE.Mesh(

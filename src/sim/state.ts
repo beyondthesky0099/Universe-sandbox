@@ -39,6 +39,8 @@ export interface SimSettings {
   relativity?: boolean;
   lightSpeedScale?: number;
   evolutionRate?: number;
+  /** Only sent to the physics worker; never saved into files or links. */
+  customForces?: { name: string; code: string }[];
 }
 
 export interface ShockwaveState {

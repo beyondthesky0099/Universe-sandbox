@@ -42,7 +42,7 @@ Still procedural:
 - every other seeded galaxy
 - the made-up scenarios (Giant Impact, Ring Maker, …), which are deliberately fictional
 
-**Suggested next steps:** the rest of D2 (smaller NASA maps for Mars, Mercury and Saturn); exoplanet hosts in the galaxy search and filters; carving the Encke and Keeler gaps
+**Suggested next steps:** remaining D2 maps (Saturn and Io from NASA Photojournal; check each one by eye); exoplanet hosts in the galaxy search and filters; carving the Encke and Keeler gaps
 (this needs published widths).
 
 Plan, in priority order:
@@ -109,12 +109,17 @@ Plan, in priority order:
       `bodyVisual.ts`; retrograde spin for Venus, Uranus and Pluto. Visual spin *rate* is still
       cosmetic, because real rates strobe at yr/s speeds.) Real planet colours, axial tilts and rotation periods from A1's data in
       `bodyVisual.ts`.
-- [~] D2. Real maps for Earth (with clouds), the Moon and Jupiter, from NASA public-domain
-      sources (`scripts/build-planet-textures.mjs`, `REAL_MAPS` in `bodyVisual.ts`). Still
-      procedural: Mercury, Venus, Mars, Saturn, Uranus and Neptune. NASA/USGS global mosaics
-      exist but are huge (Mercury is 800 MB, Mars several GB); find smaller official
-      versions. Solar System Scope (CC BY 4.0) serves an HTML page to scripted downloads, so
-      it isn't automated. Don't work around that.
+- [~] D2. Real maps for 11 bodies (`scripts/build-planet-textures.mjs`, `REAL_MAPS` in
+      `bodyVisual.ts`):
+      - Earth with clouds, the Moon and Jupiter come from NASA.
+      - Mercury (desaturated: the USGS "colour" mosaic is tinted), Mars, Phobos, Europa,
+        Ganymede, Rhea, Iapetus and Vesta come from USGS Astrogeology browse JPEGs, found by
+        filtering https://astrogeology.usgs.gov/search/results.
+      Rejected after viewing: Callisto (missing-data stripe), Io (polar gores, not
+      cylindrical), Enceladus and Triton (printed map sheets), the Venus radar maps (not what
+      the eye sees) and Titan (near-infrared). Still procedural: Venus, Saturn, Uranus,
+      Neptune, Io, Callisto, Titan and the smaller moons. Solar System Scope serves an HTML
+      page to scripted downloads, so don't automate it.
 
 ## Notes and lessons learned
 - Close-ups at real size: the camera's near plane is 1e-8 AU, and `controls.minDistance`

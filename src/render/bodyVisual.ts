@@ -5,7 +5,7 @@ import type { Climate } from '../sim/climate';
 import { EARTH_MASS } from '../sim/units';
 import { makePlanetTextures, seedFromName } from './planetTextures';
 import { accretionTexture, glowTexture } from './textures';
-import { getSolarData, poleScene } from '../sim/solarSystemData';
+import { getSolarData, poleScene, REAL_COLORS } from '../sim/solarSystemData';
 
 const SPHERE = new THREE.SphereGeometry(1, 64, 32);
 const SPHERE_LOW = new THREE.SphereGeometry(1, 24, 12);
@@ -57,11 +57,26 @@ export function atmosphereMaterial(color: number, intensity: number): THREE.Shad
 }
 
 /** Real NASA surface maps (public/textures, built by scripts/build-planet-textures.mjs). */
-const REAL_MAPS: Record<string, { map: string; clouds?: string }> = {
+const REAL_MAPS: Record<string, { map: string; clouds?: string; grey?: boolean }> = {
+  Mercury: { map: 'mercury.jpg' },
   Earth: { map: 'earth.jpg', clouds: 'earth-clouds.jpg' },
   Moon: { map: 'moon.jpg' },
+  Mars: { map: 'mars.jpg' },
+  Phobos: { map: 'phobos.jpg', grey: true },
   Jupiter: { map: 'jupiter.jpg' },
+  Europa: { map: 'europa.jpg', grey: true },
+  Ganymede: { map: 'ganymede.jpg', grey: true },
+  Rhea: { map: 'rhea.jpg', grey: true },
+  Iapetus: { map: 'iapetus.jpg', grey: true },
+  Vesta: { map: 'vesta.jpg', grey: true },
 };
+
+/** A body's real colour scaled so its brightest channel is 1: tints greyscale maps without darkening them. */
+function lightTint(hex: number | undefined): THREE.Color {
+  const c = new THREE.Color(hex ?? 0xffffff);
+  const m = Math.max(c.r, c.g, c.b) || 1;
+  return new THREE.Color(c.r / m, c.g / m, c.b / m);
+}
 const realTextureCache = new Map<string, THREE.Texture>();
 
 /** Load (once) and share a real map. Shared textures are never disposed with a body. */
@@ -301,6 +316,8 @@ export class BodyVisual {
     const real = REAL_MAPS[this.name];
     if (!real || this.climate === 'molten') return;
     mat.map = realTexture(real.map);
+    // Greyscale mosaics take a light tint of the body's real colour; colour maps stay as they are.
+    mat.color.copy(real.grey ? lightTint(REAL_COLORS[this.name]) : new THREE.Color(0xffffff));
     mat.emissiveMap = null;
     mat.emissive.set(0x000000);
     mat.needsUpdate = true;

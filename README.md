@@ -30,6 +30,8 @@ Everything except the optional companion server runs in the browser.
 | ![Saturn's rings](docs/screenshots/saturn-rings.png) | ![True scale](docs/screenshots/true-scale.png) |
 | **Exoplanet hosts on the Milky Way map** | **NASA maps: Earth, Moon, Jupiter** |
 | ![Exoplanet hosts](docs/screenshots/milky-way-exoplanets.png) | ![Real maps](docs/screenshots/real-maps.png) |
+| **More real maps: Mercury, Mars, Phobos, Europa, Ganymede, Rhea, Iapetus, Vesta** | |
+| ![More real maps](docs/screenshots/real-maps-more.png) | |
 
 ## Run it
 
@@ -114,9 +116,13 @@ need the [companion server](#companion-server). Without one, they explain how to
   approaches.
 
 ### Visuals
-- **Real surfaces:** Earth (NASA Blue Marble, with real cloud cover), the Moon (LRO colour map)
-  and Jupiter (Cassini's global map) use NASA imagery once you zoom in close. Other bodies use
-  procedural surfaces for now.
+- **Real surfaces:** zoom in close and 11 bodies show real spacecraft maps:
+  - Earth (NASA Blue Marble, with real cloud cover), the Moon (LRO) and Jupiter (Cassini)
+  - Mercury (MESSENGER) and Mars (Viking)
+  - Phobos, Europa, Ganymede, Rhea, Iapetus and Vesta (USGS global mosaics from Viking,
+    Voyager, Galileo, Cassini and Dawn)
+
+  Other bodies use procedural surfaces.
 - **Black-hole gravitational lensing** in screen space, plus **bloom**.
 - Procedural planets with oceans, continents, ice, lava, storms, cloud layers, atmosphere glow
   and rings, all generated in more detail as you zoom in.
@@ -305,8 +311,9 @@ push and pull request.
   Administration under the Exoplanet Exploration Program.* The catalogue in
   `public/data/exoplanets.json` comes from the `pscomppars` table. Rebuild it with
   `node scripts/build-exoplanets.mjs`.
-- Planet surface maps are NASA imagery (Visible Earth Blue Marble, the SVS CGI Moon Kit, and
-  Cassini PIA07782). Sources are listed in `public/textures/CREDITS.md`. Rebuild them with
+- Planet surface maps are NASA mission imagery: Visible Earth Blue Marble, the SVS CGI Moon
+  Kit, Cassini PIA07782, and USGS Astrogeology global mosaics (public domain). Each source and
+  processing step is listed in `public/textures/CREDITS.md`. Rebuild them with
   `node scripts/build-planet-textures.mjs`.
 - Saturn's ring radii, optical depths and albedos come from the NASA Saturnian Rings Fact
   Sheet (nssdc.gsfc.nasa.gov/planetary/factsheet/satringfact.html). Rebuild them with

@@ -33,7 +33,7 @@ The user asked for *"all real astronomical data"*. Today, real data covers plane
 procedural or illustrative. Plan, in priority order:
 
 ### A. The real Solar System (source: JPL Horizons API + JPL SBDB API; both reachable)
-- [ ] A1. `scripts/build-solar-system.mjs` → `public/data/solar-system.json`: osculating
+- [x] A1. `scripts/build-solar-system.mjs` → `public/data/solar-system.json`: osculating
       elements at a fixed epoch (2026-11-01) from Horizons (`EPHEM_TYPE=ELEMENTS`, ecliptic
       J2000):
       - planets, Pluto, and the dwarf planets Ceres, Eris, Haumea and Makemake
@@ -41,14 +41,14 @@ procedural or illustrative. Plan, in priority order:
         Hale–Bopp, 67P)
       - major moons, with elements relative to their planet (`CENTER=500@<planet>`)
       - real GM, mean radius, rotation period and axial tilt
-- [ ] A2. `src/sim/solarSystemData.ts`: load the JSON and propagate elements from the epoch
+- [x] A2. `src/sim/solarSystemData.ts`: load the JSON and propagate elements from the epoch
       to any date with two-body Kepler. Planets keep the Standish tables, which are valid for
       3000 BC – 3000 AD.
 - [ ] A3. Presets: "Solar System (real)" with real dwarf planets, asteroids and comets
       instead of the illustrative belt. Add per-planet moon systems (Earth–Moon, Mars, Jupiter,
       Saturn, Uranus, Neptune, Pluto–Charon). The moons aren't added to the whole-system
       preset because their short periods would force tiny timesteps.
-- [ ] A4. Tests: compare positions with Horizons vectors at a second date (to within about
+- [x] A4. Tests: compare positions with Horizons vectors at a second date (to within about
       0.01 AU for heliocentric bodies, and a few percent of the orbit for moons).
 - [ ] A5. Real radii in the body panel, and an optional "true scale" toggle that uses real radii
       instead of the inflated game radii.
@@ -84,6 +84,12 @@ procedural or illustrative. Plan, in priority order:
       example NASA public-domain maps), and must be fetched at build time, not hot-linked.
 
 ## Notes and lessons learned
+- Moons use *fitted mean elements*: about 200 orbits of Horizons samples, fitted to a
+  constant a/e/i plus linear node, periapsis and mean-longitude rates. A single osculating
+  snapshot drifted 50–65% of the orbit within months for the Moon and Io. Now the error is
+  about 2% for the Moon and under 0.1% for the others (`tests/solarsystem.test.ts`).
+- `scripts/build-solar-system.mjs` caches Horizons responses in `node_modules/.cache/horizons`
+  because Horizons sometimes returns HTTP 503. Just rerun it.
 - Run the moons in planet-centred presets. A global adaptive timestep with Phobos (7.6 h
   period) makes the full Solar System crawl.
 - Horizons API: `https://ssd.jpl.nasa.gov/api/horizons.api?format=json&COMMAND='599'&...`.

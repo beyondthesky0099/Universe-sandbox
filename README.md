@@ -24,6 +24,8 @@ Everything except the optional companion server runs in the browser.
 | ![Giant impact](docs/screenshots/giant-impact.png) | ![Star cluster](docs/screenshots/star-cluster.png) |
 | **Real Solar System (JPL data)** | **Jupiter's moons at true scale** |
 | ![Real Solar System](docs/screenshots/real-solar-system.png) | ![Jupiter's moons](docs/screenshots/jupiter-moons.png) |
+| **Every star within 33 light-years (HYG)** | |
+| ![Nearby stars](docs/screenshots/nearby-stars.png) | |
 
 ## Run it
 
@@ -67,8 +69,12 @@ need the [companion server](#companion-server). Without one, they explain how to
 - **Real exoplanets:** a browser for 4,847 confirmed systems (6,451 planets) from the NASA
   Exoplanet Archive. You can search them and filter for temperate worlds. Load any system as a
   live simulation; masses estimated from radii are marked.
-- **Nearby stars:** a 3D map of every known planet-hosting star within 15 parsecs of the Sun,
-  at true positions.
+- **Real stars:** **Nearby stars** maps all 319 catalogued stars within 10 parsecs (33
+  light-years) at their true 3D positions, including red dwarfs, white dwarfs and binaries.
+  Colours come from B−V, masses are estimated from spectral type, and the 29 stars with known
+  exoplanets can be visited.
+- **The real night sky:** the sandbox background shows the 8,920 naked-eye stars
+  (magnitude ≤ 6.5) in their true directions, so the constellations are where they should be.
 
 ### Learn
 - **Lessons** (📚): Kepler's laws, escape velocity, orbital resonance, tides and the Roche
@@ -268,6 +274,10 @@ push and pull request.
   Administration under the Exoplanet Exploration Program.* The catalogue in
   `public/data/exoplanets.json` comes from the `pscomppars` table. Rebuild it with
   `node scripts/build-exoplanets.mjs`.
+- Star data: **HYG database v4.1** by David Nash (astronexus), licensed **CC BY-SA 4.0**
+  (https://codeberg.org/astronexus/hyg). The derived files `public/data/stars-near.json` and
+  `public/data/stars-bright.json` are also CC BY-SA 4.0. Rebuild them with
+  `node scripts/build-stars.mjs`.
 - Planet positions use E. M. Standish, *Keplerian Elements for Approximate Positions of the
   Major Planets* (JPL Solar System Dynamics).
 - Dwarf planets, asteroids, comets and moons come from NASA/JPL Horizons

@@ -54,7 +54,7 @@ export class SystemView {
   quality: RenderQuality;
 
   private readonly visuals = new Map<number, BodyVisual>();
-  private readonly starfield = createStarfield();
+  private starfield: THREE.Object3D = createStarfield();
   private readonly lights: THREE.PointLight[] = [];
   private readonly particlePoints: THREE.Points;
   private readonly particlePos: Float32Array;
@@ -343,6 +343,19 @@ export class SystemView {
   }
 
   /** World size of one screen pixel at the given point. */
+  /** Replace the procedural background stars (e.g. with the real sky). */
+  setSky(sky: THREE.Object3D): void {
+    this.scene.remove(this.starfield);
+    this.starfield.traverse((o) => {
+      if (o instanceof THREE.Points) {
+        o.geometry.dispose();
+        (o.material as THREE.Material).dispose();
+      }
+    });
+    this.starfield = sky;
+    this.scene.add(sky);
+  }
+
   worldPerPixel(p: THREE.Vector3, viewportHeight: number): number {
     const dist = this.camera.position.distanceTo(p);
     return (2 * dist * Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2))) / viewportHeight;

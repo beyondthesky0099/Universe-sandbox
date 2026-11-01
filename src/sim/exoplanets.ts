@@ -114,14 +114,18 @@ export function loadCatalog(baseUrl = import.meta.env.BASE_URL): Promise<ExoCata
   return catalogPromise;
 }
 
-/** Equatorial (RA, Dec, distance) → scene coordinates in AU. */
+/** Equatorial (RA, Dec, distance) → scene coordinates in AU (ecliptic J2000 frame). */
 export function hostPosition(h: ExoHost): [number, number, number] {
   const AU_PER_PC = 206264.806;
   const d = (h.distancePc || 0) * AU_PER_PC;
   const ra = (h.raDeg * Math.PI) / 180, dec = (h.decDeg * Math.PI) / 180;
   const x = d * Math.cos(dec) * Math.cos(ra);
-  const y = d * Math.cos(dec) * Math.sin(ra);
-  const z = d * Math.sin(dec);
+  const ye = d * Math.cos(dec) * Math.sin(ra);
+  const ze = d * Math.sin(dec);
+  // Equatorial → ecliptic J2000 (the frame used for the Solar System), then → scene (x, z, −y).
+  const eps = (23.4392911 * Math.PI) / 180;
+  const y = Math.cos(eps) * ye + Math.sin(eps) * ze;
+  const z = -Math.sin(eps) * ye + Math.cos(eps) * ze;
   return [x, z, -y];
 }
 

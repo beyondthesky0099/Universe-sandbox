@@ -62,15 +62,15 @@ procedural or illustrative. Plan, in priority order:
 ### B. Real stars (source: HYG database v4.1, CC BY-SA 4.0)
 - URL: `https://raw.githubusercontent.com/astronexus/HYG-Database/main/hyg/CURRENT/hygdata_v41.csv`
   (the repo moved to codeberg.org/astronexus/hyg, but the raw GitHub file still works).
-- [ ] B1. `scripts/build-stars.mjs` → `public/data/stars-near.json` (all stars within 25 pc, with
+- [x] B1. `scripts/build-stars.mjs` → `public/data/stars-near.json` (all stars within 25 pc, with
       name, xyz, spectral type, magnitude and colour index) and `public/data/stars-bright.json`
       (stars of naked-eye magnitude, mag < 6.5).
-- [ ] B2. "Nearby stars" uses every real star, not just planet hosts. Mark planet hosts and
+- [x] B2. "Nearby stars" uses every real star, not just planet hosts. Mark planet hosts and
       give masses and colours from spectral type and B–V.
-- [ ] B3. The Solar System view's background sky uses the real bright stars, in the correct
+- [x] B3. The Solar System view's background sky uses the real bright stars, in the correct
       ecliptic orientation, so real constellations appear. This replaces the procedural
       `starfield.ts` there.
-- [ ] B4. README credit: "HYG database by David Nash (astronexus), CC BY-SA 4.0". The derived
+- [x] B4. README credit: "HYG database by David Nash (astronexus), CC BY-SA 4.0". The derived
       JSON files must keep that licence.
 
 ### C. The real Milky Way on the galaxy map
@@ -90,6 +90,11 @@ procedural or illustrative. Plan, in priority order:
       example NASA public-domain maps), and must be fetched at build time, not hot-linked.
 
 ## Notes and lessons learned
+- Stars: `src/sim/stars.ts` (`loadStarNeighbourhood`, `starPhysics`, `skyPoints`) and
+  `createRealSky` in `src/render/starfield.ts`. The near file covers 20 pc and the scene shows
+  10 pc (319 stars). Showing 15 pc would mean about 940 bodies, which is heavy with labels.
+- `hostPosition` (exoplanets) now converts equatorial → ecliptic, matching HYG and the Solar
+  System. `tests/stars.test.ts` checks that both catalogues agree on Proxima's position.
 - Real data enters through `src/sim/solarSystemData.ts`. `main.ts` preloads it with a 5 s
   timeout before the app starts, so presets can stay synchronous via `getSolarData()`. Without
   data, they fall back to built-in values.

@@ -6,6 +6,7 @@ import { mulberry32, pick, seedFromString } from './procgen/rng';
 import { generateStarSystem, starSummary, type StarSystemSpec } from './procgen/starSystem';
 import { GalaxyView, type GalaxyTarget } from './render/galaxyView';
 import { QUALITY_PRESETS, SystemView } from './render/systemView';
+import { createRealSky } from './render/starfield';
 import { isCompact, kindForMass, mainSequenceLifetime, mergedKind, NEUTRON_MAX_MASS, radiusFor, type Body, type BodyKind } from './sim/body';
 import { isTidallyLocked, nearResonance, orbitalPeriod } from './sim/analysis';
 import { bodyTemperature, climateFor, formatTemperature, isHabitable } from './sim/climate';
@@ -17,7 +18,8 @@ import { predictPath } from './sim/predict';
 import { galacticCore, loadSolarSystemOnDate, loadStarSystem, PRESETS, type SceneSetup } from './sim/presets';
 import { type SimEvent } from './sim/simulation';
 import { captureState, restoreState } from './sim/state';
-import { EXOPLANET_ACKNOWLEDGEMENT, loadCatalog, loadExoSystem, loadNeighbourhood, type ExoCatalog, type ExoHost } from './sim/exoplanets';
+import { EXOPLANET_ACKNOWLEDGEMENT, loadCatalog, loadExoSystem, type ExoCatalog, type ExoHost } from './sim/exoplanets';
+import { loadBrightStars, loadNearStars, loadStarNeighbourhood } from './sim/stars';
 import { EARTH_MASS, fmt, formatDistance, formatMass, formatSpeed, formatTime, G, JUPITER_MASS } from './sim/units';
 import { $, escapeHtml, isTyping, setFacts, toast } from './ui/dom';
 import { GalaxyStore, prefs } from './ui/galaxyStore';
@@ -233,6 +235,10 @@ export class App {
         }
       });
     }
+    // The real night sky (HYG catalogue) replaces the procedural background once it loads.
+    void loadBrightStars()
+      .then((stars) => this.system.setSky(createRealSky(stars)))
+      .catch(() => undefined);
     this.runAutorunPlugins();
     const scene = params.get('scene');
     if (scene) {
@@ -1825,8 +1831,8 @@ export class App {
 
   private async loadNeighbourhoodScene(): Promise<void> {
     try {
-      const c = await this.getCatalog();
-      this.loadScenario({ name: 'the solar neighbourhood', load: () => loadNeighbourhood(this.sim, c, 15), origin: { kind: 'neighbourhood' } });
+      const [stars, c] = await Promise.all([loadNearStars(), this.getCatalog().catch(() => undefined)]);
+      this.loadScenario({ name: 'the solar neighbourhood', load: () => loadStarNeighbourhood(this.sim, stars, c, 10), origin: { kind: 'neighbourhood' } });
       this.setView('system');
     } catch (err) {
       toast((err as Error).message);

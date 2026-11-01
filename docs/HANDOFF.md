@@ -144,6 +144,15 @@ Plan, in priority order:
 - [x] F7. Black holes and pulsars on the Milky Way map (SIMBAD + arXiv)
 - [x] F8. The CMB (WMAP 9-year ILC, `scripts/build-cmb.py`)
 
+### G. Next round (3 of 7 done)
+- [x] G1. Voyager Grand Tour (`scripts/build-voyager.mjs`, `src/sim/voyager.ts`)
+- [x] G2. Planetarium: Sky tab (`src/sim/sky.ts`, `src/render/skyView.ts`)
+- [x] G3. Solar eclipses (`scripts/build-eclipses.mjs`, `src/sim/eclipse.ts`)
+- [ ] G4. Gaia star velocities (check the Gaia archive is reachable first)
+- [ ] G5. Play gravitational-wave chirps as sound
+- [ ] G6. Halley's return in 2061, with comet tails pointing away from the Sun
+- [ ] G7. Phone performance pass
+
 Ideas for later: a Gaia-based star catalogue (better velocities: HYG puts Gliese 710 at
 1.2 ly, while Gaia puts it much closer); pulsars from the ATNF catalogue when reachable;
 dynamical friction for galaxy mergers; Virgo-cluster distances from redshift-independent

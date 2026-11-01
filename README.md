@@ -214,6 +214,31 @@ closest approach, using the asteroid's, Moon's and Sun's real positions from JPL
 true scale. The simulation then reproduces the encounter: the tests confirm Apophis's closest
 distance to within 2% and its time to within an hour.
 
+### Voyager Grand Tour
+Pick a flyby and press **Fly with Voyager** to ride along on one of the six real planetary
+encounters: Voyager 1 at Jupiter and Saturn, and Voyager 2 at Jupiter, Saturn, Uranus and
+Neptune. Each starts two days out, with the spacecraft, the planet's major moons and the Sun
+at their JPL Horizons positions, at true scale. The camera rides behind the probe looking at
+the planet; press the button again to continue the tour. The simulated closest approaches
+match Horizons to within 0.1% and a minute.
+
+### Sky from Earth (planetarium)
+The **Sky** tab shows the real sky from anywhere on Earth at any time: the Sun, the Moon with
+its phase, the planets and 8,900 stars, with twilight colours. Pick a city, type a latitude and
+longitude, or use your location, then run time forward. The Moon comes from the main terms of
+the ELP-2000/82 lunar theory (Meeus), and the planets from JPL's approximate elements. The tests
+check positions against JPL Horizons at three sites and four dates: the Moon is within half an
+arcminute and most planets within one.
+
+### Solar eclipses
+In the Sky tab, pick one of the 18 total, annular and hybrid eclipses of 2024–2035 and press
+**Watch**. You stand at the point of greatest eclipse just before totality: the sky darkens
+and the corona appears. A world map shows the path of totality and the moving shadow; click
+it to watch from anywhere, and the panel gives the local duration and time. The shadow is
+traced from JPL Horizons Sun and Moon positions and agrees with NASA's catalogue: time of
+greatest eclipse within 1 s, central duration within 1 s, and path width within 1% (about 7%
+for grazing eclipses). The corona's streamers are decorative.
+
 ### Real gravitational-wave events
 Pick one of 11 famous LIGO/Virgo/KAGRA detections and press **Replay merger**. The list
 includes GW150914 (the first ever), the neutron-star collision GW170817, GW190521 (the most
@@ -397,6 +422,14 @@ push and pull request.
   reprojected from HEALPix by `python3 -I scripts/build-cmb.py` (needs numpy and ImageMagick).
 - Spacecraft trajectories: NASA/JPL Horizons, state vectors every 10 days (rebuild with
   `node scripts/build-spacecraft.mjs`).
+- Voyager encounters: NASA/JPL Horizons planetocentric states of Voyager 1 and 2, the moons and
+  the Sun (rebuild with `node scripts/build-voyager.mjs`).
+- Solar eclipses: the list and reference values from NASA's Five Millennium Canon of Solar
+  Eclipses (Espenak & Meeus, eclipse.gsfc.nasa.gov), with JPL Horizons apparent Sun and Moon
+  positions (rebuild with `node scripts/build-eclipses.mjs`).
+- Planetarium checks: JPL Horizons topocentric positions in `tests/fixtures/sky-reference.json`
+  (rebuild with `node scripts/build-sky-reference.mjs`). The Moon's theory is from Meeus,
+  *Astronomical Algorithms* (2nd ed., ch. 47).
 - Galaxies: the **Updated Nearby Galaxy Catalog** (Karachentsev, Makarov & Kaisina 2013, AJ
   145, 101) and the **2MASS Redshift Survey** (Huchra et al. 2012, ApJS 199, 26), retrieved
   from VizieR (CDS). Rebuild them with `node scripts/build-galaxies.mjs`. Survey distances use

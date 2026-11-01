@@ -461,6 +461,36 @@ button.link {
   font-size: 11px;
 }
 
+.list.tall {
+  max-height: 50vh;
+}
+
+.tiny {
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+input[type='date'] {
+  font: inherit;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--panel-border);
+  border-radius: 7px;
+  padding: 5px 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+.badge {
+  display: inline-block;
+  padding: 0 6px;
+  border-radius: 999px;
+  font-size: 10px;
+  background: rgba(61, 220, 132, 0.18);
+  color: #8ff0b8;
+  margin-left: 4px;
+}
+
 .list:empty {
   display: none;
 }

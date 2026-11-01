@@ -4,6 +4,7 @@ import { kelvinToRgb, starColor } from './color';
 import { keplerToState, OrbitalElements } from './orbits';
 import type { Simulation } from './simulation';
 import { EARTH_MASS, G, JUPITER_MASS } from './units';
+import { planetStates, type PlanetName } from './ephemeris';
 
 export interface SceneSetup {
   /** Suggested camera distance from the origin (AU). */
@@ -84,36 +85,27 @@ export function addParticleDisk(
 
 const deg = Math.PI / 180;
 
+/** name, mass (M⊕), a (AU), e, inc (deg), colour, kind */
+const SOLAR_PLANETS: [string, number, number, number, number, number, Body['kind']][] = [
+  // name, mass (M⊕), a (AU), e, inc (deg), color
+  ['Mercury', 0.055, 0.387, 0.206, 7.0, 0x9a8f86, 'rocky'],
+  ['Venus', 0.815, 0.723, 0.007, 3.4, 0xe3c58a, 'rocky'],
+  ['Earth', 1.0, 1.0, 0.017, 0.0, 0x3f78c8, 'rocky'],
+  ['Mars', 0.107, 1.524, 0.093, 1.85, 0xc1440e, 'rocky'],
+  ['Jupiter', 317.8, 5.203, 0.049, 1.3, 0xd8b48a, 'gas'],
+  ['Saturn', 95.2, 9.537, 0.054, 2.5, 0xe3d2a8, 'gas'],
+  ['Uranus', 14.5, 19.19, 0.047, 0.8, 0x9fd6e0, 'gas'],
+  ['Neptune', 17.1, 30.07, 0.009, 1.8, 0x4b70dd, 'gas'],
+];
+
+
 const solarSystem: Preset = {
   id: 'solar',
-  name: 'Solar System',
-  description: 'The Sun and eight planets with real masses and orbits, plus an asteroid belt.',
+  name: 'Solar System (today)',
+  description: 'The Sun and eight planets at their real positions today (JPL approximate ephemerides), with real masses, plus an asteroid belt.',
   load(sim) {
-    const sun = sim.addBody({ name: 'Sun', kind: 'star', mass: 1, color: starColor(1), age: 4.6e9 });
-    const planets: [string, number, number, number, number, number, Body['kind']][] = [
-      // name, mass (M⊕), a (AU), e, inc (deg), color
-      ['Mercury', 0.055, 0.387, 0.206, 7.0, 0x9a8f86, 'rocky'],
-      ['Venus', 0.815, 0.723, 0.007, 3.4, 0xe3c58a, 'rocky'],
-      ['Earth', 1.0, 1.0, 0.017, 0.0, 0x3f78c8, 'rocky'],
-      ['Mars', 0.107, 1.524, 0.093, 1.85, 0xc1440e, 'rocky'],
-      ['Jupiter', 317.8, 5.203, 0.049, 1.3, 0xd8b48a, 'gas'],
-      ['Saturn', 95.2, 9.537, 0.054, 2.5, 0xe3d2a8, 'gas'],
-      ['Uranus', 14.5, 19.19, 0.047, 0.8, 0x9fd6e0, 'gas'],
-      ['Neptune', 17.1, 30.07, 0.009, 1.8, 0x4b70dd, 'gas'],
-    ];
-    for (const [name, m, a, e, inc, color, kind] of planets) {
-      addOrbiting(sim, sun, { name, mass: m * EARTH_MASS, color, kind }, {
-        a,
-        e,
-        inc: inc * deg,
-        lan: Math.random() * Math.PI * 2,
-        argp: Math.random() * Math.PI * 2,
-        nu: Math.random() * Math.PI * 2,
-      });
-    }
-    addParticleDisk(sim, sun, { count: 1500, inner: 2.2, outer: 3.3, thickness: 0.04, color: [0.62, 0.58, 0.52] });
-    sim.recenter();
-    return { cameraDistance: 9, timeScale: 0.4, elevation: 0.6 };
+    const setup = loadSolarSystemOnDate(sim, new Date());
+    return { ...setup, timeScale: 0.4, elevation: 0.6, tip: undefined };
   },
 };
 
@@ -468,6 +460,24 @@ const sunsFuture: Preset = {
     return { ...setup, cameraDistance: 7, timeScale: 1.5, tip: 'The Sun is 4.6 billion years old. Its red-giant phase begins in ~5 billion years (≈27 simulated years).' };
   },
 };
+
+/** The real Solar System on a given date, from JPL's approximate planetary elements. */
+export function loadSolarSystemOnDate(sim: Simulation, date: Date): SceneSetup {
+  const sun = sim.addBody({ name: 'Sun', kind: 'star', mass: 1, color: starColor(1), age: 4.6e9 });
+  const states = new Map(planetStates(date).map((p) => [p.name, p]));
+  for (const [name, m, , , , color, kind] of SOLAR_PLANETS) {
+    const st = states.get(name as PlanetName)!;
+    sim.addBody({ name, mass: m * EARTH_MASS, kind, color, x: st.pos[0], y: st.pos[1], z: st.pos[2], vx: st.vel[0], vy: st.vel[1], vz: st.vel[2] });
+  }
+  addParticleDisk(sim, sun, { count: 1500, inner: 2.2, outer: 3.3, thickness: 0.04, color: [0.62, 0.58, 0.52] });
+  sim.recenter();
+  return {
+    cameraDistance: 9,
+    timeScale: 0.1,
+    elevation: 1.1,
+    tip: `Planet positions for ${date.toISOString().slice(0, 10)} from JPL's approximate ephemerides. Asteroids are illustrative.`,
+  };
+}
 
 export const PRESETS: Preset[] = [
   solarSystem,

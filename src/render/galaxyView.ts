@@ -93,8 +93,29 @@ function nebulaTexture(seed: number): THREE.CanvasTexture {
   return tex;
 }
 
-/** Selection target in the galaxy: a star index, or the central black hole. */
-export type GalaxyTarget = number | 'core';
+/** Selection target in the galaxy: a star index, the central black hole, or the Sun. */
+export type GalaxyTarget = number | 'core' | 'sol';
+
+function textSprite(text: string, color: string): THREE.Sprite {
+  const canvas = document.createElement('canvas');
+  canvas.width = 256;
+  canvas.height = 64;
+  const ctx = canvas.getContext('2d')!;
+  ctx.font = '600 26px Inter, system-ui, sans-serif';
+  ctx.fillStyle = color;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.shadowColor = 'rgba(0,0,0,0.9)';
+  ctx.shadowBlur = 6;
+  ctx.fillText(text, 128, 32);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, sizeAttenuation: false, depthTest: false, transparent: true }));
+  sprite.scale.set(0.16, 0.04, 1);
+  sprite.center.set(0.5, -0.6);
+  sprite.renderOrder = 11;
+  return sprite;
+}
 
 /** Procedurally generated spiral galaxy where every bright point is a selectable star system. */
 export class GalaxyView {
@@ -114,6 +135,7 @@ export class GalaxyView {
   private readonly core: THREE.Sprite;
   private readonly hole: THREE.Group;
   private readonly marker: THREE.Sprite;
+  private readonly solMarker = new THREE.Group();
   private readonly bookmarkPoints: THREE.Points;
   private readonly visitedPoints: THREE.Points;
   private readonly starfield = createStarfield(3000, 23);
@@ -166,6 +188,13 @@ export class GalaxyView {
       this.scene.add(pts);
       return pts;
     };
+    // "You are here".
+    const solRing = new THREE.Sprite(new THREE.SpriteMaterial({ map: ringTexture(), color: 0xffd36b, sizeAttenuation: false, depthTest: false, transparent: true }));
+    solRing.scale.setScalar(0.03);
+    solRing.renderOrder = 11;
+    this.solMarker.add(solRing, textSprite('You are here', '#ffd36b'));
+    this.scene.add(this.solMarker);
+
     this.bookmarkPoints = markerPoints(0xffd36b, 16);
     this.visitedPoints = markerPoints(0x6f8fb0, 9);
   }
@@ -216,6 +245,7 @@ export class GalaxyView {
       this.nebulaGroup.add(sprite);
     }
 
+    this.solMarker.position.set(...this.data.sol);
     this.applyPointScale();
     this.select(-1);
     this.setMarkers([], []);
@@ -244,6 +274,7 @@ export class GalaxyView {
 
   targetPosition(target: GalaxyTarget): THREE.Vector3 {
     if (target === 'core') return new THREE.Vector3();
+    if (target === 'sol') return new THREE.Vector3(...this.data.sol);
     const p = this.data.stars.positions;
     return new THREE.Vector3(p[target * 3], p[target * 3 + 1], p[target * 3 + 2]);
   }
@@ -334,9 +365,15 @@ export class GalaxyView {
         best = i;
       }
     }
-    // The core wins when the click is right on it.
+    // The core and the Sun win when the click is right on them.
     const coreScore = test(0, 0, 0, 14);
-    if (coreScore < Infinity && coreScore - 4 < bestScore) best = 'core';
+    if (coreScore < Infinity && coreScore - 4 < bestScore) {
+      best = 'core';
+      bestScore = coreScore - 4;
+    }
+    const [sx, sy, sz] = this.data.sol;
+    const solScore = test(sx, sy, sz, 14);
+    if (solScore < Infinity && solScore - 4 < bestScore) best = 'sol';
     return best;
   }
 

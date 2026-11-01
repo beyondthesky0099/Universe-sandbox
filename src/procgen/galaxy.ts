@@ -18,6 +18,8 @@ export interface GalaxyData {
   };
   /** Star names, parallel to stars.seeds. */
   names: string[];
+  /** Where the Sun sits ("you are here"): on an arm, about halfway out. */
+  sol: [number, number, number];
   clusters: ClusterInfo[];
   nebulae: NebulaInfo[];
   /** Dark dust lanes trailing the spiral arms. */
@@ -218,9 +220,14 @@ export function generateGalaxy(seed: number, starCount = 30000, glowCount = 6000
     });
   }
 
+  const solT = 0.55;
+  const solTheta = solT * shape.twist + 0.12;
+  const sol: [number, number, number] = [Math.cos(solTheta) * solT * R, 0.4, Math.sin(solTheta) * solT * R];
+
   return {
     seed,
     name,
+    sol,
     arms: shape.arms,
     radius: GALAXY_RADIUS,
     stars: { count: starCount, positions: sp, colors: sc, sizes: ss, seeds },

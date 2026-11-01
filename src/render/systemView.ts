@@ -93,7 +93,7 @@ export class SystemView {
     quality: RenderQuality = QUALITY_PRESETS.medium,
   ) {
     this.quality = quality;
-    this.camera = new THREE.PerspectiveCamera(55, 1, 1e-4, 1e7);
+    this.camera = new THREE.PerspectiveCamera(55, 1, 1e-4, 1e9);
     this.camera.position.set(0, 5, 8);
     this.controls = new OrbitControls(this.camera, domElement);
     this.controls.enableDamping = true;
@@ -239,6 +239,7 @@ export class SystemView {
     this.approachGroup.visible = false;
     const el = setup.elevation ?? 0.8;
     const dir = new THREE.Vector3(0, Math.sin(el), Math.cos(el));
+    this.controls.maxDistance = Math.max(2e5, setup.cameraDistance * 20);
     this.controls.target.set(0, 0, 0);
     this.camera.position.copy(dir).multiplyScalar(setup.cameraDistance * zoomFrom);
     this.cameraAnim =

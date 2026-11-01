@@ -14,9 +14,10 @@ import { forecast, type Forecast } from './sim/forecast';
 import { SimHost } from './sim/host';
 import { circularOrbitVelocity } from './sim/orbits';
 import { predictPath } from './sim/predict';
-import { galacticCore, loadStarSystem, PRESETS, type SceneSetup } from './sim/presets';
+import { galacticCore, loadSolarSystemOnDate, loadStarSystem, PRESETS, type SceneSetup } from './sim/presets';
 import { type SimEvent } from './sim/simulation';
 import { captureState, restoreState } from './sim/state';
+import { EXOPLANET_ACKNOWLEDGEMENT, loadCatalog, loadExoSystem, loadNeighbourhood, type ExoCatalog, type ExoHost } from './sim/exoplanets';
 import { EARTH_MASS, fmt, formatDistance, formatMass, formatSpeed, formatTime, G, JUPITER_MASS } from './sim/units';
 import { $, escapeHtml, isTyping, setFacts, toast } from './ui/dom';
 import { GalaxyStore, prefs } from './ui/galaxyStore';
@@ -62,10 +63,16 @@ interface SpawnDrag {
 }
 
 /** Where the current sandbox scene came from. */
-type Origin = { kind: 'star'; index: number; spec: StarSystemSpec } | { kind: 'core' };
+type Origin =
+  | { kind: 'star'; index: number; spec: StarSystemSpec }
+  | { kind: 'core' }
+  | { kind: 'sol' }
+  | { kind: 'exo'; host: ExoHost }
+  | { kind: 'neighbourhood' };
 
 interface Scenario {
   name: string;
+  description?: string;
   load: () => SceneSetup;
   presetId?: string;
   origin?: Origin;
@@ -116,6 +123,10 @@ export class App {
   private features?: Uint8Array;
   private scanToken = 0;
   private quality: QualityName = prefs.get<QualityName>('quality', 'medium');
+  private catalog?: ExoCatalog;
+  /** Typical camera distance of the loaded scene; zooming far beyond it returns to the galaxy. */
+  private sceneScale = 10;
+  private exoOpen = false;
 
   constructor() {
     this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas, antialias: true, logarithmicDepthBuffer: true });
@@ -196,7 +207,7 @@ export class App {
         this.updateForecast();
       }
       if (this.frames % 6 === 0) this.updateSystemHud();
-      if (!this.transitioning && this.system.cameraDistance > AUTO_EXIT_DISTANCE) void this.exitToGalaxy();
+      if (!this.transitioning && this.system.cameraDistance > this.exitDistance) void this.exitToGalaxy();
     } else {
       this.galaxy.update(dt);
       this.renderer.render(this.galaxy.scene, this.galaxy.camera);
@@ -268,6 +279,7 @@ export class App {
     document.querySelectorAll<HTMLElement>('[data-view]').forEach((el) => {
       const match = el.dataset.view === view;
       if (el.id === 'star-panel') el.classList.toggle('hidden', !match || this.galaxy.selected === -1);
+      else if (el.id === 'exo-panel') el.classList.toggle('hidden', !match || !this.exoOpen);
       else if (el.id === 'body-panel') el.classList.toggle('hidden', !match || this.system.selectedId === undefined);
       else el.classList.toggle('hidden', !match);
     });
@@ -290,6 +302,8 @@ export class App {
       let scenario: Scenario;
       if (target === 'core') {
         scenario = { name: galacticCore.name, load: () => galacticCore.load(this.sim), presetId: galacticCore.id, origin: { kind: 'core' } };
+      } else if (target === 'sol') {
+        scenario = { name: 'the Solar System', load: () => loadSolarSystemOnDate(this.sim, new Date()), origin: { kind: 'sol' } };
       } else {
         const spec = generateStarSystem(this.galaxy.data.stars.seeds[target]);
         scenario = { name: spec.star.name, load: () => loadStarSystem(this.sim, spec), origin: { kind: 'star', index: target, spec } };
@@ -320,13 +334,14 @@ export class App {
       await this.fade(true);
       // Restore the sandbox camera so returning later doesn't immediately warp out again.
       const offset = camPos.clone().sub(camTarget);
-      if (offset.length() > AUTO_EXIT_DISTANCE * 0.5) offset.setLength(AUTO_EXIT_DISTANCE * 0.1);
+      if (offset.length() > this.exitDistance * 0.5) offset.setLength(this.sceneScale);
       this.system.camera.position.copy(camTarget).add(offset);
       this.system.controls.target.copy(camTarget);
       this.system.stopCameraAnimation();
       this.setView('galaxy');
       const origin = this.scenario.origin;
-      const target: GalaxyTarget | undefined = origin?.kind === 'core' ? 'core' : origin?.kind === 'star' ? origin.index : undefined;
+      const target: GalaxyTarget | undefined =
+        origin?.kind === 'core' ? 'core' : origin?.kind === 'star' ? origin.index : origin ? 'sol' : undefined;
       if (target !== undefined) {
         this.selectTarget(target);
         this.galaxy.arriveFrom(target, 0.3, 12);
@@ -348,6 +363,10 @@ export class App {
     } finally {
       this.transitioning = false;
     }
+  }
+
+  private get exitDistance(): number {
+    return Math.max(AUTO_EXIT_DISTANCE, this.sceneScale * 12);
   }
 
   private resetPhysicsDefaults(): void {
@@ -374,6 +393,7 @@ export class App {
     this.resetPhysicsDefaults();
     this.scenario = sc;
     const setup = sc.load();
+    this.sceneScale = setup.cameraDistance;
     this.host.commit();
     this.history.clearTimeline();
     this.system.reset(setup, zoomFrom);
@@ -384,13 +404,15 @@ export class App {
 
     const select = $<HTMLSelectElement>('preset-select');
     select.value = sc.presetId ?? '';
-    if (sc.presetId) $('preset-desc').textContent = PRESETS.find((p) => p.id === sc.presetId)?.description ?? '';
+    $('preset-desc').textContent = sc.presetId ? (PRESETS.find((p) => p.id === sc.presetId)?.description ?? '') : (sc.description ?? setup.tip ?? '');
     $('origin').classList.toggle('hidden', !sc.origin);
     if (sc.origin?.kind === 'star') {
       $('origin-name').textContent = sc.origin.spec.star.name;
       $('preset-desc').textContent = describeSystem(sc.origin.spec);
     } else if (sc.origin?.kind === 'core') {
       $('origin-name').textContent = 'the galactic core';
+    } else if (sc.origin) {
+      $('origin-name').textContent = sc.origin.kind === 'exo' ? sc.origin.host.name : sc.origin.kind === 'sol' ? 'home' : 'the solar neighbourhood';
     }
     if (setup.focus) {
       const body = this.sim.bodies.find((b) => b.name === setup.focus);
@@ -443,6 +465,20 @@ export class App {
       return;
     }
     const bookmarkBtn = $('btn-star-bookmark');
+    $('btn-star-neighbourhood').classList.toggle('hidden', target !== 'sol');
+    if (target === 'sol') {
+      $('star-name').textContent = 'The Sun · you are here';
+      setFacts($('star-facts'), [
+        ['Class', 'G-type star'],
+        ['Mass', '1 M☉'],
+        ['Age', '4.6 Gyr'],
+        ['Planets', '8 (real positions today)'],
+        ['Neighbours', 'Thousands of known exoplanet systems'],
+      ]);
+      bookmarkBtn.classList.add('hidden');
+      panel.classList.remove('hidden');
+      return;
+    }
     if (target === 'core') {
       $('star-name').textContent = 'Heart of the Galaxy';
       setFacts($('star-facts'), [
@@ -477,7 +513,7 @@ export class App {
 
   private toggleBookmark(): void {
     const t = this.galaxy.selected;
-    if (t === -1 || t === 'core') return;
+    if (typeof t !== 'number' || t === -1) return;
     const on = this.store.toggleBookmark(t);
     toast(on ? `Bookmarked ${this.galaxy.data.names[t]}` : 'Bookmark removed');
     this.refreshMarkers();
@@ -739,6 +775,7 @@ export class App {
       this.hideBodyPanel();
       return;
     }
+    this.closeExoBrowser();
     $('body-panel').classList.remove('hidden');
     this.forecastTimer = 0;
     this.updateBodyPanel();
@@ -877,6 +914,89 @@ export class App {
     const alertsEl = $('body-alerts');
     if (alertsEl.innerHTML !== html) alertsEl.innerHTML = html;
     $('btn-supernova').classList.toggle('hidden', !this.sim.canSupernova(body));
+    $('btn-visit').classList.toggle('hidden', !(body.tag?.startsWith('exohost:') || body.tag === 'home'));
+  }
+
+  // ---------------------------------------------------------------------------
+  // Real data: exoplanets, the solar neighbourhood, dated Solar System
+
+  private async getCatalog(): Promise<ExoCatalog> {
+    if (this.catalog) return this.catalog;
+    $('exo-status').textContent = 'Loading the NASA Exoplanet Archive catalogue…';
+    this.catalog = await loadCatalog();
+    return this.catalog;
+  }
+
+  private async openExoBrowser(): Promise<void> {
+    this.exoOpen = true;
+    this.hideBodyPanel();
+    $('exo-panel').classList.remove('hidden');
+    $('exo-credit').textContent = EXOPLANET_ACKNOWLEDGEMENT;
+    try {
+      const c = await this.getCatalog();
+      const planets = c.hosts.reduce((n, h) => n + h.planets.length, 0);
+      $('exo-status').textContent = `${c.hosts.length.toLocaleString()} systems, ${planets.toLocaleString()} confirmed planets (retrieved ${c.retrieved}).`;
+      this.renderExoList();
+    } catch (err) {
+      $('exo-status').textContent = (err as Error).message;
+    }
+  }
+
+  private closeExoBrowser(): void {
+    this.exoOpen = false;
+    $('exo-panel').classList.add('hidden');
+  }
+
+  private renderExoList(): void {
+    const c = this.catalog;
+    if (!c) return;
+    const q = $<HTMLInputElement>('exo-search').value.trim().toLowerCase();
+    const filter = $<HTMLSelectElement>('exo-filter').value;
+    let hosts = c.hosts.filter((h) => !q || h.name.toLowerCase().includes(q) || h.planets.some((p) => p.name.toLowerCase().includes(q)));
+    if (filter === 'habitable') hosts = hosts.filter((h) => h.planets.some((p) => p.habitable));
+    else if (filter === 'multi') hosts = hosts.filter((h) => h.planets.length >= 3);
+    else if (filter === 'recent') hosts = [...hosts].sort((a, b) => Math.max(...b.planets.map((p) => p.year ?? 0)) - Math.max(...a.planets.map((p) => p.year ?? 0)));
+    const shown = hosts.slice(0, 150);
+    $('exo-list').innerHTML = shown.length
+      ? shown
+          .map((h) => {
+            const ly = Number.isFinite(h.distancePc) ? `${(h.distancePc * 3.2616).toFixed(h.distancePc < 30 ? 1 : 0)} ly` : '? ly';
+            const hab = h.planets.some((p) => p.habitable) ? '<span class="badge">temperate</span>' : '';
+            return `<li tabindex="0" data-host="${escapeHtml(h.name)}"><span>${escapeHtml(h.name)}${hab}</span><span class="muted">${h.planets.length} pl · ${ly}</span></li>`;
+          })
+          .join('')
+      : '<li class="muted">No matching systems</li>';
+  }
+
+  private loadExoHost(host: ExoHost): void {
+    this.closeExoBrowser();
+    const temperate = host.planets.filter((p) => p.habitable).length;
+    const desc = `${host.name}: ${host.planets.length} confirmed planet${host.planets.length === 1 ? '' : 's'}${temperate ? `, ${temperate} temperate` : ''}, ${
+      Number.isFinite(host.distancePc) ? `${(host.distancePc * 3.2616).toFixed(1)} light-years away` : 'distance unknown'
+    }. Data: NASA Exoplanet Archive; masses marked as estimated come from radii. Body sizes are scaled to fit the orbits.`;
+    this.loadScenario({ name: host.name, description: desc, load: () => loadExoSystem(this.sim, host), origin: { kind: 'exo', host } });
+  }
+
+  private async loadNeighbourhoodScene(): Promise<void> {
+    try {
+      const c = await this.getCatalog();
+      this.loadScenario({ name: 'the solar neighbourhood', load: () => loadNeighbourhood(this.sim, c, 15), origin: { kind: 'neighbourhood' } });
+      this.setView('system');
+    } catch (err) {
+      toast((err as Error).message);
+    }
+  }
+
+  private async visitSelected(): Promise<void> {
+    const body = this.selectedBody();
+    if (!body?.tag) return;
+    if (body.tag === 'home') {
+      this.loadScenario({ name: 'the Solar System', load: () => loadSolarSystemOnDate(this.sim, new Date()), origin: { kind: 'sol' } });
+      return;
+    }
+    const name = body.tag.slice('exohost:'.length);
+    const host = (await this.getCatalog()).hosts.find((h) => h.name === name);
+    if (host) this.loadExoHost(host);
   }
 
   private deleteSelected(): void {
@@ -1285,6 +1405,33 @@ export class App {
       }
     });
     $('btn-share').addEventListener('click', () => void this.shareLink());
+
+    // Real data
+    const dateInput = $<HTMLInputElement>('solar-date');
+    dateInput.value = new Date().toISOString().slice(0, 10);
+    $('btn-solar-date').addEventListener('click', () => {
+      const date = dateInput.value ? new Date(`${dateInput.value}T00:00:00Z`) : new Date();
+      if (Number.isNaN(date.getTime())) return toast('Pick a valid date');
+      this.loadScenario({ name: `the Solar System on ${date.toISOString().slice(0, 10)}`, load: () => loadSolarSystemOnDate(this.sim, date), origin: { kind: 'sol' } });
+    });
+    $('btn-exoplanets').addEventListener('click', () => void this.openExoBrowser());
+    $('exo-close').addEventListener('click', () => this.closeExoBrowser());
+    $('exo-search').addEventListener('input', () => this.renderExoList());
+    $('exo-filter').addEventListener('change', () => this.renderExoList());
+    const pickHost = (e: Event) => {
+      const li = (e.target as HTMLElement).closest<HTMLElement>('li[data-host]');
+      const host = li && this.catalog?.hosts.find((h) => h.name === li.dataset.host);
+      if (host) this.loadExoHost(host);
+    };
+    $('exo-list').addEventListener('click', pickHost);
+    $('exo-list').addEventListener('keydown', (e) => (e as KeyboardEvent).key === 'Enter' && pickHost(e));
+    $('btn-neighbourhood').addEventListener('click', () => void this.loadNeighbourhoodScene());
+    $('btn-visit').addEventListener('click', () => void this.visitSelected());
+    $('btn-star-neighbourhood').addEventListener('click', async () => {
+      await this.fade(true);
+      await this.loadNeighbourhoodScene();
+      await this.fade(false);
+    });
 
     // Tools
     $('tool-select').addEventListener('click', () => this.setTool('select'));

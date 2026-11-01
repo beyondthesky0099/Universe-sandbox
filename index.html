@@ -86,6 +86,9 @@
         <div class="row buttons">
           <button id="btn-star-enter" class="primary">Enter system →</button>
         </div>
+        <div class="row buttons">
+          <button id="btn-star-neighbourhood" class="hidden">Nearby stars</button>
+        </div>
       </aside>
 
       <!-- System sandbox -->
@@ -101,6 +104,14 @@
             <button id="btn-preset-load">Load</button>
           </div>
           <p id="preset-desc" class="muted small"></p>
+          <div class="row">
+            <input id="solar-date" type="date" title="Load the real Solar System on this date" />
+            <button id="btn-solar-date" title="Real planet positions from JPL ephemerides">Solar System</button>
+          </div>
+          <div class="row buttons">
+            <button id="btn-exoplanets" title="Browse 4,800+ real planetary systems">🪐 Real exoplanets</button>
+            <button id="btn-neighbourhood" title="Known planet hosts near the Sun">Nearby stars</button>
+          </div>
           <div class="row buttons">
             <button id="btn-save" title="Download this scene as a file">Save</button>
             <button id="btn-open" title="Open a saved scene file">Open</button>
@@ -191,6 +202,26 @@
         </section>
       </aside>
 
+      <aside id="exo-panel" class="panel right hidden" data-view="system">
+        <div class="row">
+          <h2 style="flex: 1">Real exoplanets</h2>
+          <button id="exo-close" class="icon" aria-label="Close">✕</button>
+        </div>
+        <p class="muted small" id="exo-status">Loading the NASA Exoplanet Archive catalogue…</p>
+        <input id="exo-search" type="search" placeholder="Search systems (e.g. TRAPPIST-1)…" spellcheck="false" autocomplete="off" />
+        <label class="row">
+          <span>Show</span>
+          <select id="exo-filter">
+            <option value="">Nearest first</option>
+            <option value="habitable">Temperate worlds</option>
+            <option value="multi">3+ planets</option>
+            <option value="recent">Newest discoveries</option>
+          </select>
+        </label>
+        <ul id="exo-list" class="list tall"></ul>
+        <p class="muted tiny" id="exo-credit"></p>
+      </aside>
+
       <aside id="body-panel" class="panel right hidden" data-view="system">
         <h2 id="body-name">Body</h2>
         <dl id="body-facts" class="facts"></dl>
@@ -205,6 +236,7 @@
         </div>
         <div class="row buttons">
           <button id="btn-supernova" class="danger hidden" title="Detonate this star">💥 Go supernova</button>
+          <button id="btn-visit" class="primary hidden">Visit system →</button>
         </div>
       </aside>
 

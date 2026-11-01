@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { kelvinToRgb } from '../sim/color';
+import { dateToJdTT, discOverlap, span, topocentric, type Eclipse } from '../sim/eclipse';
 import { altAzToScene, skyAt, skyMatrix, type Observer, type SkySnapshot } from '../sim/sky';
 import { temperatureFromBV, type BrightStar } from '../sim/stars';
 import { textSprite } from './galaxyView';
@@ -38,7 +39,13 @@ export class SkyView {
   private readonly dome: THREE.Mesh;
   private readonly ground: THREE.Mesh;
   private lastPhase = -1;
+  private lastDark = -1;
   private height = 760;
+  private eclipse?: Eclipse;
+  /** While an eclipse is on: how much of the Sun is covered (0–1). */
+  obscuration = 0;
+  private readonly sunGlow: THREE.Sprite;
+  private readonly corona: THREE.Sprite;
 
   constructor(private readonly canvas: HTMLCanvasElement) {
     this.camera.rotation.order = 'YXZ';
@@ -48,13 +55,13 @@ export class SkyView {
       new THREE.ShaderMaterial({
         side: THREE.BackSide,
         depthWrite: false,
-        uniforms: { sunDir: { value: new THREE.Vector3(0, -1, 0) } },
+        uniforms: { sunDir: { value: new THREE.Vector3(0, -1, 0) }, light: { value: 1 } },
         vertexShader: 'varying vec3 vDir; void main() { vDir = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
         fragmentShader: `
-          uniform vec3 sunDir; varying vec3 vDir;
+          uniform vec3 sunDir; uniform float light; varying vec3 vDir;
           void main() {
             float s = sunDir.y;                       // sine of the Sun's altitude
-            float day = smoothstep(-0.105, 0.1, s);   // civil→nautical twilight to day
+            float day = smoothstep(-0.105, 0.1, s) * light; // civil→nautical twilight to day; dimmed in an eclipse
             float dusk = smoothstep(-0.31, -0.1, s) * (1.0 - smoothstep(0.05, 0.3, s));
             float up = clamp(vDir.y, 0.0, 1.0);
             vec3 night = vec3(0.008, 0.012, 0.03);
@@ -93,6 +100,13 @@ export class SkyView {
     this.moonTexture = new THREE.CanvasTexture(this.moonCanvas);
     this.moonTexture.colorSpace = THREE.SRGBColorSpace;
     this.addBodies();
+    this.sunGlow = new THREE.Sprite(new THREE.SpriteMaterial({ map: dotTexture(), color: 0xfff1c8, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+    this.corona = new THREE.Sprite(new THREE.SpriteMaterial({ map: coronaTexture(), color: 0xe8f0ff, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0 }));
+    this.sunGlow.renderOrder = 1;
+    this.corona.renderOrder = 2;
+    this.bodies.get('Sun')!.dot.renderOrder = 3;
+    this.bodies.get('Moon')!.dot.renderOrder = 4;
+    this.scene.add(this.sunGlow, this.corona);
     this.attachInput();
   }
 
@@ -135,15 +149,36 @@ export class SkyView {
       this.scene.add(dot, label);
       this.bodies.set(name, { dot, label });
     };
-    add('Sun', '#fff3c4', dotTexture());
+    add('Sun', '#fff3c4', sunDiscTexture());
     add('Moon', '#ffffff', this.moonTexture);
     for (const p of Object.keys(PLANET_COLORS)) add(p, PLANET_COLORS[p], dotTexture());
+  }
+
+  /** Use an eclipse's precise Sun and Moon positions (JPL Horizons) while its time span is on. */
+  setEclipse(e: Eclipse | undefined): void {
+    this.eclipse = e;
   }
 
   /** Recompute the sky for a moment and observer. */
   setTime(date: Date, observer = this.observer): SkySnapshot {
     this.observer = observer;
-    this.snapshot = skyAt(date, observer);
+    const snap = skyAt(date, observer);
+    this.obscuration = 0;
+    const e = this.eclipse;
+    if (e) {
+      const jd = dateToJdTT(e, date);
+      const [t0, t1] = span(e);
+      if (jd >= t0 && jd <= t1) {
+        const t = topocentric(e, jd, observer.lat, observer.lon);
+        for (const [name, v] of [['Sun', t.sun], ['Moon', t.moon]] as const) {
+          const o = snap.objects.find((x) => x.name === name)!;
+          Object.assign(o, { alt: v.alt, az: v.az, km: v.km, diameter: 2 * v.radius });
+        }
+        const sep = Math.hypot(t.sun.alt - t.moon.alt, ((((t.sun.az - t.moon.az + 540) % 360) - 180) * Math.cos(t.sun.alt * DEG)));
+        this.obscuration = discOverlap(t.sun.radius, t.moon.radius, sep);
+      }
+    }
+    this.snapshot = snap;
     this.place();
     return this.snapshot;
   }
@@ -157,9 +192,13 @@ export class SkyView {
     for (const l of this.starLabels) l.sprite.position.copy(l.v).applyMatrix4(m4).multiplyScalar(R_STARS * 0.99);
     const sun = snap.objects.find((o) => o.name === 'Sun')!;
     const sunDir = new THREE.Vector3(...altAzToScene(sun.alt, sun.az));
-    (this.dome.material as THREE.ShaderMaterial).uniforms.sunDir.value.copy(sunDir);
+    // An eclipse dims the daylight (it stays bright until the Sun is nearly covered).
+    const light = Math.pow(Math.max(0, 1 - this.obscuration), 0.6);
+    const dome = (this.dome.material as THREE.ShaderMaterial).uniforms;
+    dome.sunDir.value.copy(sunDir);
+    dome.light.value = light;
     // Stars fade out in twilight; only the brightest planets and the Moon survive daylight.
-    const dark = 1 - THREE.MathUtils.smoothstep(sun.alt, -16, -2);
+    const dark = Math.max(1 - THREE.MathUtils.smoothstep(sun.alt, -16, -2), (1 - light) * 0.9);
     this.starMaterials.forEach((mat, i) => (mat.opacity = i === 0 ? Math.max(dark, 0.05) : dark));
     for (const l of this.starLabels) (l.sprite.material as THREE.SpriteMaterial).opacity = dark * 0.85;
     for (const o of snap.objects) {
@@ -172,17 +211,26 @@ export class SkyView {
       (b.dot.material as THREE.SpriteMaterial).opacity = daylightFaint;
       (b.label.material as THREE.SpriteMaterial).opacity = Math.max(daylightFaint, 0.5);
     }
-    if (Math.abs(snap.moonIllumination - this.lastPhase) > 0.002) this.drawMoon(snap.moonIllumination);
+    // The Moon's night side shows against a dark sky (earthshine) or as a black disc on the Sun.
+    const moonDark = this.obscuration > 0 ? 1 : dark * 0.8;
+    if (Math.abs(snap.moonIllumination - this.lastPhase) > 0.002 || Math.abs(moonDark - this.lastDark) > 0.02) this.drawMoon(snap.moonIllumination, moonDark);
+    const sunBody = this.bodies.get('Sun')!;
+    this.sunGlow.position.copy(sunBody.dot.position);
+    this.corona.position.copy(sunBody.dot.position);
+    (this.sunGlow.material as THREE.SpriteMaterial).opacity = light * (sun.alt > -1 ? 1 : 0);
+    // The corona appears only in the last moments before totality and during it.
+    (this.corona.material as THREE.SpriteMaterial).opacity = THREE.MathUtils.smoothstep(this.obscuration, 0.995, 1);
     this.sizeBodies();
   }
 
   /** Lit disc with the bright limb toward +x; the sprite is rotated to face the Sun. */
-  private drawMoon(k: number): void {
+  private drawMoon(k: number, darkAlpha: number): void {
     this.lastPhase = k;
+    this.lastDark = darkAlpha;
     const ctx = this.moonCanvas.getContext('2d')!;
-    const c = 64, r = 60;
+    const c = 64, r = 63;
     ctx.clearRect(0, 0, 128, 128);
-    ctx.fillStyle = '#26282c';
+    ctx.fillStyle = this.obscuration > 0 ? '#050506' : `rgba(38, 40, 44, ${darkAlpha})`;
     ctx.beginPath();
     ctx.arc(c, c, r, 0, Math.PI * 2);
     ctx.fill();
@@ -204,17 +252,28 @@ export class SkyView {
       const b = this.bodies.get(o.name);
       if (!b) continue;
       const realPx = o.diameter * DEG * pxPerRad;
-      const minPx = o.kind === 'moon' ? 18 : o.kind === 'sun' ? 26 : PLANET_PX[o.name] ?? 4;
-      const glow = o.kind === 'sun' ? 3 : o.kind === 'planet' ? 2.2 : 1;
+      // During an eclipse the Sun and Moon are drawn at their true sizes, so the overlap is right.
+      const minPx = this.eclipse && o.kind !== 'planet' ? 0 : o.kind === 'moon' ? 18 : o.kind === 'sun' ? 14 : PLANET_PX[o.name] ?? 4;
+      const glow = o.kind === 'planet' ? 2.2 : 1;
       const px = Math.max(realPx, minPx) * glow;
       const world = (px / pxPerRad) * R_BODIES;
       b.dot.scale.set(world, world, 1);
+      if (o.kind === 'sun') {
+        this.sunGlow.scale.set(Math.max(world * 6, (60 / pxPerRad) * R_BODIES), Math.max(world * 6, (60 / pxPerRad) * R_BODIES), 1);
+        this.corona.scale.set(world * 4.5, world * 4.5, 1);
+      }
     }
   }
 
   setViewport(width: number, height: number): void {
     this.height = height;
     this.camera.aspect = width / height;
+    this.camera.updateProjectionMatrix();
+    this.sizeBodies();
+  }
+
+  setFov(fov: number): void {
+    this.camera.fov = THREE.MathUtils.clamp(fov, 2, 100);
     this.camera.updateProjectionMatrix();
     this.sizeBodies();
   }
@@ -286,4 +345,59 @@ export class SkyView {
       { passive: false },
     );
   }
+}
+
+let sunDisc: THREE.Texture | undefined;
+/** The Sun's disc with limb darkening, filling the sprite. */
+function sunDiscTexture(): THREE.Texture {
+  if (sunDisc) return sunDisc;
+  const c = document.createElement('canvas');
+  c.width = c.height = 128;
+  const ctx = c.getContext('2d')!;
+  const g = ctx.createRadialGradient(64, 64, 0, 64, 64, 63);
+  g.addColorStop(0, 'rgba(255,253,244,1)');
+  g.addColorStop(0.7, 'rgba(255,244,214,1)');
+  g.addColorStop(0.97, 'rgba(250,206,140,1)');
+  g.addColorStop(1, 'rgba(250,200,130,0)');
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.arc(64, 64, 63.5, 0, Math.PI * 2);
+  ctx.fill();
+  sunDisc = new THREE.CanvasTexture(c);
+  sunDisc.colorSpace = THREE.SRGBColorSpace;
+  return sunDisc;
+}
+
+let coronaTex: THREE.Texture | undefined;
+/** A soft, streaky glow for the corona, seen only during totality. */
+function coronaTexture(): THREE.Texture {
+  if (coronaTex) return coronaTex;
+  const c = document.createElement('canvas');
+  c.width = c.height = 256;
+  const ctx = c.getContext('2d')!;
+  const g = ctx.createRadialGradient(128, 128, 26, 128, 128, 128);
+  g.addColorStop(0, 'rgba(255,255,255,0.95)');
+  g.addColorStop(0.15, 'rgba(235,240,255,0.55)');
+  g.addColorStop(0.45, 'rgba(200,215,255,0.12)');
+  g.addColorStop(1, 'rgba(200,215,255,0)');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, 256, 256);
+  // Streamers (decorative: the real corona's shape changes with the solar cycle).
+  ctx.globalCompositeOperation = 'lighter';
+  for (let i = 0; i < 28; i++) {
+    const a = (i / 28) * Math.PI * 2 + Math.sin(i * 7.3) * 0.2;
+    const len = 60 + 50 * Math.abs(Math.sin(i * 2.1));
+    const grad = ctx.createLinearGradient(128, 128, 128 + Math.cos(a) * len * 1.6, 128 + Math.sin(a) * len * 1.6);
+    grad.addColorStop(0.2, 'rgba(220,230,255,0.10)');
+    grad.addColorStop(1, 'rgba(220,230,255,0)');
+    ctx.strokeStyle = grad;
+    ctx.lineWidth = 6;
+    ctx.beginPath();
+    ctx.moveTo(128, 128);
+    ctx.lineTo(128 + Math.cos(a) * len * 1.6, 128 + Math.sin(a) * len * 1.6);
+    ctx.stroke();
+  }
+  coronaTex = new THREE.CanvasTexture(c);
+  coronaTex.colorSpace = THREE.SRGBColorSpace;
+  return coronaTex;
 }

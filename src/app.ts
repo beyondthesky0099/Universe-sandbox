@@ -8,6 +8,7 @@ import { GalaxyView, type GalaxyTarget } from './render/galaxyView';
 import { CosmosView } from './render/cosmosView';
 import { SkyView } from './render/skyView';
 import { moonPhaseName, skyAt } from './sim/sky';
+import { dateToJdTT, eclipsePath, greatestEclipse, jdTTToDate, loadEclipses, localCircumstances, shadowAt, topocentric, type Eclipse } from './sim/eclipse';
 import { displayName, GALAXY_CREDIT, galaxyForm, loadLocalGalaxies, loadNamedGalaxies, loadWebGalaxies, LY_PER_MPC, type LocalGalaxy } from './sim/galaxies';
 import { equatorialToGalactic, galacticToMap, MILKY_WAY_SEED, type GalaxyOptions } from './procgen/galaxy';
 import { QUALITY_PRESETS, SystemView } from './render/systemView';
@@ -126,6 +127,8 @@ export class App {
   private skyDate = new Date();
   private skySpeed = 1;
   private skyPicked?: string;
+  private eclipse?: { e: Eclipse; path: ReturnType<typeof eclipsePath>; greatest: ReturnType<typeof greatestEclipse> };
+  private earthMap?: HTMLImageElement;
   private cosmosLoaded = false;
   /** The real galaxy (catalogue name) the galaxy map currently shows, for returning to the Universe map. */
   private galaxyOrigin = 'Milky Way';
@@ -681,6 +684,7 @@ export class App {
     if (this.frames % 15 === 0) {
       $('stats').textContent = `${Math.round(this.fps)} fps`;
       this.renderSkyList();
+      this.drawEclipseMap();
       if (document.activeElement !== $('sky-time')) this.setSkyTimeInput();
     }
   }
@@ -703,6 +707,118 @@ export class App {
     prefs.set('skyPlace', { lat, lon, name: name ?? '' });
     this.sky.setTime(this.skyDate, { lat, lon });
     this.renderSkyList();
+    this.updateEclipseInfo();
+  }
+
+  private selectEclipse(e: Eclipse | undefined): void {
+    this.eclipse = e ? { e, path: eclipsePath(e), greatest: greatestEclipse(e) } : undefined;
+    this.sky.setEclipse(e);
+    $('eclipse-map').classList.toggle('hidden', !e);
+    if (e && !this.earthMap) {
+      const img = new Image();
+      img.onload = () => this.drawEclipseMap();
+      img.src = `${import.meta.env.BASE_URL}textures/earth.jpg`;
+      this.earthMap = img;
+    }
+    this.drawEclipseMap();
+    this.updateEclipseInfo();
+  }
+
+  private watchEclipse(): void {
+    const ec = this.eclipse;
+    if (!ec) return;
+    const place = ec.greatest.shadow.centre!;
+    this.setSkyPlace(place.lat, place.lon);
+    const local = localCircumstances(ec.e, place.lat, place.lon);
+    this.skyDate = jdTTToDate(ec.e, local.maxJdTT - (local.centralSec / 2 + 75) / 86400);
+    this.skySpeed = 10;
+    $<HTMLSelectElement>('sky-speed').value = '10';
+    this.setSkyTimeInput();
+    const t = topocentric(ec.e, local.maxJdTT, place.lat, place.lon);
+    this.sky.lookAt(t.sun.alt, t.sun.az);
+    this.sky.setFov(3);
+    this.sky.setTime(this.skyDate);
+    this.updateEclipseInfo();
+    if (this.view !== 'sky') void this.switchView('sky');
+  }
+
+  private updateEclipseInfo(): void {
+    const ec = this.eclipse;
+    if (!ec) {
+      $('eclipse-info').textContent = '';
+      return;
+    }
+    const { e } = ec;
+    const { lat, lon } = this.sky.observer;
+    const local = localCircumstances(e, lat, lon);
+    const utc = (jd: number) => jdTTToDate(e, jd).toISOString().slice(11, 19);
+    const sunAlt = topocentric(e, local.maxJdTT, lat, lon).sun.alt;
+    const fmt = (sec: number) => `${Math.floor(sec / 60)} min ${Math.round(sec % 60)} s`;
+    let here: string;
+    if (local.obscuration <= 0) here = 'Not visible from here.';
+    else if (sunAlt < -0.5) here = 'From here it happens with the Sun below the horizon.';
+    else if (local.central !== 'none')
+      here = `From here: ${local.central === 'total' ? 'totality' : 'a ring of fire'} for ${fmt(local.centralSec)}, centred on ${utc(local.maxJdTT)} UTC, with the Sun ${Math.round(sunAlt)}° up.`;
+    else here = `From here: partial, up to ${Math.round(local.obscuration * 100)}% of the Sun covered at ${utc(local.maxJdTT)} UTC, Sun ${Math.round(sunAlt)}° up.`;
+    const ns = (v: number, p: string, n: string) => `${Math.abs(v)}°${v >= 0 ? p : n}`;
+    $('eclipse-info').textContent = `${here} NASA: greatest eclipse at ${e.greatestTD.slice(11, 16)} TD, ${ns(e.lat, 'N', 'S')} ${ns(e.lon, 'E', 'W')}, ${e.type === 'annular' ? 'annularity' : 'totality'} ${fmt(e.durationSec)}${e.widthKm ? `, path ${e.widthKm} km wide` : ''}. Click the map to watch from anywhere.`;
+  }
+
+  private drawEclipseMap(): void {
+    const ec = this.eclipse;
+    const canvas = $<HTMLCanvasElement>('eclipse-map');
+    if (!ec || canvas.classList.contains('hidden')) return;
+    const ctx = canvas.getContext('2d')!;
+    const W = canvas.width, H = canvas.height;
+    const xy = (p: { lat: number; lon: number }): [number, number] => [((p.lon + 180) / 360) * W, ((90 - p.lat) / 180) * H];
+    ctx.fillStyle = '#0b1020';
+    ctx.fillRect(0, 0, W, H);
+    if (this.earthMap?.complete && this.earthMap.naturalWidth) {
+      ctx.globalAlpha = 0.75;
+      ctx.drawImage(this.earthMap, 0, 0, W, H);
+      ctx.globalAlpha = 1;
+    }
+    const line = (pts: { lat: number; lon: number }[], color: string, width: number) => {
+      ctx.strokeStyle = color;
+      ctx.lineWidth = width;
+      ctx.beginPath();
+      let prev: [number, number] | undefined;
+      for (const p of pts) {
+        const q = xy(p);
+        if (!prev || Math.abs(q[0] - prev[0]) > W / 2) ctx.moveTo(q[0], q[1]);
+        else ctx.lineTo(q[0], q[1]);
+        prev = q;
+      }
+      ctx.stroke();
+    };
+    const withLimits = ec.path.filter((p) => p.limits);
+    line(withLimits.map((p) => p.limits![0]), 'rgba(255,200,90,0.9)', 1.5);
+    line(withLimits.map((p) => p.limits![1]), 'rgba(255,200,90,0.9)', 1.5);
+    line(ec.path.map((p) => p.centre), 'rgba(255,120,60,0.9)', 1);
+    // The shadow now.
+    const jd = dateToJdTT(ec.e, this.skyDate);
+    const sh = shadowAt(ec.e, jd);
+    if (sh.centre) {
+      const [x, y] = xy(sh.centre);
+      const kmPerPx = 40075 / W;
+      ctx.fillStyle = 'rgba(0,0,0,0.28)';
+      ctx.beginPath();
+      ctx.ellipse(x, y, sh.penumbraKm / kmPerPx / Math.max(0.2, Math.cos((sh.centre.lat * Math.PI) / 180)), sh.penumbraKm / kmPerPx, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#000';
+      ctx.beginPath();
+      ctx.arc(x, y, Math.max(3, Math.abs(sh.umbraKm) / kmPerPx), 0, Math.PI * 2);
+      ctx.fill();
+    }
+    const [ox, oy] = xy(this.sky.observer);
+    ctx.strokeStyle = '#7fdcff';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(ox - 6, oy);
+    ctx.lineTo(ox + 6, oy);
+    ctx.moveTo(ox, oy - 6);
+    ctx.lineTo(ox, oy + 6);
+    ctx.stroke();
   }
 
   private wireSkyPanel(): void {
@@ -741,6 +857,42 @@ export class App {
       this.skySpeed = 1;
       $<HTMLSelectElement>('sky-speed').value = '1';
       this.setSkyTimeInput();
+    });
+    void loadEclipses()
+      .then((list) => {
+        const select = $<HTMLSelectElement>('eclipse-select');
+        select.innerHTML = `<option value="">Choose an eclipse…</option>${list.map((e, i) => `<option value="${i}">${e.date} · ${e.type}</option>`).join('')}`;
+        const now = Date.now();
+        const next = list.findIndex((e) => Date.parse(e.date) > now);
+        select.value = String(next >= 0 ? next : 0);
+      })
+      .catch(() => ($('eclipse-select').innerHTML = '<option value="">Eclipses unavailable</option>'));
+    $('eclipse-select').addEventListener('change', async () => {
+      const list = await loadEclipses().catch(() => []);
+      this.selectEclipse(list[Number($<HTMLSelectElement>('eclipse-select').value)]);
+    });
+    $('btn-eclipse').addEventListener('click', async () => {
+      const list = await loadEclipses().catch(() => []);
+      const e = list[Number($<HTMLSelectElement>('eclipse-select').value)];
+      if (!e) return;
+      if (this.eclipse?.e !== e) this.selectEclipse(e);
+      this.watchEclipse();
+    });
+    $('eclipse-map').addEventListener('click', (ev) => {
+      const c = $<HTMLCanvasElement>('eclipse-map');
+      const r = c.getBoundingClientRect();
+      const me = ev as MouseEvent;
+      const lon = ((me.clientX - r.left) / r.width) * 360 - 180;
+      const lat = 90 - ((me.clientY - r.top) / r.height) * 180;
+      this.setSkyPlace(lat, lon);
+      this.drawEclipseMap();
+      const ec = this.eclipse;
+      if (ec) {
+        // Point at the Sun as it will be at maximum eclipse here.
+        const local = localCircumstances(ec.e, lat, lon);
+        const t = topocentric(ec.e, local.maxJdTT, lat, lon);
+        if (t.sun.alt > -1) this.sky.lookAt(t.sun.alt, t.sun.az);
+      }
     });
     $('sky-speed').addEventListener('change', () => (this.skySpeed = Number($<HTMLSelectElement>('sky-speed').value)));
     $('sky-list').addEventListener('click', (e) => {

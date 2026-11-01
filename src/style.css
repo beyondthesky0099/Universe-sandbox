@@ -971,3 +971,12 @@ body.embed #topbar {
   color: #c8a0ff;
   font-weight: 600;
 }
+
+#eclipse-map {
+  width: 100%;
+  aspect-ratio: 2 / 1;
+  margin-top: 8px;
+  border-radius: 6px;
+  cursor: crosshair;
+  background: #0b1020;
+}

@@ -91,12 +91,22 @@
             <select id="sky-speed" title="How fast time runs">
               <option value="0">Paused</option>
               <option value="1" selected>Real time</option>
+              <option value="10">10 seconds / s</option>
               <option value="60">1 minute / s</option>
               <option value="600">10 minutes / s</option>
               <option value="3600">1 hour / s</option>
               <option value="86400">1 day / s</option>
             </select>
           </div>
+        </section>
+        <section>
+          <h3>Solar eclipses</h3>
+          <div class="row buttons">
+            <select id="eclipse-select" title="Total, annular and hybrid eclipses, 2024–2035 (NASA catalogue, JPL positions)"><option value="">Loading eclipses…</option></select>
+            <button id="btn-eclipse" title="Go to the centre of the path just before totality">Watch</button>
+          </div>
+          <canvas id="eclipse-map" width="560" height="280" title="Click the map to watch from there" class="hidden"></canvas>
+          <p class="muted small" id="eclipse-info"></p>
         </section>
         <section>
           <h3>In the sky</h3>

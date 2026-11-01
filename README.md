@@ -190,6 +190,10 @@ need the [companion server](#companion-server). Without one, they explain how to
   - 12 real star clusters and 10 real nebulae (Pleiades, Omega Centauri, Orion Nebula, Crab,
     Carina, …) at their real galactic coordinates and distances
 
+  - **Real black holes and pulsars**, labelled at their true positions: Gaia BH1, the nearest
+    known black hole at 1,570 light-years, plus Gaia BH2 and BH3, Cygnus X-1, V404 Cygni,
+    A0620-00, the Vela Pulsar and PSR J0437-4715. Positions come from SIMBAD; masses and
+    distances come from each discovery paper.
   - **4,813 real stars with known exoplanets** (NASA Exoplanet Archive), placed by their real
     galactic coordinates and distances. Click one to see its planets and visit it. The streak
     toward Cygnus is the field of view of the Kepler space telescope.
@@ -387,6 +391,8 @@ push and pull request.
   certificate-chain error.
 - Asteroid flybys: the JPL Close-Approach Data API with JPL Horizons starting states (rebuild
   with `node scripts/build-flybys.mjs`).
+- Black holes and pulsars: positions from SIMBAD; masses and distances from the discovery papers,
+  verified against their arXiv abstracts by `node scripts/build-compact-objects.mjs`.
 - Cosmic microwave background: the NASA WMAP 9-year ILC map from LAMBDA (public domain),
   reprojected from HEALPix by `python3 -I scripts/build-cmb.py` (needs numpy and ImageMagick).
 - Spacecraft trajectories: NASA/JPL Horizons, state vectors every 10 days (rebuild with

@@ -1070,6 +1070,21 @@ export class App {
   /** Real exoplanet hosts on the Milky Way map, placed by their galactic coordinates. */
   private exoMapHosts: ExoHost[] = [];
 
+  /** Real black holes and pulsars (positions from SIMBAD, distances from the discovery papers). */
+  private async showCompactObjectsOnMap(seed: number): Promise<void> {
+    const res = await fetch(`${import.meta.env.BASE_URL}data/compact-objects.json`).catch(() => undefined);
+    if (!res?.ok || this.galaxySeed !== seed) return;
+    const { objects } = (await res.json()) as { objects: { name: string; kind: 'blackhole' | 'pulsar'; raDeg: number; decDeg: number; distanceKpc: number; mass?: number }[] };
+    this.galaxy.addCompactObjects(
+      objects.map((o) => {
+        const [l, b] = equatorialToGalactic(o.raDeg, o.decDeg);
+        const ly = Math.round((o.distanceKpc * 3261.6) / 10) * 10;
+        const what = o.kind === 'blackhole' ? `black hole${o.mass ? ` · ${o.mass} M☉` : ''}` : 'pulsar';
+        return { label: `${o.name} · ${what} · ${ly.toLocaleString('en-US')} ly`, pos: galacticToMap(l, b, o.distanceKpc), kind: o.kind };
+      }),
+    );
+  }
+
   private async showExoHostsOnMap(seed: number): Promise<void> {
     const catalog = await this.getCatalog().catch(() => undefined);
     if (!catalog || this.galaxySeed !== seed) return;
@@ -1100,7 +1115,10 @@ export class App {
           ? `A procedural stand-in for the real ${data.form} galaxy ${data.name}: its overall shape follows the real galaxy's type, but its ${data.stars.count.toLocaleString()} stars are invented. Zoom out to return to the Universe map.`
           : `${data.arms}-armed spiral · ${data.stars.count.toLocaleString()} explorable systems · ${data.clusters.length} star clusters (a procedural galaxy)`;
     this.exoMapHosts = [];
-    if (data.name === 'Milky Way') void this.showExoHostsOnMap(seed);
+    if (data.name === 'Milky Way') {
+      void this.showExoHostsOnMap(seed);
+      void this.showCompactObjectsOnMap(seed);
+    }
     $<HTMLInputElement>('galaxy-seed').value = String(seed);
     $('star-panel').classList.add('hidden');
     $<HTMLSelectElement>('star-filter').value = '';

@@ -134,7 +134,26 @@ Plan, in priority order:
 - [ ] E4. Galaxies in the Virgo cluster and beyond (beyond the Local Volume) aren't clickable;
       only the 2MRS points exist for them.
 
+### F. More real data (all done, pending merge in PR #2)
+- [x] F1. Real spacecraft (JPL Horizons, 16 missions, `scripts/build-spacecraft.mjs`)
+- [x] F2. Milky Way meets Andromeda (`src/sim/localGroup.ts`, kpc/Myr unit system)
+- [x] F3. Real gravitational-wave events (`scripts/build-gw-events.mjs`, arXiv-verified)
+- [x] F4. Moving stars (HYG velocities, `upcomingEncounters`)
+- [x] F5. Clickable named galaxies beyond the Local Volume (2MRS)
+- [x] F6. Real asteroid flybys (JPL CAD + Horizons, `scripts/build-flybys.mjs`)
+- [x] F7. Black holes and pulsars on the Milky Way map (SIMBAD + arXiv)
+- [x] F8. The CMB (WMAP 9-year ILC, `scripts/build-cmb.py`)
+
+Ideas for later: a Gaia-based star catalogue (better velocities: HYG puts Gliese 710 at
+1.2 ly, while Gaia puts it much closer); pulsars from the ATNF catalogue when reachable;
+dynamical friction for galaxy mergers; Virgo-cluster distances from redshift-independent
+measurements.
+
 ## Notes and lessons learned
+- Unreachable sources: the GWOSC catalogue (gwosc.org) fails with a TLS chain error, and CDS
+  (Strasbourg) and ATNF are blocked by the proxy. The Harvard VizieR mirror sometimes returns
+  empty bodies for a while. Workarounds used: arXiv abstracts to verify hand-transcribed
+  values, and the Harvard SIMBAD mirror (simbad.cfa.harvard.edu) for positions.
 - Site deployment: GitHub Pages is live at https://beyondthesky0099.github.io/Universe-sandbox/
   and deploys from `main`. The `github-pages` environment's branch rule must say `main`
   (lowercase). A capitalised `Main` silently blocked deploys.

@@ -395,6 +395,20 @@ export class GalaxyView {
     this.exoPoints.geometry.setAttribute('color', new THREE.BufferAttribute(col, 3));
   }
 
+  /** Labelled markers for real black holes and pulsars (Milky Way only). Cleared on rebuild. */
+  addCompactObjects(items: { label: string; pos: [number, number, number]; kind: 'blackhole' | 'pulsar' }[]): void {
+    for (const it of items) {
+      const color = it.kind === 'blackhole' ? 0xff7ad9 : 0x9ff0ff;
+      const ring = new THREE.Sprite(new THREE.SpriteMaterial({ map: ringTexture(), color, sizeAttenuation: false, depthTest: false, transparent: true }));
+      ring.scale.setScalar(0.022);
+      ring.position.set(...it.pos);
+      ring.renderOrder = 11;
+      const text = textSprite(it.label, it.kind === 'blackhole' ? '#ff9de3' : '#b8f4ff', 0.6);
+      text.position.set(...it.pos);
+      this.labelGroup.add(ring, text);
+    }
+  }
+
   setMarkers(bookmarks: number[], visited: number[]): void {
     const fill = (pts: THREE.Points, idx: number[]) => {
       const pos = new Float32Array(idx.length * 3);

@@ -141,3 +141,17 @@ describe('moving stars', () => {
     expect(b.x).not.toBeCloseTo(x0, 0);
   });
 });
+
+describe('real black holes and pulsars', () => {
+  it('has verified positions and distances', () => {
+    const objs = JSON.parse(readFileSync(new URL('../public/data/compact-objects.json', import.meta.url), 'utf8')).objects;
+    const bh1 = objs.find((o: { name: string }) => o.name === 'Gaia BH1');
+    expect(bh1.kind).toBe('blackhole');
+    expect(bh1.distanceKpc * 3261.6).toBeCloseTo(1566, -1); // the nearest known black hole, ~1,560 light-years
+    expect(bh1.raDeg).toBeCloseTo(262.17, 1); // Ophiuchus
+    const vela = objs.find((o: { name: string }) => o.name === 'Vela Pulsar');
+    expect(vela.kind).toBe('pulsar');
+    expect(vela.decDeg).toBeLessThan(-40);
+    expect(objs.length).toBeGreaterThanOrEqual(8);
+  });
+});

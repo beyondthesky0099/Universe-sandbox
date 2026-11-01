@@ -82,3 +82,45 @@ describe('real Solar System data', () => {
     expect(Math.hypot(s.pos[0] - ref[0], s.pos[1] - ref[1], s.pos[2] - ref[2])).toBeLessThan(0.02);
   });
 });
+
+describe('real Solar System scenes', () => {
+  it('builds the whole Solar System with real small bodies', async () => {
+    const { setSolarData } = await import('../src/sim/solarSystemData');
+    const { loadSolarSystemOnDate } = await import('../src/sim/presets');
+    const { Simulation } = await import('../src/sim/simulation');
+    setSolarData(data);
+    const sim = new Simulation();
+    loadSolarSystemOnDate(sim, new Date('2026-11-01T00:00:00Z'));
+    const names = sim.bodies.map((b) => b.name);
+    for (const n of ['Sun', 'Earth', 'Pluto', 'Ceres', 'Eris', 'Halley', 'Apophis']) expect(names).toContain(n);
+    expect(sim.particles.count).toBeGreaterThan(3900);
+    const before = sim.bodies.length;
+    sim.advance(2, 1e7, 1e9);
+    expect(sim.bodies.length).toBe(before);
+    setSolarData(undefined);
+  }, 60000);
+
+  for (const planet of ['Earth', 'Mars', 'Jupiter', 'Saturn', 'Uranus', 'Neptune', 'Pluto']) {
+    it(`keeps ${planet}'s real moons intact for many orbits`, async () => {
+      const { loadMoonSystem } = await import('../src/sim/presets');
+      const { Simulation } = await import('../src/sim/simulation');
+      const sim = new Simulation();
+      const setup = loadMoonSystem(sim, planet, new Date('2026-11-01T00:00:00Z'), data);
+      const moons = data.bodies.filter((b) => b.parent === planet && b.kind === 'moon');
+      expect(sim.bodies.length).toBe(moons.length + 1);
+      // Sizes are real: the planet's radius is its true radius in AU.
+      const p = sim.bodies.find((b) => b.name === planet)!;
+      expect(p.radius * 149597870.7).toBeCloseTo(data.byName.get(planet)!.radiusKm!, 0);
+      // Run ~30 orbits of the innermost moon (setup.timeScale is a sixth of its period).
+      sim.advance(setup.timeScale * 6 * 30, 1e7, 1e9);
+      expect(sim.bodies.length).toBe(moons.length + 1);
+      for (const m of moons) {
+        const b = sim.bodies.find((x) => x.name === m.name)!;
+        const r = Math.hypot(b.x - p.x, b.y - p.y, b.z - p.z);
+        // Still on its orbit: within its periapsis/apoapsis band (with some slack).
+        expect(r, m.name).toBeGreaterThan(m.elements.a * (1 - m.elements.e) * 0.8);
+        expect(r, m.name).toBeLessThan(m.elements.a * (1 + m.elements.e) * 1.25);
+      }
+    }, 60000);
+  }
+});

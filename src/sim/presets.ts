@@ -4,7 +4,8 @@ import { kelvinToRgb, starColor } from './color';
 import { keplerToState, OrbitalElements } from './orbits';
 import type { Simulation } from './simulation';
 import { EARTH_MASS, G, JUPITER_MASS } from './units';
-import { planetStates, type PlanetName } from './ephemeris';
+import { julianDate, planetStates, type PlanetName } from './ephemeris';
+import { getSolarData, realRadiusAu, REAL_COLORS, relativeState, smallBodyState, toScene, type SolarData } from './solarSystemData';
 
 export interface SceneSetup {
   /** Suggested camera distance from the origin (AU). */
@@ -102,10 +103,11 @@ const SOLAR_PLANETS: [string, number, number, number, number, number, Body['kind
 const solarSystem: Preset = {
   id: 'solar',
   name: 'Solar System (today)',
-  description: 'The Sun and eight planets at their real positions today (JPL approximate ephemerides), with real masses, plus an asteroid belt.',
+  description:
+    'The real Solar System today: planets (JPL ephemerides), Pluto and the dwarf planets, large asteroids, famous comets, and the 4,000 brightest real asteroids, Trojans and Kuiper belt objects (JPL Small-Body Database).',
   load(sim) {
     const setup = loadSolarSystemOnDate(sim, new Date());
-    return { ...setup, timeScale: 0.4, elevation: 0.6, tip: undefined };
+    return { ...setup, timeScale: 0.25, elevation: 0.6, tip: undefined };
   },
 };
 
@@ -462,25 +464,164 @@ const sunsFuture: Preset = {
 };
 
 /** The real Solar System on a given date, from JPL's approximate planetary elements. */
+/** Particle colours for small-body orbit classes (JPL SBDB class codes). */
+const SMALL_BODY_COLORS: Record<string, [number, number, number]> = {
+  MBA: [0.62, 0.58, 0.52],
+  IMB: [0.62, 0.58, 0.52],
+  OMB: [0.58, 0.55, 0.5],
+  MCA: [0.7, 0.55, 0.45],
+  TJN: [0.78, 0.62, 0.45],
+  CEN: [0.55, 0.7, 0.75],
+  TNO: [0.55, 0.65, 0.85],
+};
+
+/** Real Solar System bodies added individually (beyond the eight planets). */
+const NAMED_SMALL_BODIES = ['Pluto', 'Ceres', 'Eris', 'Haumea', 'Makemake', 'Vesta', 'Pallas', 'Hygiea', 'Apophis', 'Bennu', 'Halley', 'Encke', 'Churyumov–Gerasimenko', 'Hale–Bopp'];
+
 export function loadSolarSystemOnDate(sim: Simulation, date: Date): SceneSetup {
+  const data = getSolarData();
   const sun = sim.addBody({ name: 'Sun', kind: 'star', mass: 1, color: starColor(1), age: 4.6e9 });
   const states = new Map(planetStates(date).map((p) => [p.name, p]));
   for (const [name, m, , , , color, kind] of SOLAR_PLANETS) {
     const st = states.get(name as PlanetName)!;
-    sim.addBody({ name, mass: m * EARTH_MASS, kind, color, x: st.pos[0], y: st.pos[1], z: st.pos[2], vx: st.vel[0], vy: st.vel[1], vz: st.vel[2] });
+    const mass = data?.byName.get(name)?.mass ?? m * EARTH_MASS;
+    sim.addBody({ name, mass, kind, color, x: st.pos[0], y: st.pos[1], z: st.pos[2], vx: st.vel[0], vy: st.vel[1], vz: st.vel[2] });
   }
-  addParticleDisk(sim, sun, { count: 1500, inner: 2.2, outer: 3.3, thickness: 0.04, color: [0.62, 0.58, 0.52] });
+  if (!data) {
+    // Data not loaded (offline or tests): keep an illustrative belt.
+    addParticleDisk(sim, sun, { count: 1500, inner: 2.2, outer: 3.3, thickness: 0.04, color: [0.62, 0.58, 0.52] });
+    sim.recenter();
+    return {
+      cameraDistance: 9,
+      timeScale: 0.1,
+      elevation: 1.1,
+      tip: `Planet positions for ${date.toISOString().slice(0, 10)} from JPL's approximate ephemerides. The asteroid belt is illustrative (real data didn't load).`,
+    };
+  }
+  const jd = julianDate(date);
+  for (const name of NAMED_SMALL_BODIES) {
+    const b = data.byName.get(name);
+    if (!b) continue;
+    const mass = b.mass ?? 1e-15;
+    const s = relativeState(b, jd, G * (1 + mass));
+    const [x, y, z] = toScene(s.pos);
+    const [vx, vy, vz] = toScene(s.vel);
+    sim.addBody({ name, mass, kind: 'rocky', color: REAL_COLORS[name] ?? (b.kind === 'comet' ? 0xcfe6ff : 0x9a9088), x, y, z, vx, vy, vz, tag: b.kind === 'comet' ? 'comet' : undefined });
+  }
+  const named = new Set(NAMED_SMALL_BODIES.map((n) => n.toLowerCase()));
+  for (const b of data.small) {
+    // "1 Ceres", "134340 Pluto (1930 BM)": skip bodies that are already added individually.
+    const base = b.name.replace(/^\d+\s+/, '').replace(/\s*\(.*\)$/, '').toLowerCase();
+    if (named.has(base)) continue;
+    const s = smallBodyState(b, jd);
+    const [x, y, z] = toScene(s.pos);
+    const [vx, vy, vz] = toScene(s.vel);
+    const c = SMALL_BODY_COLORS[b.cls] ?? [0.6, 0.6, 0.6];
+    const shade = 0.85 + Math.random() * 0.3;
+    sim.particles.add(x, y, z, vx, vy, vz, [c[0] * shade, c[1] * shade, c[2] * shade]);
+  }
   sim.recenter();
   return {
     cameraDistance: 9,
     timeScale: 0.1,
     elevation: 1.1,
-    tip: `Planet positions for ${date.toISOString().slice(0, 10)} from JPL's approximate ephemerides. Asteroids are illustrative.`,
+    tip: `The real Solar System on ${date.toISOString().slice(0, 10)}: planets from JPL's ephemerides; dwarf planets, comets and ${data.small.length.toLocaleString('en-US')} asteroids and Kuiper belt objects from JPL Horizons and the Small-Body Database. Body sizes are enlarged so you can see them.`,
   };
 }
 
+/** Planet + real moons, at true scale (real radii), positioned for `date` from JPL data. */
+export function loadMoonSystem(sim: Simulation, planetName: string, date: Date, data: SolarData | undefined = getSolarData()): SceneSetup {
+  const planetData = data?.byName.get(planetName);
+  if (!data || !planetData?.mass) {
+    sim.addBody({ name: planetName, kind: 'rocky', mass: EARTH_MASS });
+    return { cameraDistance: 0.05, timeScale: 0.01, tip: 'Real moon data could not be loaded.' };
+  }
+  const planetColor = SOLAR_PLANETS.find((p) => p[0] === planetName)?.[5] ?? REAL_COLORS[planetName] ?? 0x9a9088;
+  const planetKind = SOLAR_PLANETS.find((p) => p[0] === planetName)?.[6] ?? 'rocky';
+  // Real sizes: soften gravity only at ~1.5 km instead of the default 15,000 km, which is larger
+  // than Phobos's whole orbit.
+  sim.softening = 1e-8;
+  const planet = sim.addBody({ name: planetName, kind: planetKind, mass: planetData.mass, radius: realRadiusAu(planetData), color: planetColor });
+  const jd = julianDate(date);
+  const moons = data.bodies.filter((b) => b.parent === planetName && b.kind === 'moon');
+  // Moons orbiting the parent itself first, so barycentric ones (Nix, Hydra) can use them.
+  moons.sort((a, b) => Number(!!a.barycentric) - Number(!!b.barycentric));
+  let innerPeriod = Infinity;
+  let regularExtent = 0;
+  for (const m of moons) {
+    const mass = m.mass ?? 1e-15;
+    let cx = planet.x, cy = planet.y, cz = planet.z, cvx = planet.vx, cvy = planet.vy, cvz = planet.vz;
+    let centralMass = planet.mass;
+    if (m.barycentric) {
+      // Elements are relative to the barycentre of the planet and its big moon(s) added so far.
+      const sys = sim.bodies;
+      const M = sys.reduce((t, b) => t + b.mass, 0);
+      cx = sys.reduce((t, b) => t + b.x * b.mass, 0) / M;
+      cy = sys.reduce((t, b) => t + b.y * b.mass, 0) / M;
+      cz = sys.reduce((t, b) => t + b.z * b.mass, 0) / M;
+      cvx = sys.reduce((t, b) => t + b.vx * b.mass, 0) / M;
+      cvy = sys.reduce((t, b) => t + b.vy * b.mass, 0) / M;
+      cvz = sys.reduce((t, b) => t + b.vz * b.mass, 0) / M;
+      centralMass = M;
+    }
+    const s = relativeState(m, jd, G * (centralMass + mass));
+    const [x, y, z] = toScene(s.pos);
+    const [vx, vy, vz] = toScene(s.vel);
+    if (!m.barycentric && mass > 1e-3 * planet.mass) {
+      // A heavy moon (Charon, ~12% of Pluto): place both around their common barycentre.
+      const f = mass / (planet.mass + mass);
+      sim.addBody({ name: m.name, kind: 'rocky', mass, radius: realRadiusAu(m), color: REAL_COLORS[m.name], x: planet.x + x * (1 - f), y: planet.y + y * (1 - f), z: planet.z + z * (1 - f), vx: planet.vx + vx * (1 - f), vy: planet.vy + vy * (1 - f), vz: planet.vz + vz * (1 - f) });
+      planet.x -= x * f;
+      planet.y -= y * f;
+      planet.z -= z * f;
+      planet.vx -= vx * f;
+      planet.vy -= vy * f;
+      planet.vz -= vz * f;
+    } else {
+      sim.addBody({ name: m.name, kind: 'rocky', mass, radius: realRadiusAu(m), color: REAL_COLORS[m.name], x: cx + x, y: cy + y, z: cz + z, vx: cvx + vx, vy: cvy + vy, vz: cvz + vz });
+    }
+    const period = 360 / m.elements.n / 365.25; // years
+    innerPeriod = Math.min(innerPeriod, period);
+  }
+  // Frame the major moons: those with at least 5% of the largest moon's mass, on regular orbits.
+  const biggest = Math.max(...moons.map((m) => m.mass ?? 0));
+  for (const m of moons) {
+    if ((m.mass ?? 0) >= 0.05 * biggest && m.elements.e < 0.3) regularExtent = Math.max(regularExtent, m.elements.a);
+  }
+  sim.recenter();
+  const outer = regularExtent || Math.max(...moons.map((m) => m.elements.a));
+  return {
+    cameraDistance: outer * 2.6,
+    timeScale: Math.max(1e-5, innerPeriod / 6),
+    elevation: 0.5,
+    tip: `${planetName} and its moons on ${date.toISOString().slice(0, 10)}, at true scale, from JPL Horizons mean orbits. The Sun's pull and the planet's oblateness are left out, so orbits slowly drift from reality.`,
+  };
+}
+
+const moonSystem = (id: string, planet: string, name: string, description: string): Preset => ({
+  id,
+  name,
+  description,
+  load: (sim) => loadMoonSystem(sim, planet, new Date()),
+});
+
+const earthMoon = moonSystem('earth-moon', 'Earth', 'Earth & Moon (real)', 'The Earth and Moon at true scale and their real positions today.');
+const marsMoons = moonSystem('mars-moons', 'Mars', 'Mars & moons (real)', 'Phobos and Deimos, Mars’s tiny captured-looking moons, at true scale.');
+const jupiterMoons = moonSystem('jupiter-moons', 'Jupiter', 'Jupiter & moons (real)', 'Io, Europa, Ganymede, Callisto and Amalthea at their real positions today. Watch the 1:2:4 Laplace resonance.');
+const saturnMoons = moonSystem('saturn-moons', 'Saturn', 'Saturn & moons (real)', 'Nine of Saturn’s moons, from Mimas to distant retrograde Phoebe, at true scale.');
+const uranusMoons = moonSystem('uranus-moons', 'Uranus', 'Uranus & moons (real)', 'The five major moons of Uranus, orbiting on their side like the planet itself.');
+const neptuneMoons = moonSystem('neptune-moons', 'Neptune', 'Neptune & moons (real)', 'Triton on its retrograde orbit, Proteus, and Nereid on a wildly eccentric one.');
+const plutoCharon = moonSystem('pluto-charon', 'Pluto', 'Pluto & Charon (real)', 'Pluto and Charon orbit a point in empty space between them; Nix and Hydra circle both.');
+
 export const PRESETS: Preset[] = [
   solarSystem,
+  earthMoon,
+  marsMoons,
+  jupiterMoons,
+  saturnMoons,
+  uranusMoons,
+  neptuneMoons,
+  plutoCharon,
   protoplanetary,
   giantImpact,
   ringmaker,

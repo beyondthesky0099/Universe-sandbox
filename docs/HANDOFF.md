@@ -44,14 +44,20 @@ procedural or illustrative. Plan, in priority order:
 - [x] A2. `src/sim/solarSystemData.ts`: load the JSON and propagate elements from the epoch
       to any date with two-body Kepler. Planets keep the Standish tables, which are valid for
       3000 BC – 3000 AD.
-- [ ] A3. Presets: "Solar System (real)" with real dwarf planets, asteroids and comets
+- [x] A3. Presets: "Solar System (real)" with real dwarf planets, asteroids and comets
       instead of the illustrative belt. Add per-planet moon systems (Earth–Moon, Mars, Jupiter,
       Saturn, Uranus, Neptune, Pluto–Charon). The moons aren't added to the whole-system
       preset because their short periods would force tiny timesteps.
 - [x] A4. Tests: compare positions with Horizons vectors at a second date (to within about
       0.01 AU for heliocentric bodies, and a few percent of the orbit for moons).
 - [ ] A5. Real radii in the body panel, and an optional "true scale" toggle that uses real radii
-      instead of the inflated game radii.
+      instead of the inflated game radii. Moon-system presets already use true radii.
+- [ ] A6. Saturn's real ring particles (C/B/A rings, 74,658–136,775 km) in Saturn's equatorial
+      plane. Take the plane normal from the angular momentum of Mimas through Rhea. Also orient
+      the ring mesh in `bodyVisual.ts`, which is currently fixed to the ecliptic.
+- [ ] A7. Moons in the whole-Solar-System scene. They're left out because the inflated game
+      radii would swallow them (Earth's game radius, 0.012 AU, is bigger than the Moon's
+      orbit). This needs per-body true radii or a kinematic "on rails" mode.
 
 ### B. Real stars (source: HYG database v4.1, CC BY-SA 4.0)
 - URL: `https://raw.githubusercontent.com/astronexus/HYG-Database/main/hyg/CURRENT/hygdata_v41.csv`
@@ -84,6 +90,11 @@ procedural or illustrative. Plan, in priority order:
       example NASA public-domain maps), and must be fetched at build time, not hot-linked.
 
 ## Notes and lessons learned
+- Real data enters through `src/sim/solarSystemData.ts`. `main.ts` preloads it with a 5 s
+  timeout before the app starts, so presets can stay synchronous via `getSolarData()`. Without
+  data, they fall back to built-in values.
+- Moon presets set `sim.softening = 1e-8` (1.5 km). The default 1e-4 AU (15,000 km) is larger
+  than Phobos's orbit and breaks it.
 - Moons use *fitted mean elements*: about 200 orbits of Horizons samples, fitted to a
   constant a/e/i plus linear node, periapsis and mean-longitude rates. A single osculating
   snapshot drifted 50–65% of the orbit within months for the Moon and Io. Now the error is

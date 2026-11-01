@@ -22,6 +22,8 @@ Everything except the optional companion server runs in the browser.
 | ![Galaxy map](docs/screenshots/galaxy-map.png) | ![Ring maker](docs/screenshots/ring-maker.png) |
 | **Giant impact** | **2,000-star cluster (Barnes–Hut)** |
 | ![Giant impact](docs/screenshots/giant-impact.png) | ![Star cluster](docs/screenshots/star-cluster.png) |
+| **Real Solar System (JPL data)** | **Jupiter's moons at true scale** |
+| ![Real Solar System](docs/screenshots/real-solar-system.png) | ![Jupiter's moons](docs/screenshots/jupiter-moons.png) |
 
 ## Run it
 
@@ -50,14 +52,23 @@ need the [companion server](#companion-server). Without one, they explain how to
   in the body panel, and the Slingshot challenge has a fuel budget for a gravity assist.
 
 ### Real data
-- **Solar System on any date:** planet positions come from JPL's approximate Keplerian
-  elements (1800–2050). The tests check them against JPL Horizons, and they agree to within
-  0.01 AU.
+- **The real Solar System on any date:**
+  - Planet positions come from JPL's approximate Keplerian elements, valid 3000 BC – 3000 AD.
+    The tests check them against JPL Horizons, and they agree to within 0.01 AU.
+  - Pluto, the dwarf planets, large asteroids (Vesta, Pallas, Hygiea, Apophis, Bennu) and
+    famous comets (Halley, Encke, 67P, Hale–Bopp) come from **JPL Horizons**.
+  - The **4,000 brightest real asteroids, Jupiter Trojans, Centaurs and Kuiper belt objects**
+    come from the **JPL Small-Body Database**. They replace the illustrative belt.
+  - Masses, radii, rotation periods and axial tilts are real.
+- **Real moon systems at true scale:** Earth & Moon, Mars, Jupiter, Saturn, Uranus, Neptune and
+  Pluto–Charon. There are 28 moons, each at its real position for today. Moons use mean orbits
+  fitted to about 200 orbits of Horizons data, and they stay within 5% of JPL's positions
+  (tested).
 - **Real exoplanets:** a browser for 4,847 confirmed systems (6,451 planets) from the NASA
   Exoplanet Archive. You can search them and filter for temperate worlds. Load any system as a
   live simulation; masses estimated from radii are marked.
-- **Nearby stars:** a 3D map of every known planet-hosting star within 15 parsecs (about 49
-  light-years) of the Sun, at true positions. Click a star to load its planets.
+- **Nearby stars:** a 3D map of every known planet-hosting star within 15 parsecs of the Sun,
+  at true positions.
 
 ### Learn
 - **Lessons** (📚): Kepler's laws, escape velocity, orbital resonance, tides and the Roche
@@ -114,7 +125,8 @@ need the [companion server](#companion-server). Without one, they explain how to
 - Zoom into a star to warp into its system, and zoom out to return to the galaxy.
 
 ### Scenarios
-Solar System (today) · Protoplanetary Disk · Giant Impact · Ring Maker · Binary Star ·
+Solar System (today) · Earth & Moon · Mars, Jupiter, Saturn, Uranus and Neptune with their moons ·
+Pluto & Charon · Protoplanetary Disk · Giant Impact · Ring Maker · Binary Star ·
 Figure-8 Three-Body · Rogue Star Flyby · Black Hole Feast · Supernova · The Sun's Future ·
 Relativistic Precession · Black Hole Inspiral · Galactic Core · Star Cluster Collapse ·
 Self-Gravitating Disk · Galaxy Collision · Empty Space
@@ -236,7 +248,10 @@ push and pull request.
 - **Stellar evolution** uses simple mass–lifetime and mass–luminosity relations, not stellar
   models.
 - Lensing is a screen-space effect, not ray tracing.
-- JPL approximate elements are accurate to a few arcminutes for 1800–2050. Exoplanet systems
+- JPL approximate elements are accurate to a few arcminutes for 1800–2050. Small bodies and
+  moons use two-body Kepler motion from a 2026 epoch, so they drift slowly over decades.
+  Moon systems leave out the Sun's pull and planetary oblateness. Saturn's ring mesh lies
+  in the ecliptic, not in Saturn's tilted equator. Exoplanet systems
   only include planets with a known orbit, and mutual inclinations are unknown, so orbits are
   drawn nearly coplanar.
 - **Tested here:** physics, science, real-data, challenge, lesson and protocol suites, the
@@ -255,6 +270,14 @@ push and pull request.
   `node scripts/build-exoplanets.mjs`.
 - Planet positions use E. M. Standish, *Keplerian Elements for Approximate Positions of the
   Major Planets* (JPL Solar System Dynamics).
+- Dwarf planets, asteroids, comets and moons come from NASA/JPL Horizons
+  (ssd.jpl.nasa.gov/horizons). The 4,000 small bodies come from the JPL Small-Body Database
+  Query API. Rebuild them with `node scripts/build-solar-system.mjs` and
+  `node scripts/build-small-bodies.mjs`.
+- Horizons has no mass or size for Eris, Haumea or Makemake, so those values come from
+  published papers, cited in the build script. The Makemake mass is an estimate. Masses of
+  comets and the smallest moons are estimated from their size and an assumed density, and
+  marked as estimates in the data.
 
 ## Project layout
 

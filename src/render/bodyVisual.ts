@@ -59,6 +59,7 @@ export class BodyVisual {
     let material: THREE.Material;
     switch (body.kind) {
       case 'star':
+      case 'neutron':
         material = new THREE.MeshBasicMaterial({ color: new THREE.Color(body.color).multiplyScalar(1.15) });
         this.glow = this.makeGlow(body.color, 1);
         break;

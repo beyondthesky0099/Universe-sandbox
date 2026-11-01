@@ -1,6 +1,7 @@
 import { BodyKind, luminosity, radiusFor } from '../sim/body';
 import { GAS_PALETTE, ROCKY_PALETTE, starColor, starTemperature } from '../sim/color';
 import { hillRadius } from '../sim/orbits';
+import { isHabitable, surfaceTemperature } from '../sim/climate';
 import { EARTH_MASS } from '../sim/units';
 import { moonName, planetName, starName } from './names';
 import { Rng, intRange, logRange, mulberry32, pick, range, weighted } from './rng';
@@ -57,6 +58,9 @@ export interface PlanetSpec {
   nu: number;
   color: number;
   moons: MoonSpec[];
+  /** Approximate surface temperature (K) at its semi-major axis. */
+  temperature: number;
+  habitable: boolean;
 }
 
 export interface CompanionSpec extends StarSummary {
@@ -77,6 +81,7 @@ export interface StarSystemSpec {
   companion?: CompanionSpec;
   planets: PlanetSpec[];
   belt?: BeltSpec;
+  habitableCount: number;
 }
 
 function makeStar(rng: Rng, spectralClass: SpectralClass): StarSummary {
@@ -152,7 +157,10 @@ export function generateStarSystem(seed: number): StarSystemSpec {
     }
 
     const name = planetName(star.name, i);
-    const color = pick(rng, isGas ? GAS_PALETTE : ROCKY_PALETTE);
+    const temperature = surfaceTemperature(kind, mass, L / (a * a));
+    const habitable = isHabitable(kind, mass, temperature);
+    // Temperate rocky worlds get ocean blues and greens.
+    const color = habitable ? pick(rng, [0x3f78c8, 0x3d8a6b, 0x4f6d8f]) : pick(rng, isGas ? GAS_PALETTE : ROCKY_PALETTE);
     const planet: PlanetSpec = {
       name,
       kind,
@@ -165,6 +173,8 @@ export function generateStarSystem(seed: number): StarSystemSpec {
       nu: range(rng, 0, Math.PI * 2),
       color,
       moons: [],
+      temperature,
+      habitable,
     };
 
     // Moons: only where they fit between the (inflated) planet surface and ~40% of the Hill sphere.
@@ -209,5 +219,5 @@ export function generateStarSystem(seed: number): StarSystemSpec {
     if (best && best[1] > best[0]) belt = { inner: best[0], outer: best[1], count: intRange(rng, 500, 1500) };
   }
 
-  return { seed, star, companion, planets, belt };
+  return { seed, star, companion, planets, belt, habitableCount: planets.filter((p) => p.habitable).length };
 }

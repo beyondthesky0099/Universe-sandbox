@@ -702,6 +702,8 @@ function kindLabel(b: Body): string {
       return 'Gas giant';
     case 'star':
       return 'Star';
+    case 'neutron':
+      return 'Neutron star';
     case 'blackhole':
       return 'Black hole';
   }

@@ -1,7 +1,7 @@
 import { BLACK_HOLE_COLLAPSE_MASS, EARTH_MASS, GAS_GIANT_MIN_MASS, STAR_MIN_MASS } from './units';
 import { starColor } from './color';
 
-export type BodyKind = 'rocky' | 'gas' | 'star' | 'blackhole';
+export type BodyKind = 'rocky' | 'gas' | 'star' | 'neutron' | 'blackhole';
 
 export interface Body {
   id: number;
@@ -23,6 +23,8 @@ export interface Body {
 }
 
 export interface BodyInit {
+  /** Explicit id (used when restoring saved state). */
+  id?: number;
   name?: string;
   kind?: BodyKind;
   mass: number;
@@ -36,7 +38,16 @@ export interface BodyInit {
   vz?: number;
 }
 
-const KIND_RANK: Record<BodyKind, number> = { rocky: 0, gas: 1, star: 2, blackhole: 3 };
+const KIND_RANK: Record<BodyKind, number> = { rocky: 0, gas: 1, star: 2, neutron: 3, blackhole: 4 };
+
+/** Neutron stars heavier than this collapse into black holes. */
+export const NEUTRON_MAX_MASS = 2.5;
+
+/**
+ * Nominal bulk densities (g/cm³) used for tidal (Roche) limits. Game radii are inflated,
+ * so densities derived from them would be meaningless.
+ */
+export const NOMINAL_DENSITY: Record<BodyKind, number> = { rocky: 5.5, gas: 1.3, star: 1.4, neutron: 1e14, blackhole: Infinity };
 
 /** What a body of this mass naturally is. */
 export function kindForMass(mass: number): BodyKind {
@@ -50,7 +61,8 @@ export function kindForMass(mass: number): BodyKind {
 export function mergedKind(a: BodyKind, b: BodyKind, totalMass: number): BodyKind {
   const natural = kindForMass(totalMass);
   const best = Math.max(KIND_RANK[a], KIND_RANK[b], KIND_RANK[natural]);
-  return (Object.keys(KIND_RANK) as BodyKind[]).find((k) => KIND_RANK[k] === best)!;
+  const kind = (Object.keys(KIND_RANK) as BodyKind[]).find((k) => KIND_RANK[k] === best)!;
+  return kind === 'neutron' && totalMass >= NEUTRON_MAX_MASS ? 'blackhole' : kind;
 }
 
 /**
@@ -66,9 +78,15 @@ export function radiusFor(kind: BodyKind, mass: number): number {
       return Math.min(0.075, 0.012 * Math.pow(mass / EARTH_MASS, 0.3));
     case 'star':
       return Math.min(1.2, Math.max(0.08, 0.15 * Math.pow(mass, 0.6)));
+    case 'neutron':
+      return 0.025;
     case 'blackhole':
       return 0.04 * Math.pow(mass, 0.4);
   }
+}
+
+export function kindRank(kind: BodyKind): number {
+  return KIND_RANK[kind];
 }
 
 /** Rough main-sequence luminosity in L☉. */
@@ -83,6 +101,8 @@ export function defaultColor(kind: BodyKind, mass: number): number {
       return starColor(mass);
     case 'blackhole':
       return 0x000000;
+    case 'neutron':
+      return 0xcfe6ff;
     case 'gas':
       return 0xd8b48a;
     case 'rocky':
@@ -94,9 +114,16 @@ let nextId = 1;
 
 export function createBody(init: BodyInit): Body {
   const kind = init.kind ?? kindForMass(init.mass);
+  let id: number;
+  if (init.id !== undefined) {
+    id = init.id;
+    nextId = Math.max(nextId, id + 1);
+  } else {
+    id = nextId++;
+  }
   return {
-    id: nextId++,
-    name: init.name ?? `Body ${nextId - 1}`,
+    id,
+    name: init.name ?? `Body ${id}`,
     kind,
     mass: init.mass,
     radius: init.radius ?? radiusFor(kind, init.mass),

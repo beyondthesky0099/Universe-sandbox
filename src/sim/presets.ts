@@ -3,7 +3,7 @@ import type { Body } from './body';
 import { kelvinToRgb, starColor } from './color';
 import { keplerToState, OrbitalElements } from './orbits';
 import type { Simulation } from './simulation';
-import { EARTH_MASS, G } from './units';
+import { EARTH_MASS, G, JUPITER_MASS } from './units';
 
 export interface SceneSetup {
   /** Suggested camera distance from the origin (AU). */
@@ -12,6 +12,10 @@ export interface SceneSetup {
   timeScale: number;
   /** Optional camera elevation angle (rad above the ecliptic). */
   elevation?: number;
+  /** Name of a body to select and follow after loading. */
+  focus?: string;
+  /** Short tip shown after loading. */
+  tip?: string;
 }
 
 export interface Preset {
@@ -234,7 +238,209 @@ const empty: Preset = {
   },
 };
 
-export const PRESETS: Preset[] = [solarSystem, protoplanetary, binaryStar, figureEight, rogueStar, blackHoleFeast, galaxyCollision, empty];
+
+const supernova: Preset = {
+  id: 'supernova',
+  name: 'Supernova',
+  description: 'A 25 M☉ blue supergiant at the end of its life, with planets and a debris belt. It detonates after a few years. Watch the shockwave strip its system.',
+  load(sim) {
+    const star = sim.addBody({ name: 'Vela Prime', kind: 'star', mass: 25 });
+    const planets: [string, number, number, Body['kind'], number][] = [
+      ['Vela Prime b', 3 * EARTH_MASS, 6, 'rocky', 0xa0785a],
+      ['Vela Prime c', 400 * EARTH_MASS, 11, 'gas', 0x6fa8c9],
+      ['Vela Prime d', 90 * EARTH_MASS, 18, 'gas', 0xc99e6b],
+    ];
+    for (const [name, mass, a, kind, color] of planets) {
+      addOrbiting(sim, star, { name, mass, kind, color }, { a, nu: Math.random() * Math.PI * 2 });
+    }
+    addParticleDisk(sim, star, { count: 2500, inner: 24, outer: 32, thickness: 0.03, color: [0.62, 0.58, 0.52] });
+    addOrbiting(sim, star, { name: 'Vela Minor', mass: 0.8, kind: 'star' }, { a: 70, e: 0.1, nu: 2 });
+    sim.recenter();
+    sim.scheduleSupernova(star.id, 4);
+    return { cameraDistance: 60, timeScale: 0.5, elevation: 0.9, tip: 'Vela Prime will explode in about 4 years…' };
+  },
+};
+
+const giantImpact: Preset = {
+  id: 'impact',
+  name: 'Giant Impact',
+  description: 'A Mars-sized protoplanet on a collision course with a young Earth. High-speed rocky impacts shatter into fragments, and some may become moons.',
+  load(sim) {
+    const sun = sim.addBody({ name: 'Sun', kind: 'star', mass: 1 });
+    const earth = addOrbiting(sim, sun, { name: 'Proto-Earth', mass: 0.9 * EARTH_MASS, kind: 'rocky', color: 0x9a5a3a }, { a: 1 });
+    // Theia trails Earth on a slightly different orbit and closes in fast.
+    sim.addBody({
+      name: 'Theia',
+      kind: 'rocky',
+      mass: 0.12 * EARTH_MASS,
+      color: 0x8a8f99,
+      x: earth.x - 0.004,
+      y: earth.y + 0.002,
+      z: earth.z + 0.035,
+      vx: earth.vx + 0.02,
+      vy: earth.vy - 0.01,
+      vz: earth.vz - 0.2,
+    });
+    return { cameraDistance: 0.35, timeScale: 0.02, elevation: 0.7, focus: 'Proto-Earth' };
+  },
+};
+
+const ringmaker: Preset = {
+  id: 'rings',
+  name: 'Ring Maker',
+  description: 'A moon on an eccentric orbit dips inside its gas giant’s Roche limit and is torn into a ring.',
+  load(sim) {
+    const sun = sim.addBody({ name: 'Helion', kind: 'star', mass: 1 });
+    const giant = addOrbiting(sim, sun, { name: 'Colossus', mass: 1.2 * JUPITER_MASS, kind: 'gas', color: 0xc99e6b }, { a: 20 });
+    addOrbiting(sim, giant, { name: 'Doomed Moon', mass: 0.02 * EARTH_MASS, kind: 'rocky', color: 0xb8a58c }, { a: 0.16, e: 0.45, nu: Math.PI * 0.75 });
+    addOrbiting(sim, giant, { name: 'Safe Moon', mass: 0.03 * EARTH_MASS, kind: 'rocky', color: 0x7d6e63 }, { a: 0.6, nu: 1 });
+    return { cameraDistance: 1.6, timeScale: 0.1, elevation: 0.5, focus: 'Colossus' };
+  },
+};
+
+const starCluster: Preset = {
+  id: 'cluster',
+  name: 'Star Cluster Collapse',
+  description: '2,000 stars that all attract each other, using the Barnes–Hut tree. A cold cloud collapses and settles into a cluster.',
+  load(sim) {
+    sim.softening = 0.6;
+    sim.dtMax = 0.05;
+    // Stars in clusters essentially never collide; this is pure stellar dynamics.
+    sim.collisions = false;
+    const n = 2000;
+    const R = 150;
+    let totalMass = 0;
+    const masses: number[] = [];
+    for (let i = 0; i < n; i++) {
+      // Rough initial mass function: mostly small stars.
+      const m = 0.1 + Math.pow(Math.random(), 3) * 4;
+      masses.push(m);
+      totalMass += m;
+    }
+    const sigma = 0.35 * Math.sqrt((G * totalMass) / (2 * R)) / Math.sqrt(3);
+    for (let i = 0; i < n; i++) {
+      // Uniform sphere.
+      let x, y, z;
+      do {
+        x = Math.random() * 2 - 1;
+        y = Math.random() * 2 - 1;
+        z = Math.random() * 2 - 1;
+      } while (x * x + y * y + z * z > 1);
+      sim.addBody({
+        name: `Cluster star ${i + 1}`,
+        kind: 'star',
+        mass: masses[i],
+        x: x * R,
+        y: y * R,
+        z: z * R,
+        vx: gauss() * sigma,
+        vy: gauss() * sigma,
+        vz: gauss() * sigma,
+      });
+    }
+    sim.recenter();
+    return { cameraDistance: 520, timeScale: 0.6, elevation: 0.5 };
+  },
+};
+
+const selfGravitatingGalaxy: Preset = {
+  id: 'spiral',
+  name: 'Self-Gravitating Disk',
+  description: '2,500 stars orbit a black hole and pull on one another. The cold disk breaks up into spiral arms and clumps.',
+  load(sim) {
+    sim.softening = 1.2;
+    sim.dtMax = 0.03;
+    sim.collisions = false;
+    const core = sim.addBody({ name: 'Hub', kind: 'blackhole', mass: 400 });
+    const n = 2000;
+    const starMass = 0.6;
+    const rMin = 6;
+    const rMax = 100;
+    const radii: number[] = [];
+    for (let i = 0; i < n; i++) radii.push(rMin + (rMax - rMin) * Math.sqrt(Math.random()));
+    radii.sort((a, b) => a - b);
+    for (let i = 0; i < n; i++) {
+      const r = radii[i];
+      const enclosed = core.mass + i * starMass;
+      const v = Math.sqrt((G * enclosed) / r);
+      const th = Math.random() * Math.PI * 2;
+      sim.addBody({
+        name: `Disk star ${i + 1}`,
+        kind: 'star',
+        mass: starMass,
+        x: Math.cos(th) * r,
+        y: gauss() * 0.8,
+        z: Math.sin(th) * r,
+        vx: Math.sin(th) * v + gauss() * v * 0.1,
+        vy: gauss() * v * 0.03,
+        vz: -Math.cos(th) * v + gauss() * v * 0.1,
+      });
+    }
+    return { cameraDistance: 230, timeScale: 0.5, elevation: 1.0 };
+  },
+};
+
+/** Central supermassive black hole with stars on eccentric orbits; also reached from the galaxy map. */
+export const galacticCore: Preset = {
+  id: 'core',
+  name: 'Galactic Core',
+  description: 'A supermassive black hole with stars on wild, eccentric orbits and an infalling gas cloud. One star is on a path to be torn apart.',
+  load(sim) {
+    sim.dtMax = 0.02;
+    const M = 4e5;
+    const bh = sim.addBody({ name: 'Heart of the Galaxy', kind: 'blackhole', mass: M });
+    for (let i = 0; i < 28; i++) {
+      addOrbiting(sim, bh, { name: `S${i + 1}`, mass: 1 + Math.pow(Math.random(), 2) * 14, kind: 'star' }, {
+        a: 250 + Math.random() * 1300,
+        e: 0.3 + Math.random() * 0.6,
+        inc: Math.random() * Math.PI,
+        lan: Math.random() * Math.PI * 2,
+        argp: Math.random() * Math.PI * 2,
+        nu: Math.PI * (0.6 + Math.random() * 0.8),
+      });
+    }
+    // On course for a tidal disruption: periapsis inside the tidal radius but outside the horizon.
+    addOrbiting(sim, bh, { name: 'Unlucky Star', mass: 1, kind: 'star' }, { a: 400, e: 0.98, inc: 0.4, argp: 1, nu: Math.PI });
+    // Infalling gas cloud.
+    const cloud = { x: 900, y: 40, z: -300 };
+    const vIn = Math.sqrt((G * M) / 950) * 0.35;
+    for (let i = 0; i < 1500; i++) {
+      sim.particles.add(
+        cloud.x + gauss() * 25,
+        cloud.y + gauss() * 10,
+        cloud.z + gauss() * 25,
+        -vIn * 0.9 + gauss() * 0.5,
+        0,
+        vIn * 0.6 + gauss() * 0.5,
+        [0.85, 0.45 + Math.random() * 0.2, 0.5],
+      );
+    }
+    return { cameraDistance: 2600, timeScale: 2, elevation: 0.9 };
+  },
+};
+
+export const PRESETS: Preset[] = [
+  solarSystem,
+  protoplanetary,
+  giantImpact,
+  ringmaker,
+  binaryStar,
+  figureEight,
+  rogueStar,
+  blackHoleFeast,
+  supernova,
+  galacticCore,
+  starCluster,
+  selfGravitatingGalaxy,
+  galaxyCollision,
+  empty,
+];
+
+function gauss(): number {
+  const u = 1 - Math.random();
+  const v = Math.random();
+  return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+}
 
 /** Populate the simulation from a procedurally generated star system. */
 export function loadStarSystem(sim: Simulation, spec: StarSystemSpec): SceneSetup {

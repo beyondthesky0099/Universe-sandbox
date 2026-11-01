@@ -33,6 +33,7 @@ describe('Simulation', () => {
   it('merges colliding bodies, conserving mass and momentum', () => {
     const sim = new Simulation();
     sim.debris = false;
+    sim.shatter = false;
     sim.addBody({ name: 'A', mass: 5 * EARTH_MASS, x: -0.05, vx: 2 });
     sim.addBody({ name: 'B', mass: 3 * EARTH_MASS, x: 0.05, vx: -1 });
     const p0 = sim.totalMomentum();

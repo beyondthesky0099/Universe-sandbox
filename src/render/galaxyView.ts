@@ -94,7 +94,14 @@ function nebulaTexture(seed: number): THREE.CanvasTexture {
 }
 
 /** Selection target in the galaxy: a star index, the central black hole, or the Sun. */
-export type GalaxyTarget = number | 'core' | 'sol';
+export type GalaxyTarget = number | 'core' | 'sol' | { exo: number };
+
+/** A real exoplanet host drawn on the Milky Way map. */
+export interface ExoMarker {
+  name: string;
+  pos: [number, number, number];
+  temperate: boolean;
+}
 
 function textSprite(text: string, color: string, scale = 1): THREE.Sprite {
   const canvas = document.createElement('canvas');
@@ -133,6 +140,9 @@ export class GalaxyView {
   private glow?: THREE.Points;
   private dust?: THREE.Points;
   private readonly nebulaGroup = new THREE.Group();
+  /** Real exoplanet hosts (Milky Way only). */
+  exoHosts: ExoMarker[] = [];
+  private exoPoints?: THREE.Points;
   /** Names of real objects (Milky Way clusters and nebulae). */
   private readonly labelGroup = new THREE.Group();
   private readonly nebulaTextures: THREE.Texture[] = [];
@@ -220,6 +230,7 @@ export class GalaxyView {
     this.nebulaTextures.length = 0;
 
     this.data = generateGalaxy(seed);
+    this.setExoHosts([]); // the app adds real hosts for the Milky Way
     const { stars, glow, dust, nebulae } = this.data;
     this.glow = pointCloud(glow.positions, glow.colors, glow.sizes, pointsMaterial(0.06, 36));
     this.dust = pointCloud(dust.positions, undefined, dust.sizes, pointsMaterial(0.22, 60, DUST_FRAGMENT, false));
@@ -298,6 +309,7 @@ export class GalaxyView {
   }
 
   targetPosition(target: GalaxyTarget): THREE.Vector3 {
+    if (typeof target === 'object') return new THREE.Vector3(...this.exoHosts[target.exo].pos);
     if (target === 'core') return new THREE.Vector3();
     if (target === 'sol') return new THREE.Vector3(...this.data.sol);
     const p = this.data.stars.positions;
@@ -355,6 +367,30 @@ export class GalaxyView {
     this.nebulaGroup.visible = !match;
   }
 
+  /** Show real exoplanet hosts: cyan rings, green for systems with a temperate planet. */
+  setExoHosts(hosts: ExoMarker[]): void {
+    this.exoHosts = hosts;
+    if (!this.exoPoints) {
+      this.exoPoints = new THREE.Points(
+        new THREE.BufferGeometry(),
+        new THREE.PointsMaterial({ map: ringTexture(), size: 7, vertexColors: true, sizeAttenuation: false, transparent: true, depthTest: false, depthWrite: false, opacity: 0.85 }),
+      );
+      this.exoPoints.frustumCulled = false;
+      this.exoPoints.renderOrder = 9;
+      this.scene.add(this.exoPoints);
+    }
+    const pos = new Float32Array(hosts.length * 3);
+    const col = new Float32Array(hosts.length * 3);
+    hosts.forEach((h, i) => {
+      pos.set(h.pos, i * 3);
+      col.set(h.temperate ? [0.45, 1, 0.55] : [0.35, 0.85, 1], i * 3);
+    });
+    this.exoPoints.geometry.dispose();
+    this.exoPoints.geometry = new THREE.BufferGeometry();
+    this.exoPoints.geometry.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    this.exoPoints.geometry.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  }
+
   setMarkers(bookmarks: number[], visited: number[]): void {
     const fill = (pts: THREE.Points, idx: number[]) => {
       const pos = new Float32Array(idx.length * 3);
@@ -388,6 +424,15 @@ export class GalaxyView {
       if (score < bestScore) {
         bestScore = score;
         best = i;
+      }
+    }
+    // Real exoplanet hosts win ties with the procedural stars around them.
+    for (let i = 0; i < this.exoHosts.length; i++) {
+      const [x, y, z] = this.exoHosts[i].pos;
+      const score = test(x, y, z, maxPx) - 2;
+      if (score < bestScore) {
+        bestScore = score;
+        best = { exo: i };
       }
     }
     // The core and the Sun win when the click is right on them.

@@ -80,3 +80,31 @@ describe('the Milky Way map', () => {
     expect(generateGalaxy(7, 100, 100, 10).name).not.toBe('Milky Way');
   });
 });
+
+describe('exoplanet hosts on the Milky Way map', () => {
+  it('converts equatorial to galactic coordinates', async () => {
+    const { equatorialToGalactic } = await import('../src/procgen/galaxy');
+    // Sgr A*: l ≈ 359.944°, b ≈ −0.046°
+    const [l1, b1] = equatorialToGalactic(266.41683, -29.00781);
+    expect(l1).toBeCloseTo(359.944, 1);
+    expect(b1).toBeCloseTo(-0.046, 1);
+    // The north galactic pole
+    expect(equatorialToGalactic(192.85948, 27.12825)[1]).toBeCloseTo(90, 4);
+    // Proxima Centauri: l ≈ 313.94°, b ≈ −1.93°
+    const [l2, b2] = equatorialToGalactic(217.42895, -62.67949);
+    expect(l2).toBeCloseTo(313.94, 1);
+    expect(b2).toBeCloseTo(-1.93, 1);
+  });
+
+  it('places hosts at their real distance from the Sun', async () => {
+    const { equatorialToGalactic, galacticToMap, generateGalaxy, MILKY_WAY_SEED, UNITS_PER_KPC } = await import('../src/procgen/galaxy');
+    const sol = generateGalaxy(MILKY_WAY_SEED, 100, 100, 10).sol;
+    for (const name of ['Proxima Cen', 'TRAPPIST-1', 'Kepler-452']) {
+      const h = catalog.hosts.find((x) => x.name === name)!;
+      const [l, b] = equatorialToGalactic(h.raDeg, h.decDeg);
+      const p = galacticToMap(l, b, h.distancePc / 1000);
+      const d = Math.hypot(p[0] - sol[0], p[1] - sol[1], p[2] - sol[2]) / UNITS_PER_KPC;
+      expect(d * 1000, name).toBeCloseTo(h.distancePc, 0);
+    }
+  });
+});

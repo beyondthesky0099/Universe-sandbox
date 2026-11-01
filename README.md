@@ -28,6 +28,8 @@ Everything except the optional companion server runs in the browser.
 | ![Nearby stars](docs/screenshots/nearby-stars.png) | ![Milky Way](docs/screenshots/milky-way.png) |
 | **Saturn's real rings (NASA radii)** | **Solar System at true scale** |
 | ![Saturn's rings](docs/screenshots/saturn-rings.png) | ![True scale](docs/screenshots/true-scale.png) |
+| **Exoplanet hosts on the Milky Way map** | |
+| ![Exoplanet hosts](docs/screenshots/milky-way-exoplanets.png) | |
 
 ## Run it
 
@@ -143,6 +145,10 @@ need the [companion server](#companion-server). Without one, they explain how to
   - the central bar at 27°, and Sgr A*
   - 12 real star clusters and 10 real nebulae (Pleiades, Omega Centauri, Orion Nebula, Crab,
     Carina, …) at their real galactic coordinates and distances
+
+  - **4,813 real stars with known exoplanets** (NASA Exoplanet Archive), placed by their real
+    galactic coordinates and distances. Click one to see its planets and visit it. The streak
+    toward Cygnus is the field of view of the Kepler space telescope.
 
   The 30,000 explorable star systems are procedural stand-ins for its ~100 billion stars, and
   the UI says so.

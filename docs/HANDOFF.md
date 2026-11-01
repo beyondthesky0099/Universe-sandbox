@@ -42,8 +42,9 @@ Still procedural:
 - every other seeded galaxy
 - the made-up scenarios (Giant Impact, Ring Maker, …), which are deliberately fictional
 
-**Suggested next steps:** C3 (exoplanet hosts on the Milky Way map), D2 (real planet texture
-maps, which needs a licence-compatible source).
+**Suggested next steps:** D2 (real planet texture maps, which needs a licence-compatible
+source); exoplanet hosts in the galaxy search and filters; carving the Encke and Keeler gaps
+(this needs published widths).
 
 Plan, in priority order:
 
@@ -100,7 +101,9 @@ Plan, in priority order:
       Omega Centauri, Orion Nebula, Crab, Carina, …). The l/b/d values were entered by hand
       and are approximate. Next: verify them, or extend to the full Messier list, from a
       reachable source (VizieR was blocked by the proxy on 2026-11-01).
-- [ ] C3. NASA exoplanet hosts placed on the Milky Way map near the Sun.
+- [x] C3. NASA exoplanet hosts on the Milky Way map (`showExoHostsOnMap` in `app.ts`,
+      `setExoHosts` in `galaxyView.ts`, `equatorialToGalactic` in `galaxy.ts`). Galaxy targets
+      can now be `{ exo: index }`. Not yet in the galaxy search box or filters.
 
 ### D. Real looks
 - [x] D1. (spin axes from IAU poles in `scripts/build-solar-system.mjs`, applied in

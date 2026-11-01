@@ -5,6 +5,7 @@ import { FEATURE, systemFeatures, type FeatureName } from './procgen/galaxy';
 import { mulberry32, pick, seedFromString } from './procgen/rng';
 import { generateStarSystem, starSummary, type StarSystemSpec } from './procgen/starSystem';
 import { GalaxyView, type GalaxyTarget } from './render/galaxyView';
+import { equatorialToGalactic, galacticToMap } from './procgen/galaxy';
 import { QUALITY_PRESETS, SystemView } from './render/systemView';
 import { createRealSky } from './render/starfield';
 import { setTrueScale } from './sim/trueScale';
@@ -540,6 +541,8 @@ export class App {
         scenario = { name: galacticCore.name, load: () => galacticCore.load(this.sim), presetId: galacticCore.id, origin: { kind: 'core' } };
       } else if (target === 'sol') {
         scenario = { name: 'the Solar System', load: () => loadSolarSystemOnDate(this.sim, new Date()), origin: { kind: 'sol' } };
+      } else if (typeof target === 'object') {
+        scenario = this.exoScenario(this.exoMapHosts[target.exo]);
       } else {
         const spec = generateStarSystem(this.galaxy.data.stars.seeds[target]);
         scenario = { name: spec.star.name, load: () => loadStarSystem(this.sim, spec), origin: { kind: 'star', index: target, spec } };
@@ -576,8 +579,9 @@ export class App {
       this.system.stopCameraAnimation();
       this.setView('galaxy');
       const origin = this.scenario.origin;
+      const exoIndex = origin?.kind === 'exo' ? this.exoMapHosts.findIndex((h) => h.name === origin.host.name) : -1;
       const target: GalaxyTarget | undefined =
-        origin?.kind === 'core' ? 'core' : origin?.kind === 'star' ? origin.index : origin ? 'sol' : undefined;
+        origin?.kind === 'core' ? 'core' : origin?.kind === 'star' ? origin.index : exoIndex >= 0 ? { exo: exoIndex } : origin ? 'sol' : undefined;
       if (target !== undefined) {
         this.selectTarget(target);
         this.galaxy.arriveFrom(target, 0.3, 12);
@@ -915,6 +919,23 @@ export class App {
     for (const p of this.plugins()) if (p.autorun) this.scripts.run(p.code);
   }
 
+  /** Real exoplanet hosts on the Milky Way map, placed by their galactic coordinates. */
+  private exoMapHosts: ExoHost[] = [];
+
+  private async showExoHostsOnMap(seed: number): Promise<void> {
+    const catalog = await this.getCatalog().catch(() => undefined);
+    if (!catalog || this.galaxySeed !== seed) return;
+    const hosts = catalog.hosts.filter((h) => Number.isFinite(h.distancePc) && h.distancePc > 0);
+    this.exoMapHosts = hosts;
+    this.galaxy.setExoHosts(
+      hosts.map((h) => {
+        const [l, b] = equatorialToGalactic(h.raDeg, h.decDeg);
+        return { name: h.name, pos: galacticToMap(l, b, h.distancePc / 1000), temperate: h.planets.some((p) => p.habitable) };
+      }),
+    );
+    $('galaxy-info').textContent += ` Rings near the Sun mark ${hosts.length.toLocaleString('en-US')} real stars with known exoplanets (green: has a temperate planet); click one to visit it.`;
+  }
+
   private buildGalaxy(seed: number): void {
     this.galaxySeed = seed;
     const data = this.galaxy.build(seed);
@@ -927,6 +948,8 @@ export class App {
       data.name === 'Milky Way'
         ? `Our galaxy: real structure (4 spiral arms, the Local Spur, the central bar, Sgr A*) with ${data.clusters.length} real clusters and ${data.nebulae.length} real nebulae at their true positions. The ${data.stars.count.toLocaleString()} explorable systems are procedural stand-ins for the ~100 billion real stars.`
         : `${data.arms}-armed spiral · ${data.stars.count.toLocaleString()} explorable systems · ${data.clusters.length} star clusters (a procedural galaxy)`;
+    this.exoMapHosts = [];
+    if (data.name === 'Milky Way') void this.showExoHostsOnMap(seed);
     $<HTMLInputElement>('galaxy-seed').value = String(seed);
     $('star-panel').classList.add('hidden');
     $<HTMLSelectElement>('star-filter').value = '';
@@ -967,6 +990,23 @@ export class App {
         ['Age', '4.6 Gyr'],
         ['Planets', '8 (real positions today)'],
         ['Neighbours', 'Thousands of known exoplanet systems'],
+      ]);
+      bookmarkBtn.classList.add('hidden');
+      panel.classList.remove('hidden');
+      return;
+    }
+    if (typeof target === 'object') {
+      const host = this.exoMapHosts[target.exo];
+      const temperate = host.planets.filter((p) => p.habitable).length;
+      $('star-name').textContent = host.name;
+      setFacts($('star-facts'), [
+        ['Type', 'Real star with known exoplanets'],
+        ['Distance', `${fmt(host.distancePc * 3.2616)} light-years`],
+        ['Star mass', Number.isFinite(host.massSun) ? `${fmt(host.massSun)} M☉` : 'unknown'],
+        ['Temperature', host.teffK ? `${Math.round(host.teffK).toLocaleString()} K` : 'unknown'],
+        ['Confirmed planets', String(host.planets.length)],
+        ['Temperate planets', String(temperate)],
+        ['Source', 'NASA Exoplanet Archive'],
       ]);
       bookmarkBtn.classList.add('hidden');
       panel.classList.remove('hidden');
@@ -1826,13 +1866,17 @@ export class App {
       : '<li class="muted">No matching systems</li>';
   }
 
-  private loadExoHost(host: ExoHost): void {
-    this.closeExoBrowser();
+  private exoScenario(host: ExoHost): Scenario {
     const temperate = host.planets.filter((p) => p.habitable).length;
     const desc = `${host.name}: ${host.planets.length} confirmed planet${host.planets.length === 1 ? '' : 's'}${temperate ? `, ${temperate} temperate` : ''}, ${
       Number.isFinite(host.distancePc) ? `${(host.distancePc * 3.2616).toFixed(1)} light-years away` : 'distance unknown'
     }. Data: NASA Exoplanet Archive; masses marked as estimated come from radii. Body sizes are scaled to fit the orbits.`;
-    this.loadScenario({ name: host.name, description: desc, load: () => loadExoSystem(this.sim, host), origin: { kind: 'exo', host } });
+    return { name: host.name, description: desc, load: () => loadExoSystem(this.sim, host), origin: { kind: 'exo', host } };
+  }
+
+  private loadExoHost(host: ExoHost): void {
+    this.closeExoBrowser();
+    this.loadScenario(this.exoScenario(host));
   }
 
   private async loadNeighbourhoodScene(): Promise<void> {

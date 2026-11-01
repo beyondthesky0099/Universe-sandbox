@@ -109,6 +109,24 @@ export function galacticToMap(lDeg: number, bDeg: number, dKpc: number): [number
   return galactocentricToMap(hx - SUN_R0_KPC, hy, hz + SUN_Z_KPC);
 }
 
+/**
+ * Equatorial J2000 (RA, Dec) → galactic (l, b), degrees. Uses the J2000 north galactic pole
+ * (RA 192.85948°, Dec 27.12825°) and the galactic longitude of the north celestial pole
+ * (122.93192°).
+ */
+export function equatorialToGalactic(raDeg: number, decDeg: number): [number, number] {
+  const D = Math.PI / 180;
+  const aG = 192.85948 * D, dG = 27.12825 * D, lNCP = 122.93192 * D;
+  const a = raDeg * D, d = decDeg * D;
+  const sinB = Math.sin(d) * Math.sin(dG) + Math.cos(d) * Math.cos(dG) * Math.cos(a - aG);
+  const b = Math.asin(Math.max(-1, Math.min(1, sinB)));
+  const y = Math.cos(d) * Math.sin(a - aG);
+  const x = Math.sin(d) * Math.cos(dG) - Math.cos(d) * Math.sin(dG) * Math.cos(a - aG);
+  let l = lNCP - Math.atan2(y, x);
+  l = ((l % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+  return [l / D, b / D];
+}
+
 /** Point on arm k at radius r (kpc): galactocentric angle (trailing arms for clockwise rotation). */
 function armAngle(rSun: number, r: number): number {
   return Math.PI + Math.log(r / rSun) / Math.tan(MW_PITCH);

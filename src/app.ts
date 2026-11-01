@@ -24,9 +24,11 @@ import { GalaxyStore, prefs } from './ui/galaxyStore';
 import { History } from './ui/history';
 import { decodeScene, downloadJson, encodeScene, readSceneFile, type SceneFile } from './ui/share';
 import { Tutorial } from './ui/tutorial';
+import { applyNudge, CHALLENGES, dailyChallenge, KMS, newChallengeState, shareText, type Challenge, type ChallengeResult, type ChallengeState } from './game/challenges';
+import { burnDirections, planHohmann } from './game/transfer';
 
 type ViewName = 'galaxy' | 'system';
-type Tool = 'select' | 'spawn';
+type Tool = 'select' | 'spawn' | 'nudge';
 type QualityName = keyof typeof QUALITY_PRESETS;
 
 interface SpawnType {
@@ -52,6 +54,7 @@ const SPAWN_TYPES: SpawnType[] = [
   { id: 'neutron', label: 'Neutron star', kind: 'neutron', mass: 1.4, swatch: '#cfe6ff' },
   { id: 'blackhole', label: 'Black hole', kind: 'blackhole', mass: 10, swatch: '#b07cff' },
   { id: 'cloud', label: 'Dust cloud', mass: 0, swatch: '#c8a27a', particles: 500 },
+  { id: 'probe', label: 'Probe', kind: 'rocky', mass: 1e-15, swatch: '#7fdcff' },
 ];
 
 interface SpawnDrag {
@@ -124,6 +127,8 @@ export class App {
   private scanToken = 0;
   private quality: QualityName = prefs.get<QualityName>('quality', 'medium');
   private catalog?: ExoCatalog;
+  private challenge?: { def: Challenge; st: ChallengeState; result?: ChallengeResult };
+  private nudgeDrag?: { bodyId: number; start: THREE.Vector3; current: THREE.Vector3; lastPredict: number; path?: Float32Array };
   /** Typical camera distance of the loaded scene; zooming far beyond it returns to the galaxy. */
   private sceneScale = 10;
   private exoOpen = false;
@@ -190,6 +195,11 @@ export class App {
       const events = this.host.advance(active ? this.timeScale * dt : 0, 12);
       this.handleEvents(events);
       if (this.spawnDrag) this.updateSpawnPreview(performance.now());
+      if (this.nudgeDrag) this.updateNudgePreview(performance.now());
+      if (this.challenge && !this.challenge.result) {
+        this.challenge.st.events.push(...events);
+        if (this.frames % 3 === 0) this.evaluateChallenge();
+      }
       this.system.update(dt, this.height, active, events);
       this.renderer.render(this.system.scene, this.system.camera);
       this.labelRenderer.render(this.system.scene, this.system.camera);
@@ -385,8 +395,9 @@ export class App {
     });
   }
 
-  private loadScenario(sc: Scenario, opts: { zoomFrom?: number; undoable?: boolean } = {}): void {
+  private loadScenario(sc: Scenario, opts: { zoomFrom?: number; undoable?: boolean; challenge?: boolean } = {}): void {
     const { zoomFrom = 1, undoable = true } = opts;
+    if (!opts.challenge && this.challenge) this.quitChallenge();
     if (undoable && this.sim.bodies.length) this.history.push(captureState(this.sim), `loading ${sc.name}`);
     this.cancelSpawn();
     this.sim.clear();
@@ -601,10 +612,12 @@ export class App {
     this.cancelSpawn();
     $('tool-select').classList.toggle('active', tool === 'select');
     $('tool-spawn').classList.toggle('active', tool === 'spawn');
+    $('tool-nudge').classList.toggle('active', tool === 'nudge');
+    this.cancelNudge();
     $('spawn-options').classList.toggle('hidden', tool !== 'spawn');
     const mb = this.system.controls.mouseButtons;
     const touches = this.system.controls.touches;
-    if (tool === 'spawn') {
+    if (tool === 'spawn' || tool === 'nudge') {
       mb.LEFT = null;
       mb.RIGHT = THREE.MOUSE.ROTATE;
       touches.ONE = null;
@@ -620,6 +633,7 @@ export class App {
     let text: string;
     if (this.view === 'galaxy') text = 'Click a star to inspect · Double-click to fly there · Zoom right in (or Enter) to visit · B bookmark';
     else if (this.tool === 'spawn') text = 'Click to place · Drag to set velocity · Right-drag to orbit camera · Esc to cancel';
+    else if (this.tool === 'nudge') text = 'Press on a body and drag to push it · Dashed line previews the new path · Right-drag to orbit camera';
     else text = 'Click to select · Double-click to follow · Space pause · Hold R rewind · Ctrl+Z undo · B spawn · M galaxy map';
     $('hint').textContent = text;
   }
@@ -661,6 +675,7 @@ export class App {
   }
 
   private undo(): void {
+    if (this.blockedInChallenge('Undo')) return;
     const entry = this.history.undo(captureState(this.sim));
     if (!entry) return;
     this.restore(entry.state);
@@ -669,6 +684,7 @@ export class App {
   }
 
   private redo(): void {
+    if (this.blockedInChallenge('Redo')) return;
     const entry = this.history.redo(captureState(this.sim));
     if (!entry) return;
     this.restore(entry.state);
@@ -682,7 +698,7 @@ export class App {
   }
 
   private startRewind(): void {
-    if (this.rewindTimer !== undefined || this.view !== 'system') return;
+    if (this.rewindTimer !== undefined || this.view !== 'system' || this.blockedInChallenge('Rewind')) return;
     this.wasRunningBeforeRewind = this.running;
     const step = () => {
       const s = this.history.rewind(this.sim.time);
@@ -915,6 +931,218 @@ export class App {
     if (alertsEl.innerHTML !== html) alertsEl.innerHTML = html;
     $('btn-supernova').classList.toggle('hidden', !this.sim.canSupernova(body));
     $('btn-visit').classList.toggle('hidden', !(body.tag?.startsWith('exohost:') || body.tag === 'home'));
+    const inChallenge = !!this.challenge;
+    for (const id of ['btn-mass-up', 'btn-mass-down', 'btn-delete']) $(id).classList.toggle('hidden', inChallenge);
+    if (inChallenge) $('btn-supernova').classList.add('hidden');
+    this.updateProbePanel(body);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Probes: burns and transfer planning
+
+  private burnSize(): number {
+    return Math.pow(10, Number($<HTMLInputElement>('burn-size').value)) * KMS;
+  }
+
+  private updateProbePanel(body: Body): void {
+    const isProbe = body.tag === 'probe';
+    $('probe-controls').classList.toggle('hidden', !isProbe);
+    if (!isProbe) return;
+    $('probe-fuel').textContent = body.fuel !== undefined ? `fuel ${(body.fuel / KMS).toFixed(2)} km/s` : 'unlimited fuel';
+    $('burn-size-out').textContent = `${(this.burnSize() / KMS).toFixed(2)} km/s`;
+    const parent = this.sim.parentOf(body);
+    const select = $<HTMLSelectElement>('transfer-target');
+    const options = parent ? this.sim.bodies.filter((b) => b !== body && b !== parent && b.tag !== 'probe' && this.sim.parentOf(b) === parent) : [];
+    const sig = options.map((o) => o.id).join(',');
+    if (select.dataset.sig !== sig) {
+      const prev = select.value;
+      select.innerHTML = `<option value="">Choose a target…</option>` + options.map((o) => `<option value="${o.id}">${escapeHtml(o.name)}</option>`).join('');
+      select.value = options.some((o) => String(o.id) === prev) ? prev : '';
+      select.dataset.sig = sig;
+    }
+    const target = select.value ? this.sim.getBody(Number(select.value)) : undefined;
+    const btn = $('btn-transfer');
+    if (!target || !parent) {
+      $('transfer-plan').textContent = options.length ? 'Pick a target for a Hohmann transfer plan.' : '';
+      btn.classList.add('hidden');
+      return;
+    }
+    const plan = planHohmann(body, target, parent, this.sim.gravityScale);
+    const deg = (r: number) => `${Math.round((r * 180) / Math.PI)}°`;
+    const timing = plan.wait < 0.01 ? 'Burn now!' : `Wait ${formatTime(plan.wait)} for the alignment.`;
+    $('transfer-plan').textContent = `Departure burn ${(Math.abs(plan.dv1) / KMS).toFixed(2)} km/s ${plan.dv1 >= 0 ? 'prograde' : 'retrograde'}, arrival burn ${(Math.abs(plan.dv2) / KMS).toFixed(2)} km/s, flight time ${formatTime(plan.timeOfFlight)}. ${target.name} should lead by ${deg(plan.phaseNeeded)} (now ${deg(plan.phaseNow)}). ${timing}`;
+    btn.classList.remove('hidden');
+    btn.textContent = `Burn ${(Math.abs(plan.dv1) / KMS).toFixed(2)} km/s ${plan.dv1 >= 0 ? 'prograde' : 'retrograde'}`;
+    btn.dataset.dv = String(plan.dv1);
+  }
+
+  private burn(direction: 'prograde' | 'retrograde' | 'out' | 'in', size = this.burnSize()): void {
+    const body = this.selectedBody();
+    const parent = body && this.sim.parentOf(body);
+    if (!body || !parent) return;
+    if (body.fuel !== undefined && body.fuel <= 1e-9) return void toast('Out of fuel');
+    const { prograde, radial } = burnDirections(body, parent);
+    const dir = direction === 'prograde' ? prograde : direction === 'retrograde' ? prograde.map((v) => -v) : direction === 'out' ? radial : radial.map((v) => -v);
+    let used = 0;
+    this.mutateGame(`burn on ${body.name}`, () => {
+      used = applyNudge(body, [dir[0] * size, dir[1] * size, dir[2] * size]);
+    });
+    if (this.challenge) this.challenge.st.dvUsed += used;
+    this.updateBodyPanel();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Nudge tool
+
+  private canNudge(body: Body): boolean {
+    if (!this.challenge) return true;
+    return body.tag === 'pushable' || body.tag === 'probe';
+  }
+
+  private nudgeVector(drag: NonNullable<App['nudgeDrag']>, body: Body): THREE.Vector3 {
+    const parent = this.sim.parentOf(body);
+    let perUnit = 1;
+    if (parent) {
+      const r = Math.max(1e-3, Math.hypot(body.x - parent.x, body.y - parent.y, body.z - parent.z));
+      perUnit = Math.sqrt((G * Math.max(this.sim.gravityScale, 0.05) * parent.mass) / (r * r * r)) * 0.5;
+    }
+    const dv = drag.current.clone().sub(drag.start).multiplyScalar(perUnit);
+    const max = this.challenge?.def.rules.maxDvKms;
+    let limit = max !== undefined && body.tag !== 'probe' ? max * KMS : Infinity;
+    if (body.fuel !== undefined) limit = Math.min(limit, body.fuel);
+    if (dv.length() > limit) dv.setLength(limit);
+    return dv;
+  }
+
+  private updateNudgePreview(now: number): void {
+    const drag = this.nudgeDrag;
+    const body = drag && this.sim.getBody(drag.bodyId);
+    if (!drag || !body) return this.cancelNudge();
+    drag.start.set(body.x, body.y, body.z);
+    const dv = this.nudgeVector(drag, body);
+    if (now - drag.lastPredict > 60) {
+      drag.lastPredict = now;
+      drag.path = predictPath(this.sim, { mass: body.mass, kind: body.kind, radius: body.radius, x: body.x, y: body.y, z: body.z, vx: body.vx + dv.x, vy: body.vy + dv.y, vz: body.vz + dv.z }, 500, 8, body.id);
+    }
+    const parent = this.sim.parentOf(body);
+    const perUnit = parent ? Math.sqrt((G * parent.mass) / Math.max(1e-9, Math.hypot(body.x - parent.x, body.z - parent.z) ** 3)) * 0.5 : 1;
+    this.system.showSpawnPreview(drag.start, 0, dv, 1 / perUnit, drag.path);
+    $('hint').textContent = `Push ${body.name}: ${(dv.length() / KMS).toFixed(2)} km/s · release to apply`;
+  }
+
+  private cancelNudge(): void {
+    if (!this.nudgeDrag) return;
+    this.nudgeDrag = undefined;
+    this.system.hideSpawnPreview();
+    this.updateHint();
+  }
+
+  private commitNudge(): void {
+    const drag = this.nudgeDrag;
+    const body = drag && this.sim.getBody(drag.bodyId);
+    this.cancelNudge();
+    if (!drag || !body) return;
+    const dv = this.nudgeVector(drag, body);
+    if (dv.length() < 1e-9) return;
+    let used = 0;
+    this.mutateGame(`nudging ${body.name}`, () => {
+      used = applyNudge(body, [dv.x, dv.y, dv.z]);
+    });
+    if (this.challenge) {
+      if (body.tag !== 'probe') this.challenge.st.pushes++;
+      this.challenge.st.dvUsed += used;
+    }
+    toast(`Pushed ${body.name} by ${(used / KMS).toFixed(2)} km/s`);
+  }
+
+  /** Like mutate(), but challenges don't record undo history. */
+  private mutateGame(label: string, fn: () => void): void {
+    if (this.challenge) {
+      fn();
+      this.host.commit();
+    } else {
+      this.mutate(label, fn);
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Challenges
+
+  private blockedInChallenge(what: string): boolean {
+    if (!this.challenge || this.challenge.result) return false;
+    toast(`${what} isn't available during a challenge`);
+    return true;
+  }
+
+  private openChallengeMenu(): void {
+    const daily = dailyChallenge();
+    const cards = [daily, ...CHALLENGES].map((c) => {
+      const best = prefs.get<number>(`stars:${c.id}`, 0);
+      const stars = '★'.repeat(best) + '☆'.repeat(3 - best);
+      return `<div class="card${c === daily ? ' daily' : ''}"><h3>${escapeHtml(c.title)}</h3><p>${escapeHtml(c.summary)}</p><div class="row"><span class="stars" style="flex:1">${stars}</span><button class="primary" data-challenge="${c.id}">Play</button></div></div>`;
+    });
+    $('challenge-list').innerHTML = cards.join('');
+    $('challenge-menu').classList.remove('hidden');
+  }
+
+  private findChallenge(id: string): Challenge | undefined {
+    const daily = dailyChallenge();
+    return id === daily.id ? daily : CHALLENGES.find((c) => c.id === id);
+  }
+
+  private startChallenge(def: Challenge): void {
+    $('challenge-menu').classList.add('hidden');
+    $('challenge-result').classList.add('hidden');
+    if (this.view !== 'system') this.setView('system');
+    this.challenge = { def, st: newChallengeState(this.sim) };
+    this.loadScenario({ name: def.title, description: def.goal, load: () => def.setup(this.sim) }, { undoable: false, challenge: true });
+    this.challenge.st = newChallengeState(this.sim);
+    // Start paused so the player can read the goal and plan.
+    this.setRunning(false);
+    setTimeout(() => toast('Paused: read the goal, plan your move, then press ▶ (Space).'), 400);
+    this.setTool(def.rules.pushes ? 'nudge' : 'select');
+    const allowed = def.rules.spawns ? def.rules.spawnTypes ?? [] : [];
+    $('spawn-palette').querySelectorAll<HTMLElement>('button').forEach((b) => b.classList.toggle('hidden', !allowed.includes(b.dataset.type!)));
+    $<HTMLButtonElement>('tool-spawn').disabled = !allowed.length;
+    if (allowed.length) {
+      const t = SPAWN_TYPES.find((s) => s.id === allowed[0]);
+      if (t) this.spawnType = t;
+    }
+    $('hud-title').textContent = def.title;
+    $('hud-goal').textContent = def.goal;
+    $('hud-progress').textContent = '';
+    $('challenge-hud').classList.remove('hidden');
+    this.updateUndoButtons();
+  }
+
+  private quitChallenge(): void {
+    this.challenge = undefined;
+    $('challenge-hud').classList.add('hidden');
+    $('challenge-result').classList.add('hidden');
+    $('spawn-palette').querySelectorAll<HTMLElement>('button').forEach((b) => b.classList.remove('hidden'));
+    $<HTMLButtonElement>('tool-spawn').disabled = false;
+  }
+
+  private evaluateChallenge(): void {
+    const c = this.challenge;
+    if (!c || c.result) return;
+    const res = c.def.evaluate(this.sim, c.st);
+    const rules = c.def.rules;
+    const extras: string[] = [];
+    if (rules.pushes) extras.push(`pushes ${c.st.pushes}/${rules.pushes}`);
+    if (rules.spawns) extras.push(`spawns ${c.st.spawns}/${rules.spawns}`);
+    $('hud-progress').textContent = [res.progress, ...extras].filter(Boolean).join(' · ');
+    if (res.status === 'playing') return;
+    c.result = res;
+    this.setRunning(false);
+    const best = prefs.get<number>(`stars:${c.def.id}`, 0);
+    if (res.status === 'won' && (res.stars ?? 0) > best) prefs.set(`stars:${c.def.id}`, res.stars);
+    $('result-stars').textContent = res.status === 'won' ? '★'.repeat(res.stars ?? 1) + '☆'.repeat(3 - (res.stars ?? 1)) : '';
+    $('result-title').textContent = res.status === 'won' ? 'Challenge complete!' : 'Not this time';
+    $('result-text').textContent = res.status === 'won' ? res.progress : (res.reason ?? '');
+    $('result-share').classList.toggle('hidden', res.status !== 'won');
+    $('challenge-result').classList.remove('hidden');
+    this.audio.play(res.status === 'won' ? 'ignite' : 'collapse', 0.1);
   }
 
   // ---------------------------------------------------------------------------
@@ -1135,11 +1363,16 @@ export class App {
       });
       return;
     }
+    if (this.challenge) {
+      const max = this.challenge.def.rules.spawns ?? 0;
+      if (this.challenge.st.spawns >= max) return void toast('No spawns left in this challenge');
+      this.challenge.st.spawns++;
+    }
     const rng = mulberry32((Date.now() ^ (this.spawnCounter * 2654435761)) >>> 0);
     const kind = this.spawnKind();
     this.spawnCounter++;
     let body: Body | undefined;
-    this.mutate(`spawning a ${t.label.toLowerCase()}`, () => {
+    const add = () => {
       body = this.sim.addBody({
         name: `${t.label} ${this.spawnCounter}`,
         kind,
@@ -1151,8 +1384,15 @@ export class App {
         vx: velocity.x,
         vy: velocity.y,
         vz: velocity.z,
+        ...(t.id === 'probe' ? { tag: 'probe', fuel: 10 * KMS } : {}),
       });
-    });
+    };
+    if (this.challenge) {
+      add();
+      this.host.commit();
+    } else {
+      this.mutate(`spawning a ${t.label.toLowerCase()}`, add);
+    }
     this.selectBody(body);
   }
 
@@ -1212,6 +1452,21 @@ export class App {
 
     c.addEventListener('pointerdown', (e) => {
       this.pointerDown = { x: e.clientX, y: e.clientY, button: e.button, time: performance.now() };
+      if (this.view === 'system' && this.tool === 'nudge' && e.button === 0 && e.isPrimary) {
+        const [x, y] = this.ndc(e);
+        const body = this.system.pick(x, y, this.width, this.height);
+        if (body && !this.canNudge(body)) {
+          toast(`${body.name} can't be pushed in this challenge`);
+        } else if (body && this.challenge && body.tag !== 'probe' && this.challenge.st.pushes >= (this.challenge.def.rules.pushes ?? 0)) {
+          toast('No pushes left');
+        } else if (body) {
+          const start = new THREE.Vector3(body.x, body.y, body.z);
+          const point = this.system.planePoint(x, y, body.y) ?? start.clone();
+          this.nudgeDrag = { bodyId: body.id, start, current: point, lastPredict: 0 };
+          this.selectBody(body);
+          c.setPointerCapture(e.pointerId);
+        }
+      }
       if (this.view === 'system' && this.tool === 'spawn' && e.button === 0 && e.isPrimary) {
         const followed = this.system.followId !== undefined ? this.sim.getBody(this.system.followId) : undefined;
         const planeY = followed?.y ?? 0;
@@ -1225,6 +1480,12 @@ export class App {
     });
 
     c.addEventListener('pointermove', (e) => {
+      if (this.nudgeDrag && e.isPrimary) {
+        const [x, y] = this.ndc(e);
+        const p = this.system.planePoint(x, y, this.nudgeDrag.start.y);
+        if (p) this.nudgeDrag.current.copy(p);
+        return;
+      }
       if (!this.spawnDrag || !e.isPrimary) return;
       const [x, y] = this.ndc(e);
       const point = this.system.planePoint(x, y, this.spawnDrag.planeY);
@@ -1236,6 +1497,10 @@ export class App {
       this.pointerDown = undefined;
       if (this.spawnDrag) {
         this.commitSpawn();
+        return;
+      }
+      if (this.nudgeDrag) {
+        this.commitNudge();
         return;
       }
       if (!down || down.button !== 0) return;
@@ -1298,6 +1563,9 @@ export class App {
         case 'b':
           this.setTool('spawn');
           break;
+        case 'n':
+          this.setTool('nudge');
+          break;
         case 'f':
           this.toggleFollow();
           break;
@@ -1322,6 +1590,7 @@ export class App {
           break;
         case 'escape':
           if (this.spawnDrag) this.cancelSpawn();
+          else if (this.nudgeDrag) this.cancelNudge();
           else if (this.system.followId !== undefined) this.system.follow(undefined);
           else this.selectBody(undefined);
           break;
@@ -1436,6 +1705,49 @@ export class App {
     // Tools
     $('tool-select').addEventListener('click', () => this.setTool('select'));
     $('tool-spawn').addEventListener('click', () => this.setTool('spawn'));
+    $('tool-nudge').addEventListener('click', () => this.setTool('nudge'));
+
+    // Probes
+    document.querySelectorAll<HTMLButtonElement>('[data-burn]').forEach((b) =>
+      b.addEventListener('click', () => this.burn(b.dataset.burn as 'prograde' | 'retrograde' | 'out' | 'in')),
+    );
+    $('burn-size').addEventListener('input', () => ($('burn-size-out').textContent = `${(this.burnSize() / KMS).toFixed(2)} km/s`));
+    $('transfer-target').addEventListener('change', () => {
+      const b = this.selectedBody();
+      if (b) this.updateProbePanel(b);
+    });
+    $('btn-transfer').addEventListener('click', () => {
+      const dv = Number($('btn-transfer').dataset.dv);
+      if (Number.isFinite(dv)) this.burn(dv >= 0 ? 'prograde' : 'retrograde', Math.abs(dv));
+    });
+
+    // Challenges
+    $('btn-challenges').addEventListener('click', () => this.openChallengeMenu());
+    $('challenge-menu-close').addEventListener('click', () => $('challenge-menu').classList.add('hidden'));
+    $('challenge-list').addEventListener('click', (e) => {
+      const id = (e.target as HTMLElement).closest<HTMLElement>('[data-challenge]')?.dataset.challenge;
+      const def = id && this.findChallenge(id);
+      if (def) this.startChallenge(def);
+    });
+    $('hud-hint').addEventListener('click', () => this.challenge && toast(this.challenge.def.hint));
+    $('hud-restart').addEventListener('click', () => this.challenge && this.startChallenge(this.challenge.def));
+    $('hud-quit').addEventListener('click', () => this.quitChallenge());
+    $('result-retry').addEventListener('click', () => this.challenge && this.startChallenge(this.challenge.def));
+    $('result-menu').addEventListener('click', () => {
+      this.quitChallenge();
+      this.openChallengeMenu();
+    });
+    $('result-share').addEventListener('click', async () => {
+      const c = this.challenge;
+      if (!c?.result) return;
+      const text = `${shareText(c.def, c.result)}\n${location.origin}${location.pathname}`;
+      try {
+        await navigator.clipboard.writeText(text);
+        toast('Result copied to clipboard');
+      } catch {
+        window.prompt('Copy your result:', text);
+      }
+    });
     const palette = $('spawn-palette');
     for (const t of SPAWN_TYPES) {
       const b = document.createElement('button');

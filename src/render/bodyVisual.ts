@@ -10,6 +10,7 @@ const SPHERE = new THREE.SphereGeometry(1, 64, 32);
 const SPHERE_LOW = new THREE.SphereGeometry(1, 24, 12);
 const DISK = new THREE.RingGeometry(1.6, 5, 96, 1);
 const RINGS = new THREE.RingGeometry(1.35, 2.5, 128, 1);
+const PROBE = new THREE.OctahedronGeometry(1, 0);
 const BEAM = new THREE.ConeGeometry(0.05, 1, 24, 1, true).translate(0, 0.5, 0);
 
 /** Minimum on-screen radius (px) so tiny bodies stay visible when zoomed out. */
@@ -114,8 +115,10 @@ export class BodyVisual {
     this.group.add(this.label);
   }
 
+  private isProbe = false;
+
   get isPlanet(): boolean {
-    return this.kind === 'rocky' || this.kind === 'gas';
+    return (this.kind === 'rocky' || this.kind === 'gas') && !this.isProbe;
   }
 
   private build(body: Body): void {
@@ -169,7 +172,14 @@ export class BodyVisual {
         material = new THREE.MeshStandardMaterial({ color: body.color, roughness: body.kind === 'gas' ? 0.85 : 0.95, metalness: 0 });
         break;
     }
-    this.mesh = new THREE.Mesh(this.isPlanet ? SPHERE : SPHERE_LOW, material);
+    if (body.tag === 'probe') {
+      // Spacecraft: a small bright diamond with a cyan glint.
+      (material as THREE.Material).dispose();
+      material = new THREE.MeshBasicMaterial({ color: 0x7fdcff });
+      this.glow = this.makeGlow(0x7fdcff, 0.8);
+      this.isProbe = true;
+    }
+    this.mesh = new THREE.Mesh(this.isProbe ? PROBE : this.isPlanet ? SPHERE : SPHERE_LOW, material);
     this.spin.add(this.mesh);
     if (this.disk) this.group.add(this.disk);
     if (this.glow) this.group.add(this.glow);
@@ -263,7 +273,7 @@ export class BodyVisual {
   /** Update transform. `worldPerPixel` is the world size of one screen pixel at the body's depth. */
   update(body: Body, worldPerPixel: number, dt: number, lockTo?: Body): void {
     this.group.position.set(body.x, body.y, body.z);
-    const r = Math.max(body.radius, worldPerPixel * MIN_PIXEL_RADIUS);
+    const r = this.isProbe ? worldPerPixel * 4 : Math.max(body.radius, worldPerPixel * MIN_PIXEL_RADIUS);
     this.mesh.scale.setScalar(r);
     if (lockTo) {
       // Tidally locked: always show the same face to the parent.
@@ -273,8 +283,9 @@ export class BodyVisual {
     }
     if (this.clouds) this.clouds.rotation.y += dt * 0.05;
     if (this.glow) {
-      const big =
-        this.kind === 'star'
+      const big = this.isProbe
+        ? worldPerPixel * 14
+        : this.kind === 'star'
           ? Math.max(body.radius * 9, worldPerPixel * 28)
           : this.kind === 'giant'
             ? Math.max(body.radius * 4, worldPerPixel * 40)

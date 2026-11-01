@@ -731,7 +731,8 @@ export class Simulation {
 
   /** Which primaries can tidally disrupt which victims (keeps rocky-on-rocky accretion intact). */
   private canDisrupt(primary: Body, victim: Body): boolean {
-    if (victim.mass > 0.2 * primary.mass) return false;
+    // Spacecraft are far too small and rigid to be torn apart by tides.
+    if (victim.mass > 0.2 * primary.mass || victim.tag === 'probe') return false;
     switch (victim.kind) {
       case 'rocky':
         return primary.kind !== 'rocky';

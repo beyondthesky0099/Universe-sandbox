@@ -30,6 +30,7 @@
           <button id="btn-redo" class="icon" title="Redo (Ctrl+Shift+Z)" aria-label="Redo" disabled>↷</button>
         </div>
         <div id="stats"></div>
+        <button id="btn-challenges" class="icon" title="Challenges & daily puzzle" aria-label="Challenges">🏆</button>
         <button id="btn-sound" class="icon" title="Sound on / off" aria-label="Toggle sound">🔇</button>
         <button id="btn-help" class="icon" title="Tutorial (?)" aria-label="Show tutorial">?</button>
       </header>
@@ -125,6 +126,7 @@
           <div class="segmented">
             <button id="tool-select" data-tool="select" title="Select tool (V)">Select</button>
             <button id="tool-spawn" data-tool="spawn" title="Spawn tool (B)">Spawn</button>
+            <button id="tool-nudge" data-tool="nudge" title="Nudge tool (N): drag from a body to push it">Nudge</button>
           </div>
           <div id="spawn-options" class="hidden">
             <div id="spawn-palette" class="palette"></div>
@@ -226,6 +228,26 @@
         <h2 id="body-name">Body</h2>
         <dl id="body-facts" class="facts"></dl>
         <div id="body-alerts"></div>
+        <div id="probe-controls" class="hidden">
+          <h3>Probe · <span id="probe-fuel"></span></h3>
+          <div class="burns">
+            <button data-burn="prograde" title="Speed up along the orbit">▲ Prograde</button>
+            <button data-burn="retrograde" title="Slow down">▼ Retrograde</button>
+            <button data-burn="out" title="Push away from the parent body">◀ Radial out</button>
+            <button data-burn="in" title="Push toward the parent body">▶ Radial in</button>
+          </div>
+          <label class="row slider">
+            <span>Burn</span>
+            <input id="burn-size" type="range" min="-1" max="1" step="0.05" value="-0.3" />
+            <output id="burn-size-out"></output>
+          </label>
+          <label class="row">
+            <span>Transfer</span>
+            <select id="transfer-target"></select>
+          </label>
+          <p id="transfer-plan" class="muted small"></p>
+          <button id="btn-transfer" class="primary hidden">Burn for transfer</button>
+        </div>
         <div class="row buttons">
           <button id="btn-mass-down" title="Halve mass">Mass ÷2</button>
           <button id="btn-mass-up" title="Double mass">Mass ×2</button>
@@ -239,6 +261,40 @@
           <button id="btn-visit" class="primary hidden">Visit system →</button>
         </div>
       </aside>
+
+      <div id="challenge-hud" class="hidden">
+        <div class="hud-title" id="hud-title"></div>
+        <div class="hud-goal" id="hud-goal"></div>
+        <div class="hud-progress" id="hud-progress"></div>
+        <div class="row buttons">
+          <button id="hud-hint">Hint</button>
+          <button id="hud-restart">Restart</button>
+          <button id="hud-quit">Quit</button>
+        </div>
+      </div>
+
+      <div id="challenge-menu" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="challenge-menu-title">
+        <div class="modal-card wide">
+          <div class="row">
+            <h2 id="challenge-menu-title" style="flex: 1">🏆 Challenges</h2>
+            <button id="challenge-menu-close" class="icon" aria-label="Close">✕</button>
+          </div>
+          <div id="challenge-list" class="cards"></div>
+        </div>
+      </div>
+
+      <div id="challenge-result" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="result-title">
+        <div class="modal-card">
+          <div class="result-stars" id="result-stars"></div>
+          <h2 id="result-title"></h2>
+          <p id="result-text"></p>
+          <div class="row buttons">
+            <button id="result-share">Share</button>
+            <button id="result-retry">Retry</button>
+            <button id="result-menu" class="primary">More challenges</button>
+          </div>
+        </div>
+      </div>
 
       <div id="toasts"></div>
       <footer id="hint"></footer>

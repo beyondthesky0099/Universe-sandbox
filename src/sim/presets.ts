@@ -30,7 +30,7 @@ export interface Preset {
 export function addOrbiting(
   sim: Simulation,
   parent: Body,
-  init: { name: string; mass: number; color?: number; kind?: Body['kind'] },
+  init: { name: string; mass: number; color?: number; kind?: Body['kind']; tag?: string; fuel?: number; age?: number },
   el: OrbitalElements,
 ): Body {
   const { pos, vel } = keplerToState(G * sim.gravityScale * (parent.mass + init.mass), el);

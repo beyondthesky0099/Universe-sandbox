@@ -1,4 +1,5 @@
 import { G } from './units';
+import type { SpacecraftData } from './spacecraft';
 
 /**
  * Real Solar System data bundled from NASA/JPL (see scripts/build-solar-system.mjs and
@@ -74,6 +75,8 @@ export interface SolarData {
   small: SmallBody[];
   /** Saturn's main rings (NASA ring fact sheet), if loaded. */
   rings?: SaturnRing[];
+  /** Real spacecraft trajectories (JPL Horizons), if loaded. */
+  spacecraft?: SpacecraftData[];
 }
 
 export interface SaturnRing {
@@ -249,9 +252,10 @@ interface RawSmall {
   bodies: [string, number, number, number, number, number, number, number, number][];
 }
 
-export function parseSolarData(solar: RawSolar, small?: RawSmall, rings?: { rings: SaturnRing[] }): SolarData {
+export function parseSolarData(solar: RawSolar, small?: RawSmall, rings?: { rings: SaturnRing[] }, craft?: { craft: SpacecraftData[] }): SolarData {
   return {
     rings: rings?.rings,
+    spacecraft: craft?.craft,
     epoch: solar.epoch,
     bodies: solar.bodies,
     byName: new Map(solar.bodies.map((b) => [b.name, b])),
@@ -288,8 +292,11 @@ export function loadSolarData(baseUrl = import.meta.env.BASE_URL): Promise<Solar
     fetch(`${baseUrl}data/saturn-rings.json`)
       .then((r) => (r.ok ? (r.json() as Promise<{ rings: SaturnRing[] }>) : undefined))
       .catch(() => undefined),
-  ]).then(([solar, small, rings]) => {
-    cached = parseSolarData(solar, small, rings);
+    fetch(`${baseUrl}data/spacecraft.json`)
+      .then((r) => (r.ok ? (r.json() as Promise<{ craft: SpacecraftData[] }>) : undefined))
+      .catch(() => undefined),
+  ]).then(([solar, small, rings, craft]) => {
+    cached = parseSolarData(solar, small, rings, craft);
     return cached;
   });
   return loading;

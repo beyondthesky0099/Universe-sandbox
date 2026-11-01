@@ -2955,6 +2955,7 @@ export class App {
 // -----------------------------------------------------------------------------
 
 function kindLabel(b: Body): string {
+  if (b.tag === 'probe') return 'Spacecraft';
   switch (b.kind) {
     case 'rocky':
       return b.mass < 0.05 * EARTH_MASS ? 'Asteroid' : 'Rocky planet';

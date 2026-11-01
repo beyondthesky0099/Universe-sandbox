@@ -77,6 +77,11 @@ need the [companion server](#companion-server). Without one, they explain how to
   else uses mass–radius relations for its kind, down to a black hole's Schwarzschild radius.
   Mergers, fragments and supernova remnants keep real sizes, and collisions only happen at
   true contact. **Solar System (true scale)** adds the 12 largest moons to the whole system.
+- **Real spacecraft:** 16 missions from JPL Horizons appear at their true positions on any
+  date they were flying: Voyager 1 and 2, Pioneer 10 and 11, New Horizons, Parker Solar Probe,
+  JWST, Europa Clipper, JUICE, Lucy, BepiColombo, Psyche, and the historical Cassini, Galileo,
+  Juno and Rosetta. Pick 1989 to catch Voyager 2 at Neptune, or 2015 for New Horizons at
+  Pluto. They're drawn as cyan diamonds and can be steered with the transfer planner.
 - **Real moon systems at true scale:** Earth & Moon, Mars, Jupiter, Saturn, Uranus, Neptune and
   Pluto–Charon. There are 28 moons, each at its real position for today, and the real Sun at
   its true distance lights each scene and pulls on the moons. Saturn's C, B and A
@@ -332,6 +337,8 @@ push and pull request.
 - Saturn's ring radii, optical depths and albedos come from the NASA Saturnian Rings Fact
   Sheet (nssdc.gsfc.nasa.gov/planetary/factsheet/satringfact.html). Rebuild them with
   `node scripts/build-saturn-rings.mjs`.
+- Spacecraft trajectories: NASA/JPL Horizons, state vectors every 10 days (rebuild with
+  `node scripts/build-spacecraft.mjs`).
 - Galaxies: the **Updated Nearby Galaxy Catalog** (Karachentsev, Makarov & Kaisina 2013, AJ
   145, 101) and the **2MASS Redshift Survey** (Huchra et al. 2012, ApJS 199, 26), retrieved
   from VizieR (CDS). Rebuild them with `node scripts/build-galaxies.mjs`. Survey distances use

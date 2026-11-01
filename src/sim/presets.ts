@@ -6,6 +6,7 @@ import type { Simulation } from './simulation';
 import { EARTH_MASS, G, JUPITER_MASS } from './units';
 import { julianDate, planetStates, type PlanetName } from './ephemeris';
 import { setTrueScale } from './trueScale';
+import { SPACECRAFT_COLOR, spacecraftState } from './spacecraft';
 import { getSolarData, KM_PER_AU, poleScene, realRadiusAu, REAL_COLORS, relativeState, sampleRingRadii, smallBodyState, toScene, type SolarData } from './solarSystemData';
 
 export interface SceneSetup {
@@ -479,7 +480,7 @@ const SMALL_BODY_COLORS: Record<string, [number, number, number]> = {
 /** Real Solar System bodies added individually (beyond the eight planets). */
 const NAMED_SMALL_BODIES = ['Pluto', 'Ceres', 'Eris', 'Haumea', 'Makemake', 'Vesta', 'Pallas', 'Hygiea', 'Apophis', 'Bennu', 'Halley', 'Encke', 'Churyumov–Gerasimenko', 'Hale–Bopp'];
 
-export function loadSolarSystemOnDate(sim: Simulation, date: Date): SceneSetup {
+export function loadSolarSystemOnDate(sim: Simulation, date: Date, opts: { trueScale?: boolean } = {}): SceneSetup {
   const data = getSolarData();
   const sun = sim.addBody({ name: 'Sun', kind: 'star', mass: 1, color: starColor(1), age: 4.6e9 });
   const states = new Map(planetStates(date).map((p) => [p.name, p]));
@@ -509,6 +510,7 @@ export function loadSolarSystemOnDate(sim: Simulation, date: Date): SceneSetup {
     const [vx, vy, vz] = toScene(s.vel);
     sim.addBody({ name, mass, kind: 'rocky', color: REAL_COLORS[name] ?? (b.kind === 'comet' ? 0xcfe6ff : 0x9a9088), x, y, z, vx, vy, vz, tag: b.kind === 'comet' ? 'comet' : undefined });
   }
+  addSpacecraft(sim, data, jd, opts.trueScale ? 'true' : 'enlarged');
   const named = new Set(NAMED_SMALL_BODIES.map((n) => n.toLowerCase()));
   for (const b of data.small) {
     // "1 Ceres", "134340 Pluto (1930 BM)": skip bodies that are already added individually.
@@ -526,7 +528,7 @@ export function loadSolarSystemOnDate(sim: Simulation, date: Date): SceneSetup {
     cameraDistance: 9,
     timeScale: 0.1,
     elevation: 1.1,
-    tip: `The real Solar System on ${date.toISOString().slice(0, 10)}: planets from JPL's ephemerides; dwarf planets, comets and ${data.small.length.toLocaleString('en-US')} asteroids and Kuiper belt objects from JPL Horizons and the Small-Body Database. Body sizes are enlarged so you can see them.`,
+    tip: `The real Solar System on ${date.toISOString().slice(0, 10)}: planets from JPL's ephemerides; dwarf planets, comets and ${data.small.length.toLocaleString('en-US')} asteroids and Kuiper belt objects from JPL Horizons and the Small-Body Database, and the spacecraft that were flying on that date (cyan diamonds). Body sizes are enlarged so you can see them.`,
   };
 }
 
@@ -577,7 +579,7 @@ const TRUE_SCALE_MOONS = ['Moon', 'Io', 'Europa', 'Ganymede', 'Callisto', 'Titan
  * treated as the planet–moon barycentre.
  */
 export function loadSolarSystemTrueScale(sim: Simulation, date: Date): SceneSetup {
-  const base = loadSolarSystemOnDate(sim, date);
+  const base = loadSolarSystemOnDate(sim, date, { trueScale: true });
   const data = getSolarData();
   if (data) {
     const jd = julianDate(date);
@@ -622,6 +624,38 @@ const solarTrueScale: Preset = {
   description: 'The real Solar System with real sizes and its 12 largest moons. Everything is tiny compared with the distances between them.',
   load: (sim) => loadSolarSystemTrueScale(sim, new Date()),
 };
+
+/**
+ * Real spacecraft at their actual positions on this Julian date (JPL Horizons), as massless
+ * probes. Craft orbiting a giant planet (Juno, Cassini, Galileo) are left out because their
+ * tight orbits would force tiny timesteps. With enlarged sizes, craft that would sit inside a
+ * planet's enlarged radius (JWST near Earth) are left out too. Returns how many were added.
+ */
+export function addSpacecraft(sim: Simulation, data: SolarData, jd: number, sizes: 'enlarged' | 'true'): number {
+  let added = 0;
+  const sun = sim.bodies.find((b) => b.name === 'Sun');
+  const ox = sun?.x ?? 0, oy = sun?.y ?? 0, oz = sun?.z ?? 0;
+  const others = sim.bodies.filter((b) => b.kind !== 'star');
+  for (const c of data.spacecraft ?? []) {
+    const st = spacecraftState(c, jd);
+    if (!st) continue;
+    const [x, y, z] = toScene(st.pos);
+    const blocked = others.some((b) => {
+      const d = Math.hypot(b.x - ox - x, b.y - oy - y, b.z - oz - z);
+      if (b.kind === 'gas' && d < 0.06) return true; // in orbit around a giant planet
+      return sizes === 'enlarged' && d < b.radius * 3;
+    });
+    if (blocked) continue;
+    const [vx, vy, vz] = toScene(st.vel);
+    sim.addBody({
+      name: c.name, kind: 'rocky', mass: 1e-20, color: SPACECRAFT_COLOR, tag: 'probe',
+      x: ox + x, y: oy + y, z: oz + z,
+      vx: (sun?.vx ?? 0) + vx, vy: (sun?.vy ?? 0) + vy, vz: (sun?.vz ?? 0) + vz,
+    });
+    added++;
+  }
+  return added;
+}
 
 /** Planet + real moons, at true scale (real radii), positioned for `date` from JPL data. */
 export function loadMoonSystem(sim: Simulation, planetName: string, date: Date, data: SolarData | undefined = getSolarData()): SceneSetup {

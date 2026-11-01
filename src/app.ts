@@ -6,6 +6,8 @@ import { mulberry32, pick, seedFromString } from './procgen/rng';
 import { generateStarSystem, starSummary, type StarSystemSpec } from './procgen/starSystem';
 import { GalaxyView, type GalaxyTarget } from './render/galaxyView';
 import { CosmosView } from './render/cosmosView';
+import { SkyView } from './render/skyView';
+import { moonPhaseName, skyAt } from './sim/sky';
 import { displayName, GALAXY_CREDIT, galaxyForm, loadLocalGalaxies, loadNamedGalaxies, loadWebGalaxies, LY_PER_MPC, type LocalGalaxy } from './sim/galaxies';
 import { equatorialToGalactic, galacticToMap, MILKY_WAY_SEED, type GalaxyOptions } from './procgen/galaxy';
 import { QUALITY_PRESETS, SystemView } from './render/systemView';
@@ -47,7 +49,7 @@ import { burnDirections, planHohmann } from './game/transfer';
 import { LESSONS, type Lesson } from './game/lessons';
 import { LineChart, measure, METRICS, type MetricId, type Series } from './ui/graph';
 
-type ViewName = 'cosmos' | 'galaxy' | 'system';
+type ViewName = 'cosmos' | 'galaxy' | 'system' | 'sky';
 type Tool = 'select' | 'spawn' | 'nudge';
 type QualityName = keyof typeof QUALITY_PRESETS;
 
@@ -120,6 +122,10 @@ export class App {
   private readonly tutorial: Tutorial;
   private view: ViewName = 'system';
   private readonly cosmos: CosmosView;
+  private readonly sky: SkyView;
+  private skyDate = new Date();
+  private skySpeed = 1;
+  private skyPicked?: string;
   private cosmosLoaded = false;
   /** The real galaxy (catalogue name) the galaxy map currently shows, for returning to the Universe map. */
   private galaxyOrigin = 'Milky Way';
@@ -190,6 +196,7 @@ export class App {
     this.system = new SystemView(this.sim, this.canvas, QUALITY_PRESETS[this.quality]);
     this.galaxy = new GalaxyView(this.canvas);
     this.cosmos = new CosmosView(this.canvas);
+    this.sky = new SkyView(this.canvas);
     this.tutorial = new Tutorial(this.tutorialSteps());
 
     const hashSeed = params.get('galaxy');
@@ -251,7 +258,10 @@ export class App {
     }
     // The real night sky (HYG catalogue) replaces the procedural background once it loads.
     void loadBrightStars()
-      .then((stars) => this.system.setSky(createRealSky(stars)))
+      .then((stars) => {
+        this.sky.setStars(stars);
+        return this.system.setSky(createRealSky(stars));
+      })
       .catch(() => undefined);
     this.runAutorunPlugins();
     const scene = params.get('scene');
@@ -341,6 +351,8 @@ export class App {
       }
       if (this.frames % 6 === 0) this.updateSystemHud();
       if (!this.transitioning && this.system.cameraDistance > this.exitDistance) void this.exitToGalaxy();
+    } else if (this.view === 'sky') {
+      this.tickSky(dt);
     } else if (this.view === 'cosmos') {
       this.cosmos.update(dt);
       this.renderView(this.cosmos.scene, this.cosmos.camera, []);
@@ -515,6 +527,7 @@ export class App {
     this.system.setViewport(this.width, this.height);
     this.galaxy.setViewport(this.width, this.height, this.renderer.getPixelRatio());
     this.cosmos.setViewport(this.width, this.height, this.renderer.getPixelRatio());
+    this.sky.setViewport(this.width, this.height);
     this.postfx?.setSize(this.width, this.height);
   }
 
@@ -537,10 +550,12 @@ export class App {
     this.system.controls.enabled = view === 'system';
     this.galaxy.controls.enabled = view === 'galaxy';
     this.cosmos.controls.enabled = view === 'cosmos';
+    this.sky.enabled = view === 'sky';
     if (view !== 'system') this.cancelSpawn();
     $('tab-cosmos').classList.toggle('active', view === 'cosmos');
     $('tab-galaxy').classList.toggle('active', view === 'galaxy');
     $('tab-system').classList.toggle('active', view === 'system');
+    $('tab-sky').classList.toggle('active', view === 'sky');
     $('labels').classList.toggle('hidden', view !== 'system');
     document.querySelectorAll<HTMLElement>('[data-view]').forEach((el) => {
       const match = el.dataset.view === view;
@@ -622,6 +637,148 @@ export class App {
     } finally {
       this.transitioning = false;
     }
+  }
+
+  /** Fade to another view without any camera transition. */
+  private async switchView(view: ViewName): Promise<void> {
+    if (this.transitioning || this.view === view) return;
+    this.transitioning = true;
+    try {
+      await this.fade(true);
+      this.setView(view);
+      await this.fade(false);
+    } finally {
+      this.transitioning = false;
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Sky (planetarium)
+
+  private static readonly SKY_PLACES: [string, number, number][] = [
+    ['Greenwich, London', 51.4778, -0.0015], ['New York', 40.7128, -74.006], ['Los Angeles', 34.0522, -118.2437],
+    ['Mexico City', 19.4326, -99.1332], ['São Paulo', -23.5505, -46.6333], ['Reykjavík', 64.1466, -21.9426],
+    ['Cape Town', -33.9249, 18.4241], ['Cairo', 30.0444, 31.2357], ['Mumbai', 19.076, 72.8777],
+    ['Delhi', 28.6139, 77.209], ['Beijing', 39.9042, 116.4074], ['Tokyo', 35.6762, 139.6503],
+    ['Sydney', -33.8688, 151.2093], ['Mauna Kea observatories', 19.8207, -155.4681],
+    ['Atacama Desert (ALMA)', -23.0229, -67.7552], ['North Pole', 90, 0], ['South Pole', -90, 0],
+  ];
+
+  private async openSky(): Promise<void> {
+    if (this.view === 'sky') return;
+    this.skyDate = new Date();
+    this.setSkyTimeInput();
+    this.sky.setTime(this.skyDate);
+    this.renderSkyList();
+    await this.switchView('sky');
+  }
+
+  private tickSky(dt: number): void {
+    this.skyDate = new Date(this.skyDate.getTime() + dt * 1000 * this.skySpeed);
+    this.sky.setTime(this.skyDate);
+    this.sky.update();
+    this.renderView(this.sky.scene, this.sky.camera, []);
+    if (this.frames % 15 === 0) {
+      $('stats').textContent = `${Math.round(this.fps)} fps`;
+      this.renderSkyList();
+      if (document.activeElement !== $('sky-time')) this.setSkyTimeInput();
+    }
+  }
+
+  private setSkyTimeInput(): void {
+    const d = this.skyDate;
+    const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+    $<HTMLInputElement>('sky-time').value = local;
+    $('sky-utc').textContent = `${d.toISOString().slice(0, 16).replace('T', ' ')} UTC`;
+  }
+
+  private setSkyPlace(lat: number, lon: number, name?: string): void {
+    lat = Math.max(-90, Math.min(90, lat));
+    lon = ((((lon + 180) % 360) + 360) % 360) - 180;
+    $<HTMLInputElement>('sky-lat').value = lat.toFixed(2);
+    $<HTMLInputElement>('sky-lon').value = lon.toFixed(2);
+    const select = $<HTMLSelectElement>('sky-place');
+    const i = App.SKY_PLACES.findIndex((p) => p[0] === name);
+    select.value = i >= 0 ? String(i) : '';
+    prefs.set('skyPlace', { lat, lon, name: name ?? '' });
+    this.sky.setTime(this.skyDate, { lat, lon });
+    this.renderSkyList();
+  }
+
+  private wireSkyPanel(): void {
+    const select = $<HTMLSelectElement>('sky-place');
+    select.innerHTML = `<option value="">Custom place</option>${App.SKY_PLACES.map((p, i) => `<option value="${i}">${p[0]}</option>`).join('')}`;
+    const saved = prefs.get<{ lat: number; lon: number; name: string } | null>('skyPlace', null);
+    if (saved) this.setSkyPlace(saved.lat, saved.lon, saved.name || undefined);
+    else this.setSkyPlace(App.SKY_PLACES[0][1], App.SKY_PLACES[0][2], App.SKY_PLACES[0][0]);
+    select.addEventListener('change', () => {
+      const p = App.SKY_PLACES[Number(select.value)];
+      if (select.value !== '' && p) this.setSkyPlace(p[1], p[2], p[0]);
+    });
+    const typed = () => {
+      const lat = Number($<HTMLInputElement>('sky-lat').value), lon = Number($<HTMLInputElement>('sky-lon').value);
+      if (Number.isFinite(lat) && Number.isFinite(lon)) this.setSkyPlace(lat, lon);
+    };
+    $('sky-lat').addEventListener('change', typed);
+    $('sky-lon').addEventListener('change', typed);
+    $('btn-sky-here').addEventListener('click', () => {
+      if (!navigator.geolocation) return toast('Location is not available in this browser.');
+      navigator.geolocation.getCurrentPosition(
+        (pos) => this.setSkyPlace(pos.coords.latitude, pos.coords.longitude),
+        () => toast('Could not get your location.'),
+        { timeout: 10000 },
+      );
+    });
+    $('sky-time').addEventListener('change', () => {
+      const d = new Date($<HTMLInputElement>('sky-time').value);
+      if (!Number.isNaN(d.getTime())) {
+        this.skyDate = d;
+        this.setSkyTimeInput();
+      }
+    });
+    $('btn-sky-now').addEventListener('click', () => {
+      this.skyDate = new Date();
+      this.skySpeed = 1;
+      $<HTMLSelectElement>('sky-speed').value = '1';
+      this.setSkyTimeInput();
+    });
+    $('sky-speed').addEventListener('change', () => (this.skySpeed = Number($<HTMLSelectElement>('sky-speed').value)));
+    $('sky-list').addEventListener('click', (e) => {
+      const li = (e.target as HTMLElement).closest<HTMLElement>('li[data-sky]');
+      const o = li && this.sky.snapshot?.objects.find((x) => x.name === li.dataset.sky);
+      if (!o) return;
+      this.skyPicked = o.name;
+      this.sky.lookAt(Math.max(o.alt, 5), o.az);
+      this.renderSkyList();
+    });
+  }
+
+  private renderSkyList(): void {
+    const snap = this.sky.snapshot;
+    if (!snap) return;
+    const compass = (az: number) => ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'][Math.round(az / 22.5) % 16];
+    const where = (o: { alt: number; az: number }) => (o.alt > 0 ? `${Math.round(o.alt)}° up, ${compass(o.az)}` : 'below the horizon');
+    const sun = snap.objects.find((o) => o.name === 'Sun')!;
+    const moon = snap.objects.find((o) => o.name === 'Moon')!;
+    // Waxing while the lit fraction grows.
+    const waxing = skyAt(new Date(this.skyDate.getTime() + 3600000), this.sky.observer).moonIllumination >= snap.moonIllumination;
+    const phase = `${moonPhaseName(snap.moonIllumination, waxing)}, ${Math.round(snap.moonIllumination * 100)}% lit`;
+    const sky = sun.alt > -0.833 ? 'Daytime' : sun.alt > -6 ? 'Civil twilight' : sun.alt > -12 ? 'Nautical twilight' : sun.alt > -18 ? 'Astronomical twilight' : 'Night';
+    const rows = [
+      { name: 'Sun', text: `${sky}: ${where(sun)}` },
+      { name: 'Moon', text: `${phase}; ${where(moon)}` },
+      ...snap.objects
+        .filter((o) => o.kind === 'planet')
+        .sort((a, b) => b.alt - a.alt)
+        .map((o) => ({ name: o.name, text: where(o), up: o.alt > 0 })),
+    ];
+    $('sky-list').innerHTML = rows
+      .map((r) => `<li data-sky="${r.name}" tabindex="0" class="${'up' in r && !r.up ? 'muted' : ''}${r.name === this.skyPicked ? ' active' : ''}"><b>${r.name}</b> <span class="small">${r.text}</span></li>`)
+      .join('');
+    const picked = this.skyPicked && snap.objects.find((o) => o.name === this.skyPicked);
+    $('sky-info').textContent = picked
+      ? `${picked.name}: altitude ${picked.alt.toFixed(1)}°, azimuth ${picked.az.toFixed(1)}°, ${picked.km > 1e7 ? `${(picked.km / 149597870.7).toFixed(2)} AU` : `${Math.round(picked.km).toLocaleString('en-US')} km`} away, ${(picked.diameter * 60).toFixed(picked.diameter * 60 < 1 ? 2 : 1)}′ across.`
+      : 'Positions are geometric (no atmospheric refraction), accurate to about an arcminute.';
   }
 
   private async switchToSandbox(): Promise<void> {
@@ -1332,7 +1489,8 @@ export class App {
 
   private updateHint(): void {
     let text: string;
-    if (this.view === 'cosmos') text = 'Click a galaxy to inspect · Double-click to fly there · Zoom right in (or Enter) to visit · Scroll out for the cosmic web';
+    if (this.view === 'sky') text = 'Drag to look around · Scroll to zoom · Click the Moon or a planet for details';
+    else if (this.view === 'cosmos') text = 'Click a galaxy to inspect · Double-click to fly there · Zoom right in (or Enter) to visit · Scroll out for the cosmic web';
     else if (this.view === 'galaxy') text = 'Click a star to inspect · Double-click to fly there · Zoom right in (or Enter) to visit · Zoom far out for other galaxies';
     else if (this.tool === 'spawn') text = 'Click to place · Drag to set velocity · Right-drag to orbit camera · Esc to cancel';
     else if (this.tool === 'nudge') text = 'Press on a body and drag to push it · Dashed line previews the new path · Right-drag to orbit camera';
@@ -2285,6 +2443,9 @@ export class App {
       this.selectTarget(this.galaxy.pick(x, y, this.width, this.height));
     } else if (this.view === 'cosmos') {
       this.selectCosmos(this.cosmos.pick(x, y, this.width, this.height));
+    } else if (this.view === 'sky') {
+      this.skyPicked = this.sky.pick(x, y);
+      this.renderSkyList();
     }
   }
 
@@ -2491,6 +2652,7 @@ export class App {
   private bindUi(): void {
     $('tab-galaxy').addEventListener('click', () => {
       if (this.view === 'system') void this.exitToGalaxy();
+      else if (this.view === 'sky') void this.switchView('galaxy');
       else if (this.view === 'cosmos') void this.visitCosmosGalaxy(this.cosmos.indexOf(this.galaxyOrigin || 'Milky Way'));
     });
     $('tab-cosmos').addEventListener('click', () => this.view !== 'cosmos' && void this.openCosmos(this.view === 'galaxy'));
@@ -2512,6 +2674,8 @@ export class App {
       this.cosmos.flyTo(index);
     });
     $('tab-system').addEventListener('click', () => void this.switchToSandbox());
+    $('tab-sky').addEventListener('click', () => void this.openSky());
+    this.wireSkyPanel();
     $('btn-play').addEventListener('click', () => this.setRunning(!this.running));
     $('btn-undo').addEventListener('click', () => this.undo());
     $('btn-redo').addEventListener('click', () => this.redo());

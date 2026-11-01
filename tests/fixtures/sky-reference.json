@@ -1,0 +1,1085 @@
+{
+ "source": "JPL Horizons observer tables: topocentric airless azimuth/elevation (deg) and illuminated fraction (%)",
+ "rows": [
+  {
+   "site": "Greenwich",
+   "lat": 51.4778,
+   "lon": -0.0015,
+   "time": "2001-01-01T00:00:00Z",
+   "body": "Sun",
+   "az": 358.348655,
+   "alt": -61.528337,
+   "illumination": 100
+  },
+  {
+   "site": "Greenwich",
+   "lat": 51.4778,
+   "lon": -0.0015,
+   "time": "2026-11-01T20:00:00Z",
+   "body": "Sun",
+   "az": 288.444536,
+   "alt": -32.378495,
+   "illumination": 100
+  },
+  {
+   "site": "Greenwich",
+   "lat": 51.4778,
+   "lon": -0.0015,
+   "time": "2027-03-15T04:30:00Z",
+   "body": "Sun",
+   "az": 71.523188,
+   "alt": -16.936383,
+   "illumination": 100
+  },
+  {
+   "site": "Greenwich",
+   "lat": 51.4778,
+   "lon": -0.0015,
+   "time": "2030-06-21T12:00:00Z",
+   "body": "Sun",
+   "az": 179.099449,
+   "alt": 61.953418,
+   "illumination": 100
+  },
+  {
+   "site": "Greenwich",
+   "lat": 51.4778,
+   "lon": -0.0015,
+   "time": "2001-01-01T00:00:00Z",
+   "body": "Moon",
+   "az": 279.673092,
+   "alt": -19.676753,
+   "illumination": 30.91191
+  },
+  {
+   "site": "Greenwich",
+   "lat": 51.4778,
+   "lon": -0.0015,
+   "time": "2026-11-01T20:00:00Z",
+   "body": "Moon",
+   "az": 28.284802,
+   "alt": -15.569977,
+   "illumination": 49.89085
+  },
+  {
+   "site": "Greenwich",
+   "lat": 51.4778,
+   "lon": -0.0015,
+   "time": "2027-03-15T04:30:00Z",
+   "body": "Moon",
+   "az": 345.349685,
+   "alt": -10.714873,
+   "illumination": 44.28014
+  },
+  {
+   "site": "Greenwich",
+   "lat": 51.4778,
+   "lon": -0.0015,
+   "time": "2030-06-21T12:00:00Z",
+   "body": "Moon",
+   "az": 281.285219,
+   "alt": -10.709804,
+   "illumination": 63.19643
+  },
+  {
+   "site": "Greenwich",
+   "lat": 51.4778,
+   "lon": -0.0015,
+   "time": "2001-01-01T00:00:00Z",
+   "body": "Mercury",
+   "az": 349.956448,
+   "alt": -62.885917,
+   "illumination": 99.36331
+  },
+  {
+   "site": "Greenwich",
+   "lat": 51.4778,
+   "lon": -0.0015,
+   "time": "2026-11-01T20:00:00Z",
+   "body": "Mercury",
+   "az": 280.982733,
+   "alt": -31.325726,
+   "illumination": 2.94075
+  },
+  {
+   "site": "Greenwich",
+   "lat": 51.4778,
+   "lon": -0.0015,
+   "time": "2027-03-15T04:30:00Z",
+   "body": "Mercury",
+   "az": 98.865479,
+   "alt": -9.74216,
+   "illumination": 50.99267
+  },
+  {
+   "site": "Greenwich",
+   "lat": 51.4778,
+   "lon": -0.0015,
+   "time": "2030-06-21T12:00:00Z",
+   "body": "Mercury",
+   "az": 186.590932,
+   "alt": 62.529888,
+   "illumination": 98.94985
+  },
+  {
+   "site": "Greenwich",
+   "lat": 51.4778,
+   "lon": -0.0015,
+   "time": "2001-01-01T00:00:00Z",
+   "body": "Venus",
+   "az": 295.410499,
+   "alt": -35.812338,
+   "illumination": 58.83351
+  },
+  {
+   "site": "Greenwich",
+   "lat": 51.4778,
+   "lon": -0.0015,
+   "time": "2026-11-01T20:00:00Z",
+   "body": "Venus",
+   "az": 303.22893,
+   "alt": -40.425631,
+   "illumination": 2.9737
+  },
+  {
+   "site": "Greenwich",
+   "lat": 51.4778,
+   "lon": -0.0015,
+   "time": "2027-03-15T04:30:00Z",
+   "body": "Venus",
+   "az": 108.423683,
+   "alt": -5.800337,
+   "illumination": 77.24159
+  },
+  {
+   "site": "Greenwich",
+   "lat": 51.4778,
+   "lon": -0.0015,
+   "time": "2030-06-21T12:00:00Z",
+   "body": "Venus",
+   "az": 230.160626,
+   "alt": 47.952154,
+   "illumination": 84.16138
+  },
+  {
+   "site": "Greenwich",
+   "lat": 51.4778,
+   "lon": -0.0015,
+   "time": "2001-01-01T00:00:00Z",
+   "body": "Mars",
+   "az": 79.840495,
+   "alt": -23.227942,
+   "illumination": 91.96596
+  },
+  {
+   "site": "Greenwich",
+   "lat": 51.4778,
+   "lon": -0.0015,
+   "time": "2026-11-01T20:00:00Z",
+   "body": "Mars",
+   "az": 19.499051,
+   "alt": -19.852524,
+   "illumination": 89.48575
+  },
+  {
+   "site": "Greenwich",
+   "lat": 51.4778,
+   "lon": -0.0015,
+   "time": "2027-03-15T04:30:00Z",
+   "body": "Mars",
+   "az": 283.816556,
+   "alt": 11.525504,
+   "illumination": 97.47176
+  },
+  {
+   "site": "Greenwich",
+   "lat": 51.4778,
+   "lon": -0.0015,
+   "time": "2030-06-21T12:00:00Z",
+   "body": "Mars",
+   "az": 194.180135,
+   "alt": 61.751336,
+   "illumination": 99.83299
+  },
+  {
+   "site": "Greenwich",
+   "lat": 51.4778,
+   "lon": -0.0015,
+   "time": "2001-01-01T00:00:00Z",
+   "body": "Jupiter",
+   "az": 240.216009,
+   "alt": 45.325524,
+   "illumination": 99.63162
+  },
+  {
+   "site": "Greenwich",
+   "lat": 51.4778,
+   "lon": -0.0015,
+   "time": "2026-11-01T20:00:00Z",
+   "body": "Jupiter",
+   "az": 14.978045,
+   "alt": -23.338803,
+   "illumination": 99.18028
+  },
+  {
+   "site": "Greenwich",
+   "lat": 51.4778,
+   "lon": -0.0015,
+   "time": "2027-03-15T04:30:00Z",
+   "body": "Jupiter",
+   "az": 287.170616,
+   "alt": 7.295042,
+   "illumination": 99.7003
+  },
+  {
+   "site": "Greenwich",
+   "lat": 51.4778,
+   "lon": -0.0015,
+   "time": "2030-06-21T12:00:00Z",
+   "body": "Jupiter",
+   "az": 60.544889,
+   "alt": -40.910408,
+   "illumination": 99.60639
+  },
+  {
+   "site": "Greenwich",
+   "lat": 51.4778,
+   "lon": -0.0015,
+   "time": "2001-01-01T00:00:00Z",
+   "body": "Saturn",
+   "az": 245.614238,
+   "alt": 38.721228,
+   "illumination": 99.84882
+  },
+  {
+   "site": "Greenwich",
+   "lat": 51.4778,
+   "lon": -0.0015,
+   "time": "2026-11-01T20:00:00Z",
+   "body": "Saturn",
+   "az": 144.817561,
+   "alt": 34.327281,
+   "illumination": 99.92949
+  },
+  {
+   "site": "Greenwich",
+   "lat": 51.4778,
+   "lon": -0.0015,
+   "time": "2027-03-15T04:30:00Z",
+   "body": "Saturn",
+   "az": 50.563401,
+   "alt": -22.562971,
+   "illumination": 99.96566
+  },
+  {
+   "site": "Greenwich",
+   "lat": 51.4778,
+   "lon": -0.0015,
+   "time": "2030-06-21T12:00:00Z",
+   "body": "Saturn",
+   "az": 225.636313,
+   "alt": 50.261753,
+   "illumination": 99.93241
+  },
+  {
+   "site": "Greenwich",
+   "lat": 51.4778,
+   "lon": -0.0015,
+   "time": "2001-01-01T00:00:00Z",
+   "body": "Uranus",
+   "az": 302.649012,
+   "alt": -41.991498,
+   "illumination": 99.977
+  },
+  {
+   "site": "Greenwich",
+   "lat": 51.4778,
+   "lon": -0.0015,
+   "time": "2026-11-01T20:00:00Z",
+   "body": "Uranus",
+   "az": 82.873322,
+   "alt": 21.367969,
+   "illumination": 99.98813
+  },
+  {
+   "site": "Greenwich",
+   "lat": 51.4778,
+   "lon": -0.0015,
+   "time": "2027-03-15T04:30:00Z",
+   "body": "Uranus",
+   "az": 359.914518,
+   "alt": -18.040303,
+   "illumination": 99.94376
+  },
+  {
+   "site": "Greenwich",
+   "lat": 51.4778,
+   "lon": -0.0015,
+   "time": "2030-06-21T12:00:00Z",
+   "body": "Uranus",
+   "az": 201.325517,
+   "alt": 60.280068,
+   "illumination": 99.99752
+  },
+  {
+   "site": "Greenwich",
+   "lat": 51.4778,
+   "lon": -0.0015,
+   "time": "2001-01-01T00:00:00Z",
+   "body": "Neptune",
+   "az": 317.006874,
+   "alt": -51.031699,
+   "illumination": 99.99536
+  },
+  {
+   "site": "Greenwich",
+   "lat": 51.4778,
+   "lon": -0.0015,
+   "time": "2026-11-01T20:00:00Z",
+   "body": "Neptune",
+   "az": 153.626783,
+   "alt": 35.001825,
+   "illumination": 99.98985
+  },
+  {
+   "site": "Greenwich",
+   "lat": 51.4778,
+   "lon": -0.0015,
+   "time": "2027-03-15T04:30:00Z",
+   "body": "Neptune",
+   "az": 62.141154,
+   "alt": -20.117948,
+   "illumination": 99.99926
+  },
+  {
+   "site": "Greenwich",
+   "lat": 51.4778,
+   "lon": -0.0015,
+   "time": "2030-06-21T12:00:00Z",
+   "body": "Neptune",
+   "az": 262.142018,
+   "alt": 11.075019,
+   "illumination": 99.97247
+  },
+  {
+   "site": "Mauna Kea",
+   "lat": 19.8207,
+   "lon": -155.4681,
+   "time": "2001-01-01T00:00:00Z",
+   "body": "Sun",
+   "az": 209.48988,
+   "alt": 41.331711,
+   "illumination": 100
+  },
+  {
+   "site": "Mauna Kea",
+   "lat": 19.8207,
+   "lon": -155.4681,
+   "time": "2026-11-01T20:00:00Z",
+   "body": "Sun",
+   "az": 135.79459,
+   "alt": 43.760121,
+   "illumination": 100
+  },
+  {
+   "site": "Mauna Kea",
+   "lat": 19.8207,
+   "lon": -155.4681,
+   "time": "2027-03-15T04:30:00Z",
+   "body": "Sun",
+   "az": 267.815119,
+   "alt": -0.541668,
+   "illumination": 100
+  },
+  {
+   "site": "Mauna Kea",
+   "lat": 19.8207,
+   "lon": -155.4681,
+   "time": "2030-06-21T12:00:00Z",
+   "body": "Sun",
+   "az": 29.621858,
+   "alt": -40.788331,
+   "illumination": 100
+  },
+  {
+   "site": "Mauna Kea",
+   "lat": 19.8207,
+   "lon": -155.4681,
+   "time": "2001-01-01T00:00:00Z",
+   "body": "Moon",
+   "az": 117.776818,
+   "alt": 35.477852,
+   "illumination": 31.86789
+  },
+  {
+   "site": "Mauna Kea",
+   "lat": 19.8207,
+   "lon": -155.4681,
+   "time": "2026-11-01T20:00:00Z",
+   "body": "Moon",
+   "az": 279.26185,
+   "alt": 38.950478,
+   "illumination": 50.9502
+  },
+  {
+   "site": "Mauna Kea",
+   "lat": 19.8207,
+   "lon": -155.4681,
+   "time": "2027-03-15T04:30:00Z",
+   "body": "Moon",
+   "az": 317.061332,
+   "alt": 79.087968,
+   "illumination": 44.40759
+  },
+  {
+   "site": "Mauna Kea",
+   "lat": 19.8207,
+   "lon": -155.4681,
+   "time": "2030-06-21T12:00:00Z",
+   "body": "Moon",
+   "az": 106.395017,
+   "alt": 35.588398,
+   "illumination": 62.0846
+  },
+  {
+   "site": "Mauna Kea",
+   "lat": 19.8207,
+   "lon": -155.4681,
+   "time": "2001-01-01T00:00:00Z",
+   "body": "Mercury",
+   "az": 203.980331,
+   "alt": 41.653393,
+   "illumination": 99.36328
+  },
+  {
+   "site": "Mauna Kea",
+   "lat": 19.8207,
+   "lon": -155.4681,
+   "time": "2026-11-01T20:00:00Z",
+   "body": "Mercury",
+   "az": 133.409252,
+   "alt": 37.594259,
+   "illumination": 2.94174
+  },
+  {
+   "site": "Mauna Kea",
+   "lat": 19.8207,
+   "lon": -155.4681,
+   "time": "2027-03-15T04:30:00Z",
+   "body": "Mercury",
+   "az": 265.30821,
+   "alt": -27.964164,
+   "illumination": 50.99551
+  },
+  {
+   "site": "Mauna Kea",
+   "lat": 19.8207,
+   "lon": -155.4681,
+   "time": "2030-06-21T12:00:00Z",
+   "body": "Mercury",
+   "az": 32.943097,
+   "alt": -38.350919,
+   "illumination": 98.94969
+  },
+  {
+   "site": "Mauna Kea",
+   "lat": 19.8207,
+   "lon": -155.4681,
+   "time": "2001-01-01T00:00:00Z",
+   "body": "Venus",
+   "az": 142.623337,
+   "alt": 48.525799,
+   "illumination": 58.83574
+  },
+  {
+   "site": "Mauna Kea",
+   "lat": 19.8207,
+   "lon": -155.4681,
+   "time": "2026-11-01T20:00:00Z",
+   "body": "Venus",
+   "az": 153.24241,
+   "alt": 52.161899,
+   "illumination": 2.97197
+  },
+  {
+   "site": "Mauna Kea",
+   "lat": 19.8207,
+   "lon": -155.4681,
+   "time": "2027-03-15T04:30:00Z",
+   "body": "Venus",
+   "az": 264.945753,
+   "alt": -38.214724,
+   "illumination": 77.2433
+  },
+  {
+   "site": "Mauna Kea",
+   "lat": 19.8207,
+   "lon": -155.4681,
+   "time": "2030-06-21T12:00:00Z",
+   "body": "Venus",
+   "az": 59.596517,
+   "alt": -22.077874,
+   "illumination": 84.16011
+  },
+  {
+   "site": "Mauna Kea",
+   "lat": 19.8207,
+   "lon": -155.4681,
+   "time": "2001-01-01T00:00:00Z",
+   "body": "Mars",
+   "az": 259.406625,
+   "alt": -6.027461,
+   "illumination": 91.96697
+  },
+  {
+   "site": "Mauna Kea",
+   "lat": 19.8207,
+   "lon": -155.4681,
+   "time": "2026-11-01T20:00:00Z",
+   "body": "Mars",
+   "az": 272.990453,
+   "alt": 48.518908,
+   "illumination": 89.48672
+  },
+  {
+   "site": "Mauna Kea",
+   "lat": 19.8207,
+   "lon": -155.4681,
+   "time": "2027-03-15T04:30:00Z",
+   "body": "Mars",
+   "az": 81.071222,
+   "alt": 31.614842,
+   "illumination": 97.47273
+  },
+  {
+   "site": "Mauna Kea",
+   "lat": 19.8207,
+   "lon": -155.4681,
+   "time": "2030-06-21T12:00:00Z",
+   "body": "Mars",
+   "az": 36.869142,
+   "alt": -36.49321,
+   "illumination": 99.83295
+  },
+  {
+   "site": "Mauna Kea",
+   "lat": 19.8207,
+   "lon": -155.4681,
+   "time": "2001-01-01T00:00:00Z",
+   "body": "Jupiter",
+   "az": 61.97405,
+   "alt": -15.048676,
+   "illumination": 99.6317
+  },
+  {
+   "site": "Mauna Kea",
+   "lat": 19.8207,
+   "lon": -155.4681,
+   "time": "2026-11-01T20:00:00Z",
+   "body": "Jupiter",
+   "az": 267.296566,
+   "alt": 52.616332,
+   "illumination": 99.18034
+  },
+  {
+   "site": "Mauna Kea",
+   "lat": 19.8207,
+   "lon": -155.4681,
+   "time": "2027-03-15T04:30:00Z",
+   "body": "Jupiter",
+   "az": 83.909973,
+   "alt": 36.448066,
+   "illumination": 99.70036
+  },
+  {
+   "site": "Mauna Kea",
+   "lat": 19.8207,
+   "lon": -155.4681,
+   "time": "2030-06-21T12:00:00Z",
+   "body": "Jupiter",
+   "az": 246.463321,
+   "alt": 14.21678,
+   "illumination": 99.60632
+  },
+  {
+   "site": "Mauna Kea",
+   "lat": 19.8207,
+   "lon": -155.4681,
+   "time": "2001-01-01T00:00:00Z",
+   "body": "Saturn",
+   "az": 67.96127,
+   "alt": -9.998727,
+   "illumination": 99.84885
+  },
+  {
+   "site": "Mauna Kea",
+   "lat": 19.8207,
+   "lon": -155.4681,
+   "time": "2026-11-01T20:00:00Z",
+   "body": "Saturn",
+   "az": 349.27557,
+   "alt": -68.64386,
+   "illumination": 99.92949
+  },
+  {
+   "site": "Mauna Kea",
+   "lat": 19.8207,
+   "lon": -155.4681,
+   "time": "2027-03-15T04:30:00Z",
+   "body": "Saturn",
+   "az": 266.73345,
+   "alt": 19.9247,
+   "illumination": 99.96565
+  },
+  {
+   "site": "Mauna Kea",
+   "lat": 19.8207,
+   "lon": -155.4681,
+   "time": "2030-06-21T12:00:00Z",
+   "body": "Saturn",
+   "az": 56.899761,
+   "alt": -24.900964,
+   "illumination": 99.9324
+  },
+  {
+   "site": "Mauna Kea",
+   "lat": 19.8207,
+   "lon": -155.4681,
+   "time": "2001-01-01T00:00:00Z",
+   "body": "Uranus",
+   "az": 155.013687,
+   "alt": 50.962742,
+   "illumination": 99.977
+  },
+  {
+   "site": "Mauna Kea",
+   "lat": 19.8207,
+   "lon": -155.4681,
+   "time": "2026-11-01T20:00:00Z",
+   "body": "Uranus",
+   "az": 302.947932,
+   "alt": -20.901261,
+   "illumination": 99.98814
+  },
+  {
+   "site": "Mauna Kea",
+   "lat": 19.8207,
+   "lon": -155.4681,
+   "time": "2027-03-15T04:30:00Z",
+   "body": "Uranus",
+   "az": 275.893494,
+   "alt": 67.061714,
+   "illumination": 99.94376
+  },
+  {
+   "site": "Mauna Kea",
+   "lat": 19.8207,
+   "lon": -155.4681,
+   "time": "2030-06-21T12:00:00Z",
+   "body": "Uranus",
+   "az": 40.912839,
+   "alt": -34.669562,
+   "illumination": 99.99752
+  },
+  {
+   "site": "Mauna Kea",
+   "lat": 19.8207,
+   "lon": -155.4681,
+   "time": "2001-01-01T00:00:00Z",
+   "body": "Neptune",
+   "az": 176.362418,
+   "alt": 51.336186,
+   "illumination": 99.99536
+  },
+  {
+   "site": "Mauna Kea",
+   "lat": 19.8207,
+   "lon": -155.4681,
+   "time": "2026-11-01T20:00:00Z",
+   "body": "Neptune",
+   "az": 9.563601,
+   "alt": -70.403832,
+   "illumination": 99.98985
+  },
+  {
+   "site": "Mauna Kea",
+   "lat": 19.8207,
+   "lon": -155.4681,
+   "time": "2027-03-15T04:30:00Z",
+   "body": "Neptune",
+   "az": 267.032152,
+   "alt": 8.874534,
+   "illumination": 99.99926
+  },
+  {
+   "site": "Mauna Kea",
+   "lat": 19.8207,
+   "lon": -155.4681,
+   "time": "2030-06-21T12:00:00Z",
+   "body": "Neptune",
+   "az": 90.282243,
+   "alt": 12.130693,
+   "illumination": 99.97246
+  },
+  {
+   "site": "Sydney",
+   "lat": -33.8688,
+   "lon": 151.2093,
+   "time": "2001-01-01T00:00:00Z",
+   "body": "Sun",
+   "az": 75.091713,
+   "alt": 61.892128,
+   "illumination": 100
+  },
+  {
+   "site": "Sydney",
+   "lat": -33.8688,
+   "lon": 151.2093,
+   "time": "2026-11-01T20:00:00Z",
+   "body": "Sun",
+   "az": 99.41216,
+   "alt": 12.423497,
+   "illumination": 100
+  },
+  {
+   "site": "Sydney",
+   "lat": -33.8688,
+   "lon": 151.2093,
+   "time": "2027-03-15T04:30:00Z",
+   "body": "Sun",
+   "az": 304.994019,
+   "alt": 43.564576,
+   "illumination": 100
+  },
+  {
+   "site": "Sydney",
+   "lat": -33.8688,
+   "lon": 151.2093,
+   "time": "2030-06-21T12:00:00Z",
+   "body": "Sun",
+   "az": 255.504471,
+   "alt": -62.415965,
+   "illumination": 100
+  },
+  {
+   "site": "Sydney",
+   "lat": -33.8688,
+   "lon": 151.2093,
+   "time": "2001-01-01T00:00:00Z",
+   "body": "Moon",
+   "az": 102.663005,
+   "alt": -3.827991,
+   "illumination": 32.23028
+  },
+  {
+   "site": "Sydney",
+   "lat": -33.8688,
+   "lon": 151.2093,
+   "time": "2026-11-01T20:00:00Z",
+   "body": "Moon",
+   "az": 359.638394,
+   "alt": 35.881534,
+   "illumination": 50.53579
+  },
+  {
+   "site": "Sydney",
+   "lat": -33.8688,
+   "lon": 151.2093,
+   "time": "2027-03-15T04:30:00Z",
+   "body": "Moon",
+   "az": 40.65325,
+   "alt": 14.291896,
+   "illumination": 45.07958
+  },
+  {
+   "site": "Sydney",
+   "lat": -33.8688,
+   "lon": 151.2093,
+   "time": "2030-06-21T12:00:00Z",
+   "body": "Moon",
+   "az": 98.482496,
+   "alt": -12.020792,
+   "illumination": 61.74007
+  },
+  {
+   "site": "Sydney",
+   "lat": -33.8688,
+   "lon": 151.2093,
+   "time": "2001-01-01T00:00:00Z",
+   "body": "Mercury",
+   "az": 81.5884,
+   "alt": 59.252992,
+   "illumination": 99.36337
+  },
+  {
+   "site": "Sydney",
+   "lat": -33.8688,
+   "lon": 151.2093,
+   "time": "2026-11-01T20:00:00Z",
+   "body": "Mercury",
+   "az": 105.176667,
+   "alt": 9.383289,
+   "illumination": 2.94144
+  },
+  {
+   "site": "Sydney",
+   "lat": -33.8688,
+   "lon": 151.2093,
+   "time": "2027-03-15T04:30:00Z",
+   "body": "Mercury",
+   "az": 274.410876,
+   "alt": 30.400317,
+   "illumination": 50.99466
+  },
+  {
+   "site": "Sydney",
+   "lat": -33.8688,
+   "lon": 151.2093,
+   "time": "2030-06-21T12:00:00Z",
+   "body": "Mercury",
+   "az": 253.022686,
+   "alt": -65.780088,
+   "illumination": 98.95
+  },
+  {
+   "site": "Sydney",
+   "lat": -33.8688,
+   "lon": 151.2093,
+   "time": "2001-01-01T00:00:00Z",
+   "body": "Venus",
+   "az": 95.166916,
+   "alt": 17.737466,
+   "illumination": 58.83764
+  },
+  {
+   "site": "Sydney",
+   "lat": -33.8688,
+   "lon": 151.2093,
+   "time": "2026-11-01T20:00:00Z",
+   "body": "Venus",
+   "az": 91.241664,
+   "alt": 24.486587,
+   "illumination": 2.97079
+  },
+  {
+   "site": "Sydney",
+   "lat": -33.8688,
+   "lon": 151.2093,
+   "time": "2027-03-15T04:30:00Z",
+   "body": "Venus",
+   "az": 265.98096,
+   "alt": 23.413704,
+   "illumination": 77.24305
+  },
+  {
+   "site": "Sydney",
+   "lat": -33.8688,
+   "lon": 151.2093,
+   "time": "2030-06-21T12:00:00Z",
+   "body": "Venus",
+   "az": 166.073043,
+   "alt": -74.012474,
+   "illumination": 84.16069
+  },
+  {
+   "site": "Sydney",
+   "lat": -33.8688,
+   "lon": 151.2093,
+   "time": "2001-01-01T00:00:00Z",
+   "body": "Mars",
+   "az": 292.359301,
+   "alt": 48.451595,
+   "illumination": 91.96688
+  },
+  {
+   "site": "Sydney",
+   "lat": -33.8688,
+   "lon": 151.2093,
+   "time": "2026-11-01T20:00:00Z",
+   "body": "Mars",
+   "az": 11.87933,
+   "alt": 38.646525,
+   "illumination": 89.4863
+  },
+  {
+   "site": "Sydney",
+   "lat": -33.8688,
+   "lon": 151.2093,
+   "time": "2027-03-15T04:30:00Z",
+   "body": "Mars",
+   "az": 88.399124,
+   "alt": -30.413018,
+   "illumination": 97.47243
+  },
+  {
+   "site": "Sydney",
+   "lat": -33.8688,
+   "lon": 151.2093,
+   "time": "2030-06-21T12:00:00Z",
+   "body": "Mars",
+   "az": 247.426276,
+   "alt": -68.695079,
+   "illumination": 99.833
+  },
+  {
+   "site": "Sydney",
+   "lat": -33.8688,
+   "lon": 151.2093,
+   "time": "2001-01-01T00:00:00Z",
+   "body": "Jupiter",
+   "az": 140.72133,
+   "alt": -72.545305,
+   "illumination": 99.63166
+  },
+  {
+   "site": "Sydney",
+   "lat": -33.8688,
+   "lon": 151.2093,
+   "time": "2026-11-01T20:00:00Z",
+   "body": "Jupiter",
+   "az": 18.688295,
+   "alt": 40.111133,
+   "illumination": 99.18031
+  },
+  {
+   "site": "Sydney",
+   "lat": -33.8688,
+   "lon": 151.2093,
+   "time": "2027-03-15T04:30:00Z",
+   "body": "Jupiter",
+   "az": 86.650267,
+   "alt": -25.265303,
+   "illumination": 99.70035
+  },
+  {
+   "site": "Sydney",
+   "lat": -33.8688,
+   "lon": 151.2093,
+   "time": "2030-06-21T12:00:00Z",
+   "body": "Jupiter",
+   "az": 319.827255,
+   "alt": 68.132794,
+   "illumination": 99.60634
+  },
+  {
+   "site": "Sydney",
+   "lat": -33.8688,
+   "lon": 151.2093,
+   "time": "2001-01-01T00:00:00Z",
+   "body": "Saturn",
+   "az": 130.110225,
+   "alt": -65.77912,
+   "illumination": 99.84884
+  },
+  {
+   "site": "Sydney",
+   "lat": -33.8688,
+   "lon": 151.2093,
+   "time": "2026-11-01T20:00:00Z",
+   "body": "Saturn",
+   "az": 251.300895,
+   "alt": -27.463516,
+   "illumination": 99.92949
+  },
+  {
+   "site": "Sydney",
+   "lat": -33.8688,
+   "lon": 151.2093,
+   "time": "2027-03-15T04:30:00Z",
+   "body": "Saturn",
+   "az": 333.767573,
+   "alt": 49.177784,
+   "illumination": 99.96566
+  },
+  {
+   "site": "Sydney",
+   "lat": -33.8688,
+   "lon": 151.2093,
+   "time": "2030-06-21T12:00:00Z",
+   "body": "Saturn",
+   "az": 179.673202,
+   "alt": -74.989212,
+   "illumination": 99.93241
+  },
+  {
+   "site": "Sydney",
+   "lat": -33.8688,
+   "lon": 151.2093,
+   "time": "2001-01-01T00:00:00Z",
+   "body": "Uranus",
+   "az": 92.447352,
+   "alt": 25.707034,
+   "illumination": 99.97701
+  },
+  {
+   "site": "Sydney",
+   "lat": -33.8688,
+   "lon": 151.2093,
+   "time": "2026-11-01T20:00:00Z",
+   "body": "Uranus",
+   "az": 298.618444,
+   "alt": 4.081957,
+   "illumination": 99.98814
+  },
+  {
+   "site": "Sydney",
+   "lat": -33.8688,
+   "lon": 151.2093,
+   "time": "2027-03-15T04:30:00Z",
+   "body": "Uranus",
+   "az": 31.176009,
+   "alt": 29.085179,
+   "illumination": 99.94376
+  },
+  {
+   "site": "Sydney",
+   "lat": -33.8688,
+   "lon": 151.2093,
+   "time": "2030-06-21T12:00:00Z",
+   "body": "Uranus",
+   "az": 239.372335,
+   "alt": -71.25816,
+   "illumination": 99.99752
+  },
+  {
+   "site": "Sydney",
+   "lat": -33.8688,
+   "lon": 151.2093,
+   "time": "2001-01-01T00:00:00Z",
+   "body": "Neptune",
+   "az": 87.804807,
+   "alt": 38.469788,
+   "illumination": 99.99536
+  },
+  {
+   "site": "Sydney",
+   "lat": -33.8688,
+   "lon": 151.2093,
+   "time": "2026-11-01T20:00:00Z",
+   "body": "Neptune",
+   "az": 244.616222,
+   "alt": -31.846682,
+   "illumination": 99.98985
+  },
+  {
+   "site": "Sydney",
+   "lat": -33.8688,
+   "lon": 151.2093,
+   "time": "2027-03-15T04:30:00Z",
+   "body": "Neptune",
+   "az": 317.362904,
+   "alt": 47.334013,
+   "illumination": 99.99926
+  },
+  {
+   "site": "Sydney",
+   "lat": -33.8688,
+   "lon": 151.2093,
+   "time": "2030-06-21T12:00:00Z",
+   "body": "Neptune",
+   "az": 112.965951,
+   "alt": -36.112454,
+   "illumination": 99.97246
+  }
+ ]
+}

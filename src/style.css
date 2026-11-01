@@ -453,6 +453,14 @@ button.link {
   cursor: pointer;
 }
 
+.list li.active {
+  background: rgba(127, 220, 255, 0.18);
+}
+
+.list li.muted {
+  opacity: 0.55;
+}
+
 .list li:hover,
 .list li:focus-visible {
   background: rgba(127, 220, 255, 0.12);

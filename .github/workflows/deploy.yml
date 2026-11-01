@@ -26,6 +26,9 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run build
+        env:
+          # Optional: set a repository variable to point the site at your companion server.
+          VITE_ASTRARIUM_SERVER: ${{ vars.ASTRARIUM_SERVER_URL }}
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

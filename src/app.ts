@@ -2701,6 +2701,11 @@ export class App {
         body: 'Click a body to see its temperature, habitability and orbit, plus warnings about upcoming close approaches and collisions. Double-click to follow it. Massive stars get a supernova button.',
       },
       {
+        title: 'Play, learn, create',
+        body: 'The top-right buttons open challenges and a daily puzzle (🏆), interactive lessons (📚), a live graph (📈), multiplayer rooms (👥), the community gallery (🌐) and a scripting console (⌨). Type a scene into “Create with Claude” to have it built for you.',
+        target: '#btn-console',
+      },
+      {
         title: 'Display',
         body: 'Show habitable zones, orbit paths and trails (relative to the followed body if you like). Graphics quality is under Settings, and 🔇 turns on sound.',
         target: '#section-display',

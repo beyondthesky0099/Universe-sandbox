@@ -5,7 +5,9 @@ import { FEATURE, systemFeatures, type FeatureName } from './procgen/galaxy';
 import { mulberry32, pick, seedFromString } from './procgen/rng';
 import { generateStarSystem, starSummary, type StarSystemSpec } from './procgen/starSystem';
 import { GalaxyView, type GalaxyTarget } from './render/galaxyView';
-import { equatorialToGalactic, galacticToMap } from './procgen/galaxy';
+import { CosmosView } from './render/cosmosView';
+import { displayName, GALAXY_CREDIT, galaxyForm, loadLocalGalaxies, loadWebGalaxies, LY_PER_MPC, type LocalGalaxy } from './sim/galaxies';
+import { equatorialToGalactic, galacticToMap, MILKY_WAY_SEED, type GalaxyOptions } from './procgen/galaxy';
 import { QUALITY_PRESETS, SystemView } from './render/systemView';
 import { createRealSky } from './render/starfield';
 import { setTrueScale } from './sim/trueScale';
@@ -41,7 +43,7 @@ import { burnDirections, planHohmann } from './game/transfer';
 import { LESSONS, type Lesson } from './game/lessons';
 import { LineChart, measure, METRICS, type MetricId, type Series } from './ui/graph';
 
-type ViewName = 'galaxy' | 'system';
+type ViewName = 'cosmos' | 'galaxy' | 'system';
 type Tool = 'select' | 'spawn' | 'nudge';
 type QualityName = keyof typeof QUALITY_PRESETS;
 
@@ -97,6 +99,7 @@ interface Scenario {
 
 const AUTO_EXIT_DISTANCE = 40000; // AU: zooming out this far returns to the galaxy map
 const AUTO_ENTER_DISTANCE = 0.6; // galaxy units: zooming this close to a selected star enters it
+const GALAXY_EXIT_DISTANCE = 560; // galaxy units: zooming out this far leaves for the Universe map
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
@@ -112,6 +115,10 @@ export class App {
   private readonly store = new GalaxyStore();
   private readonly tutorial: Tutorial;
   private view: ViewName = 'system';
+  private readonly cosmos: CosmosView;
+  private cosmosLoaded = false;
+  /** The real galaxy (catalogue name) the galaxy map currently shows, for returning to the Universe map. */
+  private galaxyOrigin = 'Milky Way';
   private tool: Tool = 'select';
   private spawnType = SPAWN_TYPES[1];
   private spawnMassFactor = 1;
@@ -178,6 +185,7 @@ export class App {
     this.host = new SimHost(params.get('worker') !== '0');
     this.system = new SystemView(this.sim, this.canvas, QUALITY_PRESETS[this.quality]);
     this.galaxy = new GalaxyView(this.canvas);
+    this.cosmos = new CosmosView(this.canvas);
     this.tutorial = new Tutorial(this.tutorialSteps());
 
     const hashSeed = params.get('galaxy');
@@ -329,9 +337,24 @@ export class App {
       }
       if (this.frames % 6 === 0) this.updateSystemHud();
       if (!this.transitioning && this.system.cameraDistance > this.exitDistance) void this.exitToGalaxy();
+    } else if (this.view === 'cosmos') {
+      this.cosmos.update(dt);
+      this.renderView(this.cosmos.scene, this.cosmos.camera, []);
+      if (this.frames % 15 === 0) $('stats').textContent = `${Math.round(this.fps)} fps`;
+      const sel = this.cosmos.selected;
+      if (
+        !this.transitioning &&
+        sel !== -1 &&
+        !this.cosmos.animating &&
+        this.cosmos.cameraDistance < this.cosmos.viewDistance(sel) * 0.12 &&
+        this.cosmos.controls.target.distanceTo(this.cosmos.position(sel)) < this.cosmos.viewDistance(sel) * 0.5
+      ) {
+        void this.visitCosmosGalaxy(sel);
+      }
     } else {
       this.galaxy.update(dt);
       this.renderView(this.galaxy.scene, this.galaxy.camera, []);
+      if (!this.transitioning && !this.galaxy.animating && this.galaxy.cameraDistance > GALAXY_EXIT_DISTANCE) void this.openCosmos(true);
       if (this.frames % 15 === 0) $('stats').textContent = `${Math.round(this.fps)} fps`;
       const sel = this.galaxy.selected;
       if (
@@ -487,6 +510,7 @@ export class App {
     this.labelRenderer.setSize(this.width, this.height);
     this.system.setViewport(this.width, this.height);
     this.galaxy.setViewport(this.width, this.height, this.renderer.getPixelRatio());
+    this.cosmos.setViewport(this.width, this.height, this.renderer.getPixelRatio());
     this.postfx?.setSize(this.width, this.height);
   }
 
@@ -508,13 +532,16 @@ export class App {
     this.view = view;
     this.system.controls.enabled = view === 'system';
     this.galaxy.controls.enabled = view === 'galaxy';
-    if (view === 'galaxy') this.cancelSpawn();
+    this.cosmos.controls.enabled = view === 'cosmos';
+    if (view !== 'system') this.cancelSpawn();
+    $('tab-cosmos').classList.toggle('active', view === 'cosmos');
     $('tab-galaxy').classList.toggle('active', view === 'galaxy');
     $('tab-system').classList.toggle('active', view === 'system');
     $('labels').classList.toggle('hidden', view !== 'system');
     document.querySelectorAll<HTMLElement>('[data-view]').forEach((el) => {
       const match = el.dataset.view === view;
       if (el.id === 'star-panel') el.classList.toggle('hidden', !match || this.galaxy.selected === -1);
+      else if (el.id === 'cosmos-galaxy-panel') el.classList.toggle('hidden', !match || this.cosmos.selected === -1);
       else if (el.id === 'exo-panel') el.classList.toggle('hidden', !match || !this.exoOpen);
       else if (el.id === 'graph-panel') el.classList.toggle('hidden', !match || !this.graphOpen);
       else if (el.id === 'body-panel') el.classList.toggle('hidden', !match || this.system.selectedId === undefined);
@@ -919,6 +946,116 @@ export class App {
     for (const p of this.plugins()) if (p.autorun) this.scripts.run(p.code);
   }
 
+  // ---------------------------------------------------------------------------
+  // The Universe map: real galaxies beyond the Milky Way
+
+  /** Open the Universe map, arriving at the galaxy we were just in when coming from a galaxy map. */
+  private async openCosmos(fromGalaxy: boolean): Promise<void> {
+    if (this.transitioning) return;
+    this.transitioning = true;
+    try {
+      if (fromGalaxy) {
+        this.galaxy.controls.enabled = false;
+        await sleep(150);
+      }
+      await this.fade(true);
+      if (!this.cosmosLoaded) {
+        try {
+          this.cosmos.setLocal(await loadLocalGalaxies());
+          this.cosmosLoaded = true;
+          $('cosmos-credit').textContent = GALAXY_CREDIT;
+          this.updateCosmosInfo();
+          void loadWebGalaxies()
+            .then((web) => {
+              this.cosmos.setWeb(web);
+              this.cosmos.setWebVisible($<HTMLInputElement>('opt-cosmic-web').checked);
+              this.updateCosmosInfo();
+            })
+            .catch((err: unknown) => toast((err as Error).message));
+        } catch (err) {
+          toast((err as Error).message);
+          this.galaxy.controls.enabled = this.view === 'galaxy';
+          await this.fade(false);
+          return;
+        }
+      }
+      this.setView('cosmos');
+      const origin = this.cosmos.indexOf(this.galaxyOrigin || 'Milky Way');
+      if (fromGalaxy && origin !== -1) {
+        this.selectCosmos(origin);
+        this.cosmos.arriveFrom(origin);
+      }
+      await sleep(60);
+      await this.fade(false);
+    } finally {
+      this.transitioning = false;
+    }
+  }
+
+  private updateCosmosInfo(): void {
+    const n = this.cosmos.local.length;
+    const web = this.cosmos.webCount;
+    $('cosmos-info').textContent =
+      `${n.toLocaleString('en-US')} real galaxies of the Local Volume (out to 85 million light-years) at their measured distances and true sizes` +
+      (web ? `, and ${web.toLocaleString('en-US')} more tracing the cosmic web out to about 700 million light-years, placed by their redshift.` : '. Loading the cosmic web…');
+  }
+
+  private selectCosmos(index: number): void {
+    this.cosmos.select(index);
+    const panel = $('cosmos-galaxy-panel');
+    if (index === -1) {
+      panel.classList.add('hidden');
+      return;
+    }
+    const g = this.cosmos.local[index];
+    $('cosmos-galaxy-name').textContent = displayName(g);
+    setFacts($('cosmos-galaxy-facts'), cosmosFacts(g));
+    $('btn-cosmos-visit').textContent = g.name === 'Milky Way' ? 'Back to the Milky Way →' : 'Visit galaxy →';
+    panel.classList.remove('hidden');
+  }
+
+  /** Go into a galaxy: the real Milky Way map, or a procedural stand-in shaped like the real galaxy. */
+  private async visitCosmosGalaxy(index: number): Promise<void> {
+    const g = this.cosmos.local[index];
+    if (!g || this.transitioning) return;
+    this.transitioning = true;
+    try {
+      this.cosmos.flyTo(index, this.cosmos.viewDistance(index) * 0.08, 1.6);
+      await sleep(420);
+      await this.fade(true);
+      if (g.name === 'Milky Way') {
+        if (!this.galaxyBuilt || this.galaxySeed !== MILKY_WAY_SEED || this.galaxyOrigin !== 'Milky Way') this.buildGalaxy(MILKY_WAY_SEED);
+      } else {
+        this.buildGalaxy(seedFromString(`real:${g.name}`), { name: displayName(g), form: galaxyForm(g), origin: g.name });
+      }
+      this.setView('galaxy');
+      await sleep(60);
+      await this.fade(false);
+      toast(g.name === 'Milky Way' ? 'Back home in the Milky Way' : `Arrived at ${displayName(g)}`);
+    } finally {
+      this.transitioning = false;
+    }
+  }
+
+  private renderCosmosSearch(): void {
+    const q = $<HTMLInputElement>('cosmos-search').value.trim().toLowerCase().replace(/\s+/g, '');
+    const list = $('cosmos-results');
+    if (!q) {
+      list.innerHTML = '';
+      return;
+    }
+    const matches = this.cosmos.local
+      .map((g, i) => ({ g, i, label: displayName(g) }))
+      .filter(({ g, label }) => label.toLowerCase().replace(/\s+/g, '').includes(q) || g.name.toLowerCase().replace(/\s+/g, '').includes(q))
+      .sort((a, b) => (b.g.lk ?? 0) - (a.g.lk ?? 0))
+      .slice(0, 12);
+    list.innerHTML = matches.length
+      ? matches
+          .map(({ g, i, label }) => `<li tabindex="0" data-galaxy="${i}"><span>${escapeHtml(label)}</span><span class="muted">${g.name === 'Milky Way' ? 'home' : `${fmt(g.d * 3.2616)} Mly`}</span></li>`)
+          .join('')
+      : '<li class="muted">No matching galaxies</li>';
+  }
+
   /** Real exoplanet hosts on the Milky Way map, placed by their galactic coordinates. */
   private exoMapHosts: ExoHost[] = [];
 
@@ -936,9 +1073,10 @@ export class App {
     $('galaxy-info').textContent += ` Rings near the Sun mark ${hosts.length.toLocaleString('en-US')} real stars with known exoplanets (green: has a temperate planet); click one to visit it.`;
   }
 
-  private buildGalaxy(seed: number): void {
+  private buildGalaxy(seed: number, opts: GalaxyOptions & { origin?: string } = {}): void {
     this.galaxySeed = seed;
-    const data = this.galaxy.build(seed);
+    this.galaxyOrigin = seed === MILKY_WAY_SEED ? 'Milky Way' : (opts.origin ?? '');
+    const data = this.galaxy.build(seed, opts);
     this.galaxyBuilt = true;
     this.features = undefined;
     this.scanToken++;
@@ -947,7 +1085,9 @@ export class App {
     $('galaxy-info').textContent =
       data.name === 'Milky Way'
         ? `Our galaxy: real structure (4 spiral arms, the Local Spur, the central bar, Sgr A*) with ${data.clusters.length} real clusters and ${data.nebulae.length} real nebulae at their true positions. The ${data.stars.count.toLocaleString()} explorable systems are procedural stand-ins for the ~100 billion real stars.`
-        : `${data.arms}-armed spiral · ${data.stars.count.toLocaleString()} explorable systems · ${data.clusters.length} star clusters (a procedural galaxy)`;
+        : opts.origin
+          ? `A procedural stand-in for the real ${data.form} galaxy ${data.name}: its overall shape follows the real galaxy's type, but its ${data.stars.count.toLocaleString()} stars are invented. Zoom out to return to the Universe map.`
+          : `${data.arms}-armed spiral · ${data.stars.count.toLocaleString()} explorable systems · ${data.clusters.length} star clusters (a procedural galaxy)`;
     this.exoMapHosts = [];
     if (data.name === 'Milky Way') void this.showExoHostsOnMap(seed);
     $<HTMLInputElement>('galaxy-seed').value = String(seed);
@@ -1153,7 +1293,8 @@ export class App {
 
   private updateHint(): void {
     let text: string;
-    if (this.view === 'galaxy') text = 'Click a star to inspect · Double-click to fly there · Zoom right in (or Enter) to visit · B bookmark';
+    if (this.view === 'cosmos') text = 'Click a galaxy to inspect · Double-click to fly there · Zoom right in (or Enter) to visit · Scroll out for the cosmic web';
+    else if (this.view === 'galaxy') text = 'Click a star to inspect · Double-click to fly there · Zoom right in (or Enter) to visit · Zoom far out for other galaxies';
     else if (this.tool === 'spawn') text = 'Click to place · Drag to set velocity · Right-drag to orbit camera · Esc to cancel';
     else if (this.tool === 'nudge') text = 'Press on a body and drag to push it · Dashed line previews the new path · Right-drag to orbit camera';
     else text = 'Click to select · Double-click to follow · Space pause · Hold R rewind · Ctrl+Z undo · B spawn · M galaxy map';
@@ -2100,11 +2241,21 @@ export class App {
       this.selectBody(this.system.pick(x, y, this.width, this.height));
     } else if (this.view === 'galaxy') {
       this.selectTarget(this.galaxy.pick(x, y, this.width, this.height));
+    } else if (this.view === 'cosmos') {
+      this.selectCosmos(this.cosmos.pick(x, y, this.width, this.height));
     }
   }
 
   private handleDoubleClick(e: { clientX: number; clientY: number }): void {
     const [x, y] = this.ndc(e);
+    if (this.view === 'cosmos') {
+      const index = this.cosmos.pick(x, y, this.width, this.height);
+      if (index !== -1) {
+        this.selectCosmos(index);
+        this.cosmos.flyTo(index);
+      }
+      return;
+    }
     if (this.view === 'galaxy') {
       const target = this.galaxy.pick(x, y, this.width, this.height);
       if (target !== -1) {
@@ -2213,13 +2364,18 @@ export class App {
       }
       if (mod) return;
       if (key === 'm') {
-        if (this.view === 'galaxy') void this.switchToSandbox();
+        if (this.view !== 'system') void this.switchToSandbox();
         else void this.exitToGalaxy();
       }
       if (key === '?') this.openTutorial();
       if (key === '`') {
         e.preventDefault();
         $('btn-console').click();
+        return;
+      }
+      if (this.view === 'cosmos') {
+        if (key === 'enter' && this.cosmos.selected !== -1) void this.visitCosmosGalaxy(this.cosmos.selected);
+        if (key === 'escape') this.selectCosmos(-1);
         return;
       }
       if (this.view === 'galaxy') {
@@ -2291,7 +2447,27 @@ export class App {
   }
 
   private bindUi(): void {
-    $('tab-galaxy').addEventListener('click', () => this.view === 'system' && void this.exitToGalaxy());
+    $('tab-galaxy').addEventListener('click', () => {
+      if (this.view === 'system') void this.exitToGalaxy();
+      else if (this.view === 'cosmos') void this.visitCosmosGalaxy(this.cosmos.indexOf(this.galaxyOrigin || 'Milky Way'));
+    });
+    $('tab-cosmos').addEventListener('click', () => this.view !== 'cosmos' && void this.openCosmos(this.view === 'galaxy'));
+    $('btn-cosmos-fly').addEventListener('click', () => this.cosmos.selected !== -1 && this.cosmos.flyTo(this.cosmos.selected));
+    $('btn-cosmos-visit').addEventListener('click', () => this.cosmos.selected !== -1 && void this.visitCosmosGalaxy(this.cosmos.selected));
+    $('btn-cosmos-home').addEventListener('click', () => {
+      const mw = this.cosmos.indexOf('Milky Way');
+      this.selectCosmos(mw);
+      this.cosmos.resetCamera();
+    });
+    $<HTMLInputElement>('opt-cosmic-web').addEventListener('change', (e) => this.cosmos.setWebVisible((e.target as HTMLInputElement).checked));
+    $('cosmos-search').addEventListener('input', () => this.renderCosmosSearch());
+    $('cosmos-results').addEventListener('click', (e) => {
+      const li = (e.target as HTMLElement).closest<HTMLElement>('[data-galaxy]');
+      if (!li) return;
+      const index = Number(li.dataset.galaxy);
+      this.selectCosmos(index);
+      this.cosmos.flyTo(index);
+    });
     $('tab-system').addEventListener('click', () => void this.switchToSandbox());
     $('btn-play').addEventListener('click', () => this.setRunning(!this.running));
     $('btn-undo').addEventListener('click', () => this.undo());
@@ -2827,4 +3003,30 @@ function describeSystem(spec: StarSystemSpec): string {
   if (spec.belt) parts.push('an asteroid belt');
   if (spec.companion) parts.push(`a distant ${spec.companion.spectralClass}-type companion`);
   return `${parts.join(', ')}.`;
+}
+
+/** Superscript exponent for "3.2 × 10¹¹". */
+function sciMass(log10: number): string {
+  const e = Math.floor(log10);
+  const m = Math.pow(10, log10 - e);
+  const sup = String(e).replace(/[0-9-]/g, (c) => '⁰¹²³⁴⁵⁶⁷⁸⁹⁻'['0123456789-'.indexOf(c)]);
+  return `${m.toFixed(1)} × 10${sup} M☉`;
+}
+
+function cosmosFacts(g: LocalGalaxy): [string, string][] {
+  const form = galaxyForm(g);
+  const facts: [string, string][] = [['Type', `${form[0].toUpperCase()}${form.slice(1)} galaxy`]];
+  if (g.name === 'Milky Way') {
+    facts.push(['Distance', 'You are here'], ['Diameter', 'about 100,000 light-years']);
+  } else {
+    const mly = (g.d * LY_PER_MPC) / 1e6;
+    facts.push(['Distance', `${mly < 1 ? `${Math.round(mly * 1000).toLocaleString('en-US')} thousand` : fmt(mly)} ${mly < 1 ? '' : 'million '}light-years`.replace('  ', ' ')]);
+    if (g.size) facts.push(['Diameter', `${Math.round(g.size * 3261.6).toLocaleString('en-US')} light-years`]);
+  }
+  if (g.mass !== undefined) facts.push(['Mass', sciMass(g.mass)]);
+  if (g.hi !== undefined) facts.push(['Hydrogen gas', sciMass(g.hi)]);
+  if (g.v !== undefined && g.name !== 'Milky Way') facts.push(['Radial velocity', `${Math.abs(g.v)} km/s ${g.v < 0 ? 'toward us' : 'away from us'}`]);
+  if (g.md && g.name !== 'Milky Way') facts.push(['Main neighbour', displayName({ name: g.md })]);
+  facts.push(['Data', 'Karachentsev et al. 2013']);
+  return facts;
 }

@@ -1,4 +1,5 @@
 import { kelvinToRgb, starTemperature } from '../sim/color';
+import type { GalaxyForm } from '../sim/galaxies';
 import { galaxyName, properName } from './names';
 import { Rng, gaussian, hash32, intRange, mulberry32, range } from './rng';
 import { generateStarSystem, starSummary, type SpectralClass } from './starSystem';
@@ -7,6 +8,8 @@ export interface GalaxyData {
   seed: number;
   name: string;
   arms: number;
+  /** Overall shape (procedural galaxies are spirals unless generated as a stand-in for a real one). */
+  form: GalaxyForm;
   radius: number;
   /** Selectable stars, each backed by a deterministic star system. */
   stars: {
@@ -70,6 +73,19 @@ interface ShapeParams {
   thickness: number;
   /** Use the Milky Way's real structure instead of a random spiral. */
   mw?: boolean;
+  /** Share of disk stars that follow the spiral arms (0 for armless disks). */
+  armFraction?: number;
+  /** Bulge size and height as fractions of the galaxy radius. */
+  bulgeScale?: number;
+  bulgeHeight?: number;
+  /** Irregular galaxies: star-forming clumps as [x, z, sigma] in units of the radius. */
+  clumps?: [number, number, number][];
+}
+
+/** Options for generating a stand-in for a real galaxy of a given form. */
+export interface GalaxyOptions {
+  name?: string;
+  form?: GalaxyForm;
 }
 
 // ---------------------------------------------------------------------------
@@ -210,17 +226,25 @@ function samplePosition(rng: Rng, s: ShapeParams, out: Float32Array, k: number):
   if (s.mw) return sampleMilkyWay(rng, s, out, k);
   const R = GALAXY_RADIUS;
   if (rng() < s.bulgeFraction) {
-    out[k] = gaussian(rng) * R * 0.11;
-    out[k + 1] = gaussian(rng) * R * 0.07;
-    out[k + 2] = gaussian(rng) * R * 0.11;
+    const bs = s.bulgeScale ?? 0.11;
+    out[k] = gaussian(rng) * R * bs;
+    out[k + 1] = gaussian(rng) * R * (s.bulgeHeight ?? 0.07);
+    out[k + 2] = gaussian(rng) * R * bs;
     return Math.hypot(out[k], out[k + 2]) / R;
+  }
+  if (s.clumps && rng() < 0.75) {
+    const [cx, cz, sigma] = s.clumps[Math.floor(rng() * s.clumps.length)];
+    out[k] = (cx + gaussian(rng) * sigma) * R;
+    out[k + 1] = gaussian(rng) * R * s.thickness * 2;
+    out[k + 2] = (cz + gaussian(rng) * sigma) * R;
+    return Math.min(1, Math.hypot(out[k], out[k + 2]) / R);
   }
   let r: number;
   do r = -Math.log(1 - rng()) * s.diskScale * R + R * 0.04;
   while (r > R);
   const t = r / R;
   let theta: number;
-  if (rng() < 0.72) {
+  if (rng() < (s.armFraction ?? 0.72)) {
     const arm = Math.floor(rng() * s.arms);
     theta = (arm / s.arms) * Math.PI * 2 + t * s.twist + gaussian(rng) * s.armSpread * (1 - 0.4 * t);
   } else {
@@ -232,7 +256,7 @@ function samplePosition(rng: Rng, s: ShapeParams, out: Float32Array, k: number):
   return t;
 }
 
-export function generateGalaxy(seed: number, starCount = 30000, glowCount = 60000, dustCount = 9000): GalaxyData {
+export function generateGalaxy(seed: number, starCount = 30000, glowCount = 60000, dustCount = 9000, opts: GalaxyOptions = {}): GalaxyData {
   const rng = mulberry32(hash32(seed, 1));
   const shape: ShapeParams = {
     arms: intRange(rng, 2, 5),
@@ -244,7 +268,20 @@ export function generateGalaxy(seed: number, starCount = 30000, glowCount = 6000
   };
   const mw = seed === MILKY_WAY_SEED;
   if (mw) Object.assign(shape, { arms: 4, bulgeFraction: 0.14, mw: true });
-  const name = mw ? 'Milky Way' : galaxyName(mulberry32(hash32(seed, 2)));
+  const form = mw ? 'spiral' : (opts.form ?? 'spiral');
+  // Stand-ins for real galaxies of other forms: no arms, little or no gas and dust.
+  if (form === 'elliptical') Object.assign(shape, { bulgeFraction: 1, bulgeScale: 0.3, bulgeHeight: 0.2 });
+  if (form === 'dwarf spheroidal') Object.assign(shape, { bulgeFraction: 1, bulgeScale: 0.32, bulgeHeight: 0.26 });
+  if (form === 'lenticular') Object.assign(shape, { bulgeFraction: 0.45, bulgeScale: 0.16, bulgeHeight: 0.09, armFraction: 0 });
+  if (form === 'irregular') {
+    const clumpRng = mulberry32(hash32(seed, 9));
+    const n = intRange(clumpRng, 3, 7);
+    shape.clumps = Array.from({ length: n }, () => [range(clumpRng, -0.5, 0.5), range(clumpRng, -0.5, 0.5), range(clumpRng, 0.08, 0.2)] as [number, number, number]);
+    Object.assign(shape, { bulgeFraction: 0.04, armFraction: 0, thickness: 0.05 });
+  }
+  const gasPoor = form === 'elliptical' || form === 'dwarf spheroidal' || form === 'lenticular';
+  if (gasPoor) dustCount = 0;
+  const name = mw ? 'Milky Way' : (opts.name ?? galaxyName(mulberry32(hash32(seed, 2))));
   const R = GALAXY_RADIUS;
 
   // Star clusters: open clusters in the disk, globular clusters in the halo.
@@ -257,7 +294,7 @@ export function generateGalaxy(seed: number, starCount = 30000, glowCount = 6000
       clusters.push({ name: c.name, kind: c.kind, x, y, z, sigma: Math.max(0.08, (c.sigmaPc / 1000) * UNITS_PER_KPC * 4) });
     }
   }
-  const openCount = mw ? 0 : intRange(clusterRng, 8, 14);
+  const openCount = mw || gasPoor ? 0 : intRange(clusterRng, 8, 14);
   for (let i = 0; i < openCount; i++) {
     samplePosition(clusterRng, { ...shape, bulgeFraction: 0 }, tmp, 0);
     clusters.push({ name: `${properName(clusterRng)} Cluster`, kind: 'open', x: tmp[0], y: tmp[1], z: tmp[2], sigma: range(clusterRng, 0.6, 1.6) });
@@ -367,7 +404,7 @@ export function generateGalaxy(seed: number, starCount = 30000, glowCount = 6000
       nebulae.push({ x, y, z, size: Math.max(1.2, (n.sizePc / 1000) * UNITS_PER_KPC * 5), color: n.color, seed: Math.floor(nebRng() * 1e9), name: n.name });
     }
   }
-  const nebCount = mw ? 0 : intRange(nebRng, 35, 60);
+  const nebCount = mw || gasPoor ? 0 : form === 'irregular' ? intRange(nebRng, 10, 20) : intRange(nebRng, 35, 60);
   const palette: [number, number, number][] = [
     [1, 0.35, 0.5],
     [0.95, 0.3, 0.4],
@@ -396,6 +433,7 @@ export function generateGalaxy(seed: number, starCount = 30000, glowCount = 6000
     name,
     sol,
     arms: shape.arms,
+    form,
     radius: GALAXY_RADIUS,
     stars: { count: starCount, positions: sp, colors: sc, sizes: ss, seeds },
     names,

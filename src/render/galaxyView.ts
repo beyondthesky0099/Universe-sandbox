@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { generateGalaxy, type GalaxyData } from '../procgen/galaxy';
+import { generateGalaxy, type GalaxyData, type GalaxyOptions } from '../procgen/galaxy';
 import { mulberry32 } from '../procgen/rng';
 import { Noise3D } from './noise';
 import { createStarfield } from './starfield';
@@ -103,7 +103,7 @@ export interface ExoMarker {
   temperate: boolean;
 }
 
-function textSprite(text: string, color: string, scale = 1): THREE.Sprite {
+export function textSprite(text: string, color: string, scale = 1): THREE.Sprite {
   const canvas = document.createElement('canvas');
   const font = '600 26px Inter, system-ui, sans-serif';
   const measure = canvas.getContext('2d')!;
@@ -151,6 +151,7 @@ export class GalaxyView {
   private readonly hole: THREE.Group;
   private readonly marker: THREE.Sprite;
   private readonly solMarker = new THREE.Group();
+  private showSol = true;
   private readonly bookmarkPoints: THREE.Points;
   private readonly visitedPoints: THREE.Points;
   private readonly starfield = createStarfield(3000, 23);
@@ -215,7 +216,7 @@ export class GalaxyView {
     this.visitedPoints = markerPoints(0x6f8fb0, 9);
   }
 
-  build(seed: number): GalaxyData {
+  build(seed: number, opts: GalaxyOptions = {}): GalaxyData {
     for (const pts of [this.stars, this.glow, this.dust]) {
       if (!pts) continue;
       this.scene.remove(pts);
@@ -229,7 +230,10 @@ export class GalaxyView {
     for (const t of this.nebulaTextures) t.dispose();
     this.nebulaTextures.length = 0;
 
-    this.data = generateGalaxy(seed);
+    this.data = generateGalaxy(seed, 30000, 60000, 9000, opts);
+    // "You are here" only belongs in our own galaxy, not in stand-ins for other real galaxies.
+    this.showSol = !opts.name;
+    this.solMarker.visible = this.showSol;
     this.setExoHosts([]); // the app adds real hosts for the Milky Way
     const { stars, glow, dust, nebulae } = this.data;
     this.glow = pointCloud(glow.positions, glow.colors, glow.sizes, pointsMaterial(0.06, 36));
@@ -443,7 +447,7 @@ export class GalaxyView {
     }
     const [sx, sy, sz] = this.data.sol;
     const solScore = test(sx, sy, sz, 14);
-    if (solScore < Infinity && solScore - 4 < bestScore) best = 'sol';
+    if (this.showSol && solScore < Infinity && solScore - 4 < bestScore) best = 'sol';
     return best;
   }
 

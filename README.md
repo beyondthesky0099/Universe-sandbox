@@ -28,6 +28,8 @@ Everything except the optional companion server runs in the browser.
 | ![Nearby stars](docs/screenshots/nearby-stars.png) | ![Milky Way](docs/screenshots/milky-way.png) |
 | **Saturn's real rings (NASA radii)** | **Solar System at true scale** |
 | ![Saturn's rings](docs/screenshots/saturn-rings.png) | ![True scale](docs/screenshots/true-scale.png) |
+| **The Universe map: Local Group** | **The cosmic web (2MASS Redshift Survey)** |
+| ![Local Group](docs/screenshots/universe-local.png) | ![Cosmic web](docs/screenshots/universe-web.png) |
 | **Exoplanet hosts on the Milky Way map** | **NASA maps: Earth, Moon, Jupiter** |
 | ![Exoplanet hosts](docs/screenshots/milky-way-exoplanets.png) | ![Real maps](docs/screenshots/real-maps.png) |
 | **More real maps: Mercury, Mars, Phobos, Europa, Ganymede, Rhea, Iapetus, Vesta** | |
@@ -147,6 +149,18 @@ need the [companion server](#companion-server). Without one, they explain how to
   The first person in a room runs the physics.
 
 ### Explore
+- **The Universe map** (**Universe** tab, or zoom far out of any galaxy):
+  - **869 real galaxies** of the Local Volume, out to 85 million light-years, from the Updated
+    Nearby Galaxy Catalog. Each is at its measured distance and drawn at its true diameter:
+    Andromeda, Triangulum, the Magellanic Clouds, Centaurus A, M81 and M82, the Whirlpool and
+    the Local Group's dwarfs.
+  - **38,000 more galaxies** from the 2MASS Redshift Survey trace the **cosmic web** out to
+    about 700 million light-years. The Virgo, Fornax, Centaurus, Perseus and Coma clusters and
+    the Great Attractor are labelled.
+  - Click a galaxy for its type, distance, size, mass, gas and motion (Andromeda is
+    approaching at 296 km/s). Zoom in or press **Visit** to explore it. Visited galaxies are
+    procedural stand-ins shaped like the real one (spiral, elliptical, lenticular, irregular
+    or dwarf), clearly labelled as such.
 - **The Milky Way** is the default galaxy (seed 1). It uses an approximate model of the real
   structure, after Reid et al. 2019 and Vallée 2017:
   - the Sun 8.2 kpc from the centre and 20 pc above the plane
@@ -318,6 +332,11 @@ push and pull request.
 - Saturn's ring radii, optical depths and albedos come from the NASA Saturnian Rings Fact
   Sheet (nssdc.gsfc.nasa.gov/planetary/factsheet/satringfact.html). Rebuild them with
   `node scripts/build-saturn-rings.mjs`.
+- Galaxies: the **Updated Nearby Galaxy Catalog** (Karachentsev, Makarov & Kaisina 2013, AJ
+  145, 101) and the **2MASS Redshift Survey** (Huchra et al. 2012, ApJS 199, 26), retrieved
+  from VizieR (CDS). Rebuild them with `node scripts/build-galaxies.mjs`. Survey distances use
+  Hubble's law (H0 = 70 km/s/Mpc), so clusters appear stretched along the line of sight
+  ("fingers of God"). Cluster labels use approximate published positions.
 - Star data: **HYG database v4.1** by David Nash (astronexus), licensed **CC BY-SA 4.0**
   (https://codeberg.org/astronexus/hyg). The derived files `public/data/stars-near.json` and
   `public/data/stars-bright.json` are also CC BY-SA 4.0. Rebuild them with

@@ -1,0 +1,92 @@
+{
+ "source": "Positions: SIMBAD. Masses and distances: discovery papers (verified against arXiv abstracts).",
+ "objects": [
+  {
+   "name": "Gaia BH1",
+   "kind": "blackhole",
+   "distanceKpc": 0.48,
+   "mass": 9.62,
+   "arxiv": "2209.06833",
+   "about": "The nearest known black hole: a dormant 9.6 M☉ black hole orbited by a Sun-like star.",
+   "simbad": "Gaia DR3 4373465352415301632",
+   "raDeg": 262.1712358858566,
+   "decDeg": -0.5809787160997
+  },
+  {
+   "name": "Gaia BH2",
+   "kind": "blackhole",
+   "distanceKpc": 1.16,
+   "mass": 8.9,
+   "arxiv": "2302.07880",
+   "about": "A dormant black hole orbited by a red giant.",
+   "simbad": "Gaia DR3 5870569352746779008",
+   "raDeg": 207.5697823340767,
+   "decDeg": -59.23898075029
+  },
+  {
+   "name": "Gaia BH3",
+   "kind": "blackhole",
+   "distanceKpc": 0.59,
+   "mass": 33,
+   "arxiv": "2404.10486",
+   "about": "The most massive stellar black hole known in the Milky Way.",
+   "simbad": "Gaia DR3 4318465066420528000",
+   "raDeg": 294.82796478104,
+   "decDeg": 14.93166971992
+  },
+  {
+   "name": "Cygnus X-1",
+   "kind": "blackhole",
+   "mass": 21.2,
+   "arxiv": "2102.09091",
+   "distanceKpc": 2.22,
+   "about": "The first black hole ever identified (1971), feeding on a blue supergiant companion.",
+   "simbad": "Cyg X-1",
+   "raDeg": 299.59031556498,
+   "decDeg": 35.20160680908,
+   "distanceNote": "Distance from Miller-Jones et al. 2021 (Science 371, 1046), not this abstract."
+  },
+  {
+   "name": "V404 Cygni",
+   "kind": "blackhole",
+   "distanceKpc": 2.39,
+   "arxiv": "0910.5253",
+   "about": "An X-ray binary whose distance was the first measured to a black hole by parallax.",
+   "simbad": "V404 Cyg",
+   "raDeg": 306.0159362655975,
+   "decDeg": 33.8672114319058
+  },
+  {
+   "name": "A0620-00",
+   "kind": "blackhole",
+   "distanceKpc": 1.06,
+   "mass": 6.6,
+   "arxiv": "1001.0261",
+   "about": "One of the nearest black holes, in an X-ray binary in Monoceros.",
+   "simbad": "V* V616 Mon",
+   "raDeg": 95.68559327388,
+   "decDeg": -0.34563623904
+  },
+  {
+   "name": "Vela Pulsar",
+   "kind": "pulsar",
+   "distanceKpc": 0.293,
+   "arxiv": "astro-ph/0302374",
+   "about": "A young pulsar spinning 11 times a second, left by a supernova about 11,000 years ago.",
+   "simbad": "PSR B0833-45",
+   "raDeg": 128.83606354,
+   "decDeg": -45.17643181
+  },
+  {
+   "name": "PSR J0437-4715",
+   "kind": "pulsar",
+   "distanceKpc": 0.15679,
+   "mass": 1.44,
+   "arxiv": "1510.04434",
+   "about": "The nearest millisecond pulsar, spinning 174 times a second.",
+   "simbad": "PSR J0437-4715",
+   "raDeg": 69.31583107574,
+   "decDeg": -47.25237343101
+  }
+ ]
+}

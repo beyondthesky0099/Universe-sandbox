@@ -9,6 +9,25 @@
  */
 export const G = 4 * Math.PI * Math.PI;
 
+/**
+ * Galaxy-scale scenes use kiloparsecs, solar masses and millions of years instead. The
+ * simulation is unit-agnostic, so they set gravityScale = KPC_MYR_GRAVITY_SCALE, and the
+ * display formatters switch with setDisplayUnits.
+ */
+export type UnitSystem = 'au-yr' | 'kpc-myr';
+/** G in kpc³ / (M☉ Myr²) divided by 4π². */
+export const KPC_MYR_GRAVITY_SCALE = 4.4985e-12 / G;
+/** 1 kpc/Myr in km/s. */
+export const KPC_PER_MYR_IN_KMS = 977.79;
+
+let displayUnits: UnitSystem = 'au-yr';
+export function setDisplayUnits(units: UnitSystem): void {
+  displayUnits = units;
+}
+export function getDisplayUnits(): UnitSystem {
+  return displayUnits;
+}
+
 export const EARTH_MASS = 3.003e-6; // M☉
 export const JUPITER_MASS = 9.546e-4; // M☉
 
@@ -32,6 +51,7 @@ export function formatMass(m: number): string {
 }
 
 export function formatDistance(au: number): string {
+  if (displayUnits === 'kpc-myr') return `${fmt(au)} kpc (${fmt(au * 3261.6)} ly)`;
   return `${fmt(au)} AU`;
 }
 
@@ -44,10 +64,15 @@ export function formatKm(au: number): string {
 }
 
 export function formatSpeed(auPerYear: number): string {
+  if (displayUnits === 'kpc-myr') return `${fmt(auPerYear * KPC_PER_MYR_IN_KMS)} km/s`;
   return `${fmt(auPerYear * AU_PER_YEAR_IN_KMS)} km/s`;
 }
 
 export function formatTime(years: number): string {
+  if (displayUnits === 'kpc-myr') {
+    // Here the time unit is a million years.
+    return Math.abs(years) < 1000 ? `${years.toFixed(0)} million yr` : `${(years / 1000).toFixed(2)} billion yr`;
+  }
   if (Math.abs(years) < 1) return `${(years * 365.25).toFixed(1)} days`;
   if (Math.abs(years) < 1e4) return `${years.toFixed(2)} yr`;
   return `${(years / 1000).toFixed(1)} kyr`;

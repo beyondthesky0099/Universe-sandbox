@@ -1,3 +1,4 @@
+import type { UnitSystem } from './units';
 import type { BodyKind } from './body';
 import type { GravityMode, Simulation } from './simulation';
 
@@ -41,6 +42,8 @@ export interface SimSettings {
   evolutionRate?: number;
   /** Real sizes instead of inflated game radii. */
   trueScale?: boolean;
+  /** Unit system (galaxy-scale scenes use kpc and Myr). */
+  units?: UnitSystem;
   /** Only sent to the physics worker; never saved into files or links. */
   customForces?: { name: string; code: string }[];
 }
@@ -98,6 +101,7 @@ export function captureState(sim: Simulation, opts: CaptureOptions = {}): SimSta
       lightSpeedScale: sim.lightSpeedScale,
       evolutionRate: sim.evolutionRate,
       trueScale: sim.trueScale,
+      units: sim.units,
     },
     bodies: sim.bodies.map((b) => ({
       id: b.id,
@@ -148,7 +152,7 @@ export function restoreState(sim: Simulation, state: SimState): void {
   sim.clear();
   sim.time = state.time;
   // Older files have no trueScale: they were saved with game sizes.
-  Object.assign(sim, { trueScale: false }, state.settings);
+  Object.assign(sim, { trueScale: false, units: 'au-yr' }, state.settings);
   for (const b of state.bodies) sim.addBody({ ...b });
   if (state.particles) {
     const p = state.particles;

@@ -243,7 +243,7 @@ export class SystemView {
     this.followId = undefined;
     this.approachGroup.visible = false;
     const el = setup.elevation ?? 0.8;
-    const dir = new THREE.Vector3(0, Math.sin(el), Math.cos(el));
+    const dir = setup.viewFrom ? new THREE.Vector3(...setup.viewFrom).normalize() : new THREE.Vector3(0, Math.sin(el), Math.cos(el));
     this.controls.maxDistance = Math.max(2e5, setup.cameraDistance * 20);
     this.controls.target.set(0, 0, 0);
     this.camera.position.copy(dir).multiplyScalar(setup.cameraDistance * zoomFrom);
@@ -508,6 +508,7 @@ export class SystemView {
 
   private shouldLabel(b: Body): boolean {
     if (b.id === this.selectedId || b.id === this.followId) return true;
+    if (b.tag === 'probe') return true; // spacecraft are tiny but always worth naming
     const n = this.sim.bodies.length;
     if (n <= 30) return true;
     if (n > 300) return false;

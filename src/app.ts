@@ -5,10 +5,19 @@ import { FEATURE, systemFeatures, type FeatureName } from './procgen/galaxy';
 import { mulberry32, pick, seedFromString } from './procgen/rng';
 import { generateStarSystem, starSummary, type StarSystemSpec } from './procgen/starSystem';
 import { GalaxyView, type GalaxyTarget } from './render/galaxyView';
-import { equatorialToGalactic, galacticToMap } from './procgen/galaxy';
+import { CosmosView } from './render/cosmosView';
+import { SkyView } from './render/skyView';
+import { moonPhaseName, skyAt } from './sim/sky';
+import { dateToJdTT, eclipsePath, greatestEclipse, jdTTToDate, loadEclipses, localCircumstances, shadowAt, topocentric, type Eclipse } from './sim/eclipse';
+import { displayName, GALAXY_CREDIT, galaxyForm, loadLocalGalaxies, loadNamedGalaxies, loadWebGalaxies, LY_PER_MPC, type LocalGalaxy } from './sim/galaxies';
+import { equatorialToGalactic, galacticToMap, MILKY_WAY_SEED, type GalaxyOptions } from './procgen/galaxy';
 import { QUALITY_PRESETS, SystemView } from './render/systemView';
 import { createRealSky } from './render/starfield';
 import { setTrueScale } from './sim/trueScale';
+import { loadGwEvent, loadGwEvents } from './sim/gwEvents';
+import { loadFlyby, loadFlybys } from './sim/flybys';
+import { loadVoyagerEncounter, loadVoyagerEncounters } from './sim/voyager';
+import { getSolarData, loadSolarData } from './sim/solarSystemData';
 import { isCompact, kindForMass, mainSequenceLifetime, mergedKind, NEUTRON_MAX_MASS, type Body, type BodyKind } from './sim/body';
 import { isTidallyLocked, nearResonance, orbitalPeriod } from './sim/analysis';
 import { bodyTemperature, climateFor, formatTemperature, isHabitable } from './sim/climate';
@@ -22,7 +31,7 @@ import { type SimEvent } from './sim/simulation';
 import { captureState, restoreState } from './sim/state';
 import { EXOPLANET_ACKNOWLEDGEMENT, loadCatalog, loadExoSystem, type ExoCatalog, type ExoHost } from './sim/exoplanets';
 import { loadBrightStars, loadNearStars, loadStarNeighbourhood } from './sim/stars';
-import { EARTH_MASS, fmt, formatDistance, formatKm, formatMass, formatSpeed, formatTime, G, JUPITER_MASS } from './sim/units';
+import { EARTH_MASS, fmt, formatDistance, formatKm, formatMass, formatSpeed, formatTime, G, JUPITER_MASS, getDisplayUnits, KPC_MYR_GRAVITY_SCALE, setDisplayUnits } from './sim/units';
 import { $, escapeHtml, isTyping, setFacts, toast } from './ui/dom';
 import { GalaxyStore, prefs } from './ui/galaxyStore';
 import { History } from './ui/history';
@@ -41,7 +50,7 @@ import { burnDirections, planHohmann } from './game/transfer';
 import { LESSONS, type Lesson } from './game/lessons';
 import { LineChart, measure, METRICS, type MetricId, type Series } from './ui/graph';
 
-type ViewName = 'galaxy' | 'system';
+type ViewName = 'cosmos' | 'galaxy' | 'system' | 'sky';
 type Tool = 'select' | 'spawn' | 'nudge';
 type QualityName = keyof typeof QUALITY_PRESETS;
 
@@ -97,6 +106,7 @@ interface Scenario {
 
 const AUTO_EXIT_DISTANCE = 40000; // AU: zooming out this far returns to the galaxy map
 const AUTO_ENTER_DISTANCE = 0.6; // galaxy units: zooming this close to a selected star enters it
+const GALAXY_EXIT_DISTANCE = 560; // galaxy units: zooming out this far leaves for the Universe map
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
@@ -112,6 +122,16 @@ export class App {
   private readonly store = new GalaxyStore();
   private readonly tutorial: Tutorial;
   private view: ViewName = 'system';
+  private readonly cosmos: CosmosView;
+  private readonly sky: SkyView;
+  private skyDate = new Date();
+  private skySpeed = 1;
+  private skyPicked?: string;
+  private eclipse?: { e: Eclipse; path: ReturnType<typeof eclipsePath>; greatest: ReturnType<typeof greatestEclipse> };
+  private earthMap?: HTMLImageElement;
+  private cosmosLoaded = false;
+  /** The real galaxy (catalogue name) the galaxy map currently shows, for returning to the Universe map. */
+  private galaxyOrigin = 'Milky Way';
   private tool: Tool = 'select';
   private spawnType = SPAWN_TYPES[1];
   private spawnMassFactor = 1;
@@ -178,6 +198,8 @@ export class App {
     this.host = new SimHost(params.get('worker') !== '0');
     this.system = new SystemView(this.sim, this.canvas, QUALITY_PRESETS[this.quality]);
     this.galaxy = new GalaxyView(this.canvas);
+    this.cosmos = new CosmosView(this.canvas);
+    this.sky = new SkyView(this.canvas);
     this.tutorial = new Tutorial(this.tutorialSteps());
 
     const hashSeed = params.get('galaxy');
@@ -239,7 +261,10 @@ export class App {
     }
     // The real night sky (HYG catalogue) replaces the procedural background once it loads.
     void loadBrightStars()
-      .then((stars) => this.system.setSky(createRealSky(stars)))
+      .then((stars) => {
+        this.sky.setStars(stars);
+        return this.system.setSky(createRealSky(stars));
+      })
       .catch(() => undefined);
     this.runAutorunPlugins();
     const scene = params.get('scene');
@@ -329,9 +354,26 @@ export class App {
       }
       if (this.frames % 6 === 0) this.updateSystemHud();
       if (!this.transitioning && this.system.cameraDistance > this.exitDistance) void this.exitToGalaxy();
+    } else if (this.view === 'sky') {
+      this.tickSky(dt);
+    } else if (this.view === 'cosmos') {
+      this.cosmos.update(dt);
+      this.renderView(this.cosmos.scene, this.cosmos.camera, []);
+      if (this.frames % 15 === 0) $('stats').textContent = `${Math.round(this.fps)} fps`;
+      const sel = this.cosmos.selected;
+      if (
+        !this.transitioning &&
+        sel !== -1 &&
+        !this.cosmos.animating &&
+        this.cosmos.cameraDistance < this.cosmos.viewDistance(sel) * 0.12 &&
+        this.cosmos.controls.target.distanceTo(this.cosmos.position(sel)) < this.cosmos.viewDistance(sel) * 0.5
+      ) {
+        void this.visitCosmosGalaxy(sel);
+      }
     } else {
       this.galaxy.update(dt);
       this.renderView(this.galaxy.scene, this.galaxy.camera, []);
+      if (!this.transitioning && !this.galaxy.animating && this.galaxy.cameraDistance > GALAXY_EXIT_DISTANCE) void this.openCosmos(true);
       if (this.frames % 15 === 0) $('stats').textContent = `${Math.round(this.fps)} fps`;
       const sel = this.galaxy.selected;
       if (
@@ -487,6 +529,8 @@ export class App {
     this.labelRenderer.setSize(this.width, this.height);
     this.system.setViewport(this.width, this.height);
     this.galaxy.setViewport(this.width, this.height, this.renderer.getPixelRatio());
+    this.cosmos.setViewport(this.width, this.height, this.renderer.getPixelRatio());
+    this.sky.setViewport(this.width, this.height);
     this.postfx?.setSize(this.width, this.height);
   }
 
@@ -508,13 +552,18 @@ export class App {
     this.view = view;
     this.system.controls.enabled = view === 'system';
     this.galaxy.controls.enabled = view === 'galaxy';
-    if (view === 'galaxy') this.cancelSpawn();
+    this.cosmos.controls.enabled = view === 'cosmos';
+    this.sky.enabled = view === 'sky';
+    if (view !== 'system') this.cancelSpawn();
+    $('tab-cosmos').classList.toggle('active', view === 'cosmos');
     $('tab-galaxy').classList.toggle('active', view === 'galaxy');
     $('tab-system').classList.toggle('active', view === 'system');
+    $('tab-sky').classList.toggle('active', view === 'sky');
     $('labels').classList.toggle('hidden', view !== 'system');
     document.querySelectorAll<HTMLElement>('[data-view]').forEach((el) => {
       const match = el.dataset.view === view;
       if (el.id === 'star-panel') el.classList.toggle('hidden', !match || this.galaxy.selected === -1);
+      else if (el.id === 'cosmos-galaxy-panel') el.classList.toggle('hidden', !match || this.cosmos.selected === -1);
       else if (el.id === 'exo-panel') el.classList.toggle('hidden', !match || !this.exoOpen);
       else if (el.id === 'graph-panel') el.classList.toggle('hidden', !match || !this.graphOpen);
       else if (el.id === 'body-panel') el.classList.toggle('hidden', !match || this.system.selectedId === undefined);
@@ -593,6 +642,297 @@ export class App {
     }
   }
 
+  /** Fade to another view without any camera transition. */
+  private async switchView(view: ViewName): Promise<void> {
+    if (this.transitioning || this.view === view) return;
+    this.transitioning = true;
+    try {
+      await this.fade(true);
+      this.setView(view);
+      await this.fade(false);
+    } finally {
+      this.transitioning = false;
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Sky (planetarium)
+
+  private static readonly SKY_PLACES: [string, number, number][] = [
+    ['Greenwich, London', 51.4778, -0.0015], ['New York', 40.7128, -74.006], ['Los Angeles', 34.0522, -118.2437],
+    ['Mexico City', 19.4326, -99.1332], ['São Paulo', -23.5505, -46.6333], ['Reykjavík', 64.1466, -21.9426],
+    ['Cape Town', -33.9249, 18.4241], ['Cairo', 30.0444, 31.2357], ['Mumbai', 19.076, 72.8777],
+    ['Delhi', 28.6139, 77.209], ['Beijing', 39.9042, 116.4074], ['Tokyo', 35.6762, 139.6503],
+    ['Sydney', -33.8688, 151.2093], ['Mauna Kea observatories', 19.8207, -155.4681],
+    ['Atacama Desert (ALMA)', -23.0229, -67.7552], ['North Pole', 90, 0], ['South Pole', -90, 0],
+  ];
+
+  private async openSky(): Promise<void> {
+    if (this.view === 'sky') return;
+    this.skyDate = new Date();
+    this.setSkyTimeInput();
+    this.sky.setTime(this.skyDate);
+    this.renderSkyList();
+    await this.switchView('sky');
+  }
+
+  private tickSky(dt: number): void {
+    this.skyDate = new Date(this.skyDate.getTime() + dt * 1000 * this.skySpeed);
+    this.sky.setTime(this.skyDate);
+    this.sky.update();
+    this.renderView(this.sky.scene, this.sky.camera, []);
+    if (this.frames % 15 === 0) {
+      $('stats').textContent = `${Math.round(this.fps)} fps`;
+      this.renderSkyList();
+      this.drawEclipseMap();
+      if (document.activeElement !== $('sky-time')) this.setSkyTimeInput();
+    }
+  }
+
+  private setSkyTimeInput(): void {
+    const d = this.skyDate;
+    const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+    $<HTMLInputElement>('sky-time').value = local;
+    $('sky-utc').textContent = `${d.toISOString().slice(0, 16).replace('T', ' ')} UTC`;
+  }
+
+  private setSkyPlace(lat: number, lon: number, name?: string): void {
+    lat = Math.max(-90, Math.min(90, lat));
+    lon = ((((lon + 180) % 360) + 360) % 360) - 180;
+    $<HTMLInputElement>('sky-lat').value = lat.toFixed(2);
+    $<HTMLInputElement>('sky-lon').value = lon.toFixed(2);
+    const select = $<HTMLSelectElement>('sky-place');
+    const i = App.SKY_PLACES.findIndex((p) => p[0] === name);
+    select.value = i >= 0 ? String(i) : '';
+    prefs.set('skyPlace', { lat, lon, name: name ?? '' });
+    this.sky.setTime(this.skyDate, { lat, lon });
+    this.renderSkyList();
+    this.updateEclipseInfo();
+  }
+
+  private selectEclipse(e: Eclipse | undefined): void {
+    this.eclipse = e ? { e, path: eclipsePath(e), greatest: greatestEclipse(e) } : undefined;
+    this.sky.setEclipse(e);
+    $('eclipse-map').classList.toggle('hidden', !e);
+    if (e && !this.earthMap) {
+      const img = new Image();
+      img.onload = () => this.drawEclipseMap();
+      img.src = `${import.meta.env.BASE_URL}textures/earth.jpg`;
+      this.earthMap = img;
+    }
+    this.drawEclipseMap();
+    this.updateEclipseInfo();
+  }
+
+  private watchEclipse(): void {
+    const ec = this.eclipse;
+    if (!ec) return;
+    const place = ec.greatest.shadow.centre!;
+    this.setSkyPlace(place.lat, place.lon);
+    const local = localCircumstances(ec.e, place.lat, place.lon);
+    this.skyDate = jdTTToDate(ec.e, local.maxJdTT - (local.centralSec / 2 + 75) / 86400);
+    this.skySpeed = 10;
+    $<HTMLSelectElement>('sky-speed').value = '10';
+    this.setSkyTimeInput();
+    const t = topocentric(ec.e, local.maxJdTT, place.lat, place.lon);
+    this.sky.lookAt(t.sun.alt, t.sun.az);
+    this.sky.setFov(3);
+    this.sky.setTime(this.skyDate);
+    this.updateEclipseInfo();
+    if (this.view !== 'sky') void this.switchView('sky');
+  }
+
+  private updateEclipseInfo(): void {
+    const ec = this.eclipse;
+    if (!ec) {
+      $('eclipse-info').textContent = '';
+      return;
+    }
+    const { e } = ec;
+    const { lat, lon } = this.sky.observer;
+    const local = localCircumstances(e, lat, lon);
+    const utc = (jd: number) => jdTTToDate(e, jd).toISOString().slice(11, 19);
+    const sunAlt = topocentric(e, local.maxJdTT, lat, lon).sun.alt;
+    const fmt = (sec: number) => `${Math.floor(sec / 60)} min ${Math.round(sec % 60)} s`;
+    let here: string;
+    if (local.obscuration <= 0) here = 'Not visible from here.';
+    else if (sunAlt < -0.5) here = 'From here it happens with the Sun below the horizon.';
+    else if (local.central !== 'none')
+      here = `From here: ${local.central === 'total' ? 'totality' : 'a ring of fire'} for ${fmt(local.centralSec)}, centred on ${utc(local.maxJdTT)} UTC, with the Sun ${Math.round(sunAlt)}° up.`;
+    else here = `From here: partial, up to ${Math.round(local.obscuration * 100)}% of the Sun covered at ${utc(local.maxJdTT)} UTC, Sun ${Math.round(sunAlt)}° up.`;
+    const ns = (v: number, p: string, n: string) => `${Math.abs(v)}°${v >= 0 ? p : n}`;
+    $('eclipse-info').textContent = `${here} NASA: greatest eclipse at ${e.greatestTD.slice(11, 16)} TD, ${ns(e.lat, 'N', 'S')} ${ns(e.lon, 'E', 'W')}, ${e.type === 'annular' ? 'annularity' : 'totality'} ${fmt(e.durationSec)}${e.widthKm ? `, path ${e.widthKm} km wide` : ''}. Click the map to watch from anywhere.`;
+  }
+
+  private drawEclipseMap(): void {
+    const ec = this.eclipse;
+    const canvas = $<HTMLCanvasElement>('eclipse-map');
+    if (!ec || canvas.classList.contains('hidden')) return;
+    const ctx = canvas.getContext('2d')!;
+    const W = canvas.width, H = canvas.height;
+    const xy = (p: { lat: number; lon: number }): [number, number] => [((p.lon + 180) / 360) * W, ((90 - p.lat) / 180) * H];
+    ctx.fillStyle = '#0b1020';
+    ctx.fillRect(0, 0, W, H);
+    if (this.earthMap?.complete && this.earthMap.naturalWidth) {
+      ctx.globalAlpha = 0.75;
+      ctx.drawImage(this.earthMap, 0, 0, W, H);
+      ctx.globalAlpha = 1;
+    }
+    const line = (pts: { lat: number; lon: number }[], color: string, width: number) => {
+      ctx.strokeStyle = color;
+      ctx.lineWidth = width;
+      ctx.beginPath();
+      let prev: [number, number] | undefined;
+      for (const p of pts) {
+        const q = xy(p);
+        if (!prev || Math.abs(q[0] - prev[0]) > W / 2) ctx.moveTo(q[0], q[1]);
+        else ctx.lineTo(q[0], q[1]);
+        prev = q;
+      }
+      ctx.stroke();
+    };
+    const withLimits = ec.path.filter((p) => p.limits);
+    line(withLimits.map((p) => p.limits![0]), 'rgba(255,200,90,0.9)', 1.5);
+    line(withLimits.map((p) => p.limits![1]), 'rgba(255,200,90,0.9)', 1.5);
+    line(ec.path.map((p) => p.centre), 'rgba(255,120,60,0.9)', 1);
+    // The shadow now.
+    const jd = dateToJdTT(ec.e, this.skyDate);
+    const sh = shadowAt(ec.e, jd);
+    if (sh.centre) {
+      const [x, y] = xy(sh.centre);
+      const kmPerPx = 40075 / W;
+      ctx.fillStyle = 'rgba(0,0,0,0.28)';
+      ctx.beginPath();
+      ctx.ellipse(x, y, sh.penumbraKm / kmPerPx / Math.max(0.2, Math.cos((sh.centre.lat * Math.PI) / 180)), sh.penumbraKm / kmPerPx, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#000';
+      ctx.beginPath();
+      ctx.arc(x, y, Math.max(3, Math.abs(sh.umbraKm) / kmPerPx), 0, Math.PI * 2);
+      ctx.fill();
+    }
+    const [ox, oy] = xy(this.sky.observer);
+    ctx.strokeStyle = '#7fdcff';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(ox - 6, oy);
+    ctx.lineTo(ox + 6, oy);
+    ctx.moveTo(ox, oy - 6);
+    ctx.lineTo(ox, oy + 6);
+    ctx.stroke();
+  }
+
+  private wireSkyPanel(): void {
+    const select = $<HTMLSelectElement>('sky-place');
+    select.innerHTML = `<option value="">Custom place</option>${App.SKY_PLACES.map((p, i) => `<option value="${i}">${p[0]}</option>`).join('')}`;
+    const saved = prefs.get<{ lat: number; lon: number; name: string } | null>('skyPlace', null);
+    if (saved) this.setSkyPlace(saved.lat, saved.lon, saved.name || undefined);
+    else this.setSkyPlace(App.SKY_PLACES[0][1], App.SKY_PLACES[0][2], App.SKY_PLACES[0][0]);
+    select.addEventListener('change', () => {
+      const p = App.SKY_PLACES[Number(select.value)];
+      if (select.value !== '' && p) this.setSkyPlace(p[1], p[2], p[0]);
+    });
+    const typed = () => {
+      const lat = Number($<HTMLInputElement>('sky-lat').value), lon = Number($<HTMLInputElement>('sky-lon').value);
+      if (Number.isFinite(lat) && Number.isFinite(lon)) this.setSkyPlace(lat, lon);
+    };
+    $('sky-lat').addEventListener('change', typed);
+    $('sky-lon').addEventListener('change', typed);
+    $('btn-sky-here').addEventListener('click', () => {
+      if (!navigator.geolocation) return toast('Location is not available in this browser.');
+      navigator.geolocation.getCurrentPosition(
+        (pos) => this.setSkyPlace(pos.coords.latitude, pos.coords.longitude),
+        () => toast('Could not get your location.'),
+        { timeout: 10000 },
+      );
+    });
+    $('sky-time').addEventListener('change', () => {
+      const d = new Date($<HTMLInputElement>('sky-time').value);
+      if (!Number.isNaN(d.getTime())) {
+        this.skyDate = d;
+        this.setSkyTimeInput();
+      }
+    });
+    $('btn-sky-now').addEventListener('click', () => {
+      this.skyDate = new Date();
+      this.skySpeed = 1;
+      $<HTMLSelectElement>('sky-speed').value = '1';
+      this.setSkyTimeInput();
+    });
+    void loadEclipses()
+      .then((list) => {
+        const select = $<HTMLSelectElement>('eclipse-select');
+        select.innerHTML = `<option value="">Choose an eclipse…</option>${list.map((e, i) => `<option value="${i}">${e.date} · ${e.type}</option>`).join('')}`;
+        const now = Date.now();
+        const next = list.findIndex((e) => Date.parse(e.date) > now);
+        select.value = String(next >= 0 ? next : 0);
+      })
+      .catch(() => ($('eclipse-select').innerHTML = '<option value="">Eclipses unavailable</option>'));
+    $('eclipse-select').addEventListener('change', async () => {
+      const list = await loadEclipses().catch(() => []);
+      this.selectEclipse(list[Number($<HTMLSelectElement>('eclipse-select').value)]);
+    });
+    $('btn-eclipse').addEventListener('click', async () => {
+      const list = await loadEclipses().catch(() => []);
+      const e = list[Number($<HTMLSelectElement>('eclipse-select').value)];
+      if (!e) return;
+      if (this.eclipse?.e !== e) this.selectEclipse(e);
+      this.watchEclipse();
+    });
+    $('eclipse-map').addEventListener('click', (ev) => {
+      const c = $<HTMLCanvasElement>('eclipse-map');
+      const r = c.getBoundingClientRect();
+      const me = ev as MouseEvent;
+      const lon = ((me.clientX - r.left) / r.width) * 360 - 180;
+      const lat = 90 - ((me.clientY - r.top) / r.height) * 180;
+      this.setSkyPlace(lat, lon);
+      this.drawEclipseMap();
+      const ec = this.eclipse;
+      if (ec) {
+        // Point at the Sun as it will be at maximum eclipse here.
+        const local = localCircumstances(ec.e, lat, lon);
+        const t = topocentric(ec.e, local.maxJdTT, lat, lon);
+        if (t.sun.alt > -1) this.sky.lookAt(t.sun.alt, t.sun.az);
+      }
+    });
+    $('sky-speed').addEventListener('change', () => (this.skySpeed = Number($<HTMLSelectElement>('sky-speed').value)));
+    $('sky-list').addEventListener('click', (e) => {
+      const li = (e.target as HTMLElement).closest<HTMLElement>('li[data-sky]');
+      const o = li && this.sky.snapshot?.objects.find((x) => x.name === li.dataset.sky);
+      if (!o) return;
+      this.skyPicked = o.name;
+      this.sky.lookAt(Math.max(o.alt, 5), o.az);
+      this.renderSkyList();
+    });
+  }
+
+  private renderSkyList(): void {
+    const snap = this.sky.snapshot;
+    if (!snap) return;
+    const compass = (az: number) => ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'][Math.round(az / 22.5) % 16];
+    const where = (o: { alt: number; az: number }) => (o.alt > 0 ? `${Math.round(o.alt)}° up, ${compass(o.az)}` : 'below the horizon');
+    const sun = snap.objects.find((o) => o.name === 'Sun')!;
+    const moon = snap.objects.find((o) => o.name === 'Moon')!;
+    // Waxing while the lit fraction grows.
+    const waxing = skyAt(new Date(this.skyDate.getTime() + 3600000), this.sky.observer).moonIllumination >= snap.moonIllumination;
+    const phase = `${moonPhaseName(snap.moonIllumination, waxing)}, ${Math.round(snap.moonIllumination * 100)}% lit`;
+    const sky = sun.alt > -0.833 ? 'Daytime' : sun.alt > -6 ? 'Civil twilight' : sun.alt > -12 ? 'Nautical twilight' : sun.alt > -18 ? 'Astronomical twilight' : 'Night';
+    const rows = [
+      { name: 'Sun', text: `${sky}: ${where(sun)}` },
+      { name: 'Moon', text: `${phase}; ${where(moon)}` },
+      ...snap.objects
+        .filter((o) => o.kind === 'planet')
+        .sort((a, b) => b.alt - a.alt)
+        .map((o) => ({ name: o.name, text: where(o), up: o.alt > 0 })),
+    ];
+    $('sky-list').innerHTML = rows
+      .map((r) => `<li data-sky="${r.name}" tabindex="0" class="${'up' in r && !r.up ? 'muted' : ''}${r.name === this.skyPicked ? ' active' : ''}"><b>${r.name}</b> <span class="small">${r.text}</span></li>`)
+      .join('');
+    const picked = this.skyPicked && snap.objects.find((o) => o.name === this.skyPicked);
+    $('sky-info').textContent = picked
+      ? `${picked.name}: altitude ${picked.alt.toFixed(1)}°, azimuth ${picked.az.toFixed(1)}°, ${picked.km > 1e7 ? `${(picked.km / 149597870.7).toFixed(2)} AU` : `${Math.round(picked.km).toLocaleString('en-US')} km`} away, ${(picked.diameter * 60).toFixed(picked.diameter * 60 < 1 ? 2 : 1)}′ across.`
+      : 'Positions are geometric (no atmospheric refraction), accurate to about an arcminute.';
+  }
+
   private async switchToSandbox(): Promise<void> {
     if (this.transitioning || this.view === 'system') return;
     this.transitioning = true;
@@ -623,6 +963,7 @@ export class App {
       lightSpeedScale: 1,
       evolutionRate: 1,
       trueScale: false,
+      units: 'au-yr',
     });
   }
 
@@ -639,6 +980,8 @@ export class App {
     this.resetPhysicsDefaults();
     this.scenario = sc;
     const setup = sc.load();
+    setDisplayUnits(this.sim.units);
+    this.setMaxTimeScale(setup.maxTimeScale ?? 100);
     this.sceneScale = setup.cameraDistance;
     this.host.commit();
     this.history.clearTimeline();
@@ -919,8 +1262,139 @@ export class App {
     for (const p of this.plugins()) if (p.autorun) this.scripts.run(p.code);
   }
 
+  // ---------------------------------------------------------------------------
+  // The Universe map: real galaxies beyond the Milky Way
+
+  /** Open the Universe map, arriving at the galaxy we were just in when coming from a galaxy map. */
+  private async openCosmos(fromGalaxy: boolean): Promise<void> {
+    if (this.transitioning) return;
+    this.transitioning = true;
+    try {
+      if (fromGalaxy) {
+        this.galaxy.controls.enabled = false;
+        await sleep(150);
+      }
+      await this.fade(true);
+      if (!this.cosmosLoaded) {
+        try {
+          const [local, named] = await Promise.all([loadLocalGalaxies(), loadNamedGalaxies()]);
+          this.cosmos.setLocal([...local, ...named]);
+          this.cosmosLoaded = true;
+          $('cosmos-credit').textContent = GALAXY_CREDIT;
+          this.updateCosmosInfo();
+          new THREE.TextureLoader().load(`${import.meta.env.BASE_URL}textures/cmb.jpg`, (tex) => {
+            this.cosmos.setCmb(tex);
+            this.cosmos.setCmbVisible($<HTMLInputElement>('opt-cmb').checked);
+          });
+          void loadWebGalaxies()
+            .then((web) => {
+              this.cosmos.setWeb(web);
+              this.cosmos.setWebVisible($<HTMLInputElement>('opt-cosmic-web').checked);
+              this.updateCosmosInfo();
+            })
+            .catch((err: unknown) => toast((err as Error).message));
+        } catch (err) {
+          toast((err as Error).message);
+          this.galaxy.controls.enabled = this.view === 'galaxy';
+          await this.fade(false);
+          return;
+        }
+      }
+      this.setView('cosmos');
+      const origin = this.cosmos.indexOf(this.galaxyOrigin || 'Milky Way');
+      if (fromGalaxy && origin !== -1) {
+        this.selectCosmos(origin);
+        this.cosmos.arriveFrom(origin);
+      }
+      await sleep(60);
+      await this.fade(false);
+    } finally {
+      this.transitioning = false;
+    }
+  }
+
+  private updateCosmosInfo(): void {
+    const named = this.cosmos.local.filter((g) => g.zd).length;
+    const n = this.cosmos.local.length - named;
+    const web = this.cosmos.webCount;
+    $('cosmos-info').textContent =
+      `${n.toLocaleString('en-US')} real galaxies of the Local Volume (out to 85 million light-years) at their measured distances and true sizes, plus ${named} bright named galaxies beyond it (M87, the Sombrero, Fornax A…) placed by redshift` +
+      (web ? `, and ${web.toLocaleString('en-US')} more tracing the cosmic web out to about 700 million light-years, placed by their redshift.` : '. Loading the cosmic web…');
+  }
+
+  private selectCosmos(index: number): void {
+    this.cosmos.select(index);
+    const panel = $('cosmos-galaxy-panel');
+    if (index === -1) {
+      panel.classList.add('hidden');
+      return;
+    }
+    const g = this.cosmos.local[index];
+    $('cosmos-galaxy-name').textContent = displayName(g);
+    setFacts($('cosmos-galaxy-facts'), cosmosFacts(g));
+    $('btn-cosmos-visit').textContent = g.name === 'Milky Way' ? 'Back to the Milky Way →' : 'Visit galaxy →';
+    panel.classList.remove('hidden');
+  }
+
+  /** Go into a galaxy: the real Milky Way map, or a procedural stand-in shaped like the real galaxy. */
+  private async visitCosmosGalaxy(index: number): Promise<void> {
+    const g = this.cosmos.local[index];
+    if (!g || this.transitioning) return;
+    this.transitioning = true;
+    try {
+      this.cosmos.flyTo(index, this.cosmos.viewDistance(index) * 0.08, 1.6);
+      await sleep(420);
+      await this.fade(true);
+      if (g.name === 'Milky Way') {
+        if (!this.galaxyBuilt || this.galaxySeed !== MILKY_WAY_SEED || this.galaxyOrigin !== 'Milky Way') this.buildGalaxy(MILKY_WAY_SEED);
+      } else {
+        this.buildGalaxy(seedFromString(`real:${g.name}`), { name: displayName(g), form: galaxyForm(g), origin: g.name });
+      }
+      this.setView('galaxy');
+      await sleep(60);
+      await this.fade(false);
+      toast(g.name === 'Milky Way' ? 'Back home in the Milky Way' : `Arrived at ${displayName(g)}`);
+    } finally {
+      this.transitioning = false;
+    }
+  }
+
+  private renderCosmosSearch(): void {
+    const q = $<HTMLInputElement>('cosmos-search').value.trim().toLowerCase().replace(/\s+/g, '');
+    const list = $('cosmos-results');
+    if (!q) {
+      list.innerHTML = '';
+      return;
+    }
+    const matches = this.cosmos.local
+      .map((g, i) => ({ g, i, label: displayName(g) }))
+      .filter(({ g, label }) => label.toLowerCase().replace(/\s+/g, '').includes(q) || g.name.toLowerCase().replace(/\s+/g, '').includes(q))
+      .sort((a, b) => (b.g.lk ?? 0) - (a.g.lk ?? 0))
+      .slice(0, 12);
+    list.innerHTML = matches.length
+      ? matches
+          .map(({ g, i, label }) => `<li tabindex="0" data-galaxy="${i}"><span>${escapeHtml(label)}</span><span class="muted">${g.name === 'Milky Way' ? 'home' : `${fmt(g.d * 3.2616)} Mly`}</span></li>`)
+          .join('')
+      : '<li class="muted">No matching galaxies</li>';
+  }
+
   /** Real exoplanet hosts on the Milky Way map, placed by their galactic coordinates. */
   private exoMapHosts: ExoHost[] = [];
+
+  /** Real black holes and pulsars (positions from SIMBAD, distances from the discovery papers). */
+  private async showCompactObjectsOnMap(seed: number): Promise<void> {
+    const res = await fetch(`${import.meta.env.BASE_URL}data/compact-objects.json`).catch(() => undefined);
+    if (!res?.ok || this.galaxySeed !== seed) return;
+    const { objects } = (await res.json()) as { objects: { name: string; kind: 'blackhole' | 'pulsar'; raDeg: number; decDeg: number; distanceKpc: number; mass?: number }[] };
+    this.galaxy.addCompactObjects(
+      objects.map((o) => {
+        const [l, b] = equatorialToGalactic(o.raDeg, o.decDeg);
+        const ly = Math.round((o.distanceKpc * 3261.6) / 10) * 10;
+        const what = o.kind === 'blackhole' ? `black hole${o.mass ? ` · ${o.mass} M☉` : ''}` : 'pulsar';
+        return { label: `${o.name} · ${what} · ${ly.toLocaleString('en-US')} ly`, pos: galacticToMap(l, b, o.distanceKpc), kind: o.kind };
+      }),
+    );
+  }
 
   private async showExoHostsOnMap(seed: number): Promise<void> {
     const catalog = await this.getCatalog().catch(() => undefined);
@@ -936,9 +1410,10 @@ export class App {
     $('galaxy-info').textContent += ` Rings near the Sun mark ${hosts.length.toLocaleString('en-US')} real stars with known exoplanets (green: has a temperate planet); click one to visit it.`;
   }
 
-  private buildGalaxy(seed: number): void {
+  private buildGalaxy(seed: number, opts: GalaxyOptions & { origin?: string } = {}): void {
     this.galaxySeed = seed;
-    const data = this.galaxy.build(seed);
+    this.galaxyOrigin = seed === MILKY_WAY_SEED ? 'Milky Way' : (opts.origin ?? '');
+    const data = this.galaxy.build(seed, opts);
     this.galaxyBuilt = true;
     this.features = undefined;
     this.scanToken++;
@@ -947,9 +1422,14 @@ export class App {
     $('galaxy-info').textContent =
       data.name === 'Milky Way'
         ? `Our galaxy: real structure (4 spiral arms, the Local Spur, the central bar, Sgr A*) with ${data.clusters.length} real clusters and ${data.nebulae.length} real nebulae at their true positions. The ${data.stars.count.toLocaleString()} explorable systems are procedural stand-ins for the ~100 billion real stars.`
-        : `${data.arms}-armed spiral · ${data.stars.count.toLocaleString()} explorable systems · ${data.clusters.length} star clusters (a procedural galaxy)`;
+        : opts.origin
+          ? `A procedural stand-in for the real ${data.form} galaxy ${data.name}: its overall shape follows the real galaxy's type, but its ${data.stars.count.toLocaleString()} stars are invented. Zoom out to return to the Universe map.`
+          : `${data.arms}-armed spiral · ${data.stars.count.toLocaleString()} explorable systems · ${data.clusters.length} star clusters (a procedural galaxy)`;
     this.exoMapHosts = [];
-    if (data.name === 'Milky Way') void this.showExoHostsOnMap(seed);
+    if (data.name === 'Milky Way') {
+      void this.showExoHostsOnMap(seed);
+      void this.showCompactObjectsOnMap(seed);
+    }
     $<HTMLInputElement>('galaxy-seed').value = String(seed);
     $('star-panel').classList.add('hidden');
     $<HTMLSelectElement>('star-filter').value = '';
@@ -1119,9 +1599,17 @@ export class App {
   }
 
   private setTimeScale(yearsPerSecond: number): void {
+    yearsPerSecond = Math.min(yearsPerSecond, this.maxTimeScale);
     this.timeScale = yearsPerSecond;
     $<HTMLInputElement>('time-scale').value = String(Math.log10(yearsPerSecond));
     $('time-scale-out').textContent = formatRate(yearsPerSecond);
+  }
+
+  /** Scenes can raise the speed limit (moving stars need thousands of years per second). */
+  private maxTimeScale = 100;
+  private setMaxTimeScale(max: number): void {
+    this.maxTimeScale = max;
+    $<HTMLInputElement>('time-scale').max = String(Math.log10(max));
   }
 
   private setRunning(running: boolean): void {
@@ -1153,7 +1641,9 @@ export class App {
 
   private updateHint(): void {
     let text: string;
-    if (this.view === 'galaxy') text = 'Click a star to inspect · Double-click to fly there · Zoom right in (or Enter) to visit · B bookmark';
+    if (this.view === 'sky') text = 'Drag to look around · Scroll to zoom · Click the Moon or a planet for details';
+    else if (this.view === 'cosmos') text = 'Click a galaxy to inspect · Double-click to fly there · Zoom right in (or Enter) to visit · Scroll out for the cosmic web';
+    else if (this.view === 'galaxy') text = 'Click a star to inspect · Double-click to fly there · Zoom right in (or Enter) to visit · Zoom far out for other galaxies';
     else if (this.tool === 'spawn') text = 'Click to place · Drag to set velocity · Right-drag to orbit camera · Esc to cancel';
     else if (this.tool === 'nudge') text = 'Press on a body and drag to push it · Dashed line previews the new path · Right-drag to orbit camera';
     else text = 'Click to select · Double-click to follow · Space pause · Hold R rewind · Ctrl+Z undo · B spawn · M galaxy map';
@@ -1162,8 +1652,10 @@ export class App {
 
   private syncSettingsUi(): void {
     const s = this.sim;
-    $<HTMLInputElement>('gravity').value = String(s.gravityScale);
-    $('gravity-out').textContent = s.gravityScale.toFixed(2);
+    // Galaxy-scale scenes keep G in kpc/Myr units; the slider shows the multiplier on top of that.
+    const gBase = s.units === 'kpc-myr' ? KPC_MYR_GRAVITY_SCALE : 1;
+    $<HTMLInputElement>('gravity').value = String(s.gravityScale / gBase);
+    $('gravity-out').textContent = (s.gravityScale / gBase).toFixed(2);
     $<HTMLInputElement>('opt-collisions').checked = s.collisions;
     $<HTMLInputElement>('opt-debris').checked = s.debris;
     $<HTMLInputElement>('opt-shatter').checked = s.shatter;
@@ -1362,6 +1854,7 @@ export class App {
   }
 
   private updateSystemHud(): void {
+    setDisplayUnits(this.sim.units);
     $('sim-time').textContent = formatTime(this.sim.time);
     const status = this.host.getStatus();
     $('lag').classList.toggle('hidden', !status.lagging);
@@ -1389,10 +1882,10 @@ export class App {
       const t = bodyTemperature(this.sim.bodies, body);
       facts.push(['Temperature', formatTemperature(t)], ['Climate', capitalize(climateFor(body.kind, t))]);
       if (isHabitable(body.kind, body.mass, t)) alerts.push(`<div class="alert good">🌍 Habitable: liquid water could exist on the surface.</div>`);
-    } else if (body.kind === 'star') {
+    } else if (body.kind === 'star' && body.tag !== 'galaxy') {
       facts.push(['Surface temp.', `${Math.round(starTemperature(body.mass)).toLocaleString()} K`]);
     }
-    if (body.kind === 'star' || body.kind === 'giant' || body.kind === 'whitedwarf') {
+    if ((body.kind === 'star' || body.kind === 'giant' || body.kind === 'whitedwarf') && body.tag !== 'galaxy') {
       facts.push(['Age', formatAge(body.age)]);
       if (body.kind === 'star') {
         const left = mainSequenceLifetime(body.mass) - body.age;
@@ -1413,7 +1906,7 @@ export class App {
         const hx = dy * dvz - dz * dvy, hy = dz * dvx - dx * dvz, hz = dx * dvy - dy * dvx;
         const h2 = hx * hx + hy * hy + hz * hz;
         const e = Math.sqrt(Math.max(0, 1 + (2 * energy * h2) / (mu * mu)));
-        facts.push(['Orbit', `a = ${fmt(a)} AU, e = ${e.toFixed(2)}`], ['Period', formatTime(2 * Math.PI * Math.sqrt((a * a * a) / mu))]);
+        facts.push(['Orbit', `a = ${formatDistance(a)}, e = ${e.toFixed(2)}`], ['Period', formatTime(2 * Math.PI * Math.sqrt((a * a * a) / mu))]);
       } else {
         facts.push(['Orbit', 'Unbound (escaping)']);
       }
@@ -1453,7 +1946,7 @@ export class App {
     const html = alerts.join('');
     const alertsEl = $('body-alerts');
     if (alertsEl.innerHTML !== html) alertsEl.innerHTML = html;
-    $('btn-supernova').classList.toggle('hidden', !this.sim.canSupernova(body));
+    $('btn-supernova').classList.toggle('hidden', !this.sim.canSupernova(body) || body.tag === 'galaxy');
     $('btn-visit').classList.toggle('hidden', !(body.tag?.startsWith('exohost:') || body.tag === 'home'));
     const inChallenge = !!this.challenge;
     for (const id of ['btn-mass-up', 'btn-mass-down', 'btn-delete']) $(id).classList.toggle('hidden', inChallenge);
@@ -2100,11 +2593,24 @@ export class App {
       this.selectBody(this.system.pick(x, y, this.width, this.height));
     } else if (this.view === 'galaxy') {
       this.selectTarget(this.galaxy.pick(x, y, this.width, this.height));
+    } else if (this.view === 'cosmos') {
+      this.selectCosmos(this.cosmos.pick(x, y, this.width, this.height));
+    } else if (this.view === 'sky') {
+      this.skyPicked = this.sky.pick(x, y);
+      this.renderSkyList();
     }
   }
 
   private handleDoubleClick(e: { clientX: number; clientY: number }): void {
     const [x, y] = this.ndc(e);
+    if (this.view === 'cosmos') {
+      const index = this.cosmos.pick(x, y, this.width, this.height);
+      if (index !== -1) {
+        this.selectCosmos(index);
+        this.cosmos.flyTo(index);
+      }
+      return;
+    }
     if (this.view === 'galaxy') {
       const target = this.galaxy.pick(x, y, this.width, this.height);
       if (target !== -1) {
@@ -2213,13 +2719,18 @@ export class App {
       }
       if (mod) return;
       if (key === 'm') {
-        if (this.view === 'galaxy') void this.switchToSandbox();
+        if (this.view !== 'system') void this.switchToSandbox();
         else void this.exitToGalaxy();
       }
       if (key === '?') this.openTutorial();
       if (key === '`') {
         e.preventDefault();
         $('btn-console').click();
+        return;
+      }
+      if (this.view === 'cosmos') {
+        if (key === 'enter' && this.cosmos.selected !== -1) void this.visitCosmosGalaxy(this.cosmos.selected);
+        if (key === 'escape') this.selectCosmos(-1);
         return;
       }
       if (this.view === 'galaxy') {
@@ -2269,7 +2780,7 @@ export class App {
           this.setTimeScale(Math.pow(10, Math.max(-3, Math.log10(this.timeScale) - 0.1)));
           break;
         case ']':
-          this.setTimeScale(Math.pow(10, Math.min(2, Math.log10(this.timeScale) + 0.1)));
+          this.setTimeScale(Math.pow(10, Math.log10(this.timeScale) + 0.1));
           break;
         case 'escape':
           if (this.spawnDrag) this.cancelSpawn();
@@ -2291,8 +2802,32 @@ export class App {
   }
 
   private bindUi(): void {
-    $('tab-galaxy').addEventListener('click', () => this.view === 'system' && void this.exitToGalaxy());
+    $('tab-galaxy').addEventListener('click', () => {
+      if (this.view === 'system') void this.exitToGalaxy();
+      else if (this.view === 'sky') void this.switchView('galaxy');
+      else if (this.view === 'cosmos') void this.visitCosmosGalaxy(this.cosmos.indexOf(this.galaxyOrigin || 'Milky Way'));
+    });
+    $('tab-cosmos').addEventListener('click', () => this.view !== 'cosmos' && void this.openCosmos(this.view === 'galaxy'));
+    $('btn-cosmos-fly').addEventListener('click', () => this.cosmos.selected !== -1 && this.cosmos.flyTo(this.cosmos.selected));
+    $('btn-cosmos-visit').addEventListener('click', () => this.cosmos.selected !== -1 && void this.visitCosmosGalaxy(this.cosmos.selected));
+    $('btn-cosmos-home').addEventListener('click', () => {
+      const mw = this.cosmos.indexOf('Milky Way');
+      this.selectCosmos(mw);
+      this.cosmos.resetCamera();
+    });
+    $<HTMLInputElement>('opt-cosmic-web').addEventListener('change', (e) => this.cosmos.setWebVisible((e.target as HTMLInputElement).checked));
+    $<HTMLInputElement>('opt-cmb').addEventListener('change', (e) => this.cosmos.setCmbVisible((e.target as HTMLInputElement).checked));
+    $('cosmos-search').addEventListener('input', () => this.renderCosmosSearch());
+    $('cosmos-results').addEventListener('click', (e) => {
+      const li = (e.target as HTMLElement).closest<HTMLElement>('[data-galaxy]');
+      if (!li) return;
+      const index = Number(li.dataset.galaxy);
+      this.selectCosmos(index);
+      this.cosmos.flyTo(index);
+    });
     $('tab-system').addEventListener('click', () => void this.switchToSandbox());
+    $('tab-sky').addEventListener('click', () => void this.openSky());
+    this.wireSkyPanel();
     $('btn-play').addEventListener('click', () => this.setRunning(!this.running));
     $('btn-undo').addEventListener('click', () => this.undo());
     $('btn-redo').addEventListener('click', () => this.redo());
@@ -2386,6 +2921,50 @@ export class App {
       this.loadScenario({ name: `the Solar System on ${date.toISOString().slice(0, 10)}`, load: () => loadSolarSystemOnDate(this.sim, date), origin: { kind: 'sol' } });
     });
     $('btn-exoplanets').addEventListener('click', () => void this.openExoBrowser());
+    void loadGwEvents()
+      .then((events) => {
+        $('gw-select').innerHTML = events
+          .map((e, i) => `<option value="${i}">${e.name} · ${e.kind === 'BNS' ? 'neutron stars' : e.kind === 'NSBH' ? 'neutron star + black hole' : 'black holes'} · ${e.m1} + ${e.m2} M☉</option>`)
+          .join('');
+      })
+      .catch(() => ($('gw-select').innerHTML = '<option value="">GW events unavailable</option>'));
+    void loadFlybys()
+      .then((list) => {
+        $('flyby-select').innerHTML = list
+          .map((f, i) => `<option value="${i}">${f.name} · ${f.date.slice(0, 11)} · ${f.distAu * 149597870.7 < 1e6 ? `${Math.round(f.distAu * 149597870.7).toLocaleString('en-US')} km` : `${(f.distAu * 149597870.7 / 1e6).toFixed(2)} million km`}</option>`)
+          .join('');
+      })
+      .catch(() => ($('flyby-select').innerHTML = '<option value="">Flybys unavailable</option>'));
+    $('btn-flyby-load').addEventListener('click', async () => {
+      const list = await loadFlybys().catch(() => []);
+      const f = list[Number($<HTMLSelectElement>('flyby-select').value)];
+      if (f) this.loadScenario({ name: `${f.name} flyby`, description: `Real close approach of ${f.name} to Earth on ${f.date} UTC (JPL).`, load: () => loadFlyby(this.sim, f) });
+    });
+    void loadVoyagerEncounters()
+      .then((list) => {
+        $('voyager-select').innerHTML = list
+          .map((e, i) => `<option value="${i}">${e.craft} · ${e.planet} · ${e.closestUtc.slice(0, 4)}</option>`)
+          .join('');
+        $<HTMLSelectElement>('voyager-select').value = String(Math.max(0, list.findIndex((e) => e.craft === 'Voyager 2')));
+      })
+      .catch(() => ($('voyager-select').innerHTML = '<option value="">Voyager data unavailable</option>'));
+    $('btn-voyager-load').addEventListener('click', async () => {
+      const list = await loadVoyagerEncounters().catch(() => []);
+      const select = $<HTMLSelectElement>('voyager-select');
+      const i = Number(select.value);
+      const e = list[i];
+      if (!e) return;
+      const data = await loadSolarData().catch(() => getSolarData());
+      this.loadScenario({ name: `${e.craft} at ${e.planet}`, description: `${e.craft}'s real flyby of ${e.planet} on ${e.closestUtc.slice(0, 10)} (JPL Horizons).`, load: () => loadVoyagerEncounter(this.sim, e, data) });
+      // The next press continues the tour with the same spacecraft.
+      const next = list.findIndex((x, j) => j > i && x.craft === e.craft);
+      if (next >= 0) select.value = String(next);
+    });
+    $('btn-gw-load').addEventListener('click', async () => {
+      const events = await loadGwEvents().catch(() => []);
+      const ev = events[Number($<HTMLSelectElement>('gw-select').value)];
+      if (ev) this.loadScenario({ name: ev.name, description: `${ev.about}${ev.massNote ? ` ${ev.massNote}` : ''}`, load: () => loadGwEvent(this.sim, ev) });
+    });
     $('exo-close').addEventListener('click', () => this.closeExoBrowser());
     $('exo-search').addEventListener('input', () => this.renderExoList());
     $('exo-filter').addEventListener('change', () => this.renderExoList());
@@ -2654,8 +3233,9 @@ export class App {
     ts.addEventListener('input', () => this.setTimeScale(Math.pow(10, Number(ts.value))));
     const grav = $<HTMLInputElement>('gravity');
     grav.addEventListener('input', () => {
-      this.host.setSettings({ gravityScale: Number(grav.value) });
-      $('gravity-out').textContent = this.sim.gravityScale.toFixed(2);
+      const gBase = this.sim.units === 'kpc-myr' ? KPC_MYR_GRAVITY_SCALE : 1;
+      this.host.setSettings({ gravityScale: Number(grav.value) * gBase });
+      $('gravity-out').textContent = Number(grav.value).toFixed(2);
     });
     const bindSetting = (id: string, key: 'collisions' | 'debris' | 'shatter' | 'tidal') =>
       $<HTMLInputElement>(id).addEventListener('change', (e) => this.host.setSettings({ [key]: (e.target as HTMLInputElement).checked }));
@@ -2779,6 +3359,8 @@ export class App {
 // -----------------------------------------------------------------------------
 
 function kindLabel(b: Body): string {
+  if (b.tag === 'probe') return 'Spacecraft';
+  if (b.tag === 'galaxy') return 'Galaxy (all its mass as one point)';
   switch (b.kind) {
     case 'rocky':
       return b.mass < 0.05 * EARTH_MASS ? 'Asteroid' : 'Rocky planet';
@@ -2817,6 +3399,7 @@ function capitalize(s: string): string {
 }
 
 function formatRate(yearsPerSecond: number): string {
+  if (getDisplayUnits() === 'kpc-myr') return `${fmt(yearsPerSecond)} Myr/s`;
   if (yearsPerSecond < 1 / 12) return `${fmt(yearsPerSecond * 365.25)} d/s`;
   return `${fmt(yearsPerSecond)} yr/s`;
 }
@@ -2827,4 +3410,31 @@ function describeSystem(spec: StarSystemSpec): string {
   if (spec.belt) parts.push('an asteroid belt');
   if (spec.companion) parts.push(`a distant ${spec.companion.spectralClass}-type companion`);
   return `${parts.join(', ')}.`;
+}
+
+/** Superscript exponent for "3.2 × 10¹¹". */
+function sciMass(log10: number): string {
+  const e = Math.floor(log10);
+  const m = Math.pow(10, log10 - e);
+  const sup = String(e).replace(/[0-9-]/g, (c) => '⁰¹²³⁴⁵⁶⁷⁸⁹⁻'['0123456789-'.indexOf(c)]);
+  return `${m.toFixed(1)} × 10${sup} M☉`;
+}
+
+function cosmosFacts(g: LocalGalaxy): [string, string][] {
+  const form = galaxyForm(g);
+  const facts: [string, string][] = [['Type', `${form[0].toUpperCase()}${form.slice(1)} galaxy`]];
+  if (g.name === 'Milky Way') {
+    facts.push(['Distance', 'You are here'], ['Diameter', 'about 100,000 light-years']);
+  } else {
+    const mly = (g.d * LY_PER_MPC) / 1e6;
+    facts.push([g.zd ? 'Distance (from redshift)' : 'Distance', `${mly < 1 ? `${Math.round(mly * 1000).toLocaleString('en-US')} thousand` : fmt(mly)} ${mly < 1 ? '' : 'million '}light-years`.replace('  ', ' ')]);
+    if (g.size && !g.zd) facts.push(['Diameter', `${Math.round(g.size * 3261.6).toLocaleString('en-US')} light-years`]);
+    if (g.name === 'MESSIER087') facts.push(['Central black hole', '6.5 billion M☉: the first black hole ever imaged (Event Horizon Telescope, 2019)']);
+  }
+  if (g.mass !== undefined) facts.push(['Mass', sciMass(g.mass)]);
+  if (g.hi !== undefined) facts.push(['Hydrogen gas', sciMass(g.hi)]);
+  if (g.v !== undefined && g.name !== 'Milky Way') facts.push([g.zd ? 'Recession velocity' : 'Radial velocity', `${Math.abs(g.v)} km/s ${g.v < 0 ? 'toward us' : 'away from us'}`]);
+  if (g.md && g.name !== 'Milky Way') facts.push(['Main neighbour', displayName({ name: g.md })]);
+  facts.push(['Data', g.zd ? '2MASS Redshift Survey (Huchra et al. 2012)' : 'Karachentsev et al. 2013']);
+  return facts;
 }

@@ -453,6 +453,14 @@ button.link {
   cursor: pointer;
 }
 
+.list li.active {
+  background: rgba(127, 220, 255, 0.18);
+}
+
+.list li.muted {
+  opacity: 0.55;
+}
+
 .list li:hover,
 .list li:focus-visible {
   background: rgba(127, 220, 255, 0.12);
@@ -962,4 +970,13 @@ body.embed #topbar {
 .lagrange-label {
   color: #c8a0ff;
   font-weight: 600;
+}
+
+#eclipse-map {
+  width: 100%;
+  aspect-ratio: 2 / 1;
+  margin-top: 8px;
+  border-radius: 6px;
+  cursor: crosshair;
+  background: #0b1020;
 }

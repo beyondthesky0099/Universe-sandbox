@@ -26,6 +26,40 @@ export interface NearStar {
   /** Visual luminosity in solar units. */
   lum: number;
   companionOf?: number;
+  /** Space velocity relative to the Sun (ecliptic J2000, parsecs per year). */
+  v?: [number, number, number];
+}
+
+const KMS_PER_PC_PER_YEAR = 977792.2;
+
+export interface Approach {
+  star: NearStar;
+  /** Years from now (negative = in the past). */
+  years: number;
+  /** Closest distance to the Sun (parsecs). */
+  pc: number;
+  /** Speed relative to the Sun (km/s). */
+  kms: number;
+}
+
+/** When each star (moving in a straight line) passes closest to the Sun. */
+export function closestApproach(s: NearStar): Approach | undefined {
+  if (!s.v) return undefined;
+  const [x, y, z] = s.xyz;
+  const [vx, vy, vz] = s.v;
+  const v2 = vx * vx + vy * vy + vz * vz;
+  if (v2 === 0) return undefined;
+  const t = -(x * vx + y * vy + z * vz) / v2;
+  const pc = Math.hypot(x + vx * t, y + vy * t, z + vz * t);
+  return { star: s, years: t, pc, kms: Math.sqrt(v2) * KMS_PER_PC_PER_YEAR };
+}
+
+/** Stars that will pass closer than `maxPc` within `withinYears`, closest first. */
+export function upcomingEncounters(stars: NearStar[], withinYears = 2e6, maxPc = 1.5): Approach[] {
+  return stars
+    .map(closestApproach)
+    .filter((a): a is Approach => !!a && a.years > 0 && a.years < withinYears && a.pc < maxPc)
+    .sort((a, b) => a.pc - b.pc);
 }
 
 /** [x, y, z unit vector (ecliptic), magnitude, B−V, proper name?] */
@@ -102,6 +136,8 @@ export function loadStarNeighbourhood(sim: Simulation, stars: NearStar[], catalo
   sim.gravityScale = 0;
   sim.collisions = false;
   sim.tidal = false;
+  // Straight-line motion with gravity off: big steps are exact, and millions of years must fit in seconds.
+  sim.dtMax = 500;
   sim.addBody({ name: 'Sun', kind: 'star', mass: 1, tag: 'home', radius: 3000, color: rgbToHex(kelvinToRgb(5772)) });
   // Exoplanet hosts near the Sun, matched to catalogue stars by position (within 0.05 pc).
   const hosts = (catalog?.hosts ?? []).filter((h) => h.distancePc <= maxPc + 1).map((h) => ({ h, p: hostPosition(h) }));
@@ -115,7 +151,12 @@ export function loadStarNeighbourhood(sim: Simulation, stars: NearStar[], catalo
     farthest = Math.max(farthest, d * AU_PER_PC);
     const match = hosts.find(({ p }) => Math.hypot(p[0] - x, p[1] - y, p[2] - z) < 0.05 * AU_PER_PC);
     if (match) hostCount++;
+    // Real space motion (pc/yr → AU/yr), so the neighbourhood drifts as it really does.
+    const [vx, vy, vz] = s.v ? scene(s.v).map((c) => c * AU_PER_PC) : [0, 0, 0];
     sim.addBody({
+      vx,
+      vy,
+      vz,
       name: s.name,
       kind: phys.kind,
       mass: phys.mass,
@@ -128,11 +169,16 @@ export function loadStarNeighbourhood(sim: Simulation, stars: NearStar[], catalo
       tag: match ? `exohost:${match.h.name}` : undefined,
     });
   }
+  const soon = upcomingEncounters(stars).slice(0, 3);
+  const encounters = soon.length
+    ? ` Closest passes ahead: ${soon.map((a) => `${a.star.name} at ${a.pc < 0.1 ? `${Math.round(a.pc * 206265).toLocaleString('en-US')} AU` : `${(a.pc * 3.2616).toFixed(1)} light-years`} in ${a.years < 1e5 ? `${Math.round(a.years / 1000)} thousand` : `${(a.years / 1e6).toFixed(2)} million`} years`).join('; ')}.`
+    : '';
   return {
     cameraDistance: farthest * 1.5,
-    timeScale: 0.001,
+    timeScale: 2000,
+    maxTimeScale: 1e6,
     elevation: 0.5,
-    tip: `All ${sim.bodies.length - 1} catalogued stars within ${maxPc} parsecs (${(maxPc * 3.2616).toFixed(0)} light-years) at their real positions${
+    tip: `Stars move with their real velocities: speed up time to watch the neighbourhood change.${encounters} All ${sim.bodies.length - 1} catalogued stars within ${maxPc} parsecs (${(maxPc * 3.2616).toFixed(0)} light-years) at their real positions${
       hostCount ? `; ${hostCount} host known exoplanets (select one and press "Visit system")` : ''
     }. ${STAR_CREDIT} Masses are estimated from spectral type and brightness.`,
   };

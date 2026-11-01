@@ -97,6 +97,8 @@ for (let k = 1; k < lines.length; k++) {
       spect: r.spect || undefined,
       ci: ci === undefined ? undefined : round(ci, 3),
       lum: round(Number(r.lum), 6),
+      // Space velocity (ecliptic J2000, parsecs per year) from proper motion and radial velocity.
+      ...(r.vx !== '' && (Number(r.vx) || Number(r.vy) || Number(r.vz)) ? { v: toEcliptic(Number(r.vx), Number(r.vy), Number(r.vz)).map((c) => round(c, 9)) } : {}),
       ...(r.comp_primary && r.comp_primary !== r.id ? { companionOf: Number(r.comp_primary) } : {}),
       id: Number(r.id),
     });
@@ -115,7 +117,7 @@ bright.sort((a, b) => a[3] - b[3]);
 const credit = 'HYG database v4.1 by David Nash (astronexus), CC BY-SA 4.0 — https://codeberg.org/astronexus/hyg';
 writeFileSync(
   new URL('../public/data/stars-near.json', import.meta.url),
-  JSON.stringify({ source: credit, license: 'CC BY-SA 4.0', frame: 'ecliptic J2000, parsecs', maxPc: NEAR_PC, stars: near }) + '\n',
+  JSON.stringify({ source: credit, license: 'CC BY-SA 4.0', frame: 'ecliptic J2000; positions in parsecs, velocities v in parsecs per year', maxPc: NEAR_PC, stars: near }) + '\n',
 );
 writeFileSync(
   new URL('../public/data/stars-bright.json', import.meta.url),

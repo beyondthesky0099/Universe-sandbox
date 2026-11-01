@@ -28,6 +28,10 @@ Everything except the optional companion server runs in the browser.
 | ![Nearby stars](docs/screenshots/nearby-stars.png) | ![Milky Way](docs/screenshots/milky-way.png) |
 | **Saturn's real rings (NASA radii)** | **Solar System at true scale** |
 | ![Saturn's rings](docs/screenshots/saturn-rings.png) | ![True scale](docs/screenshots/true-scale.png) |
+| **The Universe map: Local Group** | **The cosmic web (2MASS Redshift Survey)** |
+| ![Local Group](docs/screenshots/universe-local.png) | ![Cosmic web](docs/screenshots/universe-web.png) |
+| **The observable universe: CMB (WMAP)** | **Milky Way + Andromeda = Milkomeda** |
+| ![CMB](docs/screenshots/cmb.png) | ![Milkomeda](docs/screenshots/milkomeda.png) |
 | **Exoplanet hosts on the Milky Way map** | **NASA maps: Earth, Moon, Jupiter** |
 | ![Exoplanet hosts](docs/screenshots/milky-way-exoplanets.png) | ![Real maps](docs/screenshots/real-maps.png) |
 | **More real maps: Mercury, Mars, Phobos, Europa, Ganymede, Rhea, Iapetus, Vesta** | |
@@ -75,6 +79,11 @@ need the [companion server](#companion-server). Without one, they explain how to
   else uses mass–radius relations for its kind, down to a black hole's Schwarzschild radius.
   Mergers, fragments and supernova remnants keep real sizes, and collisions only happen at
   true contact. **Solar System (true scale)** adds the 12 largest moons to the whole system.
+- **Real spacecraft:** 16 missions from JPL Horizons appear at their true positions on any
+  date they were flying: Voyager 1 and 2, Pioneer 10 and 11, New Horizons, Parker Solar Probe,
+  JWST, Europa Clipper, JUICE, Lucy, BepiColombo, Psyche, and the historical Cassini, Galileo,
+  Juno and Rosetta. Pick 1989 to catch Voyager 2 at Neptune, or 2015 for New Horizons at
+  Pluto. They're drawn as cyan diamonds and can be steered with the transfer planner.
 - **Real moon systems at true scale:** Earth & Moon, Mars, Jupiter, Saturn, Uranus, Neptune and
   Pluto–Charon. There are 28 moons, each at its real position for today, and the real Sun at
   its true distance lights each scene and pulls on the moons. Saturn's C, B and A
@@ -89,6 +98,12 @@ need the [companion server](#companion-server). Without one, they explain how to
   light-years) at their true 3D positions, including red dwarfs, white dwarfs and binaries.
   Colours come from B−V, masses are estimated from spectral type, and the 29 stars with known
   exoplanets can be visited.
+- **Moving stars:** the nearby stars move with their real space velocities (proper motion plus
+  radial velocity, from HYG). Speed time up to millions of years per second to watch the
+  neighbourhood rearrange. The scene lists upcoming close passes: Ross 248 becoming our nearest
+  star in about 36,000 years, and Gliese 710 passing about 1.2 light-years away in 1.4 million
+  years. Those are HYG's Hipparcos-era velocities; newer Gaia measurements bring Gliese 710
+  much closer, through the Oort cloud.
 - **The real night sky:** the sandbox background shows the 8,920 naked-eye stars
   (magnitude ≤ 6.5) in their true directions, so the constellations are where they should be.
 
@@ -147,6 +162,25 @@ need the [companion server](#companion-server). Without one, they explain how to
   The first person in a room runs the physics.
 
 ### Explore
+- **The Universe map** (**Universe** tab, or zoom far out of any galaxy):
+  - **869 real galaxies** of the Local Volume, out to 85 million light-years, from the Updated
+    Nearby Galaxy Catalog. Each is at its measured distance and drawn at its true diameter:
+    Andromeda, Triangulum, the Magellanic Clouds, Centaurus A, M81 and M82, the Whirlpool and
+    the Local Group's dwarfs.
+  - **38,000 more galaxies** from the 2MASS Redshift Survey trace the **cosmic web** out to
+    about 700 million light-years. The Virgo, Fornax, Centaurus, Perseus and Coma clusters and
+    the Great Attractor are labelled.
+  - **647 bright galaxies beyond the Local Volume** are clickable too, including M87 (Virgo A,
+    home of the first black hole ever imaged), M49, M60, the Sombrero, M77 and Fornax A. They
+    are placed by redshift, and their panels say so.
+  - **The edge of the observable universe:** the cosmic microwave background from NASA's WMAP
+    9-year map, on a sphere at its real distance, 46 billion light-years. From inside it's a
+    faint backdrop; zoom all the way out to see the whole observable universe from outside,
+    with every galaxy above a speck at its centre.
+  - Click a galaxy for its type, distance, size, mass, gas and motion (Andromeda is
+    approaching at 296 km/s). Zoom in or press **Visit** to explore it. Visited galaxies are
+    procedural stand-ins shaped like the real one (spiral, elliptical, lenticular, irregular
+    or dwarf), clearly labelled as such.
 - **The Milky Way** is the default galaxy (seed 1). It uses an approximate model of the real
   structure, after Reid et al. 2019 and Vallée 2017:
   - the Sun 8.2 kpc from the centre and 20 pc above the plane
@@ -156,6 +190,10 @@ need the [companion server](#companion-server). Without one, they explain how to
   - 12 real star clusters and 10 real nebulae (Pleiades, Omega Centauri, Orion Nebula, Crab,
     Carina, …) at their real galactic coordinates and distances
 
+  - **Real black holes and pulsars**, labelled at their true positions: Gaia BH1, the nearest
+    known black hole at 1,570 light-years, plus Gaia BH2 and BH3, Cygnus X-1, V404 Cygni,
+    A0620-00, the Vela Pulsar and PSR J0437-4715. Positions come from SIMBAD; masses and
+    distances come from each discovery paper.
   - **4,813 real stars with known exoplanets** (NASA Exoplanet Archive), placed by their real
     galactic coordinates and distances. Click one to see its planets and visit it. The streak
     toward Cygnus is the field of view of the Kepler space telescope.
@@ -168,8 +206,62 @@ need the [companion server](#companion-server). Without one, they explain how to
   Bookmark systems, and see which ones you've visited.
 - Zoom into a star to warp into its system, and zoom out to return to the galaxy.
 
+### Real asteroid flybys
+Pick an upcoming close approach to Earth and press **Watch flyby**. There are eight, from JPL's
+close-approach database: Apophis passing 38,011 km from Earth's centre on 13 April 2029
+(inside the geostationary ring), 2024 YR4 in 2032, and others. Each starts four days before
+closest approach, using the asteroid's, Moon's and Sun's real positions from JPL Horizons, at
+true scale. The simulation then reproduces the encounter: the tests confirm Apophis's closest
+distance to within 2% and its time to within an hour.
+
+### Voyager Grand Tour
+Pick a flyby and press **Fly with Voyager** to ride along on one of the six real planetary
+encounters: Voyager 1 at Jupiter and Saturn, and Voyager 2 at Jupiter, Saturn, Uranus and
+Neptune. Each starts two days out, with the spacecraft, the planet's major moons and the Sun
+at their JPL Horizons positions, at true scale. The camera rides behind the probe looking at
+the planet; press the button again to continue the tour. The simulated closest approaches
+match Horizons to within 0.1% and a minute.
+
+### Sky from Earth (planetarium)
+The **Sky** tab shows the real sky from anywhere on Earth at any time: the Sun, the Moon with
+its phase, the planets and 8,900 stars, with twilight colours. Pick a city, type a latitude and
+longitude, or use your location, then run time forward. The Moon comes from the main terms of
+the ELP-2000/82 lunar theory (Meeus), and the planets from JPL's approximate elements. The tests
+check positions against JPL Horizons at three sites and four dates: the Moon is within half an
+arcminute and most planets within one.
+
+### Solar eclipses
+In the Sky tab, pick one of the 18 total, annular and hybrid eclipses of 2024–2035 and press
+**Watch**. You stand at the point of greatest eclipse just before totality: the sky darkens
+and the corona appears. A world map shows the path of totality and the moving shadow; click
+it to watch from anywhere, and the panel gives the local duration and time. The shadow is
+traced from JPL Horizons Sun and Moon positions and agrees with NASA's catalogue: time of
+greatest eclipse within 1 s, central duration within 1 s, and path width within 1% (about 7%
+for grazing eclipses). The corona's streamers are decorative.
+
+### Real gravitational-wave events
+Pick one of 11 famous LIGO/Virgo/KAGRA detections and press **Replay merger**. The list
+includes GW150914 (the first ever), the neutron-star collision GW170817, GW190521 (the most
+massive), GW190814 (a lopsided pair) and the neutron star–black hole mergers. Each replay
+uses the event's published masses, and the panel shows its real distance and how much mass
+became gravitational-wave energy. The orbit and speed of light are scaled so the final orbits
+play out in seconds, and the pair merges at the innermost stable orbit (6GM/c²).
+
+### Milky Way meets Andromeda
+The **Milky Way meets Andromeda (real)** scenario simulates the coming collision in
+kiloparsecs and millions of years:
+- Andromeda at its catalogued position, 770 kpc away
+- the HST-measured relative velocity (109 km/s closing, about 17 km/s sideways; van der Marel
+  et al. 2012)
+- both galaxies' masses, and Andromeda's real disk tilt
+
+The cores meet after **about 3.9 billion years**, matching that study's prediction, and merge
+into "Milkomeda" with long tidal tails. Each galaxy is a single softened mass, so the final
+merger comes sooner than in reality, where dynamical friction delays it by about 2 billion
+years.
+
 ### Scenarios
-Solar System (today) · Solar System (true scale) · Earth & Moon · Mars, Jupiter, Saturn, Uranus and Neptune with their moons ·
+Solar System (today) · Solar System (true scale) · Milky Way meets Andromeda (real) · Earth & Moon · Mars, Jupiter, Saturn, Uranus and Neptune with their moons ·
 Pluto & Charon · Protoplanetary Disk · Giant Impact · Ring Maker · Binary Star ·
 Figure-8 Three-Body · Rogue Star Flyby · Black Hole Feast · Supernova · The Sun's Future ·
 Relativistic Precession · Black Hole Inspiral · Galactic Core · Star Cluster Collapse ·
@@ -318,6 +410,31 @@ push and pull request.
 - Saturn's ring radii, optical depths and albedos come from the NASA Saturnian Rings Fact
   Sheet (nssdc.gsfc.nasa.gov/planetary/factsheet/satringfact.html). Rebuild them with
   `node scripts/build-saturn-rings.mjs`.
+- Gravitational-wave events: masses and distances from the LIGO/Virgo/KAGRA discovery papers.
+  `node scripts/build-gw-events.mjs` checks every number against the paper's arXiv abstract.
+  The GWOSC catalogue API was unreachable from the build environment because of a TLS
+  certificate-chain error.
+- Asteroid flybys: the JPL Close-Approach Data API with JPL Horizons starting states (rebuild
+  with `node scripts/build-flybys.mjs`).
+- Black holes and pulsars: positions from SIMBAD; masses and distances from the discovery papers,
+  verified against their arXiv abstracts by `node scripts/build-compact-objects.mjs`.
+- Cosmic microwave background: the NASA WMAP 9-year ILC map from LAMBDA (public domain),
+  reprojected from HEALPix by `python3 -I scripts/build-cmb.py` (needs numpy and ImageMagick).
+- Spacecraft trajectories: NASA/JPL Horizons, state vectors every 10 days (rebuild with
+  `node scripts/build-spacecraft.mjs`).
+- Voyager encounters: NASA/JPL Horizons planetocentric states of Voyager 1 and 2, the moons and
+  the Sun (rebuild with `node scripts/build-voyager.mjs`).
+- Solar eclipses: the list and reference values from NASA's Five Millennium Canon of Solar
+  Eclipses (Espenak & Meeus, eclipse.gsfc.nasa.gov), with JPL Horizons apparent Sun and Moon
+  positions (rebuild with `node scripts/build-eclipses.mjs`).
+- Planetarium checks: JPL Horizons topocentric positions in `tests/fixtures/sky-reference.json`
+  (rebuild with `node scripts/build-sky-reference.mjs`). The Moon's theory is from Meeus,
+  *Astronomical Algorithms* (2nd ed., ch. 47).
+- Galaxies: the **Updated Nearby Galaxy Catalog** (Karachentsev, Makarov & Kaisina 2013, AJ
+  145, 101) and the **2MASS Redshift Survey** (Huchra et al. 2012, ApJS 199, 26), retrieved
+  from VizieR (CDS). Rebuild them with `node scripts/build-galaxies.mjs`. Survey distances use
+  Hubble's law (H0 = 70 km/s/Mpc), so clusters appear stretched along the line of sight
+  ("fingers of God"). Cluster labels use approximate published positions.
 - Star data: **HYG database v4.1** by David Nash (astronexus), licensed **CC BY-SA 4.0**
   (https://codeberg.org/astronexus/hyg). The derived files `public/data/stars-near.json` and
   `public/data/stars-bright.json` are also CC BY-SA 4.0. Rebuild them with

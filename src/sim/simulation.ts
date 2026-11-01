@@ -16,7 +16,7 @@ import {
 import { kelvinToRgb } from './color';
 import { Octree } from './octree';
 import { ParticleSet } from './particles';
-import { C_AU_PER_YEAR, EARTH_MASS, G } from './units';
+import { C_AU_PER_YEAR, EARTH_MASS, G, type UnitSystem } from './units';
 
 export type SimEventType = 'merge' | 'ignite' | 'collapse' | 'shatter' | 'disrupt' | 'supernova' | 'gwmerger' | 'redgiant' | 'nebula' | 'script';
 
@@ -115,6 +115,8 @@ export class Simulation {
    * instead of the inflated game radii. Toggle with `setTrueScale` (src/sim/trueScale.ts).
    */
   trueScale = false;
+  /** Unit system of this scene (galaxy-scale scenes use kpc and Myr; see units.ts). */
+  units: UnitSystem = 'au-yr';
   /** Plummer softening length (AU) to avoid singular forces. */
   softening = 1e-4;
 
@@ -399,7 +401,8 @@ export class Simulation {
         const dy = b.y - py;
         const dz = b.z - pz;
         const d2 = dx * dx + dy * dy + dz * dz;
-        if (d2 < b.radius * b.radius) {
+        // Bodies swallow test particles that hit them, except whole galaxies (stars pass through a galaxy's core).
+        if (d2 < b.radius * b.radius && b.tag !== 'galaxy') {
           dead = true;
           break;
         }
@@ -641,6 +644,16 @@ export class Simulation {
         z: cz,
         size: big.radius * 20,
       });
+    } else if (big.tag === 'galaxy' && small.tag === 'galaxy') {
+      // Two whole galaxies (galaxy-scale scenes): they become one bigger galaxy, never a star or a
+      // black hole. "Milkomeda" is the name Cox & Loeb (2008) gave the Milky Way–Andromeda remnant.
+      const names = [big.name, small.name];
+      const name = names.includes('Milky Way') && names.includes('Andromeda') ? 'Milkomeda' : `${big.name}–${small.name}`;
+      this.events.push({ type: 'merge', message: `${small.name} and ${big.name} merged into ${name}`, x: cx, y: cy, z: cz, size: big.radius * 4 });
+      big.name = name;
+      big.mass = m;
+      big.radius = Math.max(big.radius, small.radius) * 1.15;
+      return;
     } else {
       this.events.push({ type: 'merge', message: `${small.name} collided with ${big.name}`, x: cx, y: cy, z: cz, size: big.radius });
     }

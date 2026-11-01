@@ -7,7 +7,8 @@ every working session: tick boxes, add notes, and move finished items to "Done".
 and say something like *"Read CLAUDE.md and docs/HANDOFF.md, then continue with the next
 unchecked item."*
 
-- Working branch: `ccr-bd8228d3-85c4pq` (no PR opened yet; `main` is the Pages deploy branch).
+- Working branch: `ccr-bd8228d3-85c4pq`, restarted from `main` after PR #1 merged. `main` is the
+  default branch and deploys to Pages.
 - Project conventions and commands are in `CLAUDE.md`.
 
 ## Done so far
@@ -121,7 +122,50 @@ Plan, in priority order:
       Neptune, Io, Callisto, Titan and the smaller moons. Solar System Scope serves an HTML
       page to scripted downloads, so don't automate it.
 
+### E. Beyond the Milky Way
+- [x] E1. Universe map (`src/render/cosmosView.ts`, `src/sim/galaxies.ts`, the `cosmos` view in
+      `app.ts`): 869 Local Volume galaxies (Karachentsev 2013) and 38k 2MRS galaxies, from
+      `scripts/build-galaxies.mjs` via the Harvard VizieR mirror. The CDS main site was
+      blocked by the proxy, and big responses sometimes drop, so the script retries and caches.
+- [x] E2. Visiting a galaxy builds a procedural stand-in of its real form (`GalaxyOptions` in
+      `procgen/galaxy.ts`). "You are here" is hidden in stand-ins.
+- [ ] E3. The real Milky Way–Andromeda collision scenario (M31 is 0.77 Mpc away and
+      approaching at about 110 km/s relative to the Milky Way). It needs a galaxy-scale preset.
+- [ ] E4. Galaxies in the Virgo cluster and beyond (beyond the Local Volume) aren't clickable;
+      only the 2MRS points exist for them.
+
+### F. More real data (all done, pending merge in PR #2)
+- [x] F1. Real spacecraft (JPL Horizons, 16 missions, `scripts/build-spacecraft.mjs`)
+- [x] F2. Milky Way meets Andromeda (`src/sim/localGroup.ts`, kpc/Myr unit system)
+- [x] F3. Real gravitational-wave events (`scripts/build-gw-events.mjs`, arXiv-verified)
+- [x] F4. Moving stars (HYG velocities, `upcomingEncounters`)
+- [x] F5. Clickable named galaxies beyond the Local Volume (2MRS)
+- [x] F6. Real asteroid flybys (JPL CAD + Horizons, `scripts/build-flybys.mjs`)
+- [x] F7. Black holes and pulsars on the Milky Way map (SIMBAD + arXiv)
+- [x] F8. The CMB (WMAP 9-year ILC, `scripts/build-cmb.py`)
+
+### G. Next round (3 of 7 done)
+- [x] G1. Voyager Grand Tour (`scripts/build-voyager.mjs`, `src/sim/voyager.ts`)
+- [x] G2. Planetarium: Sky tab (`src/sim/sky.ts`, `src/render/skyView.ts`)
+- [x] G3. Solar eclipses (`scripts/build-eclipses.mjs`, `src/sim/eclipse.ts`)
+- [ ] G4. Gaia star velocities (check the Gaia archive is reachable first)
+- [ ] G5. Play gravitational-wave chirps as sound
+- [ ] G6. Halley's return in 2061, with comet tails pointing away from the Sun
+- [ ] G7. Phone performance pass
+
+Ideas for later: a Gaia-based star catalogue (better velocities: HYG puts Gliese 710 at
+1.2 ly, while Gaia puts it much closer); pulsars from the ATNF catalogue when reachable;
+dynamical friction for galaxy mergers; Virgo-cluster distances from redshift-independent
+measurements.
+
 ## Notes and lessons learned
+- Unreachable sources: the GWOSC catalogue (gwosc.org) fails with a TLS chain error, and CDS
+  (Strasbourg) and ATNF are blocked by the proxy. The Harvard VizieR mirror sometimes returns
+  empty bodies for a while. Workarounds used: arXiv abstracts to verify hand-transcribed
+  values, and the Harvard SIMBAD mirror (simbad.cfa.harvard.edu) for positions.
+- Site deployment: GitHub Pages is live at https://beyondthesky0099.github.io/Universe-sandbox/
+  and deploys from `main`. The `github-pages` environment's branch rule must say `main`
+  (lowercase). A capitalised `Main` silently blocked deploys.
 - Close-ups at real size: the camera's near plane is 1e-8 AU, and `controls.minDistance`
   follows the followed body's radius. The old 0.002 AU minimum stopped you zooming in to any
   real-sized planet. Background stars are depth-tested, otherwise they draw over close

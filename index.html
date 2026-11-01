@@ -18,8 +18,10 @@
         <button id="btn-menu" class="icon only-mobile" title="Show / hide panels" aria-label="Toggle panels">☰</button>
         <div class="brand">✦ <span>Astrarium</span></div>
         <nav class="tabs" role="tablist">
+          <button id="tab-cosmos" role="tab" title="Real galaxies beyond the Milky Way">Universe</button>
           <button id="tab-galaxy" role="tab">Galaxy Map</button>
           <button id="tab-system" role="tab">Sandbox</button>
+          <button id="tab-sky" role="tab" title="The real sky from anywhere on Earth">Sky</button>
         </nav>
         <div class="clock" data-view="system">
           <button id="btn-rewind" class="icon" title="Hold to rewind (R)" aria-label="Rewind">⏪</button>
@@ -42,6 +44,86 @@
       </header>
 
       <!-- Galaxy map -->
+      <aside id="cosmos-panel" class="panel left hidden" data-view="cosmos">
+        <section>
+          <h2>The Universe</h2>
+          <p class="muted" id="cosmos-info">Loading real galaxies…</p>
+        </section>
+        <section>
+          <h3>Find a galaxy</h3>
+          <input id="cosmos-search" type="search" placeholder="Andromeda, M81, Centaurus A…" spellcheck="false" autocomplete="off" />
+          <ul id="cosmos-results" class="list"></ul>
+          <div class="row buttons">
+            <button id="btn-cosmos-home">Back to the Milky Way</button>
+          </div>
+          <label class="check"><input id="opt-cosmic-web" type="checkbox" checked /> Cosmic web (2MASS redshift survey)</label>
+          <label class="check"><input id="opt-cmb" type="checkbox" checked /> Cosmic microwave background (WMAP)</label>
+        </section>
+        <section>
+          <p class="muted small">
+            Drag to orbit, scroll to zoom out to the cosmic web, click a galaxy to inspect it, and zoom right into it (or press Visit) to explore it.
+            Yellow: ellipticals · white-blue: spirals · blue: irregulars.
+          </p>
+          <p class="muted small" id="cosmos-credit"></p>
+        </section>
+      </aside>
+
+      <aside id="sky-panel" class="panel left hidden" data-view="sky">
+        <section>
+          <h2>Sky from Earth</h2>
+          <p class="muted small">The real sky from anywhere on Earth: the Sun, Moon and planets from JPL's planetary elements and the ELP-2000 lunar theory, and 8,900 stars from the HYG catalogue, checked against JPL Horizons.</p>
+        </section>
+        <section>
+          <h3>Where</h3>
+          <select id="sky-place"></select>
+          <div class="row">
+            <label class="small">Lat <input id="sky-lat" type="number" step="0.01" min="-90" max="90" style="width: 5.5em" /></label>
+            <label class="small">Lon <input id="sky-lon" type="number" step="0.01" min="-180" max="180" style="width: 5.5em" /></label>
+          </div>
+          <button id="btn-sky-here">📍 Use my location</button>
+        </section>
+        <section>
+          <h3>When</h3>
+          <input id="sky-time" type="datetime-local" step="60" />
+          <p class="muted tiny" id="sky-utc"></p>
+          <div class="row buttons">
+            <button id="btn-sky-now">Now</button>
+            <select id="sky-speed" title="How fast time runs">
+              <option value="0">Paused</option>
+              <option value="1" selected>Real time</option>
+              <option value="10">10 seconds / s</option>
+              <option value="60">1 minute / s</option>
+              <option value="600">10 minutes / s</option>
+              <option value="3600">1 hour / s</option>
+              <option value="86400">1 day / s</option>
+            </select>
+          </div>
+        </section>
+        <section>
+          <h3>Solar eclipses</h3>
+          <div class="row buttons">
+            <select id="eclipse-select" title="Total, annular and hybrid eclipses, 2024–2035 (NASA catalogue, JPL positions)"><option value="">Loading eclipses…</option></select>
+            <button id="btn-eclipse" title="Go to the centre of the path just before totality">Watch</button>
+          </div>
+          <canvas id="eclipse-map" width="560" height="280" title="Click the map to watch from there" class="hidden"></canvas>
+          <p class="muted small" id="eclipse-info"></p>
+        </section>
+        <section>
+          <h3>In the sky</h3>
+          <ul id="sky-list" class="list"></ul>
+          <p class="muted small" id="sky-info"></p>
+        </section>
+      </aside>
+
+      <aside id="cosmos-galaxy-panel" class="panel right hidden" data-view="cosmos">
+        <h2 id="cosmos-galaxy-name">Galaxy</h2>
+        <dl id="cosmos-galaxy-facts" class="facts"></dl>
+        <div class="row buttons">
+          <button id="btn-cosmos-fly">Fly to</button>
+          <button id="btn-cosmos-visit" class="primary">Visit galaxy →</button>
+        </div>
+      </aside>
+
       <aside id="galaxy-panel" class="panel left" data-view="galaxy">
         <section>
           <h2 id="galaxy-name">Galaxy</h2>
@@ -128,6 +210,18 @@
           <div class="row buttons">
             <button id="btn-exoplanets" title="Browse 4,800+ real planetary systems">🪐 Real exoplanets</button>
             <button id="btn-neighbourhood" title="Every catalogued star within 10 parsecs of the Sun (HYG database)">Nearby stars</button>
+          </div>
+          <div class="row buttons">
+            <select id="gw-select" title="Real gravitational-wave detections (LIGO/Virgo/KAGRA)"><option value="">Loading GW events…</option></select>
+            <button id="btn-gw-load" title="Replay this merger with its real masses">Replay merger</button>
+          </div>
+          <div class="row buttons">
+            <select id="flyby-select" title="Upcoming asteroid close approaches to Earth (JPL)"><option value="">Loading flybys…</option></select>
+            <button id="btn-flyby-load" title="Fly this real close approach">Watch flyby</button>
+          </div>
+          <div class="row buttons">
+            <select id="voyager-select" title="The Voyager Grand Tour: real planetary flybys (JPL Horizons)"><option value="">Loading Voyager…</option></select>
+            <button id="btn-voyager-load" title="Ride along with Voyager past this planet">Fly with Voyager</button>
           </div>
           <div class="row buttons">
             <button id="btn-save" title="Download this scene as a file">Save</button>

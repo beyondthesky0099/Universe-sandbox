@@ -11,6 +11,7 @@ import { equatorialToGalactic, galacticToMap, MILKY_WAY_SEED, type GalaxyOptions
 import { QUALITY_PRESETS, SystemView } from './render/systemView';
 import { createRealSky } from './render/starfield';
 import { setTrueScale } from './sim/trueScale';
+import { loadGwEvent, loadGwEvents } from './sim/gwEvents';
 import { isCompact, kindForMass, mainSequenceLifetime, mergedKind, NEUTRON_MAX_MASS, type Body, type BodyKind } from './sim/body';
 import { isTidallyLocked, nearResonance, orbitalPeriod } from './sim/analysis';
 import { bodyTemperature, climateFor, formatTemperature, isHabitable } from './sim/climate';
@@ -2567,6 +2568,18 @@ export class App {
       this.loadScenario({ name: `the Solar System on ${date.toISOString().slice(0, 10)}`, load: () => loadSolarSystemOnDate(this.sim, date), origin: { kind: 'sol' } });
     });
     $('btn-exoplanets').addEventListener('click', () => void this.openExoBrowser());
+    void loadGwEvents()
+      .then((events) => {
+        $('gw-select').innerHTML = events
+          .map((e, i) => `<option value="${i}">${e.name} · ${e.kind === 'BNS' ? 'neutron stars' : e.kind === 'NSBH' ? 'neutron star + black hole' : 'black holes'} · ${e.m1} + ${e.m2} M☉</option>`)
+          .join('');
+      })
+      .catch(() => ($('gw-select').innerHTML = '<option value="">GW events unavailable</option>'));
+    $('btn-gw-load').addEventListener('click', async () => {
+      const events = await loadGwEvents().catch(() => []);
+      const ev = events[Number($<HTMLSelectElement>('gw-select').value)];
+      if (ev) this.loadScenario({ name: ev.name, description: `${ev.about}${ev.massNote ? ` ${ev.massNote}` : ''}`, load: () => loadGwEvent(this.sim, ev) });
+    });
     $('exo-close').addEventListener('click', () => this.closeExoBrowser());
     $('exo-search').addEventListener('input', () => this.renderExoList());
     $('exo-filter').addEventListener('change', () => this.renderExoList());

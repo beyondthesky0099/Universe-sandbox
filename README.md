@@ -187,6 +187,14 @@ need the [companion server](#companion-server). Without one, they explain how to
   Bookmark systems, and see which ones you've visited.
 - Zoom into a star to warp into its system, and zoom out to return to the galaxy.
 
+### Real gravitational-wave events
+Pick one of 11 famous LIGO/Virgo/KAGRA detections and press **Replay merger**. The list
+includes GW150914 (the first ever), the neutron-star collision GW170817, GW190521 (the most
+massive), GW190814 (a lopsided pair) and the neutron star–black hole mergers. Each replay
+uses the event's published masses, and the panel shows its real distance and how much mass
+became gravitational-wave energy. The orbit and speed of light are scaled so the final orbits
+play out in seconds, and the pair merges at the innermost stable orbit (6GM/c²).
+
 ### Milky Way meets Andromeda
 The **Milky Way meets Andromeda (real)** scenario simulates the coming collision in
 kiloparsecs and millions of years:
@@ -350,6 +358,10 @@ push and pull request.
 - Saturn's ring radii, optical depths and albedos come from the NASA Saturnian Rings Fact
   Sheet (nssdc.gsfc.nasa.gov/planetary/factsheet/satringfact.html). Rebuild them with
   `node scripts/build-saturn-rings.mjs`.
+- Gravitational-wave events: masses and distances from the LIGO/Virgo/KAGRA discovery papers.
+  `node scripts/build-gw-events.mjs` checks every number against the paper's arXiv abstract.
+  The GWOSC catalogue API was unreachable from the build environment because of a TLS
+  certificate-chain error.
 - Spacecraft trajectories: NASA/JPL Horizons, state vectors every 10 days (rebuild with
   `node scripts/build-spacecraft.mjs`).
 - Galaxies: the **Updated Nearby Galaxy Catalog** (Karachentsev, Makarov & Kaisina 2013, AJ

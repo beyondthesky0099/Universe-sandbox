@@ -26,6 +26,8 @@ import { decodeScene, downloadJson, encodeScene, readSceneFile, type SceneFile }
 import { Tutorial } from './ui/tutorial';
 import { applyNudge, CHALLENGES, dailyChallenge, KMS, newChallengeState, shareText, type Challenge, type ChallengeResult, type ChallengeState } from './game/challenges';
 import { burnDirections, planHohmann } from './game/transfer';
+import { LESSONS, type Lesson } from './game/lessons';
+import { LineChart, measure, METRICS, type MetricId, type Series } from './ui/graph';
 
 type ViewName = 'galaxy' | 'system';
 type Tool = 'select' | 'spawn' | 'nudge';
@@ -128,6 +130,16 @@ export class App {
   private quality: QualityName = prefs.get<QualityName>('quality', 'medium');
   private catalog?: ExoCatalog;
   private challenge?: { def: Challenge; st: ChallengeState; result?: ChallengeResult };
+  private graphOpen = false;
+  private graphMetric: MetricId = 'distance';
+  private graphSeries: [number, number][] = [];
+  private graphRef?: Series;
+  private graphStart = 0;
+  private graphBodyId?: number;
+  private graphLastTime = NaN;
+  private graphTimer = 0;
+  private chart?: LineChart;
+  private lesson?: { def: Lesson; step: number; events: SimEvent[]; done: Set<number> };
   private nudgeDrag?: { bodyId: number; start: THREE.Vector3; current: THREE.Vector3; lastPredict: number; path?: Float32Array };
   /** Typical camera distance of the loaded scene; zooming far beyond it returns to the galaxy. */
   private sceneScale = 10;
@@ -196,6 +208,9 @@ export class App {
       this.handleEvents(events);
       if (this.spawnDrag) this.updateSpawnPreview(performance.now());
       if (this.nudgeDrag) this.updateNudgePreview(performance.now());
+      if (this.lesson) this.lesson.events.push(...events);
+      if (this.graphOpen) this.sampleGraph(dt);
+      if (this.lesson && this.frames % 10 === 0) this.checkLesson();
       if (this.challenge && !this.challenge.result) {
         this.challenge.st.events.push(...events);
         if (this.frames % 3 === 0) this.evaluateChallenge();
@@ -290,6 +305,7 @@ export class App {
       const match = el.dataset.view === view;
       if (el.id === 'star-panel') el.classList.toggle('hidden', !match || this.galaxy.selected === -1);
       else if (el.id === 'exo-panel') el.classList.toggle('hidden', !match || !this.exoOpen);
+      else if (el.id === 'graph-panel') el.classList.toggle('hidden', !match || !this.graphOpen);
       else if (el.id === 'body-panel') el.classList.toggle('hidden', !match || this.system.selectedId === undefined);
       else el.classList.toggle('hidden', !match);
     });
@@ -395,9 +411,13 @@ export class App {
     });
   }
 
-  private loadScenario(sc: Scenario, opts: { zoomFrom?: number; undoable?: boolean; challenge?: boolean } = {}): void {
+  private loadScenario(sc: Scenario, opts: { zoomFrom?: number; undoable?: boolean; challenge?: boolean; lesson?: boolean } = {}): void {
     const { zoomFrom = 1, undoable = true } = opts;
     if (!opts.challenge && this.challenge) this.quitChallenge();
+    if (!opts.lesson && this.lesson) this.exitLesson();
+    // A pinned comparison run survives Reset of the same scenario, not a switch to another one.
+    if (sc.name !== this.scenario.name) this.graphRef = undefined;
+    this.resetGraph();
     if (undoable && this.sim.bodies.length) this.history.push(captureState(this.sim), `loading ${sc.name}`);
     this.cancelSpawn();
     this.sim.clear();
@@ -1066,6 +1086,150 @@ export class App {
   }
 
   // ---------------------------------------------------------------------------
+  // Live graph
+
+  private openGraph(metric?: MetricId): void {
+    if (metric) this.graphMetric = metric;
+    this.graphOpen = true;
+    $<HTMLSelectElement>('graph-metric').value = this.graphMetric;
+    if (this.view === 'system') $('graph-panel').classList.remove('hidden');
+    this.chart ??= new LineChart($<HTMLCanvasElement>('graph-canvas'));
+    this.resetGraph();
+  }
+
+  private closeGraph(): void {
+    this.graphOpen = false;
+    $('graph-panel').classList.add('hidden');
+  }
+
+  private resetGraph(): void {
+    this.graphSeries = [];
+    this.graphStart = this.sim.time;
+    this.graphLastTime = NaN;
+    this.graphBodyId = this.system.selectedId;
+  }
+
+  private sampleGraph(dt: number): void {
+    const info = METRICS.find((m) => m.id === this.graphMetric)!;
+    if (info.perBody && this.system.selectedId !== this.graphBodyId) this.resetGraph();
+    this.graphTimer -= dt;
+    if (this.graphTimer > 0) return;
+    this.graphTimer = 0.1;
+    const body = this.selectedBody();
+    const note = info.perBody && !body ? 'Select a body to graph it.' : info.perBody ? `${body!.name} · x: years since the graph started` : 'Whole system · x: years';
+    $('graph-note').textContent = note;
+    if (this.sim.time !== this.graphLastTime) {
+      this.graphLastTime = this.sim.time;
+      let v = measure(this.sim, this.graphMetric, body);
+      if (v !== undefined && Number.isFinite(v)) {
+        const last = this.graphSeries[this.graphSeries.length - 1];
+        // Keep angles continuous instead of wrapping at ±180°.
+        if (this.graphMetric === 'periapsis' && last) while (v - last[1] > 180) v -= 360;
+        if (this.graphMetric === 'periapsis' && last) while (v - last[1] < -180) v += 360;
+        this.graphSeries.push([this.sim.time - this.graphStart, v]);
+        if (this.graphSeries.length > 1200) this.graphSeries.splice(0, this.graphSeries.length - 1200);
+      }
+    }
+    const series: Series[] = [{ label: 'This run', color: '#7fdcff', points: this.graphSeries }];
+    if (this.graphRef) series.push(this.graphRef);
+    this.chart!.draw(series, 'years', `${info.label}${info.unit ? ` (${info.unit})` : ''}`);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Lessons
+
+  private openLessonMenu(): void {
+    $('lesson-list').innerHTML = LESSONS.map((l) => {
+      const done = prefs.get<boolean>(`lesson:${l.id}`, false);
+      return `<div class="card"><h3>${done ? '✓ ' : ''}${escapeHtml(l.title)}</h3><p>${escapeHtml(l.summary)}</p><div class="row"><span class="muted small" style="flex:1">${l.steps.length} steps</span><button class="primary" data-lesson="${l.id}">Start</button></div></div>`;
+    }).join('');
+    $('lesson-menu').classList.remove('hidden');
+  }
+
+  private startLesson(def: Lesson): void {
+    $('lesson-menu').classList.add('hidden');
+    if (this.challenge) this.quitChallenge();
+    if (this.view !== 'system') this.setView('system');
+    this.lesson = { def, step: 0, events: [], done: new Set() };
+    document.body.classList.add('lesson-active');
+    $('lesson-card').classList.remove('hidden');
+    this.showLessonStep(0);
+  }
+
+  private exitLesson(): void {
+    this.lesson = undefined;
+    document.body.classList.remove('lesson-active');
+    $('lesson-card').classList.add('hidden');
+  }
+
+  private showLessonStep(i: number): void {
+    const l = this.lesson;
+    if (!l) return;
+    if (i >= l.def.steps.length) {
+      prefs.set(`lesson:${l.def.id}`, true);
+      toast(`Lesson complete: ${l.def.title}`);
+      this.exitLesson();
+      return;
+    }
+    l.step = Math.max(0, i);
+    const step = l.def.steps[l.step];
+    if (step.setup) {
+      const setup = step.setup;
+      this.loadScenario({ name: l.def.title, description: l.def.summary, load: () => setup(this.sim) }, { undoable: false, lesson: true });
+      this.setRunning(true);
+      l.events = [];
+    }
+    if (step.select) {
+      const b = this.sim.bodies.find((x) => x.name === step.select);
+      if (b) {
+        this.selectBody(b);
+        this.system.follow(b.id);
+      }
+    }
+    if (step.graph) this.openGraph(step.graph);
+    $('lesson-step').textContent = `${l.def.title} · step ${l.step + 1} of ${l.def.steps.length}`;
+    $('lesson-title').textContent = step.title;
+    $('lesson-text').innerHTML = step.text
+      .split('\n\n')
+      .map((p) => `<p>${escapeHtml(p)}</p>`)
+      .join('');
+    $<HTMLButtonElement>('lesson-back').disabled = l.step === 0;
+    $('lesson-next').textContent = l.step === l.def.steps.length - 1 ? 'Finish' : 'Next';
+    this.renderLessonTask();
+  }
+
+  private renderLessonTask(): void {
+    const l = this.lesson;
+    if (!l) return;
+    const step = l.def.steps[l.step];
+    const el = $('lesson-task');
+    el.classList.toggle('hidden', !step.task);
+    if (!step.task) return;
+    const done = l.done.has(l.step);
+    el.className = `alert ${done ? 'good' : 'warn'}`;
+    el.textContent = `${done ? '✓' : '→'} ${step.task}`;
+  }
+
+  private checkLesson(): void {
+    const l = this.lesson;
+    if (!l) return;
+    const step = l.def.steps[l.step];
+    if (!step.check || l.done.has(l.step)) return;
+    const ok = step.check({
+      sim: this.sim,
+      selected: this.selectedBody(),
+      events: l.events,
+      flags: { habitableZones: this.system.habitableZones, lagrange: this.system.lagrangeEnabled, relativity: this.sim.relativity, graphMetric: this.graphOpen ? this.graphMetric : undefined },
+    });
+    if (ok) {
+      l.done.add(l.step);
+      this.renderLessonTask();
+      this.audio.play('ignite', 0.05);
+      toast('✓ Nice! Press Next to continue.');
+    }
+  }
+
+  // ---------------------------------------------------------------------------
   // Challenges
 
   private blockedInChallenge(what: string): boolean {
@@ -1093,6 +1257,7 @@ export class App {
   private startChallenge(def: Challenge): void {
     $('challenge-menu').classList.add('hidden');
     $('challenge-result').classList.add('hidden');
+    if (this.lesson) this.exitLesson();
     if (this.view !== 'system') this.setView('system');
     this.challenge = { def, st: newChallengeState(this.sim) };
     this.loadScenario({ name: def.title, description: def.goal, load: () => def.setup(this.sim) }, { undoable: false, challenge: true });
@@ -1566,6 +1731,10 @@ export class App {
         case 'n':
           this.setTool('nudge');
           break;
+        case 'g':
+          if (this.graphOpen) this.closeGraph();
+          else this.openGraph();
+          break;
         case 'f':
           this.toggleFollow();
           break;
@@ -1720,6 +1889,37 @@ export class App {
       const dv = Number($('btn-transfer').dataset.dv);
       if (Number.isFinite(dv)) this.burn(dv >= 0 ? 'prograde' : 'retrograde', Math.abs(dv));
     });
+
+    // Graph & lessons
+    const metricSelect = $<HTMLSelectElement>('graph-metric');
+    metricSelect.innerHTML = METRICS.map((m) => `<option value="${m.id}">${m.label}</option>`).join('');
+    metricSelect.addEventListener('change', () => {
+      this.graphMetric = metricSelect.value as MetricId;
+      this.graphRef = undefined;
+      this.resetGraph();
+    });
+    $('btn-graph').addEventListener('click', () => (this.graphOpen ? this.closeGraph() : this.openGraph()));
+    $('graph-close').addEventListener('click', () => this.closeGraph());
+    $('graph-clear').addEventListener('click', () => {
+      this.graphRef = undefined;
+      this.resetGraph();
+    });
+    $('graph-pin').addEventListener('click', () => {
+      if (this.graphSeries.length < 2) return void toast('Run the simulation for a moment first');
+      this.graphRef = { label: 'Pinned run', color: '#ffb24a', points: this.graphSeries.slice(), dashed: true };
+      this.resetGraph();
+      toast('Pinned. Change something (or press Reset) and compare the new run.');
+    });
+    $('btn-learn').addEventListener('click', () => this.openLessonMenu());
+    $('lesson-menu-close').addEventListener('click', () => $('lesson-menu').classList.add('hidden'));
+    $('lesson-list').addEventListener('click', (e) => {
+      const id = (e.target as HTMLElement).closest<HTMLElement>('[data-lesson]')?.dataset.lesson;
+      const def = LESSONS.find((l) => l.id === id);
+      if (def) this.startLesson(def);
+    });
+    $('lesson-next').addEventListener('click', () => this.lesson && this.showLessonStep(this.lesson.step + 1));
+    $('lesson-back').addEventListener('click', () => this.lesson && this.showLessonStep(this.lesson.step - 1));
+    $('lesson-exit').addEventListener('click', () => this.exitLesson());
 
     // Challenges
     $('btn-challenges').addEventListener('click', () => this.openChallengeMenu());

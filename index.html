@@ -30,6 +30,8 @@
           <button id="btn-redo" class="icon" title="Redo (Ctrl+Shift+Z)" aria-label="Redo" disabled>↷</button>
         </div>
         <div id="stats"></div>
+        <button id="btn-learn" class="icon" title="Interactive lessons" aria-label="Lessons">📚</button>
+        <button id="btn-graph" class="icon" title="Live graph (G)" aria-label="Graph">📈</button>
         <button id="btn-challenges" class="icon" title="Challenges & daily puzzle" aria-label="Challenges">🏆</button>
         <button id="btn-sound" class="icon" title="Sound on / off" aria-label="Toggle sound">🔇</button>
         <button id="btn-help" class="icon" title="Tutorial (?)" aria-label="Show tutorial">?</button>
@@ -293,6 +295,39 @@
             <button id="result-retry">Retry</button>
             <button id="result-menu" class="primary">More challenges</button>
           </div>
+        </div>
+      </div>
+
+      <div id="graph-panel" class="hidden" data-view="system">
+        <div class="row">
+          <select id="graph-metric" aria-label="Metric"></select>
+          <button id="graph-pin" title="Keep this run as a dashed reference to compare against">Pin run</button>
+          <button id="graph-clear" title="Clear the graph">Clear</button>
+          <button id="graph-close" class="icon" aria-label="Close graph">✕</button>
+        </div>
+        <canvas id="graph-canvas"></canvas>
+        <p id="graph-note" class="muted tiny"></p>
+      </div>
+
+      <div id="lesson-card" class="hidden">
+        <div class="tutorial-step" id="lesson-step"></div>
+        <h2 id="lesson-title"></h2>
+        <div id="lesson-text"></div>
+        <div id="lesson-task" class="alert hidden"></div>
+        <div class="row buttons">
+          <button id="lesson-exit" class="link">Exit lesson</button>
+          <button id="lesson-back">Back</button>
+          <button id="lesson-next" class="primary">Next</button>
+        </div>
+      </div>
+
+      <div id="lesson-menu" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="lesson-menu-title">
+        <div class="modal-card wide">
+          <div class="row">
+            <h2 id="lesson-menu-title" style="flex: 1">📚 Learn by playing</h2>
+            <button id="lesson-menu-close" class="icon" aria-label="Close">✕</button>
+          </div>
+          <div id="lesson-list" class="cards"></div>
         </div>
       </div>
 

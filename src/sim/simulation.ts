@@ -108,6 +108,9 @@ export class Simulation {
   private readonly scratch = new Float64Array(3);
   private stepCount = 0;
   private usingTree = false;
+  /** Half-step used to extrapolate velocities for velocity-dependent (relativistic) forces. */
+  private relHalfDt = 0;
+  private predVel = new Float64Array(0);
   /** Bodies that recently shattered merge instead of shattering again until this time. */
   private readonly shatterCooldown = new Map<number, number>();
   /** Bodies destroyed mid-step (e.g. Type Ia supernovae), removed at the end of the step. */
@@ -209,7 +212,9 @@ export class Simulation {
       pos[k] += vel[k] * dt;
     }
 
+    this.relHalfDt = h;
     this.computeForces();
+    this.relHalfDt = 0;
 
     for (const b of bodies) {
       b.vx += b.ax * h;
@@ -269,6 +274,19 @@ export class Simulation {
     const rel = this.relativity;
     let minTau2 = Infinity;
 
+    if (rel) {
+      // Velocity-dependent forces: estimate full-step velocities (v + a·h) from the half-step ones,
+      // otherwise leapfrog systematically mis-evaluates them and orbits drift.
+      if (this.predVel.length < n * 3) this.predVel = new Float64Array(n * 6);
+      const h = this.relHalfDt;
+      for (let i = 0; i < n; i++) {
+        const b = bodies[i];
+        this.predVel[i * 3] = b.vx + b.ax * h;
+        this.predVel[i * 3 + 1] = b.vy + b.ay * h;
+        this.predVel[i * 3 + 2] = b.vz + b.az * h;
+      }
+    }
+
     for (const b of bodies) b.ax = b.ay = b.az = 0;
 
     for (let i = 0; i < n; i++) {
@@ -293,7 +311,7 @@ export class Simulation {
         if (g > 0 && msum > 0) {
           const tau2 = (r2 * r) / (g * msum);
           if (tau2 < minTau2) minTau2 = tau2;
-          if (rel) this.relativisticPair(bi, bj, g, msum);
+          if (rel) this.relativisticPair(bi, bj, i, j, g, msum);
         }
       }
     }
@@ -346,11 +364,12 @@ export class Simulation {
    * quadrupole gravitational-wave damping when both are compact objects. Applied to
    * the relative motion and split by mass so momentum is conserved.
    */
-  private relativisticPair(bi: Body, bj: Body, g: number, M: number): void {
+  private relativisticPair(bi: Body, bj: Body, i: number, j: number, g: number, M: number): void {
     const c = this.lightSpeed;
     const c2 = c * c;
+    const pv = this.predVel;
     const rx = bi.x - bj.x, ry = bi.y - bj.y, rz = bi.z - bj.z;
-    const vx = bi.vx - bj.vx, vy = bi.vy - bj.vy, vz = bi.vz - bj.vz;
+    const vx = pv[i * 3] - pv[j * 3], vy = pv[i * 3 + 1] - pv[j * 3 + 1], vz = pv[i * 3 + 2] - pv[j * 3 + 2];
     const r2 = rx * rx + ry * ry + rz * rz;
     const r = Math.sqrt(r2);
     if (r === 0) return;
@@ -362,6 +381,17 @@ export class Simulation {
     let ax = k * (radial * rx + 4 * rv * vx);
     let ay = k * (radial * ry + 4 * rv * vy);
     let az = k * (radial * rz + 4 * rv * vz);
+    // The post-Newtonian expansion is only valid while the correction is small. Near a merger
+    // (with an exaggerated, low speed of light) it would blow up and even turn repulsive, so cap
+    // it at a fraction of Newtonian gravity.
+    const aN = gm / r2;
+    const a1 = Math.hypot(ax, ay, az);
+    if (a1 > 0.25 * aN) {
+      const f = (0.25 * aN) / a1;
+      ax *= f;
+      ay *= f;
+      az *= f;
+    }
     if (isCompact(bi.kind) && isCompact(bj.kind) && v2 > 0) {
       // Peters (1964) power: P = 32/5 · G⁴ (m₁m₂)² M / (c⁵ r⁵), taken from the relative kinetic energy.
       const mu = (bi.mass * bj.mass) / M;

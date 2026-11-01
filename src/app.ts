@@ -12,6 +12,7 @@ import { QUALITY_PRESETS, SystemView } from './render/systemView';
 import { createRealSky } from './render/starfield';
 import { setTrueScale } from './sim/trueScale';
 import { loadGwEvent, loadGwEvents } from './sim/gwEvents';
+import { loadFlyby, loadFlybys } from './sim/flybys';
 import { isCompact, kindForMass, mainSequenceLifetime, mergedKind, NEUTRON_MAX_MASS, type Body, type BodyKind } from './sim/body';
 import { isTidallyLocked, nearResonance, orbitalPeriod } from './sim/analysis';
 import { bodyTemperature, climateFor, formatTemperature, isHabitable } from './sim/climate';
@@ -2586,6 +2587,18 @@ export class App {
           .join('');
       })
       .catch(() => ($('gw-select').innerHTML = '<option value="">GW events unavailable</option>'));
+    void loadFlybys()
+      .then((list) => {
+        $('flyby-select').innerHTML = list
+          .map((f, i) => `<option value="${i}">${f.name} · ${f.date.slice(0, 11)} · ${f.distAu * 149597870.7 < 1e6 ? `${Math.round(f.distAu * 149597870.7).toLocaleString('en-US')} km` : `${(f.distAu * 149597870.7 / 1e6).toFixed(2)} million km`}</option>`)
+          .join('');
+      })
+      .catch(() => ($('flyby-select').innerHTML = '<option value="">Flybys unavailable</option>'));
+    $('btn-flyby-load').addEventListener('click', async () => {
+      const list = await loadFlybys().catch(() => []);
+      const f = list[Number($<HTMLSelectElement>('flyby-select').value)];
+      if (f) this.loadScenario({ name: `${f.name} flyby`, description: `Real close approach of ${f.name} to Earth on ${f.date} UTC (JPL).`, load: () => loadFlyby(this.sim, f) });
+    });
     $('btn-gw-load').addEventListener('click', async () => {
       const events = await loadGwEvents().catch(() => []);
       const ev = events[Number($<HTMLSelectElement>('gw-select').value)];

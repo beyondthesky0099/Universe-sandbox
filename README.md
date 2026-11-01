@@ -196,6 +196,14 @@ need the [companion server](#companion-server). Without one, they explain how to
   Bookmark systems, and see which ones you've visited.
 - Zoom into a star to warp into its system, and zoom out to return to the galaxy.
 
+### Real asteroid flybys
+Pick an upcoming close approach to Earth and press **Watch flyby**. There are eight, from JPL's
+close-approach database: Apophis passing 38,011 km from Earth's centre on 13 April 2029
+(inside the geostationary ring), 2024 YR4 in 2032, and others. Each starts four days before
+closest approach, using the asteroid's, Moon's and Sun's real positions from JPL Horizons, at
+true scale. The simulation then reproduces the encounter: the tests confirm Apophis's closest
+distance to within 2% and its time to within an hour.
+
 ### Real gravitational-wave events
 Pick one of 11 famous LIGO/Virgo/KAGRA detections and press **Replay merger**. The list
 includes GW150914 (the first ever), the neutron-star collision GW170817, GW190521 (the most
@@ -371,6 +379,8 @@ push and pull request.
   `node scripts/build-gw-events.mjs` checks every number against the paper's arXiv abstract.
   The GWOSC catalogue API was unreachable from the build environment because of a TLS
   certificate-chain error.
+- Asteroid flybys: the JPL Close-Approach Data API with JPL Horizons starting states (rebuild
+  with `node scripts/build-flybys.mjs`).
 - Spacecraft trajectories: NASA/JPL Horizons, state vectors every 10 days (rebuild with
   `node scripts/build-spacecraft.mjs`).
 - Galaxies: the **Updated Nearby Galaxy Catalog** (Karachentsev, Makarov & Kaisina 2013, AJ

@@ -98,9 +98,10 @@ need the [companion server](#companion-server). Without one, they explain how to
   exoplanets can be visited.
 - **Moving stars:** the nearby stars move with their real space velocities (proper motion plus
   radial velocity, from HYG). Speed time up to millions of years per second to watch the
-  neighbourhood rearrange. The scene lists upcoming close passes: Gliese 710 coming within
-  about 0.06 light-years in 1.3 million years, and Ross 248 becoming our nearest star in about
-  36,000 years.
+  neighbourhood rearrange. The scene lists upcoming close passes: Ross 248 becoming our nearest
+  star in about 36,000 years, and Gliese 710 passing about 1.2 light-years away in 1.4 million
+  years. Those are HYG's Hipparcos-era velocities; newer Gaia measurements bring Gliese 710
+  much closer, through the Oort cloud.
 - **The real night sky:** the sandbox background shows the 8,920 naked-eye stars
   (magnitude ≤ 6.5) in their true directions, so the constellations are where they should be.
 

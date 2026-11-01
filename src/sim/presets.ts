@@ -21,6 +21,8 @@ export interface SceneSetup {
   focus?: string;
   /** Short tip shown after loading. */
   tip?: string;
+  /** Fastest simulation speed the slider allows (time units per second; default 100). */
+  maxTimeScale?: number;
 }
 
 export interface Preset {

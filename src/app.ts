@@ -669,6 +669,7 @@ export class App {
     this.scenario = sc;
     const setup = sc.load();
     setDisplayUnits(this.sim.units);
+    this.setMaxTimeScale(setup.maxTimeScale ?? 100);
     this.sceneScale = setup.cameraDistance;
     this.host.commit();
     this.history.clearTimeline();
@@ -1262,9 +1263,17 @@ export class App {
   }
 
   private setTimeScale(yearsPerSecond: number): void {
+    yearsPerSecond = Math.min(yearsPerSecond, this.maxTimeScale);
     this.timeScale = yearsPerSecond;
     $<HTMLInputElement>('time-scale').value = String(Math.log10(yearsPerSecond));
     $('time-scale-out').textContent = formatRate(yearsPerSecond);
+  }
+
+  /** Scenes can raise the speed limit (moving stars need thousands of years per second). */
+  private maxTimeScale = 100;
+  private setMaxTimeScale(max: number): void {
+    this.maxTimeScale = max;
+    $<HTMLInputElement>('time-scale').max = String(Math.log10(max));
   }
 
   private setRunning(running: boolean): void {
@@ -2431,7 +2440,7 @@ export class App {
           this.setTimeScale(Math.pow(10, Math.max(-3, Math.log10(this.timeScale) - 0.1)));
           break;
         case ']':
-          this.setTimeScale(Math.pow(10, Math.min(2, Math.log10(this.timeScale) + 0.1)));
+          this.setTimeScale(Math.pow(10, Math.log10(this.timeScale) + 0.1));
           break;
         case 'escape':
           if (this.spawnDrag) this.cancelSpawn();

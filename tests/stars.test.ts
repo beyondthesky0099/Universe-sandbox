@@ -108,3 +108,36 @@ describe('exoplanet hosts on the Milky Way map', () => {
     }
   });
 });
+
+describe('moving stars', () => {
+  it('predicts the known close passes from real velocities', async () => {
+    const { closestApproach, upcomingEncounters } = await import('../src/sim/stars');
+    // Ross 248 becomes the Sun's nearest star in about 36,000 years, at about 3 light-years.
+    const ross = closestApproach(star('Ross 248'))!;
+    expect(ross.years).toBeGreaterThan(30000);
+    expect(ross.years).toBeLessThan(42000);
+    expect(ross.pc * 3.2616).toBeGreaterThan(2.5);
+    expect(ross.pc * 3.2616).toBeLessThan(3.5);
+    // Alpha Centauri keeps approaching for about 28,000 more years.
+    const acen = closestApproach(star('Rigil Kentaurus'))!;
+    expect(acen.years).toBeGreaterThan(20000);
+    expect(acen.years).toBeLessThan(35000);
+    // Gliese 710 is the closest known future encounter, about 1.3 million years from now.
+    const top = upcomingEncounters(near)[0];
+    expect(top.star.name).toMatch(/710/);
+    expect(top.years).toBeGreaterThan(1.0e6);
+    expect(top.years).toBeLessThan(1.6e6);
+  });
+
+  it('moves the neighbourhood with real velocities', () => {
+    const sim = new Simulation();
+    loadStarNeighbourhood(sim, near, catalog, 10);
+    const b = sim.bodies.find((x) => x.name === "Barnard's Star")!;
+    const kms = (Math.hypot(b.vx, b.vy, b.vz) * 1.496e8) / (365.25 * 86400);
+    expect(kms).toBeGreaterThan(130); // Barnard's Star moves at ~140 km/s relative to the Sun
+    expect(kms).toBeLessThan(150);
+    const x0 = b.x;
+    sim.advance(10000, 1e7, 1e9);
+    expect(b.x).not.toBeCloseTo(x0, 0);
+  });
+});

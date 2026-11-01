@@ -96,6 +96,11 @@ need the [companion server](#companion-server). Without one, they explain how to
   light-years) at their true 3D positions, including red dwarfs, white dwarfs and binaries.
   Colours come from B−V, masses are estimated from spectral type, and the 29 stars with known
   exoplanets can be visited.
+- **Moving stars:** the nearby stars move with their real space velocities (proper motion plus
+  radial velocity, from HYG). Speed time up to millions of years per second to watch the
+  neighbourhood rearrange. The scene lists upcoming close passes: Gliese 710 coming within
+  about 0.06 light-years in 1.3 million years, and Ross 248 becoming our nearest star in about
+  36,000 years.
 - **The real night sky:** the sandbox background shows the 8,920 naked-eye stars
   (magnitude ≤ 6.5) in their true directions, so the constellations are where they should be.
 

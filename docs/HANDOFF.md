@@ -28,9 +28,24 @@ unchecked item."*
 
 ## Current goal: use real astronomical data everywhere
 
-The user asked for *"all real astronomical data"*. Today, real data covers planet positions
-(JPL approximate elements) and exoplanet systems (NASA Exoplanet Archive). Everything else is
-procedural or illustrative. Plan, in priority order:
+The user asked for *"all real astronomical data"*.
+
+**Status (2026-11-01):** A, B and C are mostly done and pushed. Real data now covers:
+- the Solar System: planets, dwarf planets, asteroids, comets, 4,000 small bodies, and 28
+  moons in true-scale moon systems
+- the nearby stars and the night sky (HYG)
+- exoplanets (NASA)
+- the Milky Way's structure and its named clusters and nebulae
+
+Still procedural:
+- the 30,000 explorable stars on the galaxy map
+- every other seeded galaxy
+- the made-up scenarios (Giant Impact, Ring Maker, …), which are deliberately fictional
+
+**Suggested next steps:** A6 (Saturn's ring plane), D1 (real tilts and rotation in visuals),
+A5 (true-scale toggle), A7 (moons in the full Solar System), C3, then D2.
+
+Plan, in priority order:
 
 ### A. The real Solar System (source: JPL Horizons API + JPL SBDB API; both reachable)
 - [x] A1. `scripts/build-solar-system.mjs` → `public/data/solar-system.json`: osculating
@@ -62,7 +77,7 @@ procedural or illustrative. Plan, in priority order:
 ### B. Real stars (source: HYG database v4.1, CC BY-SA 4.0)
 - URL: `https://raw.githubusercontent.com/astronexus/HYG-Database/main/hyg/CURRENT/hygdata_v41.csv`
   (the repo moved to codeberg.org/astronexus/hyg, but the raw GitHub file still works).
-- [x] B1. `scripts/build-stars.mjs` → `public/data/stars-near.json` (all stars within 25 pc, with
+- [x] B1. `scripts/build-stars.mjs` → `public/data/stars-near.json` (all stars within 20 pc, with
       name, xyz, spectral type, magnitude and colour index) and `public/data/stars-bright.json`
       (stars of naked-eye magnitude, mag < 6.5).
 - [x] B2. "Nearby stars" uses every real star, not just planet hosts. Mark planet hosts and
@@ -78,11 +93,10 @@ procedural or illustrative. Plan, in priority order:
       centre and about 20 pc above the plane, a 4-arm model plus the Local (Orion) Spur, a
       bar, and Sgr A* at 4.3 × 10⁶ M☉. Procedural stars fill the rest and are labelled as
       procedural.
-- [x] C2. (12 clusters and 10 nebulae, hand-entered l/b/d values. To verify against
-      SIMBAD or extend to the full Messier list, use a reachable source.)
-      Original note: Real named objects at their real positions: Messier objects and famous nebulae and
-      clusters (Orion Nebula, Pleiades, Crab, …). This needs a data source with distances;
-      check SIMBAD/VizieR reachability first (VizieR was blocked by the proxy on 2026-11-01).
+- [x] C2. Real named objects at their real positions: 12 clusters and 10 nebulae (Pleiades,
+      Omega Centauri, Orion Nebula, Crab, Carina, …). The l/b/d values were entered by hand
+      and are approximate. Next: verify them, or extend to the full Messier list, from a
+      reachable source (VizieR was blocked by the proxy on 2026-11-01).
 - [ ] C3. NASA exoplanet hosts placed on the Milky Way map near the Sun.
 
 ### D. Real looks

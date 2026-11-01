@@ -42,8 +42,8 @@ Still procedural:
 - every other seeded galaxy
 - the made-up scenarios (Giant Impact, Ring Maker, …), which are deliberately fictional
 
-**Suggested next steps:** A6 (Saturn's ring plane), D1 (real tilts and rotation in visuals),
-A5 (true-scale toggle), A7 (moons in the full Solar System), C3, then D2.
+**Suggested next steps:** A5 (true-scale toggle), A7 (moons in the full Solar System),
+A6 ring particles, C3, then D2.
 
 Plan, in priority order:
 
@@ -67,9 +67,9 @@ Plan, in priority order:
       0.01 AU for heliocentric bodies, and a few percent of the orbit for moons).
 - [ ] A5. Real radii in the body panel, and an optional "true scale" toggle that uses real radii
       instead of the inflated game radii. Moon-system presets already use true radii.
-- [ ] A6. Saturn's real ring particles (C/B/A rings, 74,658–136,775 km) in Saturn's equatorial
-      plane. Take the plane normal from the angular momentum of Mimas through Rhea. Also orient
-      the ring mesh in `bodyVisual.ts`, which is currently fixed to the ecliptic.
+- [~] A6. Saturn's rings: the ring mesh now lies in Saturn's true equatorial plane (via the
+      IAU pole; tested against Mimas–Rhea orbit normals). Still to do: real ring *particles*
+      (C/B/A rings, 74,658–136,775 km) in moon-system scenes.
 - [ ] A7. Moons in the whole-Solar-System scene. They're left out because the inflated game
       radii would swallow them (Earth's game radius, 0.012 AU, is bigger than the Moon's
       orbit). This needs per-body true radii or a kinematic "on rails" mode.
@@ -100,12 +100,20 @@ Plan, in priority order:
 - [ ] C3. NASA exoplanet hosts placed on the Milky Way map near the Sun.
 
 ### D. Real looks
-- [ ] D1. Real planet colours, axial tilts and rotation periods from A1's data in
+- [x] D1. (spin axes from IAU poles in `scripts/build-solar-system.mjs`, applied in
+      `bodyVisual.ts`; retrograde spin for Venus, Uranus and Pluto. Visual spin *rate* is still
+      cosmetic, because real rates strobe at yr/s speeds.) Real planet colours, axial tilts and rotation periods from A1's data in
       `bodyVisual.ts`.
 - [ ] D2. Optional real planet texture maps. They need a licence-compatible source (for
       example NASA public-domain maps), and must be fetched at build time, not hot-linked.
 
 ## Notes and lessons learned
+- IAU poles are hand-entered in `POLES` in `scripts/build-solar-system.mjs`. The test in
+  `tests/solarsystem.test.ts` checks each planet's pole against Horizons' obliquity (±0.5°);
+  that test caught a wrong Mars value. For retrograde rotators the IAU "north" pole is the
+  one on the north side of the invariable plane, so the spin vector is the opposite of it.
+- `Simulation.parentOf` falls back only to *heavier* bodies, so the heaviest body orbits
+  nothing. Before this, Saturn showed "Orbiting Titan".
 - Milky Way: `MILKY_WAY_SEED = 1` in `src/procgen/galaxy.ts` switches `samplePosition` to
   `sampleMilkyWay`. Map scale is 100 units = 15 kpc. Use `galacticToMap(l, b, dKpc)` to place
   real objects. Labels come from `labelGroup` in `galaxyView.ts`.

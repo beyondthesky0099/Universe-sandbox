@@ -1,5 +1,5 @@
 {
- "source": "NASA/JPL Horizons (ssd.jpl.nasa.gov/horizons), osculating elements, ecliptic & mean equinox J2000",
+ "source": "NASA/JPL Horizons (ssd.jpl.nasa.gov/horizons), osculating elements, ecliptic & mean equinox J2000; pole directions: IAU WGCCRE (Archinal et al. 2018)",
  "epoch": "2026-11-01",
  "bodies": [
   {
@@ -10,6 +10,10 @@
    "radiusKm": 2439.4,
    "rotationHours": 1407.5112,
    "obliquityDeg": 0.035166666666666666,
+   "pole": {
+    "ra": 281.0103,
+    "dec": 61.4155
+   },
    "albedo": 0.106,
    "elements": {
     "epochJd": 2461345.5,
@@ -32,6 +36,11 @@
    "radiusKm": 6051.84,
    "rotationHours": 5832.4436160000005,
    "obliquityDeg": 177.3,
+   "pole": {
+    "ra": 272.76,
+    "dec": 67.16
+   },
+   "retrograde": true,
    "albedo": 0.65,
    "elements": {
     "epochJd": 2461345.5,
@@ -54,6 +63,10 @@
    "radiusKm": 6371.01,
    "rotationHours": 23.9344695944,
    "obliquityDeg": 23.4392911,
+   "pole": {
+    "ra": 0,
+    "dec": 90
+   },
    "albedo": 0.367,
    "elements": {
     "epochJd": 2461345.5,
@@ -76,6 +89,10 @@
    "radiusKm": 3389.92,
    "rotationHours": 24.622962,
    "obliquityDeg": 25.19,
+   "pole": {
+    "ra": 317.68143,
+    "dec": 52.8865
+   },
    "albedo": 0.15,
    "elements": {
     "epochJd": 2461345.5,
@@ -98,6 +115,10 @@
    "radiusKm": 69911,
    "rotationHours": 9.92491972222222,
    "obliquityDeg": 3.13,
+   "pole": {
+    "ra": 268.0566,
+    "dec": 64.4953
+   },
    "albedo": 0.52,
    "elements": {
     "epochJd": 2461345.5,
@@ -120,6 +141,10 @@
    "radiusKm": 58232,
    "rotationHours": 10.656222222222222,
    "obliquityDeg": 26.73,
+   "pole": {
+    "ra": 40.589,
+    "dec": 83.537
+   },
    "albedo": 0.47,
    "elements": {
     "epochJd": 2461345.5,
@@ -142,6 +167,11 @@
    "radiusKm": 25362,
    "rotationHours": 17.24,
    "obliquityDeg": 97.77,
+   "pole": {
+    "ra": 257.311,
+    "dec": -15.175
+   },
+   "retrograde": true,
    "albedo": 0.51,
    "elements": {
     "epochJd": 2461345.5,
@@ -164,6 +194,10 @@
    "radiusKm": 24624,
    "rotationHours": 16.11,
    "obliquityDeg": 28.32,
+   "pole": {
+    "ra": 299.36,
+    "dec": 43.46
+   },
    "albedo": 0.41,
    "elements": {
     "epochJd": 2461345.5,
@@ -185,6 +219,11 @@
    "mass": 6.550448471382423e-9,
    "radiusKm": 1188.3,
    "rotationHours": 153.29335198,
+   "pole": {
+    "ra": 132.993,
+    "dec": -6.163
+   },
+   "retrograde": true,
    "elements": {
     "epochJd": 2461345.5,
     "a": 38.937773733627,
@@ -205,6 +244,10 @@
    "mass": 4.719105456930162e-10,
    "radiusKm": 469.7,
    "rotationHours": 9.07417,
+   "pole": {
+    "ra": 291.418,
+    "dec": 66.764
+   },
    "albedo": 0.09,
    "elements": {
     "epochJd": 2461345.5,
@@ -477,6 +520,10 @@
    "radiusKm": 1737.53,
    "rotationHours": 655.7197475276439,
    "obliquityDeg": 6.67,
+   "pole": {
+    "ra": 269.9949,
+    "dec": 66.5392
+   },
    "albedo": 0.12,
    "elements": {
     "epochJd": 2461345.5,
@@ -1049,6 +1096,11 @@
    "parent": "Pluto",
    "mass": 7.994729052319557e-10,
    "radiusKm": 606,
+   "pole": {
+    "ra": 132.993,
+    "dec": -6.163
+   },
+   "retrograde": true,
    "elements": {
     "epochJd": 2461345.5,
     "a": 0.00013098958319795773,

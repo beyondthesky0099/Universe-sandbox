@@ -175,6 +175,26 @@ const LITERATURE = {
 /** Bulk densities (g/cm³) used to estimate masses of small bodies from their radius. */
 const DENSITY = { comet: 0.5, asteroid: 1.9, moon: 1.5, dwarf: 2 };
 
+/**
+ * North-pole directions (RA, Dec in degrees, ICRF J2000) from the IAU Working Group on
+ * Cartographic Coordinates and Rotational Elements (Archinal et al. 2018, Celest. Mech. Dyn.
+ * Astr. 130:22), constant terms only. `retrograde`: the body spins clockwise about this pole.
+ */
+const POLES = {
+  Mercury: [281.0103, 61.4155],
+  Venus: [272.76, 67.16, true],
+  Earth: [0, 90],
+  Moon: [269.9949, 66.5392],
+  Mars: [317.68143, 52.8865], // IAU 2009 (Archinal et al. 2011)
+  Jupiter: [268.0566, 64.4953],
+  Saturn: [40.589, 83.537],
+  Uranus: [257.311, -15.175, true],
+  Neptune: [299.36, 43.46],
+  Pluto: [132.993, -6.163, true],
+  Charon: [132.993, -6.163, true],
+  Ceres: [291.418, 66.764],
+};
+
 function parseElements(result) {
   const block = result.split('$$SOE')[1]?.split('$$EOE')[0];
   if (!block) throw new Error('no ephemeris block');
@@ -332,6 +352,8 @@ for (const [name, command, center, kind] of BODIES) {
     rotationHours: phys.rotationHours,
     synchronous: phys.synchronous,
     obliquityDeg: phys.obliquityDeg,
+    pole: POLES[name] ? { ra: POLES[name][0], dec: POLES[name][1] } : undefined,
+    retrograde: POLES[name]?.[2] || undefined,
     albedo: phys.albedo,
     elements: {
       epochJd: el.epochJd,
@@ -354,7 +376,7 @@ for (const [name, command, center, kind] of BODIES) {
 }
 
 const data = {
-  source: 'NASA/JPL Horizons (ssd.jpl.nasa.gov/horizons), osculating elements, ecliptic & mean equinox J2000',
+  source: 'NASA/JPL Horizons (ssd.jpl.nasa.gov/horizons), osculating elements, ecliptic & mean equinox J2000; pole directions: IAU WGCCRE (Archinal et al. 2018)',
   epoch: EPOCH,
   bodies: out,
 };

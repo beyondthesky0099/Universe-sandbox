@@ -5,6 +5,7 @@ import type { Climate } from '../sim/climate';
 import { EARTH_MASS } from '../sim/units';
 import { makePlanetTextures, seedFromName } from './planetTextures';
 import { accretionTexture, glowTexture } from './textures';
+import { getSolarData, poleScene } from '../sim/solarSystemData';
 
 const SPHERE = new THREE.SphereGeometry(1, 64, 32);
 const SPHERE_LOW = new THREE.SphereGeometry(1, 24, 12);
@@ -68,6 +69,8 @@ export class BodyVisual {
   detailKey = '';
   private mesh!: THREE.Mesh;
   private spin = new THREE.Group();
+  /** −1 for bodies that rotate clockwise about their north pole (Venus, Uranus). */
+  private spinSign = 1;
   private glow?: THREE.Sprite;
   private disk?: THREE.Mesh;
   private clouds?: THREE.Mesh;
@@ -90,9 +93,17 @@ export class BodyVisual {
     this.name = body.name;
     this.trailLength = trailLength;
     this.group.add(this.spin);
-    // Tilt the spin axis a little, deterministically per body.
-    const seed = seedFromName(body.name);
-    this.spin.rotation.z = ((seed % 1000) / 1000 - 0.5) * 0.6;
+    const real = getSolarData()?.byName.get(body.name);
+    const pole = real && poleScene(real);
+    if (pole) {
+      // Real Solar System body: point the spin axis (and Saturn's rings) at its true pole.
+      this.spin.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(...pole));
+      this.spinSign = real.retrograde ? -1 : 1;
+    } else {
+      // Tilt the spin axis a little, deterministically per body.
+      const seed = seedFromName(body.name);
+      this.spin.rotation.z = ((seed % 1000) / 1000 - 0.5) * 0.6;
+    }
     this.build(body);
 
     this.trailPos = new Float32Array(trailLength * 3);
@@ -279,7 +290,7 @@ export class BodyVisual {
       // Tidally locked: always show the same face to the parent.
       this.mesh.rotation.y = Math.atan2(lockTo.x - body.x, lockTo.z - body.z) - Math.PI / 2;
     } else {
-      this.mesh.rotation.y += dt * 0.3;
+      this.mesh.rotation.y += dt * 0.3 * this.spinSign;
     }
     if (this.clouds) this.clouds.rotation.y += dt * 0.05;
     if (this.glow) {

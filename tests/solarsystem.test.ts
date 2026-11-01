@@ -124,3 +124,50 @@ describe('real Solar System scenes', () => {
     }, 60000);
   }
 });
+
+describe('real spin axes (IAU poles)', () => {
+  const angleDeg = (a: number[], b: number[]) =>
+    (Math.acos(Math.max(-1, Math.min(1, (a[0] * b[0] + a[1] * b[1] + a[2] * b[2]) / (Math.hypot(...a) * Math.hypot(...b))))) * 180) / Math.PI;
+
+  it("matches each planet's obliquity reported by JPL Horizons", async () => {
+    const { poleScene } = await import('../src/sim/solarSystemData');
+    const DEG = Math.PI / 180;
+    for (const name of ['Venus', 'Earth', 'Mars', 'Jupiter', 'Saturn', 'Uranus', 'Neptune']) {
+      const b = data.byName.get(name)!;
+      // Rotation axis (right-hand rule): the IAU north pole, flipped for retrograde rotators.
+      const p = poleScene(b)!.map((v) => (b.retrograde ? -v : v));
+      // Orbit normal from the heliocentric elements, ecliptic → scene (x, z, −y).
+      const i = b.elements.i * DEG, node = b.elements.node * DEG;
+      const n = [Math.sin(i) * Math.sin(node), -Math.sin(i) * Math.cos(node), Math.cos(i)];
+      expect(angleDeg(p, [n[0], n[2], -n[1]]), name).toBeCloseTo(b.obliquityDeg!, 0);
+    }
+    // Earth's axis is 23.44° from the ecliptic pole (scene +Y).
+    expect(angleDeg(poleScene(data.byName.get('Earth')!)!, [0, 1, 0])).toBeCloseTo(23.44, 1);
+  });
+
+  it("agrees with the orbits of Saturn's inner moons, which lie in its equator", async () => {
+    const { poleScene } = await import('../src/sim/solarSystemData');
+    const pole = poleScene(data.byName.get('Saturn')!)!;
+    for (const name of ['Mimas', 'Enceladus', 'Tethys', 'Dione', 'Rhea']) {
+      const s = relativeState(data.byName.get(name)!, 2461345.5, muFor(name));
+      // Orbit normal r × v, converted from ecliptic to scene coordinates (x, z, −y).
+      const [x, y, z] = s.pos;
+      const [vx, vy, vz] = s.vel;
+      const h = [y * vz - z * vy, z * vx - x * vz, x * vy - y * vx];
+      expect(angleDeg([h[0], h[2], -h[1]], pole), name).toBeLessThan(2);
+    }
+  });
+});
+
+describe('parent bodies', () => {
+  it('reports moons orbiting their planet and the planet orbiting nothing', async () => {
+    const { loadMoonSystem } = await import('../src/sim/presets');
+    const { Simulation } = await import('../src/sim/simulation');
+    const sim = new Simulation();
+    loadMoonSystem(sim, 'Saturn', new Date('2026-11-01T00:00:00Z'), data);
+    const byName = (n: string) => sim.bodies.find((b) => b.name === n)!;
+    expect(sim.parentOf(byName('Titan'))?.name).toBe('Saturn');
+    expect(sim.parentOf(byName('Mimas'))?.name).toBe('Saturn');
+    expect(sim.parentOf(byName('Saturn'))).toBeUndefined();
+  });
+});

@@ -51,6 +51,10 @@ export interface SolarBodyData {
   synchronous?: boolean;
   obliquityDeg?: number;
   albedo?: number;
+  /** North pole (RA, Dec in degrees, ICRF J2000) from the IAU WGCCRE (Archinal et al. 2018). */
+  pole?: { ra: number; dec: number };
+  /** Spins clockwise about its north pole (Venus, Uranus, Pluto). */
+  retrograde?: boolean;
   /** Elements are relative to the parent system's barycentre (Nix and Hydra around Pluto–Charon). */
   barycentric?: boolean;
   elements: Elements;
@@ -200,6 +204,19 @@ export function smallBodyState(b: SmallBody, jd: number): EclipticState {
   const mu = G;
   const M = M0 * DEG + Math.sqrt(mu / a ** 3) * ((jd - epoch) / DAYS_PER_YEAR);
   return stateFromElements(a, e, i * DEG, node * DEG, peri * DEG, M, mu);
+}
+
+const OBLIQUITY_J2000 = 23.4392911 * DEG;
+
+/** Unit vector of the body's north pole in scene coordinates (ecliptic J2000 → x, z, −y). */
+export function poleScene(body: SolarBodyData): V3 | undefined {
+  if (!body.pole) return undefined;
+  const ra = body.pole.ra * DEG, dec = body.pole.dec * DEG;
+  const x = Math.cos(dec) * Math.cos(ra);
+  const ye = Math.cos(dec) * Math.sin(ra);
+  const ze = Math.sin(dec);
+  const c = Math.cos(OBLIQUITY_J2000), s = Math.sin(OBLIQUITY_J2000);
+  return toScene([x, c * ye + s * ze, -s * ye + c * ze]);
 }
 
 /** Real radius in AU, if known. */

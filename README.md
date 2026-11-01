@@ -61,7 +61,9 @@ need the [companion server](#companion-server). Without one, they explain how to
     famous comets (Halley, Encke, 67P, Hale–Bopp) come from **JPL Horizons**.
   - The **4,000 brightest real asteroids, Jupiter Trojans, Centaurs and Kuiper belt objects**
     come from the **JPL Small-Body Database**. They replace the illustrative belt.
-  - Masses, radii, rotation periods and axial tilts are real.
+  - Masses, radii, rotation periods and axial tilts are real. Planets are drawn with their real
+    spin axes from the IAU (Uranus on its side, Venus upside down), and Saturn's rings lie in its
+    true equatorial plane.
 - **Real moon systems at true scale:** Earth & Moon, Mars, Jupiter, Saturn, Uranus, Neptune and
   Pluto–Charon. There are 28 moons, each at its real position for today. Moons use mean orbits
   fitted to about 200 orbits of Horizons data, and they stay within 5% of JPL's positions
@@ -267,8 +269,7 @@ push and pull request.
 - Lensing is a screen-space effect, not ray tracing.
 - JPL approximate elements are accurate to a few arcminutes for 1800–2050. Small bodies and
   moons use two-body Kepler motion from a 2026 epoch, so they drift slowly over decades.
-  Moon systems leave out the Sun's pull and planetary oblateness. Saturn's ring mesh lies
-  in the ecliptic, not in Saturn's tilted equator. Exoplanet systems
+  Moon systems leave out the Sun's pull and planetary oblateness. Exoplanet systems
   only include planets with a known orbit, and mutual inclinations are unknown, so orbits are
   drawn nearly coplanar.
 - **Tested here:** physics, science, real-data, challenge, lesson and protocol suites, the

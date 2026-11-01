@@ -1137,11 +1137,11 @@ export class Simulation {
   }
 
   /** Body with the strongest gravitational pull at a point, excluding `exclude`. */
-  dominantBodyAt(x: number, y: number, z: number, exclude?: Body): Body | undefined {
+  dominantBodyAt(x: number, y: number, z: number, exclude?: Body, minMass = 0): Body | undefined {
     let best: Body | undefined;
     let bestPull = 0;
     for (const b of this.bodies) {
-      if (b === exclude) continue;
+      if (b === exclude || b.mass < minMass) continue;
       const d2 = (b.x - x) ** 2 + (b.y - y) ** 2 + (b.z - z) ** 2;
       const pull = b.mass / Math.max(d2, 1e-12);
       if (pull > bestPull) {
@@ -1155,7 +1155,7 @@ export class Simulation {
   /**
    * The body `body` is actually orbiting: the nearest heavier body it is gravitationally bound
    * to (so a moon reports its planet, not the star whose pull is stronger). Falls back to the
-   * body with the strongest pull.
+   * heavier body with the strongest pull, or undefined for the heaviest body.
    */
   parentOf(body: Body): Body | undefined {
     let best: Body | undefined;
@@ -1172,7 +1172,9 @@ export class Simulation {
         best = b;
       }
     }
-    return best ?? this.dominantBodyAt(body.x, body.y, body.z, body);
+    // Fall back to the strongest pull among heavier bodies only: the heaviest body in a system
+    // orbits nothing (not one of its own moons).
+    return best ?? this.dominantBodyAt(body.x, body.y, body.z, body, body.mass);
   }
 
   totalEnergy(): number {

@@ -23,6 +23,8 @@ export interface SceneSetup {
   tip?: string;
   /** Fastest simulation speed the slider allows (time units per second; default 100). */
   maxTimeScale?: number;
+  /** Direction from the target to the camera (scene axes), overriding `elevation`. */
+  viewFrom?: [number, number, number];
 }
 
 export interface Preset {
@@ -92,6 +94,12 @@ export function addParticleDisk(
 const deg = Math.PI / 180;
 
 /** name, mass (M⊕), a (AU), e, inc (deg), colour, kind */
+/** Display colour and kind of a planet (for scenes that add one on its own). */
+export function planetAppearance(name: string): { color: number; kind: Body['kind'] } {
+  const p = SOLAR_PLANETS.find((x) => x[0] === name);
+  return { color: p?.[5] ?? REAL_COLORS[name] ?? 0x9a9088, kind: p?.[6] ?? 'rocky' };
+}
+
 const SOLAR_PLANETS: [string, number, number, number, number, number, Body['kind']][] = [
   // name, mass (M⊕), a (AU), e, inc (deg), color
   ['Mercury', 0.055, 0.387, 0.206, 7.0, 0x9a8f86, 'rocky'],

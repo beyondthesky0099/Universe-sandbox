@@ -13,6 +13,8 @@ import { createRealSky } from './render/starfield';
 import { setTrueScale } from './sim/trueScale';
 import { loadGwEvent, loadGwEvents } from './sim/gwEvents';
 import { loadFlyby, loadFlybys } from './sim/flybys';
+import { loadVoyagerEncounter, loadVoyagerEncounters } from './sim/voyager';
+import { getSolarData, loadSolarData } from './sim/solarSystemData';
 import { isCompact, kindForMass, mainSequenceLifetime, mergedKind, NEUTRON_MAX_MASS, type Body, type BodyKind } from './sim/body';
 import { isTidallyLocked, nearResonance, orbitalPeriod } from './sim/analysis';
 import { bodyTemperature, climateFor, formatTemperature, isHabitable } from './sim/climate';
@@ -2621,6 +2623,26 @@ export class App {
       const list = await loadFlybys().catch(() => []);
       const f = list[Number($<HTMLSelectElement>('flyby-select').value)];
       if (f) this.loadScenario({ name: `${f.name} flyby`, description: `Real close approach of ${f.name} to Earth on ${f.date} UTC (JPL).`, load: () => loadFlyby(this.sim, f) });
+    });
+    void loadVoyagerEncounters()
+      .then((list) => {
+        $('voyager-select').innerHTML = list
+          .map((e, i) => `<option value="${i}">${e.craft} · ${e.planet} · ${e.closestUtc.slice(0, 4)}</option>`)
+          .join('');
+        $<HTMLSelectElement>('voyager-select').value = String(Math.max(0, list.findIndex((e) => e.craft === 'Voyager 2')));
+      })
+      .catch(() => ($('voyager-select').innerHTML = '<option value="">Voyager data unavailable</option>'));
+    $('btn-voyager-load').addEventListener('click', async () => {
+      const list = await loadVoyagerEncounters().catch(() => []);
+      const select = $<HTMLSelectElement>('voyager-select');
+      const i = Number(select.value);
+      const e = list[i];
+      if (!e) return;
+      const data = await loadSolarData().catch(() => getSolarData());
+      this.loadScenario({ name: `${e.craft} at ${e.planet}`, description: `${e.craft}'s real flyby of ${e.planet} on ${e.closestUtc.slice(0, 10)} (JPL Horizons).`, load: () => loadVoyagerEncounter(this.sim, e, data) });
+      // The next press continues the tour with the same spacecraft.
+      const next = list.findIndex((x, j) => j > i && x.craft === e.craft);
+      if (next >= 0) select.value = String(next);
     });
     $('btn-gw-load').addEventListener('click', async () => {
       const events = await loadGwEvents().catch(() => []);

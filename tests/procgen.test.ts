@@ -67,3 +67,24 @@ describe('galaxy', () => {
     expect(a.glow.count).toBe(1000);
   });
 });
+
+describe('galaxy features', () => {
+  it('has names, clusters, nebulae and dust', async () => {
+    const g = generateGalaxy(3, 3000, 500, 500);
+    expect(g.names).toHaveLength(3000);
+    expect(g.names[10]).toBe(starSummary(g.stars.seeds[10]).name);
+    expect(g.clusters.some((c) => c.kind === 'globular')).toBe(true);
+    expect(g.nebulae.length).toBeGreaterThan(30);
+    expect(g.dust.count).toBe(500);
+  });
+
+  it('feature flags reflect generated systems and scanning is fast enough', async () => {
+    const { systemFeatures, FEATURE } = await import('../src/procgen/galaxy');
+    const t0 = performance.now();
+    let habitable = 0;
+    for (let i = 0; i < 2000; i++) if (systemFeatures(i * 13 + 5) & FEATURE.habitable) habitable++;
+    const perSystemMs = (performance.now() - t0) / 2000;
+    expect(habitable).toBeGreaterThan(50);
+    expect(perSystemMs).toBeLessThan(0.2);
+  });
+});

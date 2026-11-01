@@ -3,7 +3,10 @@ import type { Body } from './body';
 import { kelvinToRgb, starColor } from './color';
 import { keplerToState, OrbitalElements } from './orbits';
 import type { Simulation } from './simulation';
-import { EARTH_MASS, G } from './units';
+import { EARTH_MASS, G, JUPITER_MASS } from './units';
+import { julianDate, planetStates, type PlanetName } from './ephemeris';
+import { setTrueScale } from './trueScale';
+import { getSolarData, KM_PER_AU, poleScene, realRadiusAu, REAL_COLORS, relativeState, sampleRingRadii, smallBodyState, toScene, type SolarData } from './solarSystemData';
 
 export interface SceneSetup {
   /** Suggested camera distance from the origin (AU). */
@@ -12,6 +15,10 @@ export interface SceneSetup {
   timeScale: number;
   /** Optional camera elevation angle (rad above the ecliptic). */
   elevation?: number;
+  /** Name of a body to select and follow after loading (at `cameraDistance` from it). */
+  focus?: string;
+  /** Short tip shown after loading. */
+  tip?: string;
 }
 
 export interface Preset {
@@ -25,7 +32,7 @@ export interface Preset {
 export function addOrbiting(
   sim: Simulation,
   parent: Body,
-  init: { name: string; mass: number; color?: number; kind?: Body['kind'] },
+  init: { name: string; mass: number; color?: number; kind?: Body['kind']; tag?: string; fuel?: number; age?: number },
   el: OrbitalElements,
 ): Body {
   const { pos, vel } = keplerToState(G * sim.gravityScale * (parent.mass + init.mass), el);
@@ -80,36 +87,28 @@ export function addParticleDisk(
 
 const deg = Math.PI / 180;
 
+/** name, mass (M⊕), a (AU), e, inc (deg), colour, kind */
+const SOLAR_PLANETS: [string, number, number, number, number, number, Body['kind']][] = [
+  // name, mass (M⊕), a (AU), e, inc (deg), color
+  ['Mercury', 0.055, 0.387, 0.206, 7.0, 0x9a8f86, 'rocky'],
+  ['Venus', 0.815, 0.723, 0.007, 3.4, 0xe3c58a, 'rocky'],
+  ['Earth', 1.0, 1.0, 0.017, 0.0, 0x3f78c8, 'rocky'],
+  ['Mars', 0.107, 1.524, 0.093, 1.85, 0xc1440e, 'rocky'],
+  ['Jupiter', 317.8, 5.203, 0.049, 1.3, 0xd8b48a, 'gas'],
+  ['Saturn', 95.2, 9.537, 0.054, 2.5, 0xe3d2a8, 'gas'],
+  ['Uranus', 14.5, 19.19, 0.047, 0.8, 0x9fd6e0, 'gas'],
+  ['Neptune', 17.1, 30.07, 0.009, 1.8, 0x4b70dd, 'gas'],
+];
+
+
 const solarSystem: Preset = {
   id: 'solar',
-  name: 'Solar System',
-  description: 'The Sun and eight planets with real masses and orbits, plus an asteroid belt.',
+  name: 'Solar System (today)',
+  description:
+    'The real Solar System today: planets (JPL ephemerides), Pluto and the dwarf planets, large asteroids, famous comets, and the 4,000 brightest real asteroids, Trojans and Kuiper belt objects (JPL Small-Body Database).',
   load(sim) {
-    const sun = sim.addBody({ name: 'Sun', kind: 'star', mass: 1, color: starColor(1) });
-    const planets: [string, number, number, number, number, number, Body['kind']][] = [
-      // name, mass (M⊕), a (AU), e, inc (deg), color
-      ['Mercury', 0.055, 0.387, 0.206, 7.0, 0x9a8f86, 'rocky'],
-      ['Venus', 0.815, 0.723, 0.007, 3.4, 0xe3c58a, 'rocky'],
-      ['Earth', 1.0, 1.0, 0.017, 0.0, 0x3f78c8, 'rocky'],
-      ['Mars', 0.107, 1.524, 0.093, 1.85, 0xc1440e, 'rocky'],
-      ['Jupiter', 317.8, 5.203, 0.049, 1.3, 0xd8b48a, 'gas'],
-      ['Saturn', 95.2, 9.537, 0.054, 2.5, 0xe3d2a8, 'gas'],
-      ['Uranus', 14.5, 19.19, 0.047, 0.8, 0x9fd6e0, 'gas'],
-      ['Neptune', 17.1, 30.07, 0.009, 1.8, 0x4b70dd, 'gas'],
-    ];
-    for (const [name, m, a, e, inc, color, kind] of planets) {
-      addOrbiting(sim, sun, { name, mass: m * EARTH_MASS, color, kind }, {
-        a,
-        e,
-        inc: inc * deg,
-        lan: Math.random() * Math.PI * 2,
-        argp: Math.random() * Math.PI * 2,
-        nu: Math.random() * Math.PI * 2,
-      });
-    }
-    addParticleDisk(sim, sun, { count: 1500, inner: 2.2, outer: 3.3, thickness: 0.04, color: [0.62, 0.58, 0.52] });
-    sim.recenter();
-    return { cameraDistance: 9, timeScale: 0.4, elevation: 0.6 };
+    const setup = loadSolarSystemOnDate(sim, new Date());
+    return { ...setup, timeScale: 0.25, elevation: 0.6, tip: undefined };
   },
 };
 
@@ -234,11 +233,539 @@ const empty: Preset = {
   },
 };
 
-export const PRESETS: Preset[] = [solarSystem, protoplanetary, binaryStar, figureEight, rogueStar, blackHoleFeast, galaxyCollision, empty];
+
+const supernova: Preset = {
+  id: 'supernova',
+  name: 'Supernova',
+  description: 'A 25 M☉ blue supergiant at the end of its life, with planets and a debris belt. It detonates after a few years. Watch the shockwave strip its system.',
+  load(sim) {
+    const star = sim.addBody({ name: 'Vela Prime', kind: 'star', mass: 25 });
+    const planets: [string, number, number, Body['kind'], number][] = [
+      ['Vela Prime b', 3 * EARTH_MASS, 6, 'rocky', 0xa0785a],
+      ['Vela Prime c', 400 * EARTH_MASS, 11, 'gas', 0x6fa8c9],
+      ['Vela Prime d', 90 * EARTH_MASS, 18, 'gas', 0xc99e6b],
+    ];
+    for (const [name, mass, a, kind, color] of planets) {
+      addOrbiting(sim, star, { name, mass, kind, color }, { a, nu: Math.random() * Math.PI * 2 });
+    }
+    addParticleDisk(sim, star, { count: 2500, inner: 24, outer: 32, thickness: 0.03, color: [0.62, 0.58, 0.52] });
+    addOrbiting(sim, star, { name: 'Vela Minor', mass: 0.8, kind: 'star' }, { a: 70, e: 0.1, nu: 2 });
+    sim.recenter();
+    sim.scheduleSupernova(star.id, 4);
+    return { cameraDistance: 60, timeScale: 0.5, elevation: 0.9, tip: 'Vela Prime will explode in about 4 years…' };
+  },
+};
+
+const giantImpact: Preset = {
+  id: 'impact',
+  name: 'Giant Impact',
+  description: 'A Mars-sized protoplanet on a collision course with a young Earth. High-speed rocky impacts shatter into fragments, and some may become moons.',
+  load(sim) {
+    const sun = sim.addBody({ name: 'Sun', kind: 'star', mass: 1 });
+    const earth = addOrbiting(sim, sun, { name: 'Proto-Earth', mass: 0.9 * EARTH_MASS, kind: 'rocky', color: 0x9a5a3a }, { a: 1 });
+    // Theia trails Earth on a slightly different orbit and closes in fast.
+    sim.addBody({
+      name: 'Theia',
+      kind: 'rocky',
+      mass: 0.12 * EARTH_MASS,
+      color: 0x8a8f99,
+      x: earth.x - 0.004,
+      y: earth.y + 0.002,
+      z: earth.z + 0.035,
+      vx: earth.vx + 0.02,
+      vy: earth.vy - 0.01,
+      vz: earth.vz - 0.2,
+    });
+    return { cameraDistance: 0.35, timeScale: 0.02, elevation: 0.7, focus: 'Proto-Earth' };
+  },
+};
+
+const ringmaker: Preset = {
+  id: 'rings',
+  name: 'Ring Maker',
+  description: 'A moon on an eccentric orbit dips inside its gas giant’s Roche limit and is torn into a ring.',
+  load(sim) {
+    const sun = sim.addBody({ name: 'Helion', kind: 'star', mass: 1 });
+    const giant = addOrbiting(sim, sun, { name: 'Colossus', mass: 1.2 * JUPITER_MASS, kind: 'gas', color: 0xc99e6b }, { a: 20 });
+    addOrbiting(sim, giant, { name: 'Doomed Moon', mass: 0.02 * EARTH_MASS, kind: 'rocky', color: 0xb8a58c }, { a: 0.16, e: 0.45, nu: Math.PI * 1.55 });
+    addOrbiting(sim, giant, { name: 'Safe Moon', mass: 0.03 * EARTH_MASS, kind: 'rocky', color: 0x7d6e63 }, { a: 0.6, nu: 1 });
+    return { cameraDistance: 1.6, timeScale: 0.1, elevation: 0.5, focus: 'Colossus' };
+  },
+};
+
+const starCluster: Preset = {
+  id: 'cluster',
+  name: 'Star Cluster Collapse',
+  description: '2,000 stars that all attract each other, using the Barnes–Hut tree. A cold cloud collapses and settles into a cluster.',
+  load(sim) {
+    sim.softening = 0.6;
+    sim.dtMax = 0.05;
+    // Stars in clusters essentially never collide; this is pure stellar dynamics.
+    sim.collisions = false;
+    const n = 2000;
+    const R = 150;
+    let totalMass = 0;
+    const masses: number[] = [];
+    for (let i = 0; i < n; i++) {
+      // Rough initial mass function: mostly small stars.
+      const m = 0.1 + Math.pow(Math.random(), 3) * 4;
+      masses.push(m);
+      totalMass += m;
+    }
+    const sigma = 0.35 * Math.sqrt((G * totalMass) / (2 * R)) / Math.sqrt(3);
+    for (let i = 0; i < n; i++) {
+      // Uniform sphere.
+      let x, y, z;
+      do {
+        x = Math.random() * 2 - 1;
+        y = Math.random() * 2 - 1;
+        z = Math.random() * 2 - 1;
+      } while (x * x + y * y + z * z > 1);
+      sim.addBody({
+        name: `Cluster star ${i + 1}`,
+        kind: 'star',
+        mass: masses[i],
+        x: x * R,
+        y: y * R,
+        z: z * R,
+        vx: gauss() * sigma,
+        vy: gauss() * sigma,
+        vz: gauss() * sigma,
+      });
+    }
+    sim.recenter();
+    return { cameraDistance: 520, timeScale: 0.6, elevation: 0.5 };
+  },
+};
+
+const selfGravitatingGalaxy: Preset = {
+  id: 'spiral',
+  name: 'Self-Gravitating Disk',
+  description: '2,500 stars orbit a black hole and pull on one another. The cold disk breaks up into spiral arms and clumps.',
+  load(sim) {
+    sim.softening = 1.2;
+    sim.dtMax = 0.03;
+    sim.collisions = false;
+    const core = sim.addBody({ name: 'Hub', kind: 'blackhole', mass: 400 });
+    const n = 2000;
+    const starMass = 0.6;
+    const rMin = 6;
+    const rMax = 100;
+    const radii: number[] = [];
+    for (let i = 0; i < n; i++) radii.push(rMin + (rMax - rMin) * Math.sqrt(Math.random()));
+    radii.sort((a, b) => a - b);
+    for (let i = 0; i < n; i++) {
+      const r = radii[i];
+      const enclosed = core.mass + i * starMass;
+      const v = Math.sqrt((G * enclosed) / r);
+      const th = Math.random() * Math.PI * 2;
+      sim.addBody({
+        name: `Disk star ${i + 1}`,
+        kind: 'star',
+        mass: starMass,
+        x: Math.cos(th) * r,
+        y: gauss() * 0.8,
+        z: Math.sin(th) * r,
+        vx: Math.sin(th) * v + gauss() * v * 0.1,
+        vy: gauss() * v * 0.03,
+        vz: -Math.cos(th) * v + gauss() * v * 0.1,
+      });
+    }
+    return { cameraDistance: 230, timeScale: 0.5, elevation: 1.0 };
+  },
+};
+
+/** Central supermassive black hole with stars on eccentric orbits; also reached from the galaxy map. */
+export const galacticCore: Preset = {
+  id: 'core',
+  name: 'Galactic Core',
+  description: 'A supermassive black hole with stars on wild, eccentric orbits and an infalling gas cloud. One star is on a path to be torn apart.',
+  load(sim) {
+    sim.dtMax = 0.02;
+    const M = 4e5;
+    const bh = sim.addBody({ name: 'Heart of the Galaxy', kind: 'blackhole', mass: M });
+    for (let i = 0; i < 28; i++) {
+      addOrbiting(sim, bh, { name: `S${i + 1}`, mass: 1 + Math.pow(Math.random(), 2) * 14, kind: 'star' }, {
+        a: 250 + Math.random() * 1300,
+        e: 0.3 + Math.random() * 0.6,
+        inc: Math.random() * Math.PI,
+        lan: Math.random() * Math.PI * 2,
+        argp: Math.random() * Math.PI * 2,
+        nu: Math.PI * (0.6 + Math.random() * 0.8),
+      });
+    }
+    // On course for a tidal disruption: periapsis inside the tidal radius but outside the horizon.
+    addOrbiting(sim, bh, { name: 'Unlucky Star', mass: 1, kind: 'star' }, { a: 400, e: 0.98, inc: 0.4, argp: 1, nu: Math.PI });
+    // Infalling gas cloud.
+    const cloud = { x: 900, y: 40, z: -300 };
+    const vIn = Math.sqrt((G * M) / 950) * 0.35;
+    for (let i = 0; i < 1500; i++) {
+      sim.particles.add(
+        cloud.x + gauss() * 25,
+        cloud.y + gauss() * 10,
+        cloud.z + gauss() * 25,
+        -vIn * 0.9 + gauss() * 0.5,
+        0,
+        vIn * 0.6 + gauss() * 0.5,
+        [0.85, 0.45 + Math.random() * 0.2, 0.5],
+      );
+    }
+    return { cameraDistance: 2600, timeScale: 2, elevation: 0.9 };
+  },
+};
+
+const precession: Preset = {
+  id: 'precession',
+  name: 'Relativistic Precession',
+  description:
+    'General relativity makes Mercury\u2019s orbit slowly rotate (43\u2033 per century in reality). Here the speed of light is lowered 600\u00d7 so the orbit traces a rosette.',
+  load(sim) {
+    sim.relativity = true;
+    sim.lightSpeedScale = 0.0017;
+    sim.collisions = false;
+    const sun = sim.addBody({ name: 'Sun', kind: 'star', mass: 1, age: 4.6e9 });
+    addOrbiting(sim, sun, { name: 'Mercury', mass: 0.055 * EARTH_MASS, kind: 'rocky', color: 0x9a8f86 }, { a: 0.387, e: 0.206 });
+    sim.recenter();
+    return { cameraDistance: 1.6, timeScale: 0.4, elevation: 1.4, tip: 'Watch the orbit swing around: each loop starts a little further along.' };
+  },
+};
+
+const inspiral: Preset = {
+  id: 'inspiral',
+  name: 'Black Hole Inspiral',
+  description:
+    'Two 10 M\u2609 black holes radiate gravitational waves, spiral together and merge. The speed of light is lowered so it happens in seconds, not millions of years.',
+  load(sim) {
+    sim.relativity = true;
+    sim.lightSpeedScale = 0.0016;
+    // Circular orbit including the 1PN correction (which weakens the pull at high speed):
+    // v² = GM/r / (1 + 3GM/(r c²)).
+    const r = 2;
+    const gm = G * 20;
+    const c2 = sim.lightSpeed ** 2;
+    const v = Math.sqrt(gm / r / (1 + (3 * gm) / (r * c2)));
+    sim.addBody({ name: 'Black Hole A', kind: 'blackhole', mass: 10, x: -r / 2, vz: v / 2 });
+    sim.addBody({ name: 'Black Hole B', kind: 'blackhole', mass: 10, x: r / 2, vz: -v / 2 });
+    const centre = { x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, mass: 20 } as Body;
+    addParticleDisk(sim, centre, { count: 600, inner: 5, outer: 12, thickness: 0.02, color: [0.9, 0.7, 0.5] });
+    return { cameraDistance: 9, timeScale: 0.8, elevation: 1.1, tip: 'Turn on sound to hear the merger chirp.' };
+  },
+};
+
+const sunsFuture: Preset = {
+  id: 'future',
+  name: 'The Sun\u2019s Future',
+  description:
+    'Stellar evolution at 200 million years per simulated year: the Sun becomes a red giant, swallows the inner planets, then sheds a planetary nebula and leaves a white dwarf.',
+  load(sim) {
+    const setup = solarSystem.load(sim);
+    sim.evolutionRate = 2e8;
+    return { ...setup, cameraDistance: 7, timeScale: 1.5, tip: 'The Sun is 4.6 billion years old. Its red-giant phase begins in ~5 billion years (≈27 simulated years).' };
+  },
+};
+
+/** The real Solar System on a given date, from JPL's approximate planetary elements. */
+/** Particle colours for small-body orbit classes (JPL SBDB class codes). */
+const SMALL_BODY_COLORS: Record<string, [number, number, number]> = {
+  MBA: [0.62, 0.58, 0.52],
+  IMB: [0.62, 0.58, 0.52],
+  OMB: [0.58, 0.55, 0.5],
+  MCA: [0.7, 0.55, 0.45],
+  TJN: [0.78, 0.62, 0.45],
+  CEN: [0.55, 0.7, 0.75],
+  TNO: [0.55, 0.65, 0.85],
+};
+
+/** Real Solar System bodies added individually (beyond the eight planets). */
+const NAMED_SMALL_BODIES = ['Pluto', 'Ceres', 'Eris', 'Haumea', 'Makemake', 'Vesta', 'Pallas', 'Hygiea', 'Apophis', 'Bennu', 'Halley', 'Encke', 'Churyumov–Gerasimenko', 'Hale–Bopp'];
+
+export function loadSolarSystemOnDate(sim: Simulation, date: Date): SceneSetup {
+  const data = getSolarData();
+  const sun = sim.addBody({ name: 'Sun', kind: 'star', mass: 1, color: starColor(1), age: 4.6e9 });
+  const states = new Map(planetStates(date).map((p) => [p.name, p]));
+  for (const [name, m, , , , color, kind] of SOLAR_PLANETS) {
+    const st = states.get(name as PlanetName)!;
+    const mass = data?.byName.get(name)?.mass ?? m * EARTH_MASS;
+    sim.addBody({ name, mass, kind, color, x: st.pos[0], y: st.pos[1], z: st.pos[2], vx: st.vel[0], vy: st.vel[1], vz: st.vel[2] });
+  }
+  if (!data) {
+    // Data not loaded (offline or tests): keep an illustrative belt.
+    addParticleDisk(sim, sun, { count: 1500, inner: 2.2, outer: 3.3, thickness: 0.04, color: [0.62, 0.58, 0.52] });
+    sim.recenter();
+    return {
+      cameraDistance: 9,
+      timeScale: 0.1,
+      elevation: 1.1,
+      tip: `Planet positions for ${date.toISOString().slice(0, 10)} from JPL's approximate ephemerides. The asteroid belt is illustrative (real data didn't load).`,
+    };
+  }
+  const jd = julianDate(date);
+  for (const name of NAMED_SMALL_BODIES) {
+    const b = data.byName.get(name);
+    if (!b) continue;
+    const mass = b.mass ?? 1e-15;
+    const s = relativeState(b, jd, G * (1 + mass));
+    const [x, y, z] = toScene(s.pos);
+    const [vx, vy, vz] = toScene(s.vel);
+    sim.addBody({ name, mass, kind: 'rocky', color: REAL_COLORS[name] ?? (b.kind === 'comet' ? 0xcfe6ff : 0x9a9088), x, y, z, vx, vy, vz, tag: b.kind === 'comet' ? 'comet' : undefined });
+  }
+  const named = new Set(NAMED_SMALL_BODIES.map((n) => n.toLowerCase()));
+  for (const b of data.small) {
+    // "1 Ceres", "134340 Pluto (1930 BM)": skip bodies that are already added individually.
+    const base = b.name.replace(/^\d+\s+/, '').replace(/\s*\(.*\)$/, '').toLowerCase();
+    if (named.has(base)) continue;
+    const s = smallBodyState(b, jd);
+    const [x, y, z] = toScene(s.pos);
+    const [vx, vy, vz] = toScene(s.vel);
+    const c = SMALL_BODY_COLORS[b.cls] ?? [0.6, 0.6, 0.6];
+    const shade = 0.85 + Math.random() * 0.3;
+    sim.particles.add(x, y, z, vx, vy, vz, [c[0] * shade, c[1] * shade, c[2] * shade]);
+  }
+  sim.recenter();
+  return {
+    cameraDistance: 9,
+    timeScale: 0.1,
+    elevation: 1.1,
+    tip: `The real Solar System on ${date.toISOString().slice(0, 10)}: planets from JPL's ephemerides; dwarf planets, comets and ${data.small.length.toLocaleString('en-US')} asteroids and Kuiper belt objects from JPL Horizons and the Small-Body Database. Body sizes are enlarged so you can see them.`,
+  };
+}
+
+/**
+ * Saturn's real rings as test particles on circular orbits in Saturn's true equatorial plane
+ * (from its IAU pole), at the radii from NASA's ring fact sheet. Returns how many were added.
+ */
+export function addSaturnRings(sim: Simulation, saturn: Body, data: SolarData, count: number): number {
+  const sd = data.byName.get('Saturn');
+  const pole = sd && poleScene(sd);
+  if (!data.rings?.length || !pole) return 0;
+  const [px, py, pz] = pole;
+  // Orthonormal basis (u, w) of the ring plane with w = pole × u.
+  let ux = -pz, uy = 0, uz = px;
+  const ul = Math.hypot(ux, uy, uz) || 1;
+  ux /= ul; uy /= ul; uz /= ul;
+  const wx = py * uz - pz * uy, wy = pz * ux - px * uz, wz = px * uy - py * ux;
+  const mu = G * sim.gravityScale * saturn.mass;
+  let added = 0;
+  for (const { r: rKm, ring } of sampleRingRadii(data.rings, count)) {
+    const r = rKm / KM_PER_AU;
+    const th = Math.random() * Math.PI * 2;
+    const c = Math.cos(th), s = Math.sin(th);
+    const v = Math.sqrt(mu / r);
+    const shade = (0.45 + (ring.albedo ?? 0.4)) * (0.85 + Math.random() * 0.3);
+    const grey = ring.name.startsWith('C') ? 0.9 : 1; // the C ring is greyer
+    const ok = sim.particles.add(
+      saturn.x + r * (ux * c + wx * s),
+      saturn.y + r * (uy * c + wy * s),
+      saturn.z + r * (uz * c + wz * s),
+      saturn.vx + v * (wx * c - ux * s),
+      saturn.vy + v * (wy * c - uy * s),
+      saturn.vz + v * (wz * c - uz * s),
+      [0.86 * shade, 0.79 * shade * grey, 0.66 * shade * grey],
+    );
+    if (ok < 0) break;
+    added++;
+  }
+  return added;
+}
+
+/** Moons shown in the true-scale Solar System: the large ones (with periods of 1.8 days or more). */
+const TRUE_SCALE_MOONS = ['Moon', 'Io', 'Europa', 'Ganymede', 'Callisto', 'Titan', 'Rhea', 'Iapetus', 'Titania', 'Oberon', 'Triton', 'Charon'];
+
+/**
+ * The whole real Solar System at true scale: real radii, plus the major moons (which the
+ * inflated game sizes would swallow). Moons are placed around their planet's position, which is
+ * treated as the planet–moon barycentre.
+ */
+export function loadSolarSystemTrueScale(sim: Simulation, date: Date): SceneSetup {
+  const base = loadSolarSystemOnDate(sim, date);
+  const data = getSolarData();
+  if (data) {
+    const jd = julianDate(date);
+    for (const name of TRUE_SCALE_MOONS) {
+      const m = data.byName.get(name);
+      const planet = m && sim.bodies.find((b) => b.name === m.parent);
+      if (!m || !planet || !m.mass) continue;
+      const s = relativeState(m, jd, G * (planet.mass + m.mass));
+      const [x, y, z] = toScene(s.pos);
+      const [vx, vy, vz] = toScene(s.vel);
+      const f = m.mass / (planet.mass + m.mass);
+      sim.addBody({
+        name, kind: 'rocky', mass: m.mass, color: REAL_COLORS[name],
+        x: planet.x + x * (1 - f), y: planet.y + y * (1 - f), z: planet.z + z * (1 - f),
+        vx: planet.vx + vx * (1 - f), vy: planet.vy + vy * (1 - f), vz: planet.vz + vz * (1 - f),
+      });
+      planet.x -= x * f;
+      planet.y -= y * f;
+      planet.z -= z * f;
+      planet.vx -= vx * f;
+      planet.vy -= vy * f;
+      planet.vz -= vz * f;
+    }
+  }
+  const saturn = sim.bodies.find((b) => b.name === 'Saturn');
+  if (data && saturn) addSaturnRings(sim, saturn, data, 3000);
+  setTrueScale(sim, true);
+  return {
+    cameraDistance: 0.012,
+    timeScale: 0.002,
+    elevation: 0.5,
+    focus: 'Earth',
+    tip: `The real Solar System at true scale on ${date.toISOString().slice(0, 10)}, with its major moons. Everything is its real size, so planets are tiny dots. Zoom out to see how empty space is. ${
+      data ? '' : base.tip ?? ''
+    }`,
+  };
+}
+
+const solarTrueScale: Preset = {
+  id: 'solar-true',
+  name: 'Solar System (true scale)',
+  description: 'The real Solar System with real sizes and its 12 largest moons. Everything is tiny compared with the distances between them.',
+  load: (sim) => loadSolarSystemTrueScale(sim, new Date()),
+};
+
+/** Planet + real moons, at true scale (real radii), positioned for `date` from JPL data. */
+export function loadMoonSystem(sim: Simulation, planetName: string, date: Date, data: SolarData | undefined = getSolarData()): SceneSetup {
+  const planetData = data?.byName.get(planetName);
+  if (!data || !planetData?.mass) {
+    sim.addBody({ name: planetName, kind: 'rocky', mass: EARTH_MASS });
+    return { cameraDistance: 0.05, timeScale: 0.01, tip: 'Real moon data could not be loaded.' };
+  }
+  const planetColor = SOLAR_PLANETS.find((p) => p[0] === planetName)?.[5] ?? REAL_COLORS[planetName] ?? 0x9a9088;
+  const planetKind = SOLAR_PLANETS.find((p) => p[0] === planetName)?.[6] ?? 'rocky';
+  // Real sizes: soften gravity only at ~1.5 km instead of the default 15,000 km, which is larger
+  // than Phobos's whole orbit.
+  sim.softening = 1e-8;
+  const planet = sim.addBody({ name: planetName, kind: planetKind, mass: planetData.mass, radius: realRadiusAu(planetData), color: planetColor });
+  const jd = julianDate(date);
+  const moons = data.bodies.filter((b) => b.parent === planetName && b.kind === 'moon');
+  // Moons orbiting the parent itself first, so barycentric ones (Nix, Hydra) can use them.
+  moons.sort((a, b) => Number(!!a.barycentric) - Number(!!b.barycentric));
+  let innerPeriod = Infinity;
+  let regularExtent = 0;
+  for (const m of moons) {
+    const mass = m.mass ?? 1e-15;
+    let cx = planet.x, cy = planet.y, cz = planet.z, cvx = planet.vx, cvy = planet.vy, cvz = planet.vz;
+    let centralMass = planet.mass;
+    if (m.barycentric) {
+      // Elements are relative to the barycentre of the planet and its big moon(s) added so far.
+      const sys = sim.bodies;
+      const M = sys.reduce((t, b) => t + b.mass, 0);
+      cx = sys.reduce((t, b) => t + b.x * b.mass, 0) / M;
+      cy = sys.reduce((t, b) => t + b.y * b.mass, 0) / M;
+      cz = sys.reduce((t, b) => t + b.z * b.mass, 0) / M;
+      cvx = sys.reduce((t, b) => t + b.vx * b.mass, 0) / M;
+      cvy = sys.reduce((t, b) => t + b.vy * b.mass, 0) / M;
+      cvz = sys.reduce((t, b) => t + b.vz * b.mass, 0) / M;
+      centralMass = M;
+    }
+    const s = relativeState(m, jd, G * (centralMass + mass));
+    const [x, y, z] = toScene(s.pos);
+    const [vx, vy, vz] = toScene(s.vel);
+    if (!m.barycentric && mass > 1e-3 * planet.mass) {
+      // A heavy moon (Charon, ~12% of Pluto): place both around their common barycentre.
+      const f = mass / (planet.mass + mass);
+      sim.addBody({ name: m.name, kind: 'rocky', mass, radius: realRadiusAu(m), color: REAL_COLORS[m.name], x: planet.x + x * (1 - f), y: planet.y + y * (1 - f), z: planet.z + z * (1 - f), vx: planet.vx + vx * (1 - f), vy: planet.vy + vy * (1 - f), vz: planet.vz + vz * (1 - f) });
+      planet.x -= x * f;
+      planet.y -= y * f;
+      planet.z -= z * f;
+      planet.vx -= vx * f;
+      planet.vy -= vy * f;
+      planet.vz -= vz * f;
+    } else {
+      sim.addBody({ name: m.name, kind: 'rocky', mass, radius: realRadiusAu(m), color: REAL_COLORS[m.name], x: cx + x, y: cy + y, z: cz + z, vx: cvx + vx, vy: cvy + vy, vz: cvz + vz });
+    }
+    const period = 360 / m.elements.n / 365.25; // years
+    innerPeriod = Math.min(innerPeriod, period);
+  }
+  // Frame the major moons: those with at least 5% of the largest moon's mass, on regular orbits.
+  const biggest = Math.max(...moons.map((m) => m.mass ?? 0));
+  for (const m of moons) {
+    if ((m.mass ?? 0) >= 0.05 * biggest && m.elements.e < 0.3) regularExtent = Math.max(regularExtent, m.elements.a);
+  }
+  const ringCount = planetName === 'Saturn' ? addSaturnRings(sim, planet, data, 6000) : 0;
+  // Moon systems are true scale: this also ticks "Real sizes" and keeps merged bodies real-sized.
+  // The real Sun, at its true direction and distance from the planet on this date: it lights the
+  // scene, sets real temperatures, and adds its pull on the moons. The planet's heliocentric
+  // state is reversed, so nothing already placed needs to move.
+  const helio = SOLAR_PLANETS.some((p) => p[0] === planetName)
+    ? planetStates(date).find((p) => p.name === planetName)
+    : (() => {
+        const st = relativeState(planetData, jd, G * (1 + planetData.mass!));
+        return { pos: toScene(st.pos), vel: toScene(st.vel) };
+      })();
+  if (helio) {
+    sim.addBody({
+      name: 'Sun', kind: 'star', mass: 1, color: starColor(1), age: 4.6e9,
+      x: planet.x - helio.pos[0], y: planet.y - helio.pos[1], z: planet.z - helio.pos[2],
+      vx: planet.vx - helio.vel[0], vy: planet.vy - helio.vel[1], vz: planet.vz - helio.vel[2],
+    });
+  }
+  setTrueScale(sim, true, data);
+  sim.recenter();
+  const outer = regularExtent || Math.max(...moons.map((m) => m.elements.a));
+  return {
+    cameraDistance: outer * 2.6,
+    focus: planetName,
+    timeScale: Math.max(1e-5, innerPeriod / 6),
+    elevation: 0.5,
+    tip: `${planetName} and its moons on ${date.toISOString().slice(0, 10)}, at true scale, from JPL Horizons mean orbits.${
+      ringCount ? ` The rings are ${ringCount.toLocaleString('en-US')} particles at the real radii from NASA's ring fact sheet, in Saturn's true equatorial plane.` : ''
+    } The Sun is at its real distance; the planet's oblateness is left out, so orbits slowly drift from reality.`,
+  };
+}
+
+const moonSystem = (id: string, planet: string, name: string, description: string): Preset => ({
+  id,
+  name,
+  description,
+  load: (sim) => loadMoonSystem(sim, planet, new Date()),
+});
+
+const earthMoon = moonSystem('earth-moon', 'Earth', 'Earth & Moon (real)', 'The Earth and Moon at true scale and their real positions today.');
+const marsMoons = moonSystem('mars-moons', 'Mars', 'Mars & moons (real)', 'Phobos and Deimos, Mars’s tiny captured-looking moons, at true scale.');
+const jupiterMoons = moonSystem('jupiter-moons', 'Jupiter', 'Jupiter & moons (real)', 'Io, Europa, Ganymede, Callisto and Amalthea at their real positions today. Watch the 1:2:4 Laplace resonance.');
+const saturnMoons = moonSystem('saturn-moons', 'Saturn', 'Saturn & moons (real)', 'Nine of Saturn’s moons, from Mimas to distant retrograde Phoebe, at true scale.');
+const uranusMoons = moonSystem('uranus-moons', 'Uranus', 'Uranus & moons (real)', 'The five major moons of Uranus, orbiting on their side like the planet itself.');
+const neptuneMoons = moonSystem('neptune-moons', 'Neptune', 'Neptune & moons (real)', 'Triton on its retrograde orbit, Proteus, and Nereid on a wildly eccentric one.');
+const plutoCharon = moonSystem('pluto-charon', 'Pluto', 'Pluto & Charon (real)', 'Pluto and Charon orbit a point in empty space between them; Nix and Hydra circle both.');
+
+export const PRESETS: Preset[] = [
+  solarSystem,
+  solarTrueScale,
+  earthMoon,
+  marsMoons,
+  jupiterMoons,
+  saturnMoons,
+  uranusMoons,
+  neptuneMoons,
+  plutoCharon,
+  protoplanetary,
+  giantImpact,
+  ringmaker,
+  binaryStar,
+  figureEight,
+  rogueStar,
+  blackHoleFeast,
+  supernova,
+  sunsFuture,
+  precession,
+  inspiral,
+  galacticCore,
+  starCluster,
+  selfGravitatingGalaxy,
+  galaxyCollision,
+  empty,
+];
+
+function gauss(): number {
+  const u = 1 - Math.random();
+  const v = Math.random();
+  return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+}
 
 /** Populate the simulation from a procedurally generated star system. */
 export function loadStarSystem(sim: Simulation, spec: StarSystemSpec): SceneSetup {
-  const star = sim.addBody({ name: spec.star.name, kind: 'star', mass: spec.star.mass, color: spec.star.color });
+  const star = sim.addBody({ name: spec.star.name, kind: 'star', mass: spec.star.mass, color: spec.star.color, age: spec.star.age ?? 0 });
   let outermost = 2;
   for (const p of spec.planets) {
     const planet = addOrbiting(sim, star, { name: p.name, mass: p.mass, kind: p.kind, color: p.color }, p);

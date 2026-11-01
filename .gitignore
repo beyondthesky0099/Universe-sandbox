@@ -3,3 +3,5 @@ dist/
 *.log
 .DS_Store
 .vite/
+server/node_modules/
+server/data/

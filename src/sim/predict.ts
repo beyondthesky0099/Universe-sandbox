@@ -6,7 +6,7 @@ import { Simulation } from './simulation';
  * with the most influential existing bodies (which are copied, so the live simulation
  * is untouched). Returns a flat [x, y, z, ...] array of sampled positions.
  */
-export function predictPath(sim: Simulation, init: BodyInit, maxPoints = 400, influencers = 8): Float32Array {
+export function predictPath(sim: Simulation, init: BodyInit, maxPoints = 400, influencers = 8, excludeId?: number): Float32Array {
   const ghost = new Simulation(0);
   ghost.gravityScale = sim.gravityScale;
   ghost.collisions = false;
@@ -16,7 +16,8 @@ export function predictPath(sim: Simulation, init: BodyInit, maxPoints = 400, in
   const x = init.x ?? 0;
   const y = init.y ?? 0;
   const z = init.z ?? 0;
-  const ranked = [...sim.bodies]
+  const ranked = sim.bodies
+    .filter((b) => b.id !== excludeId)
     .map((b) => ({ b, pull: b.mass / Math.max(1e-12, (b.x - x) ** 2 + (b.y - y) ** 2 + (b.z - z) ** 2) }))
     .sort((p, q) => q.pull - p.pull)
     .slice(0, influencers);

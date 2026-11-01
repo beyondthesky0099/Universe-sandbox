@@ -1,0 +1,51 @@
+{
+ "source": "NASA Saturnian Rings Fact Sheet (https://nssdc.gsfc.nasa.gov/planetary/factsheet/satringfact.html)",
+ "saturnEquatorialRadiusKm": 60268,
+ "rings": [
+  {
+   "name": "C ring",
+   "inner": 74658,
+   "outer": 91975,
+   "tau": 0.2,
+   "albedo": 0.21
+  },
+  {
+   "name": "B ring",
+   "inner": 91975,
+   "outer": 117507,
+   "tau": 1.45,
+   "albedo": 0.5
+  },
+  {
+   "name": "Cassini Division",
+   "inner": 117507,
+   "outer": 122340,
+   "tau": 0.05,
+   "albedo": 0.3
+  },
+  {
+   "name": "A ring",
+   "inner": 122340,
+   "outer": 136780,
+   "tau": 0.7,
+   "albedo": 0.5
+  },
+  {
+   "name": "F ring",
+   "inner": 139801,
+   "outer": 139851,
+   "tau": 0.1,
+   "albedo": 0.6
+  }
+ ],
+ "gaps": [
+  {
+   "name": "Encke Gap",
+   "radius": 133410
+  },
+  {
+   "name": "Keeler Gap",
+   "radius": 136487
+  }
+ ]
+}

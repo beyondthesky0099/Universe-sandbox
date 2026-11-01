@@ -12,6 +12,9 @@ export const G = 4 * Math.PI * Math.PI;
 export const EARTH_MASS = 3.003e-6; // M☉
 export const JUPITER_MASS = 9.546e-4; // M☉
 
+/** Speed of light in AU per year. */
+export const C_AU_PER_YEAR = 63241.077;
+
 /** 1 AU/yr expressed in km/s. */
 export const AU_PER_YEAR_IN_KMS = 4.7406;
 
@@ -30,6 +33,14 @@ export function formatMass(m: number): string {
 
 export function formatDistance(au: number): string {
   return `${fmt(au)} AU`;
+}
+
+/** Real sizes in kilometres (large stars in AU). */
+export function formatKm(au: number): string {
+  const km = au * 149597870.7;
+  if (km >= 1e7) return formatDistance(au);
+  if (km >= 1000) return `${Math.round(km).toLocaleString('en-US')} km`;
+  return `${Number(km.toPrecision(3))} km`;
 }
 
 export function formatSpeed(auPerYear: number): string {

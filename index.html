@@ -2,7 +2,9 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="theme-color" content="#02030a" />
+    <meta name="description" content="Astrarium: explore a procedural galaxy and play with real N-body gravity in your browser." />
     <title>Astrarium: Universe Sandbox</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✦</text></svg>" />
   </head>
@@ -10,48 +12,85 @@
     <div id="app">
       <canvas id="scene"></canvas>
       <div id="labels"></div>
+      <div id="fade"></div>
 
       <header id="topbar">
-        <div class="brand">✦ Astrarium</div>
+        <button id="btn-menu" class="icon only-mobile" title="Show / hide panels" aria-label="Toggle panels">☰</button>
+        <div class="brand">✦ <span>Astrarium</span></div>
         <nav class="tabs" role="tablist">
           <button id="tab-galaxy" role="tab">Galaxy Map</button>
           <button id="tab-system" role="tab">Sandbox</button>
         </nav>
         <div class="clock" data-view="system">
-          <button id="btn-play" class="icon" title="Play / pause (Space)">⏸</button>
+          <button id="btn-rewind" class="icon" title="Hold to rewind (R)" aria-label="Rewind">⏪</button>
+          <button id="btn-play" class="icon" title="Play / pause (Space)" aria-label="Play or pause">⏸</button>
           <span id="sim-time">0 days</span>
           <span id="lag" class="warn hidden" title="The simulation can't keep up at this speed. Time is being dropped.">lagging</span>
+          <button id="btn-undo" class="icon" title="Undo (Ctrl+Z)" aria-label="Undo" disabled>↶</button>
+          <button id="btn-redo" class="icon" title="Redo (Ctrl+Shift+Z)" aria-label="Redo" disabled>↷</button>
         </div>
         <div id="stats"></div>
+        <button id="btn-sound" class="icon" title="Sound on / off" aria-label="Toggle sound">🔇</button>
+        <button id="btn-help" class="icon" title="Tutorial (?)" aria-label="Show tutorial">?</button>
       </header>
 
       <!-- Galaxy map -->
       <aside id="galaxy-panel" class="panel left" data-view="galaxy">
-        <h2 id="galaxy-name">Galaxy</h2>
-        <p class="muted" id="galaxy-info"></p>
-        <label class="row">
-          <span>Seed</span>
-          <input id="galaxy-seed" type="text" spellcheck="false" />
-        </label>
-        <div class="row buttons">
-          <button id="btn-galaxy-go">Generate</button>
-          <button id="btn-galaxy-random">Random galaxy</button>
-        </div>
-        <p class="muted small">Click any star to inspect its system. Drag to orbit, right-drag to pan, scroll to zoom.</p>
+        <section>
+          <h2 id="galaxy-name">Galaxy</h2>
+          <p class="muted" id="galaxy-info"></p>
+          <label class="row">
+            <span>Seed</span>
+            <input id="galaxy-seed" type="text" spellcheck="false" />
+          </label>
+          <div class="row buttons">
+            <button id="btn-galaxy-go">Generate</button>
+            <button id="btn-galaxy-random">Random galaxy</button>
+          </div>
+        </section>
+        <section>
+          <h3>Find</h3>
+          <input id="star-search" type="search" placeholder="Search star names…" spellcheck="false" autocomplete="off" />
+          <ul id="search-results" class="list"></ul>
+          <label class="row">
+            <span>Show</span>
+            <select id="star-filter">
+              <option value="">All systems</option>
+              <option value="habitable">Habitable worlds</option>
+              <option value="gasGiant">Gas giants</option>
+              <option value="moons">Planets with moons</option>
+              <option value="manyPlanets">6+ planets</option>
+              <option value="binary">Binary stars</option>
+              <option value="belt">Asteroid belts</option>
+              <option value="massive">Massive O/B stars</option>
+              <option value="bookmarked">Bookmarked</option>
+              <option value="visited">Visited</option>
+            </select>
+          </label>
+          <p id="filter-status" class="muted small"></p>
+        </section>
+        <section>
+          <h3>Bookmarks</h3>
+          <ul id="bookmark-list" class="list"></ul>
+          <p class="muted small">Click a star to inspect it, double-click to fly there, and click the bright core for the central black hole. Zoom right into a star to enter its system.</p>
+        </section>
       </aside>
 
       <aside id="star-panel" class="panel right hidden" data-view="galaxy">
         <h2 id="star-name">Star</h2>
         <dl id="star-facts" class="facts"></dl>
         <div class="row buttons">
+          <button id="btn-star-bookmark" title="Bookmark (B)">☆ Bookmark</button>
           <button id="btn-star-fly">Fly to</button>
+        </div>
+        <div class="row buttons">
           <button id="btn-star-enter" class="primary">Enter system →</button>
         </div>
       </aside>
 
       <!-- System sandbox -->
       <aside id="system-panel" class="panel left" data-view="system">
-        <section>
+        <section id="section-scenario">
           <h3>Scenario</h3>
           <div id="origin" class="origin hidden">
             <span>Exploring <b id="origin-name"></b></span>
@@ -62,9 +101,15 @@
             <button id="btn-preset-load">Load</button>
           </div>
           <p id="preset-desc" class="muted small"></p>
+          <div class="row buttons">
+            <button id="btn-save" title="Download this scene as a file">Save</button>
+            <button id="btn-open" title="Open a saved scene file">Open</button>
+            <button id="btn-share" title="Copy a link to this scene">Share link</button>
+          </div>
+          <input id="file-input" type="file" accept=".json,application/json" class="hidden" />
         </section>
 
-        <section>
+        <section id="section-tools">
           <h3>Tools</h3>
           <div class="segmented">
             <button id="tool-select" data-tool="select" title="Select tool (V)">Select</button>
@@ -81,7 +126,7 @@
           </div>
         </section>
 
-        <section>
+        <section id="section-sim">
           <h3>Simulation</h3>
           <label class="row slider">
             <span>Speed</span>
@@ -96,20 +141,47 @@
           <div class="checks">
             <label class="check"><input id="opt-collisions" type="checkbox" checked /> Collisions</label>
             <label class="check"><input id="opt-debris" type="checkbox" checked /> Debris</label>
-            <label class="check"><input id="opt-trails" type="checkbox" checked /> Trails</label>
-            <label class="check"><input id="opt-labels" type="checkbox" checked /> Labels</label>
+            <label class="check"><input id="opt-shatter" type="checkbox" checked /> Shattering</label>
+            <label class="check"><input id="opt-tidal" type="checkbox" checked /> Tidal breakup</label>
           </div>
           <div class="row buttons">
-            <button id="btn-clear-trails">Clear trails</button>
             <button id="btn-recenter" title="Shift to the centre-of-mass frame">Recenter</button>
             <button id="btn-reset">Reset</button>
           </div>
+        </section>
+
+        <section id="section-display">
+          <h3>Display</h3>
+          <div class="checks">
+            <label class="check"><input id="opt-trails" type="checkbox" checked /> Trails</label>
+            <label class="check" title="Draw trails relative to the followed body"><input id="opt-rel-trails" type="checkbox" /> Relative trails</label>
+            <label class="check"><input id="opt-labels" type="checkbox" checked /> Labels</label>
+            <label class="check"><input id="opt-orbits" type="checkbox" checked /> Orbit path</label>
+            <label class="check"><input id="opt-hz" type="checkbox" /> Habitable zones</label>
+          </div>
+          <div class="row buttons">
+            <button id="btn-clear-trails">Clear trails</button>
+          </div>
+        </section>
+
+        <section id="section-settings">
+          <h3>Settings</h3>
+          <label class="row">
+            <span>Graphics</span>
+            <select id="quality">
+              <option value="low">Low</option>
+              <option value="medium">Medium</option>
+              <option value="high">High</option>
+            </select>
+          </label>
+          <p id="engine-info" class="muted small"></p>
         </section>
       </aside>
 
       <aside id="body-panel" class="panel right hidden" data-view="system">
         <h2 id="body-name">Body</h2>
         <dl id="body-facts" class="facts"></dl>
+        <div id="body-alerts"></div>
         <div class="row buttons">
           <button id="btn-mass-down" title="Halve mass">Mass ÷2</button>
           <button id="btn-mass-up" title="Double mass">Mass ×2</button>
@@ -118,10 +190,27 @@
           <button id="btn-follow" title="Follow (F)">Follow</button>
           <button id="btn-delete" class="danger" title="Delete (Del)">Delete</button>
         </div>
+        <div class="row buttons">
+          <button id="btn-supernova" class="danger hidden" title="Detonate this star">💥 Go supernova</button>
+        </div>
       </aside>
 
       <div id="toasts"></div>
       <footer id="hint"></footer>
+
+      <div id="tutorial" class="hidden" role="dialog" aria-modal="true" aria-labelledby="tutorial-title">
+        <div id="tutorial-highlight"></div>
+        <div class="tutorial-card">
+          <div class="tutorial-step" id="tutorial-step"></div>
+          <h2 id="tutorial-title"></h2>
+          <p id="tutorial-body"></p>
+          <div class="row buttons">
+            <button id="tutorial-skip" class="link">Skip</button>
+            <button id="tutorial-back">Back</button>
+            <button id="tutorial-next" class="primary">Next</button>
+          </div>
+        </div>
+      </div>
     </div>
     <script type="module" src="/src/main.ts"></script>
   </body>

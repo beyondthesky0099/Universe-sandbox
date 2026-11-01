@@ -73,14 +73,15 @@ export function circularSpeed(mass: number, r: number, gravityScale = 1): number
  * Velocity for a prograde circular orbit around `parent` at the given point, projected
  * onto the plane perpendicular to +Y (the "ecliptic"). Includes the parent's velocity.
  */
-export function circularOrbitVelocity(parent: Body, x: number, y: number, z: number, gravityScale = 1): Vec3 {
+export function circularOrbitVelocity(parent: Body, x: number, y: number, z: number, gravityScale = 1, extraMass = 0): Vec3 {
   const dx = x - parent.x;
   const dz = z - parent.z;
   const dy = y - parent.y;
   const r = Math.hypot(dx, dy, dz);
   const rh = Math.hypot(dx, dz);
   if (r === 0 || rh === 0) return { x: parent.vx, y: parent.vy, z: parent.vz };
-  const s = circularSpeed(parent.mass, r, gravityScale);
+  // Relative orbital speed depends on the combined mass of both bodies.
+  const s = circularSpeed(parent.mass + extraMass, r, gravityScale);
   // ŷ × r̂ gives the prograde tangent.
   return { x: parent.vx + (dz / rh) * s, y: parent.vy, z: parent.vz + (-dx / rh) * s };
 }

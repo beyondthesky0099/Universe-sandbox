@@ -6,7 +6,7 @@ import type { Approach } from '../sim/forecast';
 import { orbitPath } from '../sim/orbits';
 import type { SceneSetup } from '../sim/presets';
 import type { SimEvent, Simulation } from '../sim/simulation';
-import { BodyVisual, DETAIL_PIXEL_RADIUS } from './bodyVisual';
+import { atmosphereMaterial, BodyVisual, DETAIL_PIXEL_RADIUS } from './bodyVisual';
 import { createStarfield } from './starfield';
 import { dotTexture, glowTexture, ringTexture } from './textures';
 
@@ -76,6 +76,7 @@ export class SystemView {
   private climateTimer = 0;
   private followBlend = 1;
   private followDistance = 0;
+  private followStartDistance = 0;
   private cameraAnim?: { from: THREE.Vector3; to: THREE.Vector3; target: THREE.Vector3; t: number; speed: number };
   private lastTrailRef: number | undefined;
 
@@ -231,6 +232,10 @@ export class SystemView {
     this.cameraAnim = { from: this.camera.position.clone(), to: this.controls.target.clone().add(offset.multiplyScalar(factor)), target: this.controls.target.clone(), t: 0, speed };
   }
 
+  stopCameraAnimation(): void {
+    this.cameraAnim = undefined;
+  }
+
   clearTrails(): void {
     for (const v of this.visuals.values()) v.clearTrail();
   }
@@ -297,7 +302,9 @@ export class SystemView {
     const body = id !== undefined ? this.sim.getBody(id) : undefined;
     if (body) {
       const current = this.cameraDistance;
-      this.followDistance = THREE.MathUtils.clamp(current, body.radius * 6, Math.max(body.radius * 60, 0.5));
+      this.followStartDistance = current;
+      // Close enough to see the body properly, but keep the user's zoom if it's already reasonable.
+      this.followDistance = THREE.MathUtils.clamp(current, body.radius * 4, body.radius * 14);
     }
   }
 
@@ -309,15 +316,18 @@ export class SystemView {
     // Follow camera: move target and camera together.
     const followed = this.followId !== undefined ? this.sim.getBody(this.followId) : undefined;
     if (followed) {
-      this.followBlend = Math.min(1, this.followBlend + dt * 2.5);
-      const ease = this.followBlend < 1 ? 1 - Math.pow(1 - this.followBlend, 3) : 1;
+      const blending = this.followBlend < 1;
+      this.followBlend = Math.min(1, this.followBlend + dt * 1.2);
+      const ease = 1 - Math.pow(1 - this.followBlend, 3);
       const desired = new THREE.Vector3(followed.x, followed.y, followed.z);
-      const delta = desired.sub(this.controls.target).multiplyScalar(ease);
+      const delta = desired.sub(this.controls.target).multiplyScalar(blending ? ease : 1);
       this.controls.target.add(delta);
       this.camera.position.add(delta);
-      if (this.followBlend < 1) {
+      if (blending) {
+        // Zoom smoothly in log space so huge distance changes still feel even.
         const offset = this.camera.position.clone().sub(this.controls.target);
-        offset.setLength(THREE.MathUtils.lerp(offset.length(), this.followDistance, ease * 0.15));
+        const d = Math.exp(THREE.MathUtils.lerp(Math.log(this.followStartDistance), Math.log(this.followDistance), ease));
+        offset.setLength(d);
         this.camera.position.copy(this.controls.target).add(offset);
       }
     }
@@ -540,10 +550,8 @@ export class SystemView {
   private updateShockwaves(): void {
     const waves = this.sim.shockwaves;
     while (this.shockShells.length < waves.length) {
-      const shell = new THREE.Mesh(
-        new THREE.SphereGeometry(1, 48, 24),
-        new THREE.MeshBasicMaterial({ color: 0x9fd0ff, transparent: true, opacity: 0.2, depthWrite: false, blending: THREE.AdditiveBlending, wireframe: true }),
-      );
+      // Rim-lit bubble: bright at the limb, transparent face-on.
+      const shell = new THREE.Mesh(new THREE.SphereGeometry(1, 64, 32), atmosphereMaterial(0x9fd0ff, 0.8));
       this.shockShells.push(shell);
       this.scene.add(shell);
     }
@@ -553,8 +561,7 @@ export class SystemView {
       if (!w) return;
       shell.position.set(w.x, w.y, w.z);
       shell.scale.setScalar(w.radius);
-      shell.rotation.y += 0.002;
-      (shell.material as THREE.MeshBasicMaterial).opacity = 0.22 * (1 - w.radius / w.maxRadius);
+      (shell.material as THREE.ShaderMaterial).uniforms.uIntensity.value = 0.9 * (1 - w.radius / w.maxRadius);
     });
   }
 

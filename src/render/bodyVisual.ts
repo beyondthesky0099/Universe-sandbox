@@ -10,7 +10,7 @@ const SPHERE = new THREE.SphereGeometry(1, 64, 32);
 const SPHERE_LOW = new THREE.SphereGeometry(1, 24, 12);
 const DISK = new THREE.RingGeometry(1.6, 5, 96, 1);
 const RINGS = new THREE.RingGeometry(1.35, 2.5, 128, 1);
-const BEAM = new THREE.ConeGeometry(0.12, 1, 24, 1, true).translate(0, 0.5, 0);
+const BEAM = new THREE.ConeGeometry(0.05, 1, 24, 1, true).translate(0, 0.5, 0);
 
 /** Minimum on-screen radius (px) so tiny bodies stay visible when zoomed out. */
 const MIN_PIXEL_RADIUS = 2.2;
@@ -43,7 +43,7 @@ const ATMOSPHERE_FRAGMENT = /* glsl */ `
   }
 `;
 
-function atmosphereMaterial(color: number, intensity: number): THREE.ShaderMaterial {
+export function atmosphereMaterial(color: number, intensity: number): THREE.ShaderMaterial {
   return new THREE.ShaderMaterial({
     vertexShader: ATMOSPHERE_VERTEX,
     fragmentShader: ATMOSPHERE_FRAGMENT,
@@ -134,7 +134,7 @@ export class BodyVisual {
         const beamMat = new THREE.MeshBasicMaterial({
           color: 0x9fd8ff,
           transparent: true,
-          opacity: 0.35,
+          opacity: 0.22,
           blending: THREE.AdditiveBlending,
           depthWrite: false,
           side: THREE.DoubleSide,
@@ -202,7 +202,7 @@ export class BodyVisual {
   applyDetail(body: Body, textureWidth: number): void {
     if (!this.isPlanet) return;
     const key = this.wantedDetailKey(body);
-    const look = { kind: body.kind, color: body.color, seed: seedFromName(this.name), climate: this.climate, earthMasses: body.mass / EARTH_MASS };
+    const look = { kind: body.kind, color: body.color, seed: seedFromName(this.name), climate: this.climate, earthMasses: body.mass / EARTH_MASS, rings: this.name === 'Saturn' };
     const tex = makePlanetTextures(look, textureWidth);
     this.disposeDetail();
     const mat = this.mesh.material as THREE.MeshStandardMaterial;
@@ -226,7 +226,7 @@ export class BodyVisual {
       this.mesh.add(this.clouds);
     }
     if (tex.atmosphere !== undefined) {
-      this.atmosphere = new THREE.Mesh(SPHERE_LOW, atmosphereMaterial(tex.atmosphere, body.kind === 'gas' ? 0.6 : 0.9));
+      this.atmosphere = new THREE.Mesh(SPHERE, atmosphereMaterial(tex.atmosphere, body.kind === 'gas' ? 0.4 : 0.9));
       this.atmosphere.scale.setScalar(1.04);
       this.mesh.add(this.atmosphere);
     }

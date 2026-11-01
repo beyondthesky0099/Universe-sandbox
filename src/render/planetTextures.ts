@@ -11,6 +11,8 @@ export interface PlanetLook {
   climate: Climate;
   /** Earth masses. */
   earthMasses: number;
+  /** Always give a gas giant rings (e.g. Saturn). */
+  rings?: boolean;
 }
 
 export interface PlanetTextures {
@@ -85,7 +87,16 @@ function rockyTextures(look: PlanetLook, width: number): PlanetTextures {
   const base = hexToRgb(look.color);
   const out: Partial<PlanetTextures> = {};
 
-  switch (look.climate) {
+  // Small bodies can't hold an atmosphere or oceans, whatever their temperature.
+  const climate = look.climate === 'temperate' && look.earthMasses < 0.1 ? 'barren' : look.climate;
+  switch (climate) {
+    case 'barren': {
+      out.map = paint(width, (x, y, z) => {
+        const h = n.fbm(x * 2.2, y * 2.2, z * 2.2, 5);
+        return mix(shade(base, 0.6), shade(base, 1.1), h * 0.5 + 0.5);
+      });
+      break;
+    }
     case 'temperate': {
       const seaLevel = -0.05 + rng() * 0.15;
       const deep: RGB = [0.04, 0.14, 0.36];
@@ -200,30 +211,31 @@ function gasTextures(look: PlanetLook, width: number): PlanetTextures {
   const rng = mulberry32(look.seed);
   const base = hexToRgb(look.color);
   const iceGiant = base[2] > base[0];
-  const bandCount = iceGiant ? 4 + rng() * 4 : 8 + rng() * 10;
-  const contrast = iceGiant ? 0.12 : 0.35;
+  const bandCount = iceGiant ? 4 + rng() * 4 : 12 + rng() * 12;
+  const contrast = iceGiant ? 0.14 : 0.45;
   const palette: RGB[] = Array.from({ length: 5 }, () => {
     const f = 1 + (rng() - 0.5) * contrast * 2;
     const hueShift = (rng() - 0.5) * 0.12;
     return [base[0] * f + hueShift, base[1] * f, base[2] * f - hueShift] as RGB;
   });
   // A few storms.
-  const storms = Array.from({ length: 1 + Math.floor(rng() * 3) }, () => ({
-    lat: (rng() - 0.5) * 1.6,
+  const storms = Array.from({ length: Math.floor(rng() * 3) }, () => ({
+    lat: (rng() - 0.5) * 1.4,
     lon: rng() * Math.PI * 2,
-    size: 0.08 + rng() * 0.12,
+    size: 0.035 + rng() * 0.05,
     color: rng() < 0.5 ? ([0.85, 0.45, 0.3] as RGB) : ([0.95, 0.93, 0.88] as RGB),
   }));
   const out: PlanetTextures = {
     map: paint(width, (x, y, z, lat) => {
-      const warp = n.fbm(x * 3, y * 3, z * 3, 4) * 0.35;
+      const warp = n.fbm(x * 4, y * 4, z * 4, 4) * 0.12;
       const t = (lat / Math.PI + 0.5) * bandCount + warp * 2;
       const idx = Math.floor(t);
       const f = t - idx;
       const a = palette[((idx % 5) + 5) % 5];
       const b = palette[(((idx + 1) % 5) + 5) % 5];
       let c = mix(a, b, smoothstep(0.35, 0.65, f));
-      c = shade(c, 0.92 + n.noise(x * 12, y * 30, z * 12) * 0.08);
+      // Fine stripes and turbulence within each band.
+      c = shade(c, 0.9 + 0.06 * Math.sin(t * Math.PI * 3.3) + n.noise(x * 12, y * 30, z * 12) * 0.08);
       const lon = Math.atan2(z, x);
       for (const s of storms) {
         const dl = Math.atan2(Math.sin(lon - s.lon), Math.cos(lon - s.lon));
@@ -234,7 +246,7 @@ function gasTextures(look: PlanetLook, width: number): PlanetTextures {
     }),
     atmosphere: iceGiant ? 0x8fd0ff : 0xffe2b0,
   };
-  if (rng() < 0.4) out.rings = ringTexture(look.seed, base);
+  if (rng() < 0.4 || look.rings) out.rings = ringTexture(look.seed, base);
   return out;
 }
 

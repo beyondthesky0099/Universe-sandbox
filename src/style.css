@@ -44,6 +44,8 @@ body {
   position: absolute;
   inset: 0;
   pointer-events: none;
+  /* CSS2DRenderer sets z-index on labels; keep them in their own stacking context below the UI. */
+  z-index: 0;
 }
 
 .body-label {
@@ -66,6 +68,7 @@ body {
   left: 0;
   right: 0;
   height: 48px;
+  z-index: 3;
   display: flex;
   align-items: center;
   gap: 18px;
@@ -107,6 +110,7 @@ body {
 }
 
 .clock {
+  white-space: nowrap;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -119,7 +123,7 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
-.warn {
+#lag {
   color: #ffb74a;
   font-size: 11px;
   text-transform: uppercase;
@@ -140,6 +144,7 @@ body {
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+  z-index: 2;
 }
 
 .panel.left {
@@ -222,7 +227,8 @@ body {
 
 button,
 select,
-input[type='text'] {
+input[type='text'],
+input[type='search'] {
   font: inherit;
   color: var(--text);
   background: rgba(255, 255, 255, 0.06);
@@ -234,6 +240,20 @@ input[type='text'] {
 input[type='text'] {
   flex: 1;
   min-width: 0;
+}
+
+input[type='search'] {
+  width: 100%;
+}
+
+button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+button:disabled:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: var(--panel-border);
 }
 
 select {
@@ -276,6 +296,11 @@ button.primary:hover {
 button.danger:hover {
   background: rgba(255, 107, 107, 0.18);
   border-color: var(--danger);
+}
+
+button.icon.active {
+  background: rgba(63, 184, 255, 0.35);
+  border-color: var(--accent);
 }
 
 button.icon {
@@ -369,6 +394,7 @@ button.link {
   align-items: center;
   gap: 6px;
   pointer-events: none;
+  z-index: 4;
 }
 
 .toast {
@@ -407,13 +433,162 @@ button.link {
   white-space: nowrap;
 }
 
+/* Lists (search results, bookmarks) */
+.list {
+  list-style: none;
+  margin: 6px 0;
+  padding: 0;
+  max-height: 160px;
+  overflow-y: auto;
+}
+
+.list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.list li:hover,
+.list li:focus-visible {
+  background: rgba(127, 220, 255, 0.12);
+  outline: none;
+}
+
+.list li .muted {
+  font-size: 11px;
+}
+
+.list:empty {
+  display: none;
+}
+
+/* Alerts in the body panel */
+.alert {
+  padding: 6px 8px;
+  border-radius: 7px;
+  margin: 4px 0 10px;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.alert.warn {
+  background: rgba(255, 178, 74, 0.12);
+  border: 1px solid rgba(255, 178, 74, 0.4);
+}
+
+.alert.danger {
+  background: rgba(255, 74, 74, 0.14);
+  border: 1px solid rgba(255, 74, 74, 0.5);
+}
+
+.alert.good {
+  background: rgba(61, 220, 132, 0.1);
+  border: 1px solid rgba(61, 220, 132, 0.4);
+}
+
+/* Warp fade between views */
+#fade {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  background: radial-gradient(circle at center, rgba(220, 235, 255, 0.95), rgba(40, 60, 110, 0.98) 55%, #02030a);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.4s ease;
+}
+
+#fade.on {
+  opacity: 1;
+}
+
+/* Tutorial */
+#tutorial {
+  position: absolute;
+  inset: 0;
+  z-index: 50;
+  background: rgba(2, 3, 10, 0.35);
+}
+
+#tutorial-highlight {
+  position: absolute;
+  border: 2px solid var(--accent);
+  border-radius: 10px;
+  box-shadow: 0 0 0 9999px rgba(2, 3, 10, 0.45), 0 0 18px rgba(127, 220, 255, 0.6);
+  transition: all 0.3s ease;
+  pointer-events: none;
+}
+
+.tutorial-card {
+  position: absolute;
+  left: 50%;
+  bottom: 70px;
+  transform: translateX(-50%);
+  width: min(440px, calc(100% - 28px));
+  padding: 18px;
+  background: rgba(12, 16, 30, 0.95);
+  border: 1px solid var(--accent);
+  border-radius: 12px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+}
+
+.tutorial-card h2 {
+  margin: 4px 0 8px;
+  font-size: 17px;
+}
+
+.tutorial-card p {
+  line-height: 1.5;
+  margin: 0 0 12px;
+}
+
+.tutorial-step {
+  color: var(--muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.only-mobile {
+  display: none;
+}
+
 @media (max-width: 760px) {
+  #topbar {
+    gap: 8px;
+    padding: 0 8px;
+  }
+  .brand span,
+  #stats,
+  #hint,
+  #btn-undo,
+  #btn-redo {
+    display: none;
+  }
+  .only-mobile {
+    display: inline-block;
+  }
   .panel {
-    width: calc(50% - 21px);
+    width: calc(100% - 20px);
+    left: 10px !important;
+    right: 10px !important;
+    max-height: 45%;
     font-size: 12px;
   }
-  #stats,
-  #hint {
+  .panel.right {
+    top: auto;
+    bottom: 10px;
+  }
+  body.panels-hidden .panel.left {
     display: none;
+  }
+  .tabs button {
+    padding: 6px 10px;
+  }
+  button,
+  select {
+    min-height: 34px;
   }
 }

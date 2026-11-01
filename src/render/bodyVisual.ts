@@ -126,6 +126,15 @@ export class BodyVisual {
         material = new THREE.MeshBasicMaterial({ color: new THREE.Color(body.color).multiplyScalar(1.15) });
         this.glow = this.makeGlow(body.color, 1);
         break;
+      case 'giant':
+        // Swollen, dimmer surface with a broad orange halo.
+        material = new THREE.MeshBasicMaterial({ color: new THREE.Color(body.color).multiplyScalar(0.95) });
+        this.glow = this.makeGlow(0xff8040, 0.7);
+        break;
+      case 'whitedwarf':
+        material = new THREE.MeshBasicMaterial({ color: 0xf4f8ff });
+        this.glow = this.makeGlow(0xcfe0ff, 0.8);
+        break;
       case 'neutron': {
         material = new THREE.MeshBasicMaterial({ color: 0xe8f4ff });
         this.glow = this.makeGlow(0x9fd0ff, 0.9);
@@ -252,14 +261,26 @@ export class BodyVisual {
   }
 
   /** Update transform. `worldPerPixel` is the world size of one screen pixel at the body's depth. */
-  update(body: Body, worldPerPixel: number, dt: number): void {
+  update(body: Body, worldPerPixel: number, dt: number, lockTo?: Body): void {
     this.group.position.set(body.x, body.y, body.z);
     const r = Math.max(body.radius, worldPerPixel * MIN_PIXEL_RADIUS);
     this.mesh.scale.setScalar(r);
-    this.mesh.rotation.y += dt * 0.3;
+    if (lockTo) {
+      // Tidally locked: always show the same face to the parent.
+      this.mesh.rotation.y = Math.atan2(lockTo.x - body.x, lockTo.z - body.z) - Math.PI / 2;
+    } else {
+      this.mesh.rotation.y += dt * 0.3;
+    }
     if (this.clouds) this.clouds.rotation.y += dt * 0.05;
     if (this.glow) {
-      const big = this.kind === 'star' ? Math.max(body.radius * 9, worldPerPixel * 28) : this.kind === 'neutron' ? Math.max(body.radius * 12, worldPerPixel * 22) : body.radius * 14;
+      const big =
+        this.kind === 'star'
+          ? Math.max(body.radius * 9, worldPerPixel * 28)
+          : this.kind === 'giant'
+            ? Math.max(body.radius * 4, worldPerPixel * 40)
+            : this.kind === 'neutron' || this.kind === 'whitedwarf'
+              ? Math.max(body.radius * 12, worldPerPixel * 22)
+              : body.radius * 14;
       this.glow.scale.setScalar(big);
     }
     if (this.disk) {

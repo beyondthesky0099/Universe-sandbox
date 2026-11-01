@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { luminosity, type Body } from '../sim/body';
+import { isLuminous, luminosity, type Body } from '../sim/body';
+import { isTidallyLocked, lagrangePoints } from '../sim/analysis';
+import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import { bodyTemperature, climateFor, habitableZone } from '../sim/climate';
 import type { Approach } from '../sim/forecast';
 import { orbitPath } from '../sim/orbits';
@@ -45,6 +47,7 @@ export class SystemView {
   labelsEnabled = true;
   habitableZones = false;
   orbitsEnabled = true;
+  lagrangeEnabled = false;
   trailFrame: TrailFrame = 'absolute';
   selectedId: number | undefined;
   followId: number | undefined;
@@ -79,6 +82,10 @@ export class SystemView {
   private followStartDistance = 0;
   private cameraAnim?: { from: THREE.Vector3; to: THREE.Vector3; target: THREE.Vector3; t: number; speed: number };
   private lastTrailRef: number | undefined;
+  /** Body id → parent id for tidally locked bodies (refreshed with climate). */
+  private locks = new Map<number, number>();
+  private readonly lagrangeMarkers: THREE.Sprite[] = [];
+  private readonly ripples: { mesh: THREE.Mesh; age: number; life: number; size: number }[] = [];
 
   constructor(
     private readonly sim: Simulation,
@@ -151,6 +158,22 @@ export class SystemView {
     this.approachGroup.add(this.approachLine, ...this.approachMarkers);
     this.approachGroup.visible = false;
     this.scene.add(this.approachGroup);
+
+    // Lagrange point markers (L1–L5) for the selected body.
+    for (const name of ['L1', 'L2', 'L3', 'L4', 'L5']) {
+      const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: ringTexture(), color: 0xc8a0ff, sizeAttenuation: false, depthTest: false, transparent: true }));
+      s.scale.setScalar(0.025);
+      s.renderOrder = 10;
+      s.visible = false;
+      const el = document.createElement('div');
+      el.className = 'body-label lagrange-label';
+      el.textContent = name;
+      const label = new CSS2DObject(el);
+      label.center.set(-0.3, 0.5);
+      s.add(label);
+      this.lagrangeMarkers.push(s);
+      this.scene.add(s);
+    }
 
     // Habitable-zone annuli.
     for (let i = 0; i < MAX_HZ; i++) {
@@ -361,8 +384,15 @@ export class SystemView {
       if (!v) continue;
       tmp.set(b.x, b.y, b.z);
       const wpp = this.worldPerPixel(tmp, viewportHeight);
-      v.update(b, wpp, dt);
-      if (updateClimate && v.isPlanet) v.setClimate(climateFor(b.kind, bodyTemperature(this.sim.bodies, b)));
+      const lockId = this.locks.get(b.id);
+      v.update(b, wpp, dt, lockId !== undefined ? this.sim.getBody(lockId) : undefined);
+      if (updateClimate && v.isPlanet) {
+        v.setClimate(climateFor(b.kind, bodyTemperature(this.sim.bodies, b)));
+        const parent = this.sim.parentOf(b);
+        const d = parent ? Math.hypot(b.x - parent.x, b.y - parent.y, b.z - parent.z) : 0;
+        if (parent && isTidallyLocked(b, parent, d)) this.locks.set(b.id, parent.id);
+        else this.locks.delete(b.id);
+      }
       if (this.trailsEnabled) {
         if (simRunning) v.pushTrail(b, spacing, ref);
         else v.placeTrail(ref);
@@ -385,6 +415,8 @@ export class SystemView {
     this.updateHabitableZones();
     this.updateOrbitLine();
     this.updateShockwaves();
+    this.updateLagrange();
+    this.updateRipples(dt);
 
     // Selection marker.
     const sel = this.selectedId !== undefined ? this.sim.getBody(this.selectedId) : undefined;
@@ -398,17 +430,47 @@ export class SystemView {
     this.starfield.scale.setScalar(this.camera.far * 0.5);
   }
 
+  private updateLagrange(): void {
+    const sel = this.selectedId !== undefined ? this.sim.getBody(this.selectedId) : undefined;
+    const parent = this.lagrangeEnabled && sel ? this.sim.parentOf(sel) : undefined;
+    const points = sel && parent ? lagrangePoints(parent, sel) : [];
+    this.lagrangeMarkers.forEach((m, i) => {
+      const p = points[i];
+      m.visible = !!p;
+      (m.children[0] as CSS2DObject).visible = !!p;
+      if (p) m.position.set(p.x, p.y, p.z);
+    });
+  }
+
+  /** Expanding gravitational-wave rings from compact-object mergers. */
+  private updateRipples(dt: number): void {
+    for (let i = this.ripples.length - 1; i >= 0; i--) {
+      const r = this.ripples[i];
+      r.age += dt;
+      const t = r.age / r.life;
+      if (t >= 1) {
+        this.scene.remove(r.mesh);
+        (r.mesh.material as THREE.Material).dispose();
+        r.mesh.geometry.dispose();
+        this.ripples.splice(i, 1);
+        continue;
+      }
+      r.mesh.scale.setScalar(r.size * (0.1 + t * 3));
+      (r.mesh.material as THREE.MeshBasicMaterial).opacity = 0.6 * (1 - t);
+    }
+  }
+
   private shouldLabel(b: Body): boolean {
     if (b.id === this.selectedId || b.id === this.followId) return true;
     const n = this.sim.bodies.length;
     if (n <= 30) return true;
     if (n > 300) return false;
-    return b.kind === 'star' || b.kind === 'blackhole' || b.kind === 'neutron';
+    return b.kind !== 'rocky' && b.kind !== 'gas';
   }
 
   private updateLights(): void {
     const stars = this.sim.bodies
-      .filter((b) => b.kind === 'star')
+      .filter((b) => isLuminous(b.kind))
       .sort((a, b) => luminosity(b) - luminosity(a))
       .slice(0, MAX_LIGHTS);
     this.lights.forEach((light, i) => {
@@ -426,7 +488,7 @@ export class SystemView {
   private updateHabitableZones(): void {
     const stars = this.habitableZones
       ? this.sim.bodies
-          .filter((b) => b.kind === 'star')
+          .filter((b) => isLuminous(b.kind))
           .sort((a, b) => luminosity(b) - luminosity(a))
           .slice(0, MAX_HZ)
       : [];
@@ -573,7 +635,22 @@ export class SystemView {
       ignite: 0xfff2c0,
       collapse: 0xb07cff,
       supernova: 0xd8ecff,
+      gwmerger: 0xb8d4ff,
+      redgiant: 0xff7040,
+      nebula: 0x60f0d0,
     };
+    if (e.type === 'gwmerger') {
+      for (let k = 0; k < 3; k++) {
+        const mesh = new THREE.Mesh(
+          new THREE.RingGeometry(0.96, 1, 96, 1),
+          new THREE.MeshBasicMaterial({ color: 0xb8d4ff, transparent: true, opacity: 0.6, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending }),
+        );
+        mesh.rotation.x = -Math.PI / 2;
+        mesh.position.set(e.x, e.y, e.z);
+        this.scene.add(mesh);
+        this.ripples.push({ mesh, age: -k * 0.35, life: 2.5, size: Math.max(e.size, 0.5) });
+      }
+    }
     const sprite = new THREE.Sprite(
       new THREE.SpriteMaterial({ map: glowTexture(), color: colors[e.type], transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }),
     );

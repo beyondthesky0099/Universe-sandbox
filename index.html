@@ -143,8 +143,20 @@
             <label class="check"><input id="opt-debris" type="checkbox" checked /> Debris</label>
             <label class="check"><input id="opt-shatter" type="checkbox" checked /> Shattering</label>
             <label class="check"><input id="opt-tidal" type="checkbox" checked /> Tidal breakup</label>
+            <label class="check" title="General relativity: perihelion precession and gravitational-wave inspiral"><input id="opt-relativity" type="checkbox" /> Relativity</label>
           </div>
+          <label class="row slider" title="Lower the speed of light to exaggerate relativistic effects">
+            <span>Light speed</span>
+            <input id="light-speed" type="range" min="-3.5" max="0" step="0.05" value="0" />
+            <output id="light-speed-out">real</output>
+          </label>
+          <label class="row slider" title="How fast stars age: years of stellar evolution per simulated year">
+            <span>Star aging</span>
+            <input id="evolution" type="range" min="0" max="9.5" step="0.1" value="0" />
+            <output id="evolution-out">real time</output>
+          </label>
           <div class="row buttons">
+            <button id="btn-age" title="Advance every star's age by a billion years">Age +1 Gyr</button>
             <button id="btn-recenter" title="Shift to the centre-of-mass frame">Recenter</button>
             <button id="btn-reset">Reset</button>
           </div>
@@ -158,6 +170,7 @@
             <label class="check"><input id="opt-labels" type="checkbox" checked /> Labels</label>
             <label class="check"><input id="opt-orbits" type="checkbox" checked /> Orbit path</label>
             <label class="check"><input id="opt-hz" type="checkbox" /> Habitable zones</label>
+            <label class="check"><input id="opt-lagrange" type="checkbox" /> Lagrange points</label>
           </div>
           <div class="row buttons">
             <button id="btn-clear-trails">Clear trails</button>

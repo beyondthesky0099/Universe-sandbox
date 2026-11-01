@@ -1,8 +1,11 @@
 import {
   Body,
   BodyInit,
+  CHANDRASEKHAR_MASS,
   createBody,
   defaultColor,
+  isCompact,
+  mainSequenceLifetime,
   kindForMass,
   mergedKind,
   NOMINAL_DENSITY,
@@ -11,9 +14,9 @@ import {
 import { kelvinToRgb } from './color';
 import { Octree } from './octree';
 import { ParticleSet } from './particles';
-import { EARTH_MASS, G } from './units';
+import { C_AU_PER_YEAR, EARTH_MASS, G } from './units';
 
-export type SimEventType = 'merge' | 'ignite' | 'collapse' | 'shatter' | 'disrupt' | 'supernova';
+export type SimEventType = 'merge' | 'ignite' | 'collapse' | 'shatter' | 'disrupt' | 'supernova' | 'gwmerger' | 'redgiant' | 'nebula';
 
 export interface SimEvent {
   type: SimEventType;
@@ -86,6 +89,15 @@ export class Simulation {
   etaTree = 0.25;
   dtMax = 0.01;
   dtMin = 1e-8;
+  /**
+   * General relativity: adds the first post-Newtonian correction (perihelion precession)
+   * and gravitational-wave energy loss between compact objects. Direct-summation mode only.
+   */
+  relativity = false;
+  /** Speed of light as a fraction of the real value. Lower it to exaggerate relativistic effects. */
+  lightSpeedScale = 1;
+  /** Years of stellar aging per simulated year (stellar evolution time-lapse). */
+  evolutionRate = 1;
   /** Plummer softening length (AU) to avoid singular forces. */
   softening = 1e-4;
 
@@ -98,6 +110,8 @@ export class Simulation {
   private usingTree = false;
   /** Bodies that recently shattered merge instead of shattering again until this time. */
   private readonly shatterCooldown = new Map<number, number>();
+  /** Bodies destroyed mid-step (e.g. Type Ia supernovae), removed at the end of the step. */
+  private readonly doomed = new Set<Body>();
   /** Pending supernovae: body id → simulation time of detonation. */
   readonly fuses = new Map<number, number>();
 
@@ -137,6 +151,7 @@ export class Simulation {
     this.shockwaves = [];
     this.fuses.clear();
     this.shatterCooldown.clear();
+    this.doomed.clear();
     this.time = 0;
     this.forcesDirty = true;
   }
@@ -207,6 +222,10 @@ export class Simulation {
     this.stepCount++;
     this.removeAbsorbedParticles();
     let changed = false;
+    if (this.evolutionRate > 0) {
+      for (const b of bodies) b.age += dt * this.evolutionRate;
+      if ((this.stepCount & 7) === 0 && this.evolveStars()) changed = true;
+    }
     if (this.collisions && this.resolveCollisions()) changed = true;
     if (this.tidal && this.resolveTides()) changed = true;
     if (this.shockwaves.length) this.updateShockwaves(dt);
@@ -218,7 +237,16 @@ export class Simulation {
         if (b && this.supernova(b)) changed = true;
       }
     }
+    if (this.doomed.size) {
+      this.bodies = this.bodies.filter((b) => !this.doomed.has(b));
+      this.doomed.clear();
+      changed = true;
+    }
     if (changed) this.computeForces();
+  }
+
+  get lightSpeed(): number {
+    return C_AU_PER_YEAR * this.lightSpeedScale;
   }
 
   // ---------------------------------------------------------------------------
@@ -238,6 +266,7 @@ export class Simulation {
     const n = bodies.length;
     const g = this.effectiveG;
     const eps2 = this.softening * this.softening;
+    const rel = this.relativity;
     let minTau2 = Infinity;
 
     for (const b of bodies) b.ax = b.ay = b.az = 0;
@@ -264,6 +293,7 @@ export class Simulation {
         if (g > 0 && msum > 0) {
           const tau2 = (r2 * r) / (g * msum);
           if (tau2 < minTau2) minTau2 = tau2;
+          if (rel) this.relativisticPair(bi, bj, g, msum);
         }
       }
     }
@@ -306,9 +336,48 @@ export class Simulation {
       acc[k + 2] = az;
     }
 
-    this.nextDt = Number.isFinite(minTau2)
-      ? Math.min(this.dtMax, Math.max(this.dtMin, this.eta * Math.sqrt(minTau2)))
-      : this.dtMax;
+    // Velocity-dependent relativistic forces need finer steps to stay energy-stable in leapfrog.
+    const eta = rel ? this.eta * 0.2 : this.eta;
+    this.nextDt = Number.isFinite(minTau2) ? Math.min(this.dtMax, Math.max(this.dtMin, eta * Math.sqrt(minTau2))) : this.dtMax;
+  }
+
+  /**
+   * 1PN (Schwarzschild-like) correction to the relative acceleration of a pair, plus
+   * quadrupole gravitational-wave damping when both are compact objects. Applied to
+   * the relative motion and split by mass so momentum is conserved.
+   */
+  private relativisticPair(bi: Body, bj: Body, g: number, M: number): void {
+    const c = this.lightSpeed;
+    const c2 = c * c;
+    const rx = bi.x - bj.x, ry = bi.y - bj.y, rz = bi.z - bj.z;
+    const vx = bi.vx - bj.vx, vy = bi.vy - bj.vy, vz = bi.vz - bj.vz;
+    const r2 = rx * rx + ry * ry + rz * rz;
+    const r = Math.sqrt(r2);
+    if (r === 0) return;
+    const v2 = vx * vx + vy * vy + vz * vz;
+    const rv = rx * vx + ry * vy + rz * vz;
+    const gm = g * M;
+    const k = gm / (c2 * r2 * r);
+    const radial = 4 * (gm / r) - v2;
+    let ax = k * (radial * rx + 4 * rv * vx);
+    let ay = k * (radial * ry + 4 * rv * vy);
+    let az = k * (radial * rz + 4 * rv * vz);
+    if (isCompact(bi.kind) && isCompact(bj.kind) && v2 > 0) {
+      // Peters (1964) power: P = 32/5 · G⁴ (m₁m₂)² M / (c⁵ r⁵), taken from the relative kinetic energy.
+      const mu = (bi.mass * bj.mass) / M;
+      const power = (32 / 5) * (g * g * g * g * (bi.mass * bj.mass) ** 2 * M) / (c2 * c2 * c * r2 * r2 * r);
+      const drag = power / (mu * v2);
+      ax -= drag * vx;
+      ay -= drag * vy;
+      az -= drag * vz;
+    }
+    const fi = bj.mass / M, fj = bi.mass / M;
+    bi.ax += ax * fi;
+    bi.ay += ay * fi;
+    bi.az += az * fi;
+    bj.ax -= ax * fj;
+    bj.ay -= ay * fj;
+    bj.az -= az * fj;
   }
 
   private computeForcesTree(): void {
@@ -472,7 +541,18 @@ export class Simulation {
     big.y = cy;
     big.z = cz;
 
-    this.events.push({ type: 'merge', message: `${small.name} collided with ${big.name}`, x: cx, y: cy, z: cz, size: big.radius });
+    if (isCompact(big.kind) && isCompact(small.kind) && big.kind !== 'whitedwarf' && small.kind !== 'whitedwarf') {
+      this.events.push({
+        type: 'gwmerger',
+        message: `${small.name} and ${big.name} merged in a burst of gravitational waves!`,
+        x: cx,
+        y: cy,
+        z: cz,
+        size: big.radius * 20,
+      });
+    } else {
+      this.events.push({ type: 'merge', message: `${small.name} collided with ${big.name}`, x: cx, y: cy, z: cz, size: big.radius });
+    }
     const starsOnly = big.kind !== 'blackhole' && small.kind !== 'blackhole' && big.kind !== 'neutron' && small.kind !== 'neutron';
     this.applyMass(big, m, mergedKind(big.kind, small.kind, m), starsOnly);
     if (this.debris && g > 0) this.spawnDebris(big, small, relV, nx0, ny0, nz0);
@@ -485,7 +565,11 @@ export class Simulation {
   private applyMass(body: Body, mass: number, kind: Body['kind'], allowSupernova = true): void {
     const oldKind = body.kind;
     body.mass = mass;
-    if (kind === 'blackhole' && oldKind === 'star' && allowSupernova) {
+    if (kind === 'whitedwarf' && mass >= CHANDRASEKHAR_MASS) {
+      this.typeIa(body);
+      return;
+    }
+    if (kind === 'blackhole' && (oldKind === 'star' || oldKind === 'giant') && allowSupernova) {
       // A star pushed past the collapse limit explodes, leaving a black hole.
       body.kind = 'star';
       body.radius = radiusFor('star', mass);
@@ -495,7 +579,8 @@ export class Simulation {
     body.kind = kind;
     body.radius = radiusFor(kind, mass);
     if (kind !== oldKind || kind === 'star') {
-      if (kind === 'star' || kind === 'neutron' || kind === 'blackhole' || oldKind === 'star') body.color = defaultColor(kind, mass);
+      if (kind !== 'rocky' && kind !== 'gas') body.color = defaultColor(kind, mass);
+      else if (oldKind !== 'rocky' && oldKind !== 'gas') body.color = defaultColor(kind, mass);
     }
     const { x, y, z } = body;
     if (kind !== oldKind && kind === 'star') {
@@ -511,6 +596,8 @@ export class Simulation {
     let kind = kindForMass(mass);
     if (body.kind === 'blackhole') kind = 'blackhole';
     else if (body.kind === 'neutron') kind = mergedKind('neutron', 'neutron', mass);
+    else if (body.kind === 'whitedwarf') kind = 'whitedwarf';
+    else if (body.kind === 'giant') kind = kind === 'blackhole' ? 'blackhole' : mass >= 0.08 ? 'giant' : kind;
     this.applyMass(body, mass, kind);
   }
 
@@ -635,7 +722,7 @@ export class Simulation {
 
   /** Distance (AU) inside which `primary` tears `victim` apart. */
   rocheLimit(primary: Body, victim: Body): number {
-    if (primary.kind === 'blackhole' || primary.kind === 'neutron') {
+    if (isCompact(primary.kind)) {
       // Classic tidal-disruption radius r_t ≈ R (M / m)^⅓.
       return 0.8 * victim.radius * Math.cbrt(primary.mass / victim.mass);
     }
@@ -649,9 +736,10 @@ export class Simulation {
       case 'rocky':
         return primary.kind !== 'rocky';
       case 'gas':
-        return primary.kind === 'star' || primary.kind === 'neutron' || primary.kind === 'blackhole';
+        return primary.kind === 'star' || primary.kind === 'giant' || isCompact(primary.kind);
       case 'star':
-        return primary.kind === 'neutron' || primary.kind === 'blackhole';
+      case 'giant':
+        return isCompact(primary.kind);
       default:
         return false;
     }
@@ -666,14 +754,15 @@ export class Simulation {
     let victimCount = 0;
     for (const b of bodies) {
       if (b.kind !== 'rocky') nonRocky.push(b);
-      if (b.kind === 'star' || b.kind === 'neutron' || b.kind === 'blackhole') luminousOrCompact.push(b);
-      if (b.kind === 'neutron' || b.kind === 'blackhole') compact.push(b);
-      if (b.kind === 'rocky' || b.kind === 'gas' || b.kind === 'star') victimCount++;
+      if (b.kind === 'star' || b.kind === 'giant' || isCompact(b.kind)) luminousOrCompact.push(b);
+      if (isCompact(b.kind)) compact.push(b);
+      if (b.kind === 'rocky' || b.kind === 'gas' || b.kind === 'star' || b.kind === 'giant') victimCount++;
     }
     if (victimCount === 0 || nonRocky.length === 0) return false;
     const dead = new Set<Body>();
     for (const v of bodies) {
-      const candidates = v.kind === 'star' ? compact : v.kind === 'gas' ? luminousOrCompact : v.kind === 'rocky' ? nonRocky : undefined;
+      const candidates =
+        v.kind === 'star' || v.kind === 'giant' ? compact : v.kind === 'gas' ? luminousOrCompact : v.kind === 'rocky' ? nonRocky : undefined;
       if (!candidates || candidates.length === 0 || dead.has(v)) continue;
       for (const p of candidates) {
         if (p === v || dead.has(p) || !this.canDisrupt(p, v)) continue;
@@ -693,7 +782,7 @@ export class Simulation {
 
   /** Tear `victim` into a stream of debris; a fraction accretes onto the primary. */
   private disrupt(primary: Body, victim: Body, dist: number): void {
-    const compact = primary.kind === 'blackhole' || primary.kind === 'neutron';
+    const compact = isCompact(primary.kind);
     const accreted = victim.mass * (compact ? 0.5 : 0.15);
     const m = primary.mass + accreted;
     primary.vx = (primary.mass * primary.vx + accreted * victim.vx) / m;
@@ -701,10 +790,10 @@ export class Simulation {
     primary.vz = (primary.mass * primary.vz + accreted * victim.vz) / m;
     this.applyMass(primary, m, mergedKind(primary.kind, primary.kind, m));
 
-    const count = victim.kind === 'star' ? 1400 : victim.kind === 'gas' ? 700 : 350;
+    const count = victim.kind === 'star' || victim.kind === 'giant' ? 1400 : victim.kind === 'gas' ? 700 : 350;
     const ux = (victim.x - primary.x) / dist, uy = (victim.y - primary.y) / dist, uz = (victim.z - primary.z) / dist;
     const rvx = victim.vx - primary.vx, rvy = victim.vy - primary.vy, rvz = victim.vz - primary.vz;
-    const base = victim.kind === 'star' ? kelvinToRgb(6000) : hexToRgb(victim.color);
+    const base = victim.kind === 'star' || victim.kind === 'giant' ? kelvinToRgb(6000) : hexToRgb(victim.color);
     const stretch = Math.max(victim.radius * 4, dist * 0.08);
     for (let i = 0; i < count; i++) {
       // Spread along the tidal axis; each particle keeps the orbit its new distance implies.
@@ -737,7 +826,111 @@ export class Simulation {
   // Supernovae
 
   canSupernova(body: Body): boolean {
-    return body.kind === 'star' && body.mass >= SUPERNOVA_MIN_MASS;
+    return (body.kind === 'star' || body.kind === 'giant') && body.mass >= SUPERNOVA_MIN_MASS;
+  }
+
+  /** Age every body by `years` (instant evolution time-lapse) and apply stellar transitions. */
+  ageBy(years: number): void {
+    for (const b of this.bodies) b.age += years;
+    // Several transitions may be due at once (star → giant → white dwarf).
+    for (let i = 0; i < 3 && this.evolveStars(); i++);
+    if (this.doomed.size) {
+      this.bodies = this.bodies.filter((b) => !this.doomed.has(b));
+      this.doomed.clear();
+    }
+    this.forcesDirty = true;
+  }
+
+  /** Main-sequence stars past their lifetime swell into giants; giants shed their envelopes. */
+  private evolveStars(): boolean {
+    let changed = false;
+    for (const b of this.bodies) {
+      if (b.kind === 'star') {
+        const life = mainSequenceLifetime(b.mass);
+        if (b.age < life) continue;
+        if (b.mass >= SUPERNOVA_MIN_MASS) {
+          changed = this.supernova(b) || changed;
+        } else {
+          b.kind = 'giant';
+          b.radius = radiusFor('giant', b.mass);
+          b.color = defaultColor('giant', b.mass);
+          this.events.push({ type: 'redgiant', message: `${b.name} swelled into a red giant!`, x: b.x, y: b.y, z: b.z, size: b.radius * 2 });
+          changed = true;
+        }
+      } else if (b.kind === 'giant' && b.age >= mainSequenceLifetime(b.mass) * 1.1) {
+        if (b.mass >= SUPERNOVA_MIN_MASS) changed = this.supernova(b) || changed;
+        else {
+          this.planetaryNebula(b);
+          changed = true;
+        }
+      }
+    }
+    if (changed) this.forcesDirty = true;
+    return changed;
+  }
+
+  /** A giant gently sheds its envelope as a glowing shell, leaving a white dwarf. */
+  private planetaryNebula(giant: Body): void {
+    const wd = Math.min(1.3, Math.max(0.5, 0.5 + 0.08 * (giant.mass - 1)));
+    const R = giant.radius;
+    const g = Math.max(this.effectiveG, G * 0.1);
+    const v = Math.max(3, 0.5 * Math.sqrt((2 * g * giant.mass) / R));
+    const p = this.particles;
+    const count = Math.min(1200, p.capacity - p.count);
+    const palette: Rgb[] = [
+      [0.35, 0.95, 0.85],
+      [1, 0.45, 0.65],
+      [0.5, 0.65, 1],
+    ];
+    for (let i = 0; i < count; i++) {
+      const u = 2 * Math.random() - 1;
+      const th = Math.random() * Math.PI * 2;
+      const s = Math.sqrt(1 - u * u);
+      const dx = s * Math.cos(th), dy = u * 0.7, dz = s * Math.sin(th);
+      const speed = v * (0.8 + Math.random() * 0.4);
+      const c = palette[i % palette.length];
+      p.add(giant.x + dx * R, giant.y + dy * R, giant.z + dz * R, giant.vx + dx * speed, giant.vy + dy * speed, giant.vz + dz * speed, c);
+    }
+    giant.kind = 'whitedwarf';
+    giant.mass = wd;
+    giant.radius = radiusFor('whitedwarf', wd);
+    giant.color = defaultColor('whitedwarf', wd);
+    this.events.push({
+      type: 'nebula',
+      message: `${giant.name} shed its outer layers as a planetary nebula, leaving a white dwarf.`,
+      x: giant.x,
+      y: giant.y,
+      z: giant.z,
+      size: R * 3,
+    });
+  }
+
+  /** A white dwarf pushed past the Chandrasekhar limit detonates completely. */
+  private typeIa(wd: Body): void {
+    const g = Math.max(this.effectiveG, G * 0.1);
+    const vEj = Math.max(40, 4 * Math.sqrt((2 * g * wd.mass) / 0.03));
+    const p = this.particles;
+    const count = Math.min(1600, p.capacity - p.count);
+    for (let i = 0; i < count; i++) {
+      const u = 2 * Math.random() - 1;
+      const th = Math.random() * Math.PI * 2;
+      const s = Math.sqrt(1 - u * u);
+      const dx = s * Math.cos(th), dy = u, dz = s * Math.sin(th);
+      const v = vEj * (0.8 + Math.random() * 0.4);
+      p.add(wd.x, wd.y, wd.z, wd.vx + dx * v, wd.vy + dy * v, wd.vz + dz * v, kelvinToRgb(7000 + Math.random() * 8000));
+    }
+    this.shockwaves.push({ x: wd.x, y: wd.y, z: wd.z, radius: 0.05, speed: vEj, momentum: wd.mass * vEj, maxRadius: Math.min(3000, vEj * 20), sourceId: wd.id, hit: new Set([wd.id]) });
+    this.events.push({
+      type: 'supernova',
+      message: `${wd.name} passed the Chandrasekhar limit and exploded as a Type Ia supernova!`,
+      x: wd.x,
+      y: wd.y,
+      z: wd.z,
+      size: 2,
+    });
+    wd.radius = 0;
+    this.doomed.add(wd);
+    this.forcesDirty = true;
   }
 
   /**

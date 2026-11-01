@@ -1,4 +1,4 @@
-import type { BodyKind } from './body';
+import { BODY_KINDS } from './body';
 import type { AdvanceResult, SimEvent, Simulation } from './simulation';
 import type { SimSettings, SimState } from './state';
 
@@ -18,8 +18,8 @@ export interface Frame {
   usingTree: boolean;
   /** BODY_STRIDE numbers per body (see encodeFrame). */
   bodies: Float64Array;
-  /** Names for every body, sent only when the set of bodies or their names changed. */
-  names?: [number, string][];
+  /** Names (and tags) for every body, sent only when the set of bodies changed. */
+  names?: [number, string, string?][];
   particleCount: number;
   ppos: Float32Array;
   pvel: Float32Array;
@@ -30,9 +30,9 @@ export interface Frame {
   fuses: [number, number][];
 }
 
-export const BODY_STRIDE = 11;
+export const BODY_STRIDE = 13;
 export const SHOCK_STRIDE = 8;
-const KINDS: BodyKind[] = ['rocky', 'gas', 'star', 'neutron', 'blackhole'];
+const KINDS = BODY_KINDS;
 
 /** Encode the simulation into a compact, transferable frame. */
 export function encodeFrame(sim: Simulation, version: number, result: AdvanceResult, includeNames: boolean): Frame {
@@ -52,6 +52,8 @@ export function encodeFrame(sim: Simulation, version: number, result: AdvanceRes
     bodies[k + 8] = b.vz;
     bodies[k + 9] = b.color;
     bodies[k + 10] = KINDS.indexOf(b.kind);
+    bodies[k + 11] = b.age;
+    bodies[k + 12] = b.fuel ?? NaN;
   }
   const p = sim.particles;
   const n3 = p.count * 3;
@@ -65,7 +67,7 @@ export function encodeFrame(sim: Simulation, version: number, result: AdvanceRes
     lagging: result.lagging,
     usingTree: sim.isUsingTree,
     bodies,
-    names: includeNames ? sim.bodies.map((b) => [b.id, b.name]) : undefined,
+    names: includeNames ? sim.bodies.map((b) => [b.id, b.name, b.tag]) : undefined,
     particleCount: p.count,
     ppos: Float32Array.from(p.pos.subarray(0, n3)),
     pvel: Float32Array.from(p.vel.subarray(0, n3)),
@@ -86,17 +88,19 @@ export function frameTransferables(f: Frame): Transferable[] {
  */
 export function applyFrame(sim: Simulation, f: Frame): void {
   const existing = new Map(sim.bodies.map((b) => [b.id, b]));
-  const names = f.names ? new Map(f.names) : undefined;
+  const names = f.names ? new Map(f.names.map(([id, name, tag]) => [id, { name, tag }])) : undefined;
   const n = f.bodies.length / BODY_STRIDE;
   const next = [];
   for (let i = 0; i < n; i++) {
     const k = i * BODY_STRIDE;
     const id = f.bodies[k];
     let b = existing.get(id);
+    const meta = names?.get(id);
     if (!b) {
-      b = sim.addBodyDetached({ id, name: names?.get(id) ?? `Body ${id}`, mass: f.bodies[k + 1] });
-    } else if (names) {
-      b.name = names.get(id) ?? b.name;
+      b = sim.addBodyDetached({ id, name: meta?.name ?? `Body ${id}`, mass: f.bodies[k + 1], tag: meta?.tag });
+    } else if (meta) {
+      b.name = meta.name;
+      b.tag = meta.tag;
     }
     b.mass = f.bodies[k + 1];
     b.radius = f.bodies[k + 2];
@@ -108,6 +112,9 @@ export function applyFrame(sim: Simulation, f: Frame): void {
     b.vz = f.bodies[k + 8];
     b.color = f.bodies[k + 9];
     b.kind = KINDS[f.bodies[k + 10]];
+    b.age = f.bodies[k + 11];
+    const fuel = f.bodies[k + 12];
+    b.fuel = Number.isNaN(fuel) ? undefined : fuel;
     next.push(b);
   }
   sim.bodies = next;

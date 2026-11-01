@@ -12,6 +12,9 @@ export const G = 4 * Math.PI * Math.PI;
 export const EARTH_MASS = 3.003e-6; // M☉
 export const JUPITER_MASS = 9.546e-4; // M☉
 
+/** Speed of light in AU per year. */
+export const C_AU_PER_YEAR = 63241.077;
+
 /** 1 AU/yr expressed in km/s. */
 export const AU_PER_YEAR_IN_KMS = 4.7406;
 

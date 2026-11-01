@@ -14,6 +14,9 @@ export interface BodyState {
   vx: number;
   vy: number;
   vz: number;
+  age?: number;
+  tag?: string;
+  fuel?: number;
 }
 
 export interface ParticleState {
@@ -33,6 +36,9 @@ export interface SimSettings {
   dtMax: number;
   softening: number;
   gravityMode?: GravityMode;
+  relativity?: boolean;
+  lightSpeedScale?: number;
+  evolutionRate?: number;
 }
 
 export interface ShockwaveState {
@@ -84,6 +90,9 @@ export function captureState(sim: Simulation, opts: CaptureOptions = {}): SimSta
       dtMax: sim.dtMax,
       softening: sim.softening,
       gravityMode: sim.gravityMode,
+      relativity: sim.relativity,
+      lightSpeedScale: sim.lightSpeedScale,
+      evolutionRate: sim.evolutionRate,
     },
     bodies: sim.bodies.map((b) => ({
       id: b.id,
@@ -98,6 +107,9 @@ export function captureState(sim: Simulation, opts: CaptureOptions = {}): SimSta
       vx: round(b.vx),
       vy: round(b.vy),
       vz: round(b.vz),
+      ...(b.age ? { age: round(b.age) } : {}),
+      ...(b.tag ? { tag: b.tag } : {}),
+      ...(b.fuel !== undefined ? { fuel: round(b.fuel) } : {}),
     })),
   };
   if (sim.shockwaves.length) state.shockwaves = sim.shockwaves.map((w) => ({ ...w, hit: [...w.hit] }));

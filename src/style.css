@@ -592,3 +592,8 @@ button.link {
     min-height: 34px;
   }
 }
+
+.lagrange-label {
+  color: #c8a0ff;
+  font-weight: 600;
+}

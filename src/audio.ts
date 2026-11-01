@@ -161,6 +161,32 @@ export class AudioEngine {
         this.tone(70, 20, 3, 0.45, 'sine', 0.02);
         this.noiseBurst(2.5, 300, 30, 0.3);
         break;
+      case 'gwmerger': {
+        if (!this.rateLimit(type, 600)) return;
+        // The famous "chirp": rising frequency and amplitude, then ringdown.
+        const ctx = this.ctx!;
+        const t = ctx.currentTime;
+        const osc = ctx.createOscillator();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(35, t);
+        osc.frequency.exponentialRampToValueAtTime(420, t + 1.1);
+        const g = ctx.createGain();
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.exponentialRampToValueAtTime(0.5, t + 1.05);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + 1.5);
+        osc.connect(g).connect(this.sfx!);
+        osc.start(t);
+        osc.stop(t + 1.6);
+        break;
+      }
+      case 'redgiant':
+        if (!this.rateLimit(type, 600)) return;
+        this.tone(55, 45, 4, 0.3, 'triangle', 1.2);
+        break;
+      case 'nebula':
+        if (!this.rateLimit(type, 600)) return;
+        for (const f of [523, 659, 784, 1046]) this.tone(f, f * 0.99, 3, 0.05, 'sine', 0.4);
+        break;
       case 'supernova':
         if (!this.rateLimit(type, 600)) return;
         this.noiseBurst(4.5, 5000, 40, 0.7);

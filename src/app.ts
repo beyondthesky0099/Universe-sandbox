@@ -6,7 +6,8 @@ import { mulberry32, pick, seedFromString } from './procgen/rng';
 import { generateStarSystem, starSummary, type StarSystemSpec } from './procgen/starSystem';
 import { GalaxyView, type GalaxyTarget } from './render/galaxyView';
 import { QUALITY_PRESETS, SystemView } from './render/systemView';
-import { kindForMass, mergedKind, NEUTRON_MAX_MASS, radiusFor, type Body, type BodyKind } from './sim/body';
+import { isCompact, kindForMass, mainSequenceLifetime, mergedKind, NEUTRON_MAX_MASS, radiusFor, type Body, type BodyKind } from './sim/body';
+import { isTidallyLocked, nearResonance, orbitalPeriod } from './sim/analysis';
 import { bodyTemperature, climateFor, formatTemperature, isHabitable } from './sim/climate';
 import { GAS_PALETTE, ROCKY_PALETTE, starTemperature } from './sim/color';
 import { forecast, type Forecast } from './sim/forecast';
@@ -45,6 +46,8 @@ const SPAWN_TYPES: SpawnType[] = [
   { id: 'reddwarf', label: 'Red dwarf', kind: 'star', mass: 0.2, swatch: '#ffb36b' },
   { id: 'sun', label: 'Yellow star', kind: 'star', mass: 1, swatch: '#fff1d8' },
   { id: 'bluegiant', label: 'Blue giant', kind: 'star', mass: 15, swatch: '#a9c4ff' },
+  { id: 'giant', label: 'Red giant', kind: 'giant', mass: 1.2, swatch: '#ff8a4a' },
+  { id: 'whitedwarf', label: 'White dwarf', kind: 'whitedwarf', mass: 0.6, swatch: '#eaf2ff' },
   { id: 'neutron', label: 'Neutron star', kind: 'neutron', mass: 1.4, swatch: '#cfe6ff' },
   { id: 'blackhole', label: 'Black hole', kind: 'blackhole', mass: 10, swatch: '#b07cff' },
   { id: 'cloud', label: 'Dust cloud', mass: 0, swatch: '#c8a27a', particles: 500 },
@@ -357,6 +360,9 @@ export class App {
       tidal: true,
       shatter: true,
       gravityMode: 'auto',
+      relativity: false,
+      lightSpeedScale: 1,
+      evolutionRate: 1,
     });
   }
 
@@ -590,6 +596,11 @@ export class App {
     $<HTMLInputElement>('opt-debris').checked = s.debris;
     $<HTMLInputElement>('opt-shatter').checked = s.shatter;
     $<HTMLInputElement>('opt-tidal').checked = s.tidal;
+    $<HTMLInputElement>('opt-relativity').checked = s.relativity;
+    $<HTMLInputElement>('light-speed').value = String(Math.log10(s.lightSpeedScale));
+    $('light-speed-out').textContent = formatFactor(s.lightSpeedScale);
+    $<HTMLInputElement>('evolution').value = String(Math.log10(Math.max(1, s.evolutionRate)));
+    $('evolution-out').textContent = formatEvolution(s.evolutionRate);
   }
 
   // ---------------------------------------------------------------------------
@@ -804,6 +815,13 @@ export class App {
     } else if (body.kind === 'star') {
       facts.push(['Surface temp.', `${Math.round(starTemperature(body.mass)).toLocaleString()} K`]);
     }
+    if (body.kind === 'star' || body.kind === 'giant' || body.kind === 'whitedwarf') {
+      facts.push(['Age', formatAge(body.age)]);
+      if (body.kind === 'star') {
+        const left = mainSequenceLifetime(body.mass) - body.age;
+        facts.push(['Main sequence left', left > 0 ? formatAge(left) : 'ending']);
+      }
+    }
     const parent = this.sim.parentOf(body);
     if (parent) {
       const dx = body.x - parent.x, dy = body.y - parent.y, dz = body.z - parent.z;
@@ -822,8 +840,22 @@ export class App {
       } else {
         facts.push(['Orbit', 'Unbound (escaping)']);
       }
+      if (isTidallyLocked(body, parent, r)) facts.push(['Rotation', 'Tidally locked']);
+      const myPeriod = orbitalPeriod(body, parent, this.sim.gravityScale);
+      if (myPeriod) {
+        for (const other of this.sim.bodies) {
+          if (other === body || other === parent || other.mass < body.mass * 1e-3) continue;
+          if (this.sim.parentOf(other) !== parent) continue;
+          const p = orbitalPeriod(other, parent, this.sim.gravityScale);
+          const res = p ? nearResonance(myPeriod, p) : undefined;
+          if (res) {
+            alerts.push(`<div class="alert good">🎵 In ${res[0]}:${res[1]} orbital resonance with ${escapeHtml(other.name)}.</div>`);
+            break;
+          }
+        }
+      }
       const roche = this.sim.rocheLimit(parent, body);
-      if (r < roche * 1.5 && parent.mass > body.mass * 5 && body.kind !== 'blackhole' && body.kind !== 'neutron') {
+      if (r < roche * 1.5 && parent.mass > body.mass * 5 && !isCompact(body.kind)) {
         alerts.push(`<div class="alert warn">Close to ${escapeHtml(parent.name)}'s Roche limit (${fmt(roche)} AU): tides may tear it apart.</div>`);
       }
     } else {
@@ -916,6 +948,8 @@ export class App {
     const mass = this.spawnMass();
     if (t.kind === 'blackhole') return 'blackhole';
     if (t.kind === 'neutron') return mass >= NEUTRON_MAX_MASS ? 'blackhole' : 'neutron';
+    if (t.kind === 'whitedwarf') return 'whitedwarf';
+    if (t.kind === 'giant') return mass >= 50 ? 'blackhole' : 'giant';
     const natural = kindForMass(mass);
     // Respect the chosen type unless the mass multiplier pushes it across a physical threshold.
     if (t.kind === 'rocky' && natural === 'gas') return 'rocky';
@@ -1288,6 +1322,19 @@ export class App {
     bindSetting('opt-debris', 'debris');
     bindSetting('opt-shatter', 'shatter');
     bindSetting('opt-tidal', 'tidal');
+    $<HTMLInputElement>('opt-relativity').addEventListener('change', (e) => this.host.setSettings({ relativity: (e.target as HTMLInputElement).checked }));
+    const light = $<HTMLInputElement>('light-speed');
+    light.addEventListener('input', () => {
+      this.host.setSettings({ lightSpeedScale: Math.pow(10, Number(light.value)) });
+      $('light-speed-out').textContent = formatFactor(this.sim.lightSpeedScale);
+    });
+    const evo = $<HTMLInputElement>('evolution');
+    evo.addEventListener('input', () => {
+      this.host.setSettings({ evolutionRate: Math.pow(10, Number(evo.value)) });
+      $('evolution-out').textContent = formatEvolution(this.sim.evolutionRate);
+    });
+    $('btn-age').addEventListener('click', () => this.mutate('aging stars by 1 Gyr', () => this.sim.ageBy(1e9)));
+    $<HTMLInputElement>('opt-lagrange').addEventListener('change', (e) => (this.system.lagrangeEnabled = (e.target as HTMLInputElement).checked));
     $<HTMLInputElement>('opt-trails').addEventListener('change', (e) => {
       this.system.trailsEnabled = (e.target as HTMLInputElement).checked;
       if (this.system.trailsEnabled) this.system.clearTrails();
@@ -1388,11 +1435,30 @@ function kindLabel(b: Body): string {
       return 'Gas giant';
     case 'star':
       return 'Star';
+    case 'giant':
+      return 'Red giant';
+    case 'whitedwarf':
+      return 'White dwarf';
     case 'neutron':
       return 'Neutron star';
     case 'blackhole':
       return 'Black hole';
   }
+}
+
+function formatAge(years: number): string {
+  if (years >= 1e9) return `${(years / 1e9).toFixed(2)} Gyr`;
+  if (years >= 1e6) return `${(years / 1e6).toFixed(1)} Myr`;
+  if (years >= 1e3) return `${(years / 1e3).toFixed(1)} kyr`;
+  return formatTime(years);
+}
+
+function formatFactor(f: number): string {
+  return f >= 0.999 ? 'real' : `${fmt(f)}×`;
+}
+
+function formatEvolution(rate: number): string {
+  return rate <= 1.01 ? 'real time' : `${formatAge(rate)}/yr`;
 }
 
 function capitalize(s: string): string {

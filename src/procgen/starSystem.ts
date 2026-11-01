@@ -1,4 +1,4 @@
-import { BodyKind, luminosity, radiusFor } from '../sim/body';
+import { BodyKind, luminosity, mainSequenceLifetime, radiusFor } from '../sim/body';
 import { GAS_PALETTE, ROCKY_PALETTE, starColor, starTemperature } from '../sim/color';
 import { hillRadius } from '../sim/orbits';
 import { isHabitable, surfaceTemperature } from '../sim/climate';
@@ -35,6 +35,8 @@ export interface StarSummary {
   mass: number;
   temperature: number;
   color: number;
+  /** Age in years (set for full systems). */
+  age?: number;
 }
 
 export interface MoonSpec {
@@ -219,5 +221,7 @@ export function generateStarSystem(seed: number): StarSystemSpec {
     if (best && best[1] > best[0]) belt = { inner: best[0], outer: best[1], count: intRange(rng, 500, 1500) };
   }
 
+  // Drawn last so earlier fields keep their values for a given seed.
+  star.age = Math.min(1.2e10, mainSequenceLifetime(star.mass) * range(rng, 0.05, 0.85));
   return { seed, star, companion, planets, belt, habitableCount: planets.filter((p) => p.habitable).length };
 }

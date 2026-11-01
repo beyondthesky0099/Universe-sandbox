@@ -89,7 +89,7 @@ const solarSystem: Preset = {
   name: 'Solar System',
   description: 'The Sun and eight planets with real masses and orbits, plus an asteroid belt.',
   load(sim) {
-    const sun = sim.addBody({ name: 'Sun', kind: 'star', mass: 1, color: starColor(1) });
+    const sun = sim.addBody({ name: 'Sun', kind: 'star', mass: 1, color: starColor(1), age: 4.6e9 });
     const planets: [string, number, number, number, number, number, Body['kind']][] = [
       // name, mass (M⊕), a (AU), e, inc (deg), color
       ['Mercury', 0.055, 0.387, 0.206, 7.0, 0x9a8f86, 'rocky'],
@@ -419,6 +419,56 @@ export const galacticCore: Preset = {
   },
 };
 
+const precession: Preset = {
+  id: 'precession',
+  name: 'Relativistic Precession',
+  description:
+    'General relativity makes Mercury\u2019s orbit slowly rotate (43\u2033 per century in reality). Here the speed of light is lowered 600\u00d7 so the orbit traces a rosette.',
+  load(sim) {
+    sim.relativity = true;
+    sim.lightSpeedScale = 0.0017;
+    sim.collisions = false;
+    const sun = sim.addBody({ name: 'Sun', kind: 'star', mass: 1, age: 4.6e9 });
+    addOrbiting(sim, sun, { name: 'Mercury', mass: 0.055 * EARTH_MASS, kind: 'rocky', color: 0x9a8f86 }, { a: 0.387, e: 0.206 });
+    sim.recenter();
+    return { cameraDistance: 1.6, timeScale: 0.4, elevation: 1.4, tip: 'Watch the orbit swing around: each loop starts a little further along.' };
+  },
+};
+
+const inspiral: Preset = {
+  id: 'inspiral',
+  name: 'Black Hole Inspiral',
+  description:
+    'Two 10 M\u2609 black holes radiate gravitational waves, spiral together and merge. The speed of light is lowered so it happens in seconds, not millions of years.',
+  load(sim) {
+    sim.relativity = true;
+    sim.lightSpeedScale = 0.0016;
+    // Circular orbit including the 1PN correction (which weakens the pull at high speed):
+    // v² = GM/r / (1 + 3GM/(r c²)).
+    const r = 2;
+    const gm = G * 20;
+    const c2 = sim.lightSpeed ** 2;
+    const v = Math.sqrt(gm / r / (1 + (3 * gm) / (r * c2)));
+    sim.addBody({ name: 'Black Hole A', kind: 'blackhole', mass: 10, x: -r / 2, vz: v / 2 });
+    sim.addBody({ name: 'Black Hole B', kind: 'blackhole', mass: 10, x: r / 2, vz: -v / 2 });
+    const centre = { x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, mass: 20 } as Body;
+    addParticleDisk(sim, centre, { count: 600, inner: 5, outer: 12, thickness: 0.02, color: [0.9, 0.7, 0.5] });
+    return { cameraDistance: 9, timeScale: 0.8, elevation: 1.1, tip: 'Turn on sound to hear the merger chirp.' };
+  },
+};
+
+const sunsFuture: Preset = {
+  id: 'future',
+  name: 'The Sun\u2019s Future',
+  description:
+    'Stellar evolution at 200 million years per simulated year: the Sun becomes a red giant, swallows the inner planets, then sheds a planetary nebula and leaves a white dwarf.',
+  load(sim) {
+    const setup = solarSystem.load(sim);
+    sim.evolutionRate = 2e8;
+    return { ...setup, cameraDistance: 7, timeScale: 1.5, tip: 'The Sun is 4.6 billion years old. Its red-giant phase begins in ~5 billion years (≈27 simulated years).' };
+  },
+};
+
 export const PRESETS: Preset[] = [
   solarSystem,
   protoplanetary,
@@ -429,6 +479,9 @@ export const PRESETS: Preset[] = [
   rogueStar,
   blackHoleFeast,
   supernova,
+  sunsFuture,
+  precession,
+  inspiral,
   galacticCore,
   starCluster,
   selfGravitatingGalaxy,
@@ -444,7 +497,7 @@ function gauss(): number {
 
 /** Populate the simulation from a procedurally generated star system. */
 export function loadStarSystem(sim: Simulation, spec: StarSystemSpec): SceneSetup {
-  const star = sim.addBody({ name: spec.star.name, kind: 'star', mass: spec.star.mass, color: spec.star.color });
+  const star = sim.addBody({ name: spec.star.name, kind: 'star', mass: spec.star.mass, color: spec.star.color, age: spec.star.age ?? 0 });
   let outermost = 2;
   for (const p of spec.planets) {
     const planet = addOrbiting(sim, star, { name: p.name, mass: p.mass, kind: p.kind, color: p.color }, p);

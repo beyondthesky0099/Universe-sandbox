@@ -7,7 +7,8 @@ import { generateStarSystem, starSummary, type StarSystemSpec } from './procgen/
 import { GalaxyView, type GalaxyTarget } from './render/galaxyView';
 import { QUALITY_PRESETS, SystemView } from './render/systemView';
 import { createRealSky } from './render/starfield';
-import { isCompact, kindForMass, mainSequenceLifetime, mergedKind, NEUTRON_MAX_MASS, radiusFor, type Body, type BodyKind } from './sim/body';
+import { setTrueScale } from './sim/trueScale';
+import { isCompact, kindForMass, mainSequenceLifetime, mergedKind, NEUTRON_MAX_MASS, type Body, type BodyKind } from './sim/body';
 import { isTidallyLocked, nearResonance, orbitalPeriod } from './sim/analysis';
 import { bodyTemperature, climateFor, formatTemperature, isHabitable } from './sim/climate';
 import { GAS_PALETTE, ROCKY_PALETTE, starTemperature } from './sim/color';
@@ -20,7 +21,7 @@ import { type SimEvent } from './sim/simulation';
 import { captureState, restoreState } from './sim/state';
 import { EXOPLANET_ACKNOWLEDGEMENT, loadCatalog, loadExoSystem, type ExoCatalog, type ExoHost } from './sim/exoplanets';
 import { loadBrightStars, loadNearStars, loadStarNeighbourhood } from './sim/stars';
-import { EARTH_MASS, fmt, formatDistance, formatMass, formatSpeed, formatTime, G, JUPITER_MASS } from './sim/units';
+import { EARTH_MASS, fmt, formatDistance, formatKm, formatMass, formatSpeed, formatTime, G, JUPITER_MASS } from './sim/units';
 import { $, escapeHtml, isTyping, setFacts, toast } from './ui/dom';
 import { GalaxyStore, prefs } from './ui/galaxyStore';
 import { History } from './ui/history';
@@ -617,6 +618,7 @@ export class App {
       relativity: false,
       lightSpeedScale: 1,
       evolutionRate: 1,
+      trueScale: false,
     });
   }
 
@@ -1127,6 +1129,7 @@ export class App {
     $<HTMLInputElement>('opt-shatter').checked = s.shatter;
     $<HTMLInputElement>('opt-tidal').checked = s.tidal;
     $<HTMLInputElement>('opt-relativity').checked = s.relativity;
+    $<HTMLInputElement>('opt-truescale').checked = s.trueScale;
     $<HTMLInputElement>('light-speed').value = String(Math.log10(s.lightSpeedScale));
     $('light-speed-out').textContent = formatFactor(s.lightSpeedScale);
     $<HTMLInputElement>('evolution').value = String(Math.log10(Math.max(1, s.evolutionRate)));
@@ -1339,7 +1342,7 @@ export class App {
     const facts: [string, string][] = [
       ['Type', kindLabel(body)],
       ['Mass', formatMass(body.mass)],
-      ['Radius (game)', formatDistance(body.radius)],
+      [this.sim.trueScale ? 'Radius' : 'Radius (enlarged)', this.sim.trueScale ? formatKm(body.radius) : formatDistance(body.radius)],
     ];
     const alerts: string[] = [];
     if (body.kind === 'rocky' || body.kind === 'gas') {
@@ -1936,7 +1939,7 @@ export class App {
     if (!drag) return;
     const { velocity, perUnit } = this.spawnVelocity(drag);
     const kind = this.spawnKind();
-    const radius = this.spawnType.particles ? 0 : radiusFor(kind, this.spawnMass());
+    const radius = this.spawnType.particles ? 0 : this.sim.bodyRadius(kind, this.spawnMass());
     if (now - drag.lastPredict > 50) {
       drag.lastPredict = now;
       drag.path = predictPath(this.sim, {
@@ -2617,6 +2620,11 @@ export class App {
     bindSetting('opt-shatter', 'shatter');
     bindSetting('opt-tidal', 'tidal');
     $<HTMLInputElement>('opt-relativity').addEventListener('change', (e) => this.host.setSettings({ relativity: (e.target as HTMLInputElement).checked }));
+    $<HTMLInputElement>('opt-truescale').addEventListener('change', (e) => {
+      const on = (e.target as HTMLInputElement).checked;
+      this.mutate(on ? 'switching to real sizes' : 'switching to visible sizes', () => setTrueScale(this.sim, on));
+      toast(on ? 'Real sizes: planets become tiny dots. Collisions only happen at true contact.' : 'Visible sizes: bodies are enlarged so you can see them.');
+    });
     const light = $<HTMLInputElement>('light-speed');
     light.addEventListener('input', () => {
       this.host.setSettings({ lightSpeedScale: Math.pow(10, Number(light.value)) });

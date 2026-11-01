@@ -1,6 +1,7 @@
 import {
   Body,
   BodyInit,
+  type BodyKind,
   CHANDRASEKHAR_MASS,
   createBody,
   defaultColor,
@@ -9,6 +10,7 @@ import {
   kindForMass,
   mergedKind,
   NOMINAL_DENSITY,
+  physicalRadius,
   radiusFor,
 } from './body';
 import { kelvinToRgb } from './color';
@@ -108,6 +110,11 @@ export class Simulation {
   customForces: CustomForce[] = [];
   private compiledForces: { name: string; fn: (body: Body, time: number, sim: Simulation) => unknown }[] = [];
   private compiledKey = '';
+  /**
+   * Real sizes: new and changed bodies (mergers, fragments, remnants) get physical radii
+   * instead of the inflated game radii. Toggle with `setTrueScale` (src/sim/trueScale.ts).
+   */
+  trueScale = false;
   /** Plummer softening length (AU) to avoid singular forces. */
   softening = 1e-4;
 
@@ -177,6 +184,11 @@ export class Simulation {
   /** Call after mutating bodies directly (mass, position, velocity). */
   invalidate(): void {
     this.forcesDirty = true;
+  }
+
+  /** Radius for a body of this kind and mass under the current size mode. */
+  bodyRadius(kind: BodyKind, mass: number): number {
+    return this.trueScale ? physicalRadius(kind, mass) : radiusFor(kind, mass);
   }
 
   get effectiveG(): number {
@@ -651,12 +663,12 @@ export class Simulation {
     if (kind === 'blackhole' && (oldKind === 'star' || oldKind === 'giant') && allowSupernova) {
       // A star pushed past the collapse limit explodes, leaving a black hole.
       body.kind = 'star';
-      body.radius = radiusFor('star', mass);
+      body.radius = this.bodyRadius('star', mass);
       this.supernova(body);
       return;
     }
     body.kind = kind;
-    body.radius = radiusFor(kind, mass);
+    body.radius = this.bodyRadius(kind, mass);
     if (kind !== oldKind || kind === 'star') {
       if (kind !== 'rocky' && kind !== 'gas') body.color = defaultColor(kind, mass);
       else if (oldKind !== 'rocky' && oldKind !== 'gas') body.color = defaultColor(kind, mass);
@@ -704,8 +716,8 @@ export class Simulation {
     nx /= nl; ny /= nl; nz /= nl;
     const [ux, uy, uz, wx, wy, wz] = perpendicularBasis(nx, ny, nz);
 
-    const rLR = radiusFor('rocky', mLR);
-    const rF = radiusFor('rocky', mFrag);
+    const rLR = this.bodyRadius('rocky', mLR);
+    const rF = this.bodyRadius('rocky', mFrag);
     const g = this.effectiveG;
     const vEscLR = Math.sqrt((2 * g * mLR) / rLR);
     const fragments: Body[] = [];
@@ -932,7 +944,7 @@ export class Simulation {
           changed = this.supernova(b) || changed;
         } else {
           b.kind = 'giant';
-          b.radius = radiusFor('giant', b.mass);
+          b.radius = this.bodyRadius('giant', b.mass);
           b.color = defaultColor('giant', b.mass);
           this.events.push({ type: 'redgiant', message: `${b.name} swelled into a red giant!`, x: b.x, y: b.y, z: b.z, size: b.radius * 2 });
           changed = true;
@@ -973,7 +985,7 @@ export class Simulation {
     }
     giant.kind = 'whitedwarf';
     giant.mass = wd;
-    giant.radius = radiusFor('whitedwarf', wd);
+    giant.radius = this.bodyRadius('whitedwarf', wd);
     giant.color = defaultColor('whitedwarf', wd);
     this.events.push({
       type: 'nebula',
@@ -1054,7 +1066,7 @@ export class Simulation {
     const name = star.name;
     star.kind = remnantKind;
     star.mass = remnant;
-    star.radius = radiusFor(remnantKind, remnant);
+    star.radius = this.bodyRadius(remnantKind, remnant);
     star.color = defaultColor(remnantKind, remnant);
     this.events.push({
       type: 'supernova',

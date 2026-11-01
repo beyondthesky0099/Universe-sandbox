@@ -64,6 +64,11 @@ need the [companion server](#companion-server). Without one, they explain how to
   - Masses, radii, rotation periods and axial tilts are real. Planets are drawn with their real
     spin axes from the IAU (Uranus on its side, Venus upside down), and Saturn's rings lie in its
     true equatorial plane.
+- **Real sizes:** tick **Real sizes** in the Simulation panel to switch any scene from enlarged
+  bodies to true radii. Known Solar System bodies use their measured JPL radius. Everything
+  else uses mass–radius relations for its kind, down to a black hole's Schwarzschild radius.
+  Mergers, fragments and supernova remnants keep real sizes, and collisions only happen at
+  true contact. **Solar System (true scale)** adds the 12 largest moons to the whole system.
 - **Real moon systems at true scale:** Earth & Moon, Mars, Jupiter, Saturn, Uranus, Neptune and
   Pluto–Charon. There are 28 moons, each at its real position for today. Moons use mean orbits
   fitted to about 200 orbits of Horizons data, and they stay within 5% of JPL's positions
@@ -144,7 +149,7 @@ need the [companion server](#companion-server). Without one, they explain how to
 - Zoom into a star to warp into its system, and zoom out to return to the galaxy.
 
 ### Scenarios
-Solar System (today) · Earth & Moon · Mars, Jupiter, Saturn, Uranus and Neptune with their moons ·
+Solar System (today) · Solar System (true scale) · Earth & Moon · Mars, Jupiter, Saturn, Uranus and Neptune with their moons ·
 Pluto & Charon · Protoplanetary Disk · Giant Impact · Ring Maker · Binary Star ·
 Figure-8 Three-Body · Rogue Star Flyby · Black Hole Feast · Supernova · The Sun's Future ·
 Relativistic Precession · Black Hole Inspiral · Galactic Core · Star Cluster Collapse ·
@@ -257,8 +262,8 @@ push and pull request.
 ## Units, simplifications and limitations
 
 - Simulation units are **AU, solar masses and years**, so `G = 4π²`.
-- Body radii are **inflated** so bodies are visible and collide at solar-system scales. Tidal
-  limits use nominal densities instead.
+- By default, body radii are **inflated** so bodies are visible and collide at solar-system
+  scales (turn on **Real sizes** for true radii). Tidal limits always use nominal densities.
 - Test particles (belts, debris, gas) are massless: they feel gravity but don't exert it. Mass
   lost to tidal debris isn't tracked.
 - **Relativity** is approximate: a capped 1PN correction plus orbit-averaged gravitational-wave

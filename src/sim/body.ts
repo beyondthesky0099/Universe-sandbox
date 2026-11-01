@@ -1,4 +1,4 @@
-import { BLACK_HOLE_COLLAPSE_MASS, EARTH_MASS, GAS_GIANT_MIN_MASS, STAR_MIN_MASS } from './units';
+import { BLACK_HOLE_COLLAPSE_MASS, EARTH_MASS, GAS_GIANT_MIN_MASS, JUPITER_MASS, STAR_MIN_MASS } from './units';
 import { kelvinToRgb, rgbToHex, starColor } from './color';
 
 export type BodyKind = 'rocky' | 'gas' | 'star' | 'giant' | 'whitedwarf' | 'neutron' | 'blackhole';
@@ -119,6 +119,40 @@ export function radiusFor(kind: BodyKind, mass: number): number {
       return 0.02;
     case 'blackhole':
       return 0.04 * Math.pow(mass, 0.4);
+  }
+}
+
+const R_EARTH_AU = 6371 / 149597870.7;
+const R_JUPITER_AU = 69911 / 149597870.7;
+const R_SUN_AU = 695700 / 149597870.7;
+
+/**
+ * Physical (true) radius in AU from kind and mass, for "Real sizes" mode. Approximate
+ * mass–radius relations: rocky planets R ∝ M^0.27; ice and gas giants grow up to about
+ * Jupiter's radius and then stay there; main-sequence stars R ∝ M^0.8 (M < 1) or M^0.57;
+ * white dwarfs shrink as they get heavier; neutron stars are 12 km; black holes use the
+ * Schwarzschild radius 2GM/c².
+ */
+export function physicalRadius(kind: BodyKind, mass: number): number {
+  const mJ = mass / JUPITER_MASS;
+  switch (kind) {
+    case 'rocky':
+      return R_EARTH_AU * Math.pow(mass / EARTH_MASS, 0.27);
+    case 'gas':
+      if (mJ < 0.3) return R_JUPITER_AU * 0.84 * Math.pow(mJ / 0.3, 0.45);
+      if (mJ < 1) return R_JUPITER_AU * Math.pow(mJ, 0.145);
+      return R_JUPITER_AU;
+    case 'star':
+      return R_SUN_AU * Math.pow(mass, mass < 1 ? 0.8 : 0.57);
+    case 'giant':
+      return 50 * R_SUN_AU * Math.sqrt(mass);
+    case 'whitedwarf':
+      return 0.0127 * R_SUN_AU * Math.pow(mass / 0.6, -1 / 3);
+    case 'neutron':
+      return 12 / 149597870.7;
+    case 'blackhole':
+      // 2GM/c² with G = 4π² AU³/(M☉ yr²) and c = 63,241 AU/yr
+      return (2 * 4 * Math.PI * Math.PI * mass) / (63241.077 * 63241.077);
   }
 }
 

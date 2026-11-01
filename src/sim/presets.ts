@@ -5,6 +5,7 @@ import { keplerToState, OrbitalElements } from './orbits';
 import type { Simulation } from './simulation';
 import { EARTH_MASS, G, JUPITER_MASS } from './units';
 import { julianDate, planetStates, type PlanetName } from './ephemeris';
+import { setTrueScale } from './trueScale';
 import { getSolarData, realRadiusAu, REAL_COLORS, relativeState, smallBodyState, toScene, type SolarData } from './solarSystemData';
 
 export interface SceneSetup {
@@ -529,6 +530,59 @@ export function loadSolarSystemOnDate(sim: Simulation, date: Date): SceneSetup {
   };
 }
 
+/** Moons shown in the true-scale Solar System: the large ones (with periods of 1.8 days or more). */
+const TRUE_SCALE_MOONS = ['Moon', 'Io', 'Europa', 'Ganymede', 'Callisto', 'Titan', 'Rhea', 'Iapetus', 'Titania', 'Oberon', 'Triton', 'Charon'];
+
+/**
+ * The whole real Solar System at true scale: real radii, plus the major moons (which the
+ * inflated game sizes would swallow). Moons are placed around their planet's position, which is
+ * treated as the planet–moon barycentre.
+ */
+export function loadSolarSystemTrueScale(sim: Simulation, date: Date): SceneSetup {
+  const base = loadSolarSystemOnDate(sim, date);
+  const data = getSolarData();
+  if (data) {
+    const jd = julianDate(date);
+    for (const name of TRUE_SCALE_MOONS) {
+      const m = data.byName.get(name);
+      const planet = m && sim.bodies.find((b) => b.name === m.parent);
+      if (!m || !planet || !m.mass) continue;
+      const s = relativeState(m, jd, G * (planet.mass + m.mass));
+      const [x, y, z] = toScene(s.pos);
+      const [vx, vy, vz] = toScene(s.vel);
+      const f = m.mass / (planet.mass + m.mass);
+      sim.addBody({
+        name, kind: 'rocky', mass: m.mass, color: REAL_COLORS[name],
+        x: planet.x + x * (1 - f), y: planet.y + y * (1 - f), z: planet.z + z * (1 - f),
+        vx: planet.vx + vx * (1 - f), vy: planet.vy + vy * (1 - f), vz: planet.vz + vz * (1 - f),
+      });
+      planet.x -= x * f;
+      planet.y -= y * f;
+      planet.z -= z * f;
+      planet.vx -= vx * f;
+      planet.vy -= vy * f;
+      planet.vz -= vz * f;
+    }
+  }
+  setTrueScale(sim, true);
+  return {
+    cameraDistance: 0.012,
+    timeScale: 0.002,
+    elevation: 0.5,
+    focus: 'Earth',
+    tip: `The real Solar System at true scale on ${date.toISOString().slice(0, 10)}, with its major moons. Everything is its real size, so planets are tiny dots. Zoom out to see how empty space is. ${
+      data ? '' : base.tip ?? ''
+    }`,
+  };
+}
+
+const solarTrueScale: Preset = {
+  id: 'solar-true',
+  name: 'Solar System (true scale)',
+  description: 'The real Solar System with real sizes and its 12 largest moons. Everything is tiny compared with the distances between them.',
+  load: (sim) => loadSolarSystemTrueScale(sim, new Date()),
+};
+
 /** Planet + real moons, at true scale (real radii), positioned for `date` from JPL data. */
 export function loadMoonSystem(sim: Simulation, planetName: string, date: Date, data: SolarData | undefined = getSolarData()): SceneSetup {
   const planetData = data?.byName.get(planetName);
@@ -615,6 +669,7 @@ const plutoCharon = moonSystem('pluto-charon', 'Pluto', 'Pluto & Charon (real)',
 
 export const PRESETS: Preset[] = [
   solarSystem,
+  solarTrueScale,
   earthMoon,
   marsMoons,
   jupiterMoons,

@@ -42,8 +42,8 @@ Still procedural:
 - every other seeded galaxy
 - the made-up scenarios (Giant Impact, Ring Maker, …), which are deliberately fictional
 
-**Suggested next steps:** A5 (true-scale toggle), A7 (moons in the full Solar System),
-A6 ring particles, C3, then D2.
+**Suggested next steps:** A6 ring particles, C3 (exoplanet hosts on the Milky Way map),
+D2 (real planet texture maps).
 
 Plan, in priority order:
 
@@ -65,14 +65,15 @@ Plan, in priority order:
       preset because their short periods would force tiny timesteps.
 - [x] A4. Tests: compare positions with Horizons vectors at a second date (to within about
       0.01 AU for heliocentric bodies, and a few percent of the orbit for moons).
-- [ ] A5. Real radii in the body panel, and an optional "true scale" toggle that uses real radii
-      instead of the inflated game radii. Moon-system presets already use true radii.
+- [x] A5. "Real sizes" toggle (`src/sim/trueScale.ts`, `Simulation.trueScale` and
+      `bodyRadius`, `physicalRadius` in `body.ts`). It's saved in state, undoable and shared in
+      multiplayer. Real sizes also set softening to 1e-8.
 - [~] A6. Saturn's rings: the ring mesh now lies in Saturn's true equatorial plane (via the
       IAU pole; tested against Mimas–Rhea orbit normals). Still to do: real ring *particles*
       (C/B/A rings, 74,658–136,775 km) in moon-system scenes.
-- [ ] A7. Moons in the whole-Solar-System scene. They're left out because the inflated game
-      radii would swallow them (Earth's game radius, 0.012 AU, is bigger than the Moon's
-      orbit). This needs per-body true radii or a kinematic "on rails" mode.
+- [x] A7. "Solar System (true scale)" preset with the 12 largest moons (Phobos, Deimos and the
+      small moons are left out to keep the timestep reasonable). It runs at about 26% of a core
+      at its default 0.73 days/s.
 
 ### B. Real stars (source: HYG database v4.1, CC BY-SA 4.0)
 - URL: `https://raw.githubusercontent.com/astronexus/HYG-Database/main/hyg/CURRENT/hygdata_v41.csv`
@@ -108,6 +109,8 @@ Plan, in priority order:
       example NASA public-domain maps), and must be fetched at build time, not hot-linked.
 
 ## Notes and lessons learned
+- Labels: in scenes with 31–300 bodies, the 30 most massive are labelled
+  (`shouldLabel` in `systemView.ts`). Before this, only stars were labelled.
 - IAU poles are hand-entered in `POLES` in `scripts/build-solar-system.mjs`. The test in
   `tests/solarsystem.test.ts` checks each planet's pole against Horizons' obliquity (±0.5°);
   that test caught a wrong Mars value. For retrograde rotators the IAU "north" pole is the

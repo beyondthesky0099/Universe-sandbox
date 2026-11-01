@@ -35,6 +35,14 @@ export function formatDistance(au: number): string {
   return `${fmt(au)} AU`;
 }
 
+/** Real sizes in kilometres (large stars in AU). */
+export function formatKm(au: number): string {
+  const km = au * 149597870.7;
+  if (km >= 1e7) return formatDistance(au);
+  if (km >= 1000) return `${Math.round(km).toLocaleString('en-US')} km`;
+  return `${Number(km.toPrecision(3))} km`;
+}
+
 export function formatSpeed(auPerYear: number): string {
   return `${fmt(auPerYear * AU_PER_YEAR_IN_KMS)} km/s`;
 }

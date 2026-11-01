@@ -39,6 +39,8 @@ export interface SimSettings {
   relativity?: boolean;
   lightSpeedScale?: number;
   evolutionRate?: number;
+  /** Real sizes instead of inflated game radii. */
+  trueScale?: boolean;
   /** Only sent to the physics worker; never saved into files or links. */
   customForces?: { name: string; code: string }[];
 }
@@ -95,6 +97,7 @@ export function captureState(sim: Simulation, opts: CaptureOptions = {}): SimSta
       relativity: sim.relativity,
       lightSpeedScale: sim.lightSpeedScale,
       evolutionRate: sim.evolutionRate,
+      trueScale: sim.trueScale,
     },
     bodies: sim.bodies.map((b) => ({
       id: b.id,
@@ -144,7 +147,8 @@ export function restoreState(sim: Simulation, state: SimState): void {
   if (state.format !== 'astrarium-scene') throw new Error('Not an Astrarium scene');
   sim.clear();
   sim.time = state.time;
-  Object.assign(sim, state.settings);
+  // Older files have no trueScale: they were saved with game sizes.
+  Object.assign(sim, { trueScale: false }, state.settings);
   for (const b of state.bodies) sim.addBody({ ...b });
   if (state.particles) {
     const p = state.particles;

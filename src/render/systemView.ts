@@ -507,8 +507,13 @@ export class SystemView {
     const n = this.sim.bodies.length;
     if (n <= 30) return true;
     if (n > 300) return false;
-    return b.kind !== 'rocky' && b.kind !== 'gas';
+    // Busy scenes: label the 30 most massive bodies (refreshed every 30 frames).
+    if (this.frame % 30 === 0 || this.labelIds.size === 0) {
+      this.labelIds = new Set([...this.sim.bodies].sort((x, y) => y.mass - x.mass).slice(0, 30).map((x) => x.id));
+    }
+    return this.labelIds.has(b.id);
   }
+  private labelIds = new Set<number>();
 
   private updateLights(): void {
     const stars = this.sim.bodies

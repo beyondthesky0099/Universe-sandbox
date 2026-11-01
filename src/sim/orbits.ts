@@ -89,3 +89,42 @@ export function circularOrbitVelocity(parent: Body, x: number, y: number, z: num
 export function hillRadius(a: number, m: number, M: number): number {
   return a * Math.cbrt(m / (3 * M));
 }
+
+/**
+ * Sample the osculating (instantaneous Keplerian) orbit of a body relative to its parent.
+ * Returns `points` positions relative to the parent, or null for unbound orbits.
+ */
+export function orbitPath(mu: number, rx: number, ry: number, rz: number, vx: number, vy: number, vz: number, points = 256): Float32Array | null {
+  const r = Math.hypot(rx, ry, rz);
+  const v2 = vx * vx + vy * vy + vz * vz;
+  const energy = v2 / 2 - mu / r;
+  if (!(mu > 0) || energy >= 0) return null;
+  const a = -mu / (2 * energy);
+  // Angular momentum h = r × v.
+  const hx = ry * vz - rz * vy, hy = rz * vx - rx * vz, hz = rx * vy - ry * vx;
+  const h = Math.hypot(hx, hy, hz);
+  if (h === 0) return null;
+  // Eccentricity vector e = (v × h)/mu − r̂.
+  let ex = (vy * hz - vz * hy) / mu - rx / r;
+  let ey = (vz * hx - vx * hz) / mu - ry / r;
+  let ez = (vx * hy - vy * hx) / mu - rz / r;
+  const e = Math.hypot(ex, ey, ez);
+  if (e < 1e-8) {
+    ex = rx / r; ey = ry / r; ez = rz / r;
+  } else {
+    ex /= e; ey /= e; ez /= e;
+  }
+  // Q = ĥ × P
+  const qx = (hy * ez - hz * ey) / h, qy = (hz * ex - hx * ez) / h, qz = (hx * ey - hy * ex) / h;
+  const p = a * (1 - e * e);
+  const out = new Float32Array(points * 3);
+  for (let i = 0; i < points; i++) {
+    const nu = (i / (points - 1)) * Math.PI * 2;
+    const rr = p / (1 + e * Math.cos(nu));
+    const c = Math.cos(nu) * rr, s = Math.sin(nu) * rr;
+    out[i * 3] = c * ex + s * qx;
+    out[i * 3 + 1] = c * ey + s * qy;
+    out[i * 3 + 2] = c * ez + s * qz;
+  }
+  return out;
+}

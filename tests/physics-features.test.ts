@@ -203,3 +203,20 @@ describe('forecast', () => {
     expect(f.closest).toBeDefined();
   });
 });
+
+describe('orbit path', () => {
+  it('samples a closed ellipse with the right periapsis and apoapsis', async () => {
+    const { keplerToState, orbitPath } = await import('../src/sim/orbits');
+    const { pos, vel } = keplerToState(39.48, { a: 2, e: 0.5, inc: 0.3, nu: 1 });
+    const path = orbitPath(39.48, pos.x, pos.y, pos.z, vel.x, vel.y, vel.z, 721)!;
+    let min = Infinity, max = 0;
+    for (let i = 0; i < path.length; i += 3) {
+      const r = Math.hypot(path[i], path[i + 1], path[i + 2]);
+      min = Math.min(min, r);
+      max = Math.max(max, r);
+    }
+    expect(min).toBeCloseTo(1, 3);
+    expect(max).toBeCloseTo(3, 3);
+    expect(orbitPath(39.48, 1, 0, 0, 0, 0, 20)).toBeNull();
+  });
+});

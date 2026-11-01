@@ -74,11 +74,13 @@ procedural or illustrative. Plan, in priority order:
       JSON files must keep that licence.
 
 ### C. The real Milky Way on the galaxy map
-- [ ] C1. A "Milky Way" galaxy option using real structure: the Sun at about 8.2 kpc from the
+- [x] C1. A "Milky Way" galaxy option using real structure: the Sun at about 8.2 kpc from the
       centre and about 20 pc above the plane, a 4-arm model plus the Local (Orion) Spur, a
       bar, and Sgr A* at 4.3 × 10⁶ M☉. Procedural stars fill the rest and are labelled as
       procedural.
-- [ ] C2. Real named objects at their real positions: Messier objects and famous nebulae and
+- [x] C2. (12 clusters and 10 nebulae, hand-entered l/b/d values. To verify against
+      SIMBAD or extend to the full Messier list, use a reachable source.)
+      Original note: Real named objects at their real positions: Messier objects and famous nebulae and
       clusters (Orion Nebula, Pleiades, Crab, …). This needs a data source with distances;
       check SIMBAD/VizieR reachability first (VizieR was blocked by the proxy on 2026-11-01).
 - [ ] C3. NASA exoplanet hosts placed on the Milky Way map near the Sun.
@@ -90,6 +92,9 @@ procedural or illustrative. Plan, in priority order:
       example NASA public-domain maps), and must be fetched at build time, not hot-linked.
 
 ## Notes and lessons learned
+- Milky Way: `MILKY_WAY_SEED = 1` in `src/procgen/galaxy.ts` switches `samplePosition` to
+  `sampleMilkyWay`. Map scale is 100 units = 15 kpc. Use `galacticToMap(l, b, dKpc)` to place
+  real objects. Labels come from `labelGroup` in `galaxyView.ts`.
 - Stars: `src/sim/stars.ts` (`loadStarNeighbourhood`, `starPhysics`, `skyPoints`) and
   `createRealSky` in `src/render/starfield.ts`. The near file covers 20 pc and the scene shows
   10 pc (319 stars). Showing 15 pc would mean about 940 bodies, which is heavy with labels.

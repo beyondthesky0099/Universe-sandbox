@@ -49,6 +49,8 @@ export interface NebulaInfo {
   size: number;
   color: [number, number, number];
   seed: number;
+  /** Real nebulae (Milky Way only) have names. */
+  name?: string;
 }
 
 const CLASS_SIZE: Record<SpectralClass, number> = { O: 3.4, B: 2.7, A: 2.1, F: 1.7, G: 1.5, K: 1.25, M: 1.0 };
@@ -66,9 +68,128 @@ interface ShapeParams {
   bulgeFraction: number;
   diskScale: number;
   thickness: number;
+  /** Use the Milky Way's real structure instead of a random spiral. */
+  mw?: boolean;
 }
 
+// ---------------------------------------------------------------------------
+// The Milky Way: an approximate model of its real structure, after Reid et al. (2019) and
+// Vallée (2017). Four logarithmic arms with a 12° pitch, the Local (Orion) Spur where the Sun
+// is, and a central bar 27° from the Sun–centre line.
+
+/** Seed of the default galaxy, which is the Milky Way. */
+export const MILKY_WAY_SEED = 1;
+/** Map units per kiloparsec: GALAXY_RADIUS (100) spans 15 kpc. */
+export const UNITS_PER_KPC = 100 / 15;
+/** Distance of the Sun from the Galactic Centre (kpc) and height above the plane. */
+export const SUN_R0_KPC = 8.2;
+export const SUN_Z_KPC = 0.02;
+const MW_PITCH = (12 * Math.PI) / 180;
+/** Each arm's radius (kpc) in the direction of the Sun (galactocentric angle π). */
+export const MW_ARMS: { name: string; rSun: number; weight: number }[] = [
+  { name: 'Scutum–Centaurus Arm', rSun: 5.15, weight: 1.2 },
+  { name: 'Sagittarius–Carina Arm', rSun: 7.2, weight: 1 },
+  { name: 'Perseus Arm', rSun: 10.05, weight: 1.2 },
+  { name: 'Outer (Norma–Cygnus) Arm', rSun: 14.0, weight: 0.6 },
+];
+const MW_BAR_ANGLE = Math.PI - (27 * Math.PI) / 180; // the near end points toward positive l
+const MW_BAR_HALF_KPC = 4.5;
+
+/** Galactocentric kpc → map units. Frame: centre at the origin, Sun at (−R0, 0, z0), y toward l = 90°, z toward the north galactic pole. */
+export function galactocentricToMap(gx: number, gy: number, gz: number): [number, number, number] {
+  return [gx * UNITS_PER_KPC, gz * UNITS_PER_KPC, -gy * UNITS_PER_KPC];
+}
+
+/** Galactic longitude/latitude (degrees) and distance from the Sun (kpc) → map units. */
+export function galacticToMap(lDeg: number, bDeg: number, dKpc: number): [number, number, number] {
+  const l = (lDeg * Math.PI) / 180, b = (bDeg * Math.PI) / 180;
+  const hx = dKpc * Math.cos(b) * Math.cos(l);
+  const hy = dKpc * Math.cos(b) * Math.sin(l);
+  const hz = dKpc * Math.sin(b);
+  return galactocentricToMap(hx - SUN_R0_KPC, hy, hz + SUN_Z_KPC);
+}
+
+/** Point on arm k at radius r (kpc): galactocentric angle (trailing arms for clockwise rotation). */
+function armAngle(rSun: number, r: number): number {
+  return Math.PI + Math.log(r / rSun) / Math.tan(MW_PITCH);
+}
+
+function sampleMilkyWay(rng: Rng, s: ShapeParams, out: Float32Array, k: number): number {
+  const R = GALAXY_RADIUS;
+  const u = rng();
+  let gx: number, gy: number, gz: number;
+  if (u < s.bulgeFraction) {
+    // Bulge and bar: a triaxial cloud along the bar axis.
+    const along = gaussian(rng) * MW_BAR_HALF_KPC * 0.45;
+    const across = gaussian(rng) * 0.7;
+    gx = along * Math.cos(MW_BAR_ANGLE) - across * Math.sin(MW_BAR_ANGLE);
+    gy = along * Math.sin(MW_BAR_ANGLE) + across * Math.cos(MW_BAR_ANGLE);
+    gz = gaussian(rng) * 0.45;
+  } else {
+    // Exponential disk (scale length 2.6 kpc), mostly along arms, starting at the bar's end.
+    let r: number;
+    do r = -Math.log(1 - rng()) * 2.6 + 1.5;
+    while (r > 15);
+    let theta: number;
+    const v = rng();
+    if (r < 3.8) {
+      // Inside the bar's reach the arms are not well defined: a smooth inner disk.
+      theta = rng() * Math.PI * 2;
+    } else if (v < 0.07 && r > 7.4 && r < 9.6) {
+      // The Local (Orion) Spur: a short arm segment through the Sun.
+      theta = Math.PI + Math.log(r / 8.35) / Math.tan((10 * Math.PI) / 180) + (gaussian(rng) * 0.25) / r;
+    } else if (v < 0.75) {
+      const total = MW_ARMS.reduce((t, a) => t + a.weight, 0);
+      let pick = rng() * total;
+      const arm = MW_ARMS.find((a) => (pick -= a.weight) <= 0) ?? MW_ARMS[0];
+      theta = armAngle(arm.rSun, r) + (gaussian(rng) * 0.35) / Math.max(1, r * 0.25);
+    } else {
+      theta = rng() * Math.PI * 2;
+    }
+    gx = Math.cos(theta) * r;
+    gy = Math.sin(theta) * r;
+    // Scale height ~300 pc, flaring a little outward.
+    gz = gaussian(rng) * 0.3 * (1 + r / 15);
+  }
+  const [x, y, z] = galactocentricToMap(gx, gy, gz);
+  out[k] = x;
+  out[k + 1] = y;
+  out[k + 2] = z;
+  return Math.hypot(x, z) / R;
+}
+
+/** Real clusters with approximate galactic coordinates (l, b in degrees) and distances (kpc). */
+const MW_CLUSTERS: { name: string; kind: 'open' | 'globular'; l: number; b: number; d: number; sigmaPc: number }[] = [
+  { name: 'Pleiades (M45)', kind: 'open', l: 166.6, b: -23.5, d: 0.136, sigmaPc: 4 },
+  { name: 'Hyades', kind: 'open', l: 180.1, b: -22.3, d: 0.047, sigmaPc: 5 },
+  { name: 'Beehive (M44)', kind: 'open', l: 205.9, b: 32.5, d: 0.187, sigmaPc: 4 },
+  { name: 'Double Cluster (h & χ Persei)', kind: 'open', l: 135.0, b: -3.6, d: 2.3, sigmaPc: 12 },
+  { name: 'Wild Duck Cluster (M11)', kind: 'open', l: 27.3, b: -2.8, d: 1.9, sigmaPc: 6 },
+  { name: 'Omega Centauri', kind: 'globular', l: 309.1, b: 15.0, d: 5.2, sigmaPc: 40 },
+  { name: '47 Tucanae', kind: 'globular', l: 305.9, b: -44.9, d: 4.5, sigmaPc: 30 },
+  { name: 'Hercules Cluster (M13)', kind: 'globular', l: 59.0, b: 40.9, d: 7.1, sigmaPc: 25 },
+  { name: 'M4', kind: 'globular', l: 351.0, b: 16.0, d: 2.2, sigmaPc: 15 },
+  { name: 'M22', kind: 'globular', l: 9.9, b: -7.6, d: 3.2, sigmaPc: 20 },
+  { name: 'M3', kind: 'globular', l: 42.2, b: 78.7, d: 10.2, sigmaPc: 25 },
+  { name: 'M15', kind: 'globular', l: 65.0, b: -27.3, d: 10.4, sigmaPc: 20 },
+];
+
+/** Real nebulae with approximate galactic coordinates and distances (kpc). */
+export const MW_NEBULAE: { name: string; l: number; b: number; d: number; sizePc: number; color: [number, number, number] }[] = [
+  { name: 'Orion Nebula (M42)', l: 209.0, b: -19.4, d: 0.41, sizePc: 60, color: [1, 0.35, 0.5] },
+  { name: 'Carina Nebula', l: 287.6, b: -0.6, d: 2.3, sizePc: 150, color: [1, 0.4, 0.45] },
+  { name: 'Eagle Nebula (M16)', l: 17.0, b: 0.8, d: 1.74, sizePc: 100, color: [0.95, 0.45, 0.4] },
+  { name: 'Lagoon Nebula (M8)', l: 6.0, b: -1.2, d: 1.25, sizePc: 90, color: [1, 0.35, 0.55] },
+  { name: 'Rosette Nebula', l: 206.3, b: -2.1, d: 1.6, sizePc: 80, color: [1, 0.3, 0.4] },
+  { name: 'Cygnus X', l: 80.0, b: 0.8, d: 1.4, sizePc: 200, color: [1, 0.45, 0.5] },
+  { name: 'Crab Nebula (M1)', l: 184.6, b: -5.8, d: 2.0, sizePc: 40, color: [0.45, 0.65, 1] },
+  { name: 'Ring Nebula (M57)', l: 63.2, b: 14.0, d: 0.79, sizePc: 30, color: [0.55, 0.95, 0.85] },
+  { name: 'North America Nebula', l: 85.6, b: -0.7, d: 0.8, sizePc: 70, color: [1, 0.35, 0.45] },
+  { name: 'Trifid Nebula (M20)', l: 7.0, b: -0.3, d: 1.6, sizePc: 50, color: [0.5, 0.6, 1] },
+];
+
 function samplePosition(rng: Rng, s: ShapeParams, out: Float32Array, k: number): number {
+  if (s.mw) return sampleMilkyWay(rng, s, out, k);
   const R = GALAXY_RADIUS;
   if (rng() < s.bulgeFraction) {
     out[k] = gaussian(rng) * R * 0.11;
@@ -103,19 +224,27 @@ export function generateGalaxy(seed: number, starCount = 30000, glowCount = 6000
     diskScale: range(rng, 0.25, 0.38),
     thickness: range(rng, 0.015, 0.03),
   };
-  const name = galaxyName(mulberry32(hash32(seed, 2)));
+  const mw = seed === MILKY_WAY_SEED;
+  if (mw) Object.assign(shape, { arms: 4, bulgeFraction: 0.14, mw: true });
+  const name = mw ? 'Milky Way' : galaxyName(mulberry32(hash32(seed, 2)));
   const R = GALAXY_RADIUS;
 
   // Star clusters: open clusters in the disk, globular clusters in the halo.
   const clusterRng = mulberry32(hash32(seed, 5));
   const clusters: ClusterInfo[] = [];
   const tmp = new Float32Array(3);
-  const openCount = intRange(clusterRng, 8, 14);
+  if (mw) {
+    for (const c of MW_CLUSTERS) {
+      const [x, y, z] = galacticToMap(c.l, c.b, c.d);
+      clusters.push({ name: c.name, kind: c.kind, x, y, z, sigma: Math.max(0.08, (c.sigmaPc / 1000) * UNITS_PER_KPC * 4) });
+    }
+  }
+  const openCount = mw ? 0 : intRange(clusterRng, 8, 14);
   for (let i = 0; i < openCount; i++) {
     samplePosition(clusterRng, { ...shape, bulgeFraction: 0 }, tmp, 0);
     clusters.push({ name: `${properName(clusterRng)} Cluster`, kind: 'open', x: tmp[0], y: tmp[1], z: tmp[2], sigma: range(clusterRng, 0.6, 1.6) });
   }
-  const globCount = intRange(clusterRng, 5, 9);
+  const globCount = mw ? 0 : intRange(clusterRng, 5, 9);
   for (let i = 0; i < globCount; i++) {
     const u = clusterRng() * 2 - 1;
     const th = clusterRng() * Math.PI * 2;
@@ -141,7 +270,7 @@ export function generateGalaxy(seed: number, starCount = 30000, glowCount = 6000
   for (let i = 0; i < starCount; i++) {
     const k = i * 3;
     let t: number;
-    if (posRng() < 0.07) {
+    if (posRng() < (mw ? 0.02 : 0.07)) {
       const c = clusters[Math.floor(posRng() * clusters.length)];
       sp[k] = c.x + gaussian(posRng) * c.sigma;
       sp[k + 1] = c.y + gaussian(posRng) * c.sigma;
@@ -185,6 +314,20 @@ export function generateGalaxy(seed: number, starCount = 30000, glowCount = 6000
   const dp = new Float32Array(dustCount * 3);
   const ds = new Float32Array(dustCount);
   for (let i = 0; i < dustCount; i++) {
+    if (mw) {
+      // Dust lanes on the inner (concave) edge of each arm.
+      let rk: number;
+      do rk = -Math.log(1 - dustRng()) * 2.6 + 3;
+      while (rk > 14);
+      const arm = MW_ARMS[Math.floor(dustRng() * MW_ARMS.length)];
+      const th = armAngle(arm.rSun * 0.96, rk) + (gaussian(dustRng) * 0.12) / Math.max(1, rk * 0.25);
+      const [x, y, z] = galactocentricToMap(Math.cos(th) * rk, Math.sin(th) * rk, gaussian(dustRng) * 0.08);
+      dp[i * 3] = x;
+      dp[i * 3 + 1] = y;
+      dp[i * 3 + 2] = z;
+      ds[i] = range(dustRng, 3, 8);
+      continue;
+    }
     let r: number;
     do r = -Math.log(1 - dustRng()) * shape.diskScale * R + R * 0.12;
     while (r > R * 0.95);
@@ -200,7 +343,13 @@ export function generateGalaxy(seed: number, starCount = 30000, glowCount = 6000
   // Nebulae: glowing gas clouds along the arms.
   const nebRng = mulberry32(hash32(seed, 7));
   const nebulae: NebulaInfo[] = [];
-  const nebCount = intRange(nebRng, 35, 60);
+  if (mw) {
+    for (const n of MW_NEBULAE) {
+      const [x, y, z] = galacticToMap(n.l, n.b, n.d);
+      nebulae.push({ x, y, z, size: Math.max(1.2, (n.sizePc / 1000) * UNITS_PER_KPC * 5), color: n.color, seed: Math.floor(nebRng() * 1e9), name: n.name });
+    }
+  }
+  const nebCount = mw ? 0 : intRange(nebRng, 35, 60);
   const palette: [number, number, number][] = [
     [1, 0.35, 0.5],
     [0.95, 0.3, 0.4],
@@ -222,7 +371,7 @@ export function generateGalaxy(seed: number, starCount = 30000, glowCount = 6000
 
   const solT = 0.55;
   const solTheta = solT * shape.twist + 0.12;
-  const sol: [number, number, number] = [Math.cos(solTheta) * solT * R, 0.4, Math.sin(solTheta) * solT * R];
+  const sol: [number, number, number] = mw ? galactocentricToMap(-SUN_R0_KPC, 0, SUN_Z_KPC) : [Math.cos(solTheta) * solT * R, 0.4, Math.sin(solTheta) * solT * R];
 
   return {
     seed,

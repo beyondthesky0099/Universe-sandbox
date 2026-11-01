@@ -921,7 +921,10 @@ export class App {
     this.scanToken++;
     this.store.load(seed);
     $('galaxy-name').textContent = data.name;
-    $('galaxy-info').textContent = `${data.arms}-armed spiral · ${data.stars.count.toLocaleString()} explorable systems · ${data.clusters.length} star clusters`;
+    $('galaxy-info').textContent =
+      data.name === 'Milky Way'
+        ? `Our galaxy: real structure (4 spiral arms, the Local Spur, the central bar, Sgr A*) with ${data.clusters.length} real clusters and ${data.nebulae.length} real nebulae at their true positions. The ${data.stars.count.toLocaleString()} explorable systems are procedural stand-ins for the ~100 billion real stars.`
+        : `${data.arms}-armed spiral · ${data.stars.count.toLocaleString()} explorable systems · ${data.clusters.length} star clusters (a procedural galaxy)`;
     $<HTMLInputElement>('galaxy-seed').value = String(seed);
     $('star-panel').classList.add('hidden');
     $<HTMLSelectElement>('star-filter').value = '';

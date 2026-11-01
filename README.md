@@ -24,8 +24,8 @@ Everything except the optional companion server runs in the browser.
 | ![Giant impact](docs/screenshots/giant-impact.png) | ![Star cluster](docs/screenshots/star-cluster.png) |
 | **Real Solar System (JPL data)** | **Jupiter's moons at true scale** |
 | ![Real Solar System](docs/screenshots/real-solar-system.png) | ![Jupiter's moons](docs/screenshots/jupiter-moons.png) |
-| **Every star within 33 light-years (HYG)** | |
-| ![Nearby stars](docs/screenshots/nearby-stars.png) | |
+| **Every star within 33 light-years (HYG)** | **The Milky Way (real structure)** |
+| ![Nearby stars](docs/screenshots/nearby-stars.png) | ![Milky Way](docs/screenshots/milky-way.png) |
 
 ## Run it
 
@@ -124,8 +124,19 @@ need the [companion server](#companion-server). Without one, they explain how to
   The first person in a room runs the physics.
 
 ### Explore
-- Seeded spiral galaxies with star clusters, nebulae, dust lanes, a central supermassive black
-  hole, and a "You are here" marker for the Sun.
+- **The Milky Way** is the default galaxy (seed 1). It uses an approximate model of the real
+  structure, after Reid et al. 2019 and Vallée 2017:
+  - the Sun 8.2 kpc from the centre and 20 pc above the plane
+  - four logarithmic spiral arms (Scutum–Centaurus, Sagittarius–Carina, Perseus and Outer)
+    at a 12° pitch, plus the Local (Orion) Spur
+  - the central bar at 27°, and Sgr A*
+  - 12 real star clusters and 10 real nebulae (Pleiades, Omega Centauri, Orion Nebula, Crab,
+    Carina, …) at their real galactic coordinates and distances
+
+  The 30,000 explorable star systems are procedural stand-ins for its ~100 billion stars, and
+  the UI says so.
+- Any other seed generates a procedural spiral galaxy with clusters, nebulae, dust lanes and
+  a central supermassive black hole.
 - Search and filter 30,000 systems for habitable worlds, gas giants, binaries and more.
   Bookmark systems, and see which ones you've visited.
 - Zoom into a star to warp into its system, and zoom out to return to the galaxy.

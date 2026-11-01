@@ -60,3 +60,23 @@ describe('real stars (HYG)', () => {
     expect(sim.gravityScale).toBe(0);
   });
 });
+
+describe('the Milky Way map', () => {
+  it('puts the Sun 8.2 kpc from the centre and real objects at their real positions', async () => {
+    const { generateGalaxy, galacticToMap, MILKY_WAY_SEED, UNITS_PER_KPC } = await import('../src/procgen/galaxy');
+    const g = generateGalaxy(MILKY_WAY_SEED, 3000, 3000, 500);
+    expect(g.name).toBe('Milky Way');
+    const [sx, sy, sz] = g.sol;
+    expect(Math.hypot(sx, sz) / UNITS_PER_KPC).toBeCloseTo(8.2, 2);
+    expect(sy / UNITS_PER_KPC).toBeCloseTo(0.02, 3);
+    // Toward l = 0 lies the Galactic Centre: 8.2 kpc along l = 0 reaches the origin.
+    const gc = galacticToMap(0, 0, 8.2);
+    expect(Math.hypot(gc[0], gc[2])).toBeLessThan(0.01);
+    // The Pleiades are 136 pc from the Sun.
+    const pleiades = g.clusters.find((c) => c.name.startsWith('Pleiades'))!;
+    expect(Math.hypot(pleiades.x - sx, pleiades.y - sy, pleiades.z - sz) / UNITS_PER_KPC).toBeCloseTo(0.136, 3);
+    expect(g.nebulae.some((n) => n.name === 'Orion Nebula (M42)')).toBe(true);
+    // Other seeds stay procedural.
+    expect(generateGalaxy(7, 100, 100, 10).name).not.toBe('Milky Way');
+  });
+});

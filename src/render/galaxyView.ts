@@ -96,22 +96,25 @@ function nebulaTexture(seed: number): THREE.CanvasTexture {
 /** Selection target in the galaxy: a star index, the central black hole, or the Sun. */
 export type GalaxyTarget = number | 'core' | 'sol';
 
-function textSprite(text: string, color: string): THREE.Sprite {
+function textSprite(text: string, color: string, scale = 1): THREE.Sprite {
   const canvas = document.createElement('canvas');
-  canvas.width = 256;
+  const font = '600 26px Inter, system-ui, sans-serif';
+  const measure = canvas.getContext('2d')!;
+  measure.font = font;
+  canvas.width = Math.max(256, Math.ceil(measure.measureText(text).width + 24));
   canvas.height = 64;
   const ctx = canvas.getContext('2d')!;
-  ctx.font = '600 26px Inter, system-ui, sans-serif';
+  ctx.font = font;
   ctx.fillStyle = color;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.shadowColor = 'rgba(0,0,0,0.9)';
   ctx.shadowBlur = 6;
-  ctx.fillText(text, 128, 32);
+  ctx.fillText(text, canvas.width / 2, 32);
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
   const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, sizeAttenuation: false, depthTest: false, transparent: true }));
-  sprite.scale.set(0.16, 0.04, 1);
+  sprite.scale.set(0.16 * (canvas.width / 256) * scale, 0.04 * scale, 1);
   sprite.center.set(0.5, -0.6);
   sprite.renderOrder = 11;
   return sprite;
@@ -130,6 +133,8 @@ export class GalaxyView {
   private glow?: THREE.Points;
   private dust?: THREE.Points;
   private readonly nebulaGroup = new THREE.Group();
+  /** Names of real objects (Milky Way clusters and nebulae). */
+  private readonly labelGroup = new THREE.Group();
   private readonly nebulaTextures: THREE.Texture[] = [];
   private originalColors?: Float32Array;
   private readonly core: THREE.Sprite;
@@ -157,6 +162,7 @@ export class GalaxyView {
     this.core.scale.setScalar(70);
     this.scene.add(this.core);
     this.scene.add(this.nebulaGroup);
+    this.scene.add(this.labelGroup);
 
     // Supermassive black hole: shadow, accretion disk and photon ring. Only visible up close.
     this.hole = new THREE.Group();
@@ -245,6 +251,25 @@ export class GalaxyView {
       this.nebulaGroup.add(sprite);
     }
 
+    for (const child of [...this.labelGroup.children]) {
+      this.labelGroup.remove(child);
+      const sprite = child as THREE.Sprite;
+      sprite.material.map?.dispose();
+      sprite.material.dispose();
+    }
+    if (this.data.name === 'Milky Way') {
+      const named: { name: string; x: number; y: number; z: number; color: string }[] = [
+        ...this.data.nebulae.filter((n) => n.name).map((n) => ({ name: n.name!, x: n.x, y: n.y, z: n.z, color: '#f0a8c0' })),
+        ...this.data.clusters.map((c) => ({ name: c.name, x: c.x, y: c.y, z: c.z, color: c.kind === 'globular' ? '#ffe2a0' : '#a8d4ff' })),
+        { name: 'Sagittarius A*', x: 0, y: 0, z: 0, color: '#ff9b6b' },
+      ];
+      for (const n of named) {
+        const label = textSprite(n.name, n.color, 0.7);
+        label.position.set(n.x, n.y, n.z);
+        label.material.opacity = 0.8;
+        this.labelGroup.add(label);
+      }
+    }
     this.solMarker.position.set(...this.data.sol);
     this.applyPointScale();
     this.select(-1);

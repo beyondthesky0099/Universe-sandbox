@@ -347,7 +347,9 @@ export class BodyVisual {
   /** Update transform. `worldPerPixel` is the world size of one screen pixel at the body's depth. */
   update(body: Body, worldPerPixel: number, dt: number, lockTo?: Body): void {
     this.group.position.set(body.x, body.y, body.z);
-    const r = this.isProbe ? worldPerPixel * 4 : Math.max(body.radius, worldPerPixel * MIN_PIXEL_RADIUS);
+    // A whole galaxy (galaxy-scale scenes) is drawn as a small bright nucleus: its stars are the particles.
+    const isGalaxy = body.tag === 'galaxy';
+    const r = this.isProbe ? worldPerPixel * 4 : isGalaxy ? Math.max(body.radius * 0.05, worldPerPixel * 2) : Math.max(body.radius, worldPerPixel * MIN_PIXEL_RADIUS);
     this.mesh.scale.setScalar(r);
     if (lockTo) {
       // Tidally locked: always show the same face to the parent.
@@ -366,7 +368,7 @@ export class BodyVisual {
             : this.kind === 'neutron' || this.kind === 'whitedwarf'
               ? Math.max(body.radius * 12, worldPerPixel * 22)
               : body.radius * 14;
-      this.glow.scale.setScalar(big);
+      this.glow.scale.setScalar(isGalaxy ? body.radius * 1.6 : big);
     }
     if (this.disk) {
       this.disk.scale.setScalar(r);

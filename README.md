@@ -187,8 +187,21 @@ need the [companion server](#companion-server). Without one, they explain how to
   Bookmark systems, and see which ones you've visited.
 - Zoom into a star to warp into its system, and zoom out to return to the galaxy.
 
+### Milky Way meets Andromeda
+The **Milky Way meets Andromeda (real)** scenario simulates the coming collision in
+kiloparsecs and millions of years:
+- Andromeda at its catalogued position, 770 kpc away
+- the HST-measured relative velocity (109 km/s closing, about 17 km/s sideways; van der Marel
+  et al. 2012)
+- both galaxies' masses, and Andromeda's real disk tilt
+
+The cores meet after **about 3.9 billion years**, matching that study's prediction, and merge
+into "Milkomeda" with long tidal tails. Each galaxy is a single softened mass, so the final
+merger comes sooner than in reality, where dynamical friction delays it by about 2 billion
+years.
+
 ### Scenarios
-Solar System (today) · Solar System (true scale) · Earth & Moon · Mars, Jupiter, Saturn, Uranus and Neptune with their moons ·
+Solar System (today) · Solar System (true scale) · Milky Way meets Andromeda (real) · Earth & Moon · Mars, Jupiter, Saturn, Uranus and Neptune with their moons ·
 Pluto & Charon · Protoplanetary Disk · Giant Impact · Ring Maker · Binary Star ·
 Figure-8 Three-Body · Rogue Star Flyby · Black Hole Feast · Supernova · The Sun's Future ·
 Relativistic Precession · Black Hole Inspiral · Galactic Core · Star Cluster Collapse ·

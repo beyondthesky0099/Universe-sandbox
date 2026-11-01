@@ -7,6 +7,7 @@ import { EARTH_MASS, G, JUPITER_MASS } from './units';
 import { julianDate, planetStates, type PlanetName } from './ephemeris';
 import { setTrueScale } from './trueScale';
 import { SPACECRAFT_COLOR, spacecraftState } from './spacecraft';
+import { loadMilkyWayAndromeda } from './localGroup';
 import { getSolarData, KM_PER_AU, poleScene, realRadiusAu, REAL_COLORS, relativeState, sampleRingRadii, smallBodyState, toScene, type SolarData } from './solarSystemData';
 
 export interface SceneSetup {
@@ -748,6 +749,13 @@ export function loadMoonSystem(sim: Simulation, planetName: string, date: Date, 
   };
 }
 
+const milkyWayAndromeda: Preset = {
+  id: 'mw-m31',
+  name: 'Milky Way meets Andromeda (real)',
+  description: 'The real collision ahead: Andromeda at its measured distance and HST-measured velocity, with both galaxies’ real masses and disk orientations. Time runs in millions of years.',
+  load: (sim) => loadMilkyWayAndromeda(sim),
+};
+
 const moonSystem = (id: string, planet: string, name: string, description: string): Preset => ({
   id,
   name,
@@ -787,6 +795,7 @@ export const PRESETS: Preset[] = [
   galacticCore,
   starCluster,
   selfGravitatingGalaxy,
+  milkyWayAndromeda,
   galaxyCollision,
   empty,
 ];

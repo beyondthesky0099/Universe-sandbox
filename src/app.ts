@@ -24,7 +24,7 @@ import { type SimEvent } from './sim/simulation';
 import { captureState, restoreState } from './sim/state';
 import { EXOPLANET_ACKNOWLEDGEMENT, loadCatalog, loadExoSystem, type ExoCatalog, type ExoHost } from './sim/exoplanets';
 import { loadBrightStars, loadNearStars, loadStarNeighbourhood } from './sim/stars';
-import { EARTH_MASS, fmt, formatDistance, formatKm, formatMass, formatSpeed, formatTime, G, JUPITER_MASS } from './sim/units';
+import { EARTH_MASS, fmt, formatDistance, formatKm, formatMass, formatSpeed, formatTime, G, JUPITER_MASS, getDisplayUnits, KPC_MYR_GRAVITY_SCALE, setDisplayUnits } from './sim/units';
 import { $, escapeHtml, isTyping, setFacts, toast } from './ui/dom';
 import { GalaxyStore, prefs } from './ui/galaxyStore';
 import { History } from './ui/history';
@@ -650,6 +650,7 @@ export class App {
       lightSpeedScale: 1,
       evolutionRate: 1,
       trueScale: false,
+      units: 'au-yr',
     });
   }
 
@@ -666,6 +667,7 @@ export class App {
     this.resetPhysicsDefaults();
     this.scenario = sc;
     const setup = sc.load();
+    setDisplayUnits(this.sim.units);
     this.sceneScale = setup.cameraDistance;
     this.host.commit();
     this.history.clearTimeline();
@@ -1303,8 +1305,10 @@ export class App {
 
   private syncSettingsUi(): void {
     const s = this.sim;
-    $<HTMLInputElement>('gravity').value = String(s.gravityScale);
-    $('gravity-out').textContent = s.gravityScale.toFixed(2);
+    // Galaxy-scale scenes keep G in kpc/Myr units; the slider shows the multiplier on top of that.
+    const gBase = s.units === 'kpc-myr' ? KPC_MYR_GRAVITY_SCALE : 1;
+    $<HTMLInputElement>('gravity').value = String(s.gravityScale / gBase);
+    $('gravity-out').textContent = (s.gravityScale / gBase).toFixed(2);
     $<HTMLInputElement>('opt-collisions').checked = s.collisions;
     $<HTMLInputElement>('opt-debris').checked = s.debris;
     $<HTMLInputElement>('opt-shatter').checked = s.shatter;
@@ -1503,6 +1507,7 @@ export class App {
   }
 
   private updateSystemHud(): void {
+    setDisplayUnits(this.sim.units);
     $('sim-time').textContent = formatTime(this.sim.time);
     const status = this.host.getStatus();
     $('lag').classList.toggle('hidden', !status.lagging);
@@ -1530,10 +1535,10 @@ export class App {
       const t = bodyTemperature(this.sim.bodies, body);
       facts.push(['Temperature', formatTemperature(t)], ['Climate', capitalize(climateFor(body.kind, t))]);
       if (isHabitable(body.kind, body.mass, t)) alerts.push(`<div class="alert good">🌍 Habitable: liquid water could exist on the surface.</div>`);
-    } else if (body.kind === 'star') {
+    } else if (body.kind === 'star' && body.tag !== 'galaxy') {
       facts.push(['Surface temp.', `${Math.round(starTemperature(body.mass)).toLocaleString()} K`]);
     }
-    if (body.kind === 'star' || body.kind === 'giant' || body.kind === 'whitedwarf') {
+    if ((body.kind === 'star' || body.kind === 'giant' || body.kind === 'whitedwarf') && body.tag !== 'galaxy') {
       facts.push(['Age', formatAge(body.age)]);
       if (body.kind === 'star') {
         const left = mainSequenceLifetime(body.mass) - body.age;
@@ -1554,7 +1559,7 @@ export class App {
         const hx = dy * dvz - dz * dvy, hy = dz * dvx - dx * dvz, hz = dx * dvy - dy * dvx;
         const h2 = hx * hx + hy * hy + hz * hz;
         const e = Math.sqrt(Math.max(0, 1 + (2 * energy * h2) / (mu * mu)));
-        facts.push(['Orbit', `a = ${fmt(a)} AU, e = ${e.toFixed(2)}`], ['Period', formatTime(2 * Math.PI * Math.sqrt((a * a * a) / mu))]);
+        facts.push(['Orbit', `a = ${formatDistance(a)}, e = ${e.toFixed(2)}`], ['Period', formatTime(2 * Math.PI * Math.sqrt((a * a * a) / mu))]);
       } else {
         facts.push(['Orbit', 'Unbound (escaping)']);
       }
@@ -1594,7 +1599,7 @@ export class App {
     const html = alerts.join('');
     const alertsEl = $('body-alerts');
     if (alertsEl.innerHTML !== html) alertsEl.innerHTML = html;
-    $('btn-supernova').classList.toggle('hidden', !this.sim.canSupernova(body));
+    $('btn-supernova').classList.toggle('hidden', !this.sim.canSupernova(body) || body.tag === 'galaxy');
     $('btn-visit').classList.toggle('hidden', !(body.tag?.startsWith('exohost:') || body.tag === 'home'));
     const inChallenge = !!this.challenge;
     for (const id of ['btn-mass-up', 'btn-mass-down', 'btn-delete']) $(id).classList.toggle('hidden', inChallenge);
@@ -2830,8 +2835,9 @@ export class App {
     ts.addEventListener('input', () => this.setTimeScale(Math.pow(10, Number(ts.value))));
     const grav = $<HTMLInputElement>('gravity');
     grav.addEventListener('input', () => {
-      this.host.setSettings({ gravityScale: Number(grav.value) });
-      $('gravity-out').textContent = this.sim.gravityScale.toFixed(2);
+      const gBase = this.sim.units === 'kpc-myr' ? KPC_MYR_GRAVITY_SCALE : 1;
+      this.host.setSettings({ gravityScale: Number(grav.value) * gBase });
+      $('gravity-out').textContent = Number(grav.value).toFixed(2);
     });
     const bindSetting = (id: string, key: 'collisions' | 'debris' | 'shatter' | 'tidal') =>
       $<HTMLInputElement>(id).addEventListener('change', (e) => this.host.setSettings({ [key]: (e.target as HTMLInputElement).checked }));
@@ -2956,6 +2962,7 @@ export class App {
 
 function kindLabel(b: Body): string {
   if (b.tag === 'probe') return 'Spacecraft';
+  if (b.tag === 'galaxy') return 'Galaxy (all its mass as one point)';
   switch (b.kind) {
     case 'rocky':
       return b.mass < 0.05 * EARTH_MASS ? 'Asteroid' : 'Rocky planet';
@@ -2994,6 +3001,7 @@ function capitalize(s: string): string {
 }
 
 function formatRate(yearsPerSecond: number): string {
+  if (getDisplayUnits() === 'kpc-myr') return `${fmt(yearsPerSecond)} Myr/s`;
   if (yearsPerSecond < 1 / 12) return `${fmt(yearsPerSecond * 365.25)} d/s`;
   return `${fmt(yearsPerSecond)} yr/s`;
 }

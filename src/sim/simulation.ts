@@ -116,6 +116,11 @@ export class Simulation {
     return body;
   }
 
+  /** Create a body without adding it to the simulation (used when mirroring worker state). */
+  addBodyDetached(init: BodyInit): Body {
+    return createBody(init);
+  }
+
   removeBody(id: number): void {
     this.bodies = this.bodies.filter((b) => b.id !== id);
     this.forcesDirty = true;

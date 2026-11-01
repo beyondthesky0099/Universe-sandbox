@@ -1,5 +1,5 @@
 import type { BodyKind } from './body';
-import type { Simulation } from './simulation';
+import type { GravityMode, Simulation } from './simulation';
 
 export interface BodyState {
   id: number;
@@ -32,6 +32,19 @@ export interface SimSettings {
   shatter: boolean;
   dtMax: number;
   softening: number;
+  gravityMode?: GravityMode;
+}
+
+export interface ShockwaveState {
+  x: number;
+  y: number;
+  z: number;
+  radius: number;
+  speed: number;
+  momentum: number;
+  maxRadius: number;
+  sourceId: number;
+  hit: number[];
 }
 
 export interface SimState {
@@ -41,6 +54,9 @@ export interface SimState {
   settings: SimSettings;
   bodies: BodyState[];
   particles?: ParticleState;
+  shockwaves?: ShockwaveState[];
+  /** Scheduled supernovae: [body id, detonation time]. */
+  fuses?: [number, number][];
 }
 
 export interface CaptureOptions {
@@ -67,6 +83,7 @@ export function captureState(sim: Simulation, opts: CaptureOptions = {}): SimSta
       shatter: sim.shatter,
       dtMax: sim.dtMax,
       softening: sim.softening,
+      gravityMode: sim.gravityMode,
     },
     bodies: sim.bodies.map((b) => ({
       id: b.id,
@@ -83,6 +100,8 @@ export function captureState(sim: Simulation, opts: CaptureOptions = {}): SimSta
       vz: round(b.vz),
     })),
   };
+  if (sim.shockwaves.length) state.shockwaves = sim.shockwaves.map((w) => ({ ...w, hit: [...w.hit] }));
+  if (sim.fuses.size) state.fuses = [...sim.fuses];
   if (particles && sim.particles.count > 0) {
     const p = sim.particles;
     const n3 = p.count * 3;
@@ -121,6 +140,8 @@ export function restoreState(sim: Simulation, state: SimState): void {
       sim.particles.add(p.pos[k], p.pos[k + 1], p.pos[k + 2], p.vel[k], p.vel[k + 1], p.vel[k + 2], [p.color[k], p.color[k + 1], p.color[k + 2]]);
     }
   }
+  if (state.shockwaves) sim.shockwaves = state.shockwaves.map((w) => ({ ...w, hit: new Set(w.hit) }));
+  if (state.fuses) for (const [id, at] of state.fuses) sim.fuses.set(id, at);
   sim.invalidate();
 }
 

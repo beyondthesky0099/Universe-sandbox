@@ -664,7 +664,7 @@ export class App {
       const body = this.sim.bodies.find((b) => b.name === setup.focus);
       if (body) {
         this.selectBody(body);
-        this.system.follow(body.id);
+        this.system.follow(body.id, setup.cameraDistance);
       }
     }
     if (setup.tip) setTimeout(() => toast(setup.tip!), 600);

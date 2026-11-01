@@ -28,8 +28,8 @@ Everything except the optional companion server runs in the browser.
 | ![Nearby stars](docs/screenshots/nearby-stars.png) | ![Milky Way](docs/screenshots/milky-way.png) |
 | **Saturn's real rings (NASA radii)** | **Solar System at true scale** |
 | ![Saturn's rings](docs/screenshots/saturn-rings.png) | ![True scale](docs/screenshots/true-scale.png) |
-| **Exoplanet hosts on the Milky Way map** | |
-| ![Exoplanet hosts](docs/screenshots/milky-way-exoplanets.png) | |
+| **Exoplanet hosts on the Milky Way map** | **NASA maps: Earth, Moon, Jupiter** |
+| ![Exoplanet hosts](docs/screenshots/milky-way-exoplanets.png) | ![Real maps](docs/screenshots/real-maps.png) |
 
 ## Run it
 
@@ -74,7 +74,8 @@ need the [companion server](#companion-server). Without one, they explain how to
   Mergers, fragments and supernova remnants keep real sizes, and collisions only happen at
   true contact. **Solar System (true scale)** adds the 12 largest moons to the whole system.
 - **Real moon systems at true scale:** Earth & Moon, Mars, Jupiter, Saturn, Uranus, Neptune and
-  Pluto–Charon. There are 28 moons, each at its real position for today. Saturn's C, B and A
+  Pluto–Charon. There are 28 moons, each at its real position for today, and the real Sun at
+  its true distance lights each scene and pulls on the moons. Saturn's C, B and A
   rings, the Cassini Division and the F ring are 6,000 orbiting particles at the radii from
   NASA's ring fact sheet, with density weighted by optical depth. Moons use mean orbits
   fitted to about 200 orbits of Horizons data, and they stay within 5% of JPL's positions
@@ -113,6 +114,9 @@ need the [companion server](#companion-server). Without one, they explain how to
   approaches.
 
 ### Visuals
+- **Real surfaces:** Earth (NASA Blue Marble, with real cloud cover), the Moon (LRO colour map)
+  and Jupiter (Cassini's global map) use NASA imagery once you zoom in close. Other bodies use
+  procedural surfaces for now.
 - **Black-hole gravitational lensing** in screen space, plus **bloom**.
 - Procedural planets with oceans, continents, ice, lava, storms, cloud layers, atmosphere glow
   and rings, all generated in more detail as you zoom in.
@@ -301,6 +305,9 @@ push and pull request.
   Administration under the Exoplanet Exploration Program.* The catalogue in
   `public/data/exoplanets.json` comes from the `pscomppars` table. Rebuild it with
   `node scripts/build-exoplanets.mjs`.
+- Planet surface maps are NASA imagery (Visible Earth Blue Marble, the SVS CGI Moon Kit, and
+  Cassini PIA07782). Sources are listed in `public/textures/CREDITS.md`. Rebuild them with
+  `node scripts/build-planet-textures.mjs`.
 - Saturn's ring radii, optical depths and albedos come from the NASA Saturnian Rings Fact
   Sheet (nssdc.gsfc.nasa.gov/planetary/factsheet/satringfact.html). Rebuild them with
   `node scripts/build-saturn-rings.mjs`.

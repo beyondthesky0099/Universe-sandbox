@@ -93,13 +93,15 @@ export class SystemView {
     quality: RenderQuality = QUALITY_PRESETS.medium,
   ) {
     this.quality = quality;
-    this.camera = new THREE.PerspectiveCamera(55, 1, 1e-4, 1e9);
+    // The logarithmic depth buffer copes with a tiny near plane, so real-sized planets (Earth is
+    // 4e-5 AU across) can be seen up close.
+    this.camera = new THREE.PerspectiveCamera(55, 1, 1e-8, 1e9);
     this.camera.position.set(0, 5, 8);
     this.controls = new OrbitControls(this.camera, domElement);
     this.controls.enableDamping = true;
     this.controls.dampingFactor = 0.08;
     this.controls.zoomSpeed = 1.4;
-    this.controls.minDistance = 0.002;
+    this.controls.minDistance = 1e-7;
     this.controls.maxDistance = 2e5;
 
     // A colour-managed background renders identically with and without post-processing
@@ -361,15 +363,15 @@ export class SystemView {
     return (2 * dist * Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2))) / viewportHeight;
   }
 
-  follow(id: number | undefined): void {
+  /** Follow a body. Without `distance`, zoom to see it properly but keep a reasonable user zoom. */
+  follow(id: number | undefined, distance?: number): void {
     this.followId = id;
     this.followBlend = 0;
     const body = id !== undefined ? this.sim.getBody(id) : undefined;
     if (body) {
       const current = this.cameraDistance;
       this.followStartDistance = current;
-      // Close enough to see the body properly, but keep the user's zoom if it's already reasonable.
-      this.followDistance = THREE.MathUtils.clamp(current, body.radius * 4, body.radius * 14);
+      this.followDistance = distance ?? THREE.MathUtils.clamp(current, body.radius * 4, body.radius * 14);
     }
   }
 
@@ -380,6 +382,8 @@ export class SystemView {
 
     // Follow camera: move target and camera together.
     const followed = this.followId !== undefined ? this.sim.getBody(this.followId) : undefined;
+    // Zoom in as far as just outside the followed body's surface (real sizes are tiny).
+    this.controls.minDistance = followed ? Math.max(1e-7, followed.radius * 1.15) : 1e-7;
     if (followed) {
       const blending = this.followBlend < 1;
       this.followBlend = Math.min(1, this.followBlend + dt * 1.2);

@@ -108,13 +108,13 @@ describe('real Solar System scenes', () => {
       const sim = new Simulation();
       const setup = loadMoonSystem(sim, planet, new Date('2026-11-01T00:00:00Z'), data);
       const moons = data.bodies.filter((b) => b.parent === planet && b.kind === 'moon');
-      expect(sim.bodies.length).toBe(moons.length + 1);
+      expect(sim.bodies.length).toBe(moons.length + 2); // + the Sun
       // Sizes are real: the planet's radius is its true radius in AU.
       const p = sim.bodies.find((b) => b.name === planet)!;
       expect(p.radius * 149597870.7).toBeCloseTo(data.byName.get(planet)!.radiusKm!, 0);
       // Run ~30 orbits of the innermost moon (setup.timeScale is a sixth of its period).
       sim.advance(setup.timeScale * 6 * 30, 1e7, 1e9);
-      expect(sim.bodies.length).toBe(moons.length + 1);
+      expect(sim.bodies.length).toBe(moons.length + 2); // + the Sun
       for (const m of moons) {
         const b = sim.bodies.find((x) => x.name === m.name)!;
         const r = Math.hypot(b.x - p.x, b.y - p.y, b.z - p.z);
@@ -161,7 +161,7 @@ describe('real spin axes (IAU poles)', () => {
 });
 
 describe('parent bodies', () => {
-  it('reports moons orbiting their planet and the planet orbiting nothing', async () => {
+  it('reports moons orbiting their planet, the planet orbiting the Sun, and the Sun orbiting nothing', async () => {
     const { loadMoonSystem } = await import('../src/sim/presets');
     const { Simulation } = await import('../src/sim/simulation');
     const sim = new Simulation();
@@ -169,7 +169,9 @@ describe('parent bodies', () => {
     const byName = (n: string) => sim.bodies.find((b) => b.name === n)!;
     expect(sim.parentOf(byName('Titan'))?.name).toBe('Saturn');
     expect(sim.parentOf(byName('Mimas'))?.name).toBe('Saturn');
-    expect(sim.parentOf(byName('Saturn'))).toBeUndefined();
+    // The Sun is in the scene at its real distance, so Saturn orbits it; the Sun orbits nothing.
+    expect(sim.parentOf(byName('Saturn'))?.name).toBe('Sun');
+    expect(sim.parentOf(byName('Sun'))).toBeUndefined();
   });
 });
 
@@ -211,4 +213,21 @@ describe("Saturn's rings", () => {
     const after = radii();
     for (let i = 0; i < after.length; i += 50) expect(Math.abs(after[i] - before[i]) / before[i]).toBeLessThan(0.02);
   }, 120000);
+});
+
+describe('moon systems include the real Sun', () => {
+  it('places the Sun at the planet’s real heliocentric distance', async () => {
+    const { loadMoonSystem } = await import('../src/sim/presets');
+    const { Simulation } = await import('../src/sim/simulation');
+    const { planetStates } = await import('../src/sim/ephemeris');
+    const date = new Date('2026-11-01T00:00:00Z');
+    const sim = new Simulation();
+    loadMoonSystem(sim, 'Jupiter', date, data);
+    const sun = sim.bodies.find((b) => b.name === 'Sun')!;
+    const jup = sim.bodies.find((b) => b.name === 'Jupiter')!;
+    const ref = planetStates(date).find((p) => p.name === 'Jupiter')!;
+    const d = Math.hypot(jup.x - sun.x, jup.y - sun.y, jup.z - sun.z);
+    expect(d).toBeCloseTo(Math.hypot(...ref.pos), 3);
+    expect(sun.radius * 149597870.7).toBeCloseTo(695700, -3); // real size
+  });
 });

@@ -56,6 +56,26 @@ export function atmosphereMaterial(color: number, intensity: number): THREE.Shad
   });
 }
 
+/** Real NASA surface maps (public/textures, built by scripts/build-planet-textures.mjs). */
+const REAL_MAPS: Record<string, { map: string; clouds?: string }> = {
+  Earth: { map: 'earth.jpg', clouds: 'earth-clouds.jpg' },
+  Moon: { map: 'moon.jpg' },
+  Jupiter: { map: 'jupiter.jpg' },
+};
+const realTextureCache = new Map<string, THREE.Texture>();
+
+/** Load (once) and share a real map. Shared textures are never disposed with a body. */
+function realTexture(file: string): THREE.Texture {
+  let tex = realTextureCache.get(file);
+  if (!tex) {
+    tex = new THREE.TextureLoader().load(`${import.meta.env.BASE_URL}textures/${file}`);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.anisotropy = 4;
+    realTextureCache.set(file, tex);
+  }
+  return tex;
+}
+
 /** Everything drawn for one simulated body: sphere, glow, clouds, rings, trail and label. */
 export class BodyVisual {
   readonly id: number;
@@ -269,7 +289,33 @@ export class BodyVisual {
       this.rings.rotation.x = -Math.PI / 2;
       this.mesh.add(this.rings);
     }
+    this.applyRealMaps(mat);
     this.detailKey = key;
+  }
+
+  /**
+   * Swap in a real NASA map for bodies that have one, unless the body has been heated until
+   * molten (then the procedural lava look shows what happened to it).
+   */
+  private applyRealMaps(mat: THREE.MeshStandardMaterial): void {
+    const real = REAL_MAPS[this.name];
+    if (!real || this.climate === 'molten') return;
+    mat.map = realTexture(real.map);
+    mat.emissiveMap = null;
+    mat.emissive.set(0x000000);
+    mat.needsUpdate = true;
+    if (real.clouds) {
+      const clouds = realTexture(real.clouds);
+      const cloudMat = new THREE.MeshStandardMaterial({ map: clouds, alphaMap: clouds, transparent: true, depthWrite: false, roughness: 1 });
+      if (this.clouds) {
+        (this.clouds.material as THREE.Material).dispose();
+        this.clouds.material = cloudMat;
+      } else {
+        this.clouds = new THREE.Mesh(SPHERE, cloudMat);
+        this.clouds.scale.setScalar(1.015);
+        this.mesh.add(this.clouds);
+      }
+    }
   }
 
   private applyClimateTint(): void {

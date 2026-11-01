@@ -35,7 +35,7 @@ export function createStarfield(count = 6000, seed = 11): THREE.Points {
     map: dotTexture(),
     transparent: true,
     depthWrite: false,
-    depthTest: false,
+    depthTest: true, // planets in front hide the sky (it sits at half the far plane)
     blending: THREE.AdditiveBlending,
   });
   const points = new THREE.Points(geo, mat);
@@ -75,7 +75,7 @@ export function createRealSky(stars: BrightStar[]): THREE.Group {
       map: dotTexture(),
       transparent: true,
       depthWrite: false,
-      depthTest: false,
+      depthTest: true, // planets in front hide the sky (it sits at half the far plane)
       blending: THREE.AdditiveBlending,
     });
     const points = new THREE.Points(geo, mat);

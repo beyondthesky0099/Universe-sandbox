@@ -15,7 +15,7 @@ export interface SceneSetup {
   timeScale: number;
   /** Optional camera elevation angle (rad above the ecliptic). */
   elevation?: number;
-  /** Name of a body to select and follow after loading. */
+  /** Name of a body to select and follow after loading (at `cameraDistance` from it). */
   focus?: string;
   /** Short tip shown after loading. */
   tip?: string;
@@ -684,16 +684,33 @@ export function loadMoonSystem(sim: Simulation, planetName: string, date: Date, 
   }
   const ringCount = planetName === 'Saturn' ? addSaturnRings(sim, planet, data, 6000) : 0;
   // Moon systems are true scale: this also ticks "Real sizes" and keeps merged bodies real-sized.
+  // The real Sun, at its true direction and distance from the planet on this date: it lights the
+  // scene, sets real temperatures, and adds its pull on the moons. The planet's heliocentric
+  // state is reversed, so nothing already placed needs to move.
+  const helio = SOLAR_PLANETS.some((p) => p[0] === planetName)
+    ? planetStates(date).find((p) => p.name === planetName)
+    : (() => {
+        const st = relativeState(planetData, jd, G * (1 + planetData.mass!));
+        return { pos: toScene(st.pos), vel: toScene(st.vel) };
+      })();
+  if (helio) {
+    sim.addBody({
+      name: 'Sun', kind: 'star', mass: 1, color: starColor(1), age: 4.6e9,
+      x: planet.x - helio.pos[0], y: planet.y - helio.pos[1], z: planet.z - helio.pos[2],
+      vx: planet.vx - helio.vel[0], vy: planet.vy - helio.vel[1], vz: planet.vz - helio.vel[2],
+    });
+  }
   setTrueScale(sim, true, data);
   sim.recenter();
   const outer = regularExtent || Math.max(...moons.map((m) => m.elements.a));
   return {
     cameraDistance: outer * 2.6,
+    focus: planetName,
     timeScale: Math.max(1e-5, innerPeriod / 6),
     elevation: 0.5,
     tip: `${planetName} and its moons on ${date.toISOString().slice(0, 10)}, at true scale, from JPL Horizons mean orbits.${
       ringCount ? ` The rings are ${ringCount.toLocaleString('en-US')} particles at the real radii from NASA's ring fact sheet, in Saturn's true equatorial plane.` : ''
-    } The Sun's pull and the planet's oblateness are left out, so orbits slowly drift from reality.`,
+    } The Sun is at its real distance; the planet's oblateness is left out, so orbits slowly drift from reality.`,
   };
 }
 

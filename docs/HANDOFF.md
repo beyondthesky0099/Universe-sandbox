@@ -42,8 +42,7 @@ Still procedural:
 - every other seeded galaxy
 - the made-up scenarios (Giant Impact, Ring Maker, …), which are deliberately fictional
 
-**Suggested next steps:** D2 (real planet texture maps, which needs a licence-compatible
-source); exoplanet hosts in the galaxy search and filters; carving the Encke and Keeler gaps
+**Suggested next steps:** the rest of D2 (smaller NASA maps for Mars, Mercury and Saturn); exoplanet hosts in the galaxy search and filters; carving the Encke and Keeler gaps
 (this needs published widths).
 
 Plan, in priority order:
@@ -110,10 +109,20 @@ Plan, in priority order:
       `bodyVisual.ts`; retrograde spin for Venus, Uranus and Pluto. Visual spin *rate* is still
       cosmetic, because real rates strobe at yr/s speeds.) Real planet colours, axial tilts and rotation periods from A1's data in
       `bodyVisual.ts`.
-- [ ] D2. Optional real planet texture maps. They need a licence-compatible source (for
-      example NASA public-domain maps), and must be fetched at build time, not hot-linked.
+- [~] D2. Real maps for Earth (with clouds), the Moon and Jupiter, from NASA public-domain
+      sources (`scripts/build-planet-textures.mjs`, `REAL_MAPS` in `bodyVisual.ts`). Still
+      procedural: Mercury, Venus, Mars, Saturn, Uranus and Neptune. NASA/USGS global mosaics
+      exist but are huge (Mercury is 800 MB, Mars several GB); find smaller official
+      versions. Solar System Scope (CC BY 4.0) serves an HTML page to scripted downloads, so
+      it isn't automated. Don't work around that.
 
 ## Notes and lessons learned
+- Close-ups at real size: the camera's near plane is 1e-8 AU, and `controls.minDistance`
+  follows the followed body's radius. The old 0.002 AU minimum stopped you zooming in to any
+  real-sized planet. Background stars are depth-tested, otherwise they draw over close
+  planets.
+- Moon-system scenes include the real Sun (the planet's heliocentric state, reversed) for
+  light, temperature and solar perturbation, and focus the planet with `follow(id, distance)`.
 - Labels: in scenes with 31–300 bodies, the 30 most massive are labelled
   (`shouldLabel` in `systemView.ts`). Before this, only stars were labelled.
 - IAU poles are hand-entered in `POLES` in `scripts/build-solar-system.mjs`. The test in

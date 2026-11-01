@@ -140,5 +140,6 @@ resized and recompressed (and, where noted, converted to greyscale or desaturate
 | File | Credit | Source |
 | --- | --- | --- |
 ${MAPS.map(([name, url, , credit]) => `| ${name}.jpg | ${credit} | ${url} |`).join('\n')}
+| cmb.jpg | NASA/WMAP Science Team, WMAP 9-year Internal Linear Combination map, reprojected from HEALPix by \`scripts/build-cmb.py\` (public domain) | https://lambda.gsfc.nasa.gov/data/map/dr5/dfp/ilc/wmap_ilc_9yr_v5.fits |
 `,
 );

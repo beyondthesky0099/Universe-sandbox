@@ -68,6 +68,34 @@ const FORM_COLOR: Record<GalaxyForm, [number, number, number]> = {
   'dwarf spheroidal': [0.85, 0.78, 0.66],
 };
 
+/** Comoving distance to the last-scattering surface: ~14 Gpc, about 46 billion light-years. */
+export const CMB_RADIUS_MPC = 14000;
+
+const CMB_VERTEX = /* glsl */ `
+  varying vec3 vDir;
+  void main() {
+    vDir = position;
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  }
+`;
+
+/** Look up the equirectangular galactic map (u = l / 360°, v = 0.5 + b / 180°) from the direction. */
+const CMB_FRAGMENT = /* glsl */ `
+  uniform sampler2D map;
+  uniform float uOpacity;
+  varying vec3 vDir;
+  void main() {
+    vec3 d = normalize(vDir);
+    // Map frame (x, y, z) = galactic (x, z, -y).
+    float gx = d.x, gy = -d.z, gz = d.y;
+    float l = atan(gy, gx);
+    if (l < 0.0) l += 6.28318530718;
+    float b = asin(clamp(gz, -1.0, 1.0));
+    vec2 uv = vec2(l / 6.28318530718, 0.5 + b / 3.14159265359);
+    gl_FragColor = vec4(texture2D(map, uv).rgb * uOpacity, 1.0);
+  }
+`;
+
 interface Label {
   sprite: THREE.Sprite;
   /** Visible while the camera distance (Mpc) is within this range. */
@@ -88,6 +116,8 @@ export class CosmosView {
   private readonly labels: Label[] = [];
   private readonly marker: THREE.Sprite;
   private pointScale = 300;
+  private cmb?: THREE.Mesh;
+  private cmbVisible = true;
   private anim?: { fromTarget: THREE.Vector3; toTarget: THREE.Vector3; fromPos: THREE.Vector3; toPos: THREE.Vector3; t: number; speed: number };
 
   constructor(domElement: HTMLElement) {
@@ -97,7 +127,7 @@ export class CosmosView {
     this.controls.dampingFactor = 0.08;
     this.controls.zoomSpeed = 1.4;
     this.controls.minDistance = 0.004;
-    this.controls.maxDistance = 900;
+    this.controls.maxDistance = 40000; // far enough to see the whole observable universe from outside
     this.controls.enabled = false;
     this.marker = new THREE.Sprite(new THREE.SpriteMaterial({ map: ringTexture(), color: 0x7fdcff, sizeAttenuation: false, depthTest: false, transparent: true }));
     this.marker.scale.setScalar(0.05);
@@ -153,7 +183,7 @@ export class CosmosView {
     for (const s of COSMIC_STRUCTURES) {
       const sprite = textSprite(s.name, '#ffb38a', 0.85);
       sprite.position.set(...galacticToCosmos(s.l, s.b, s.d));
-      this.labels.push({ sprite, min: s.d < 1 ? 1.5 : s.d * 0.25, max: s.d < 1 ? 40 : 1e9 });
+      this.labels.push({ sprite, min: s.d < 1 ? 1.5 : s.d * 0.25, max: s.d < 1 ? 40 : 5000 });
       this.scene.add(sprite);
     }
     this.applyPointScale();
@@ -186,6 +216,32 @@ export class CosmosView {
     this.webPoints.renderOrder = 4;
     this.scene.add(this.webPoints);
     this.applyPointScale();
+  }
+
+  /** The cosmic microwave background (WMAP 9-year map) on a sphere at the edge of the observable universe. */
+  setCmb(texture: THREE.Texture): void {
+    texture.colorSpace = THREE.SRGBColorSpace;
+    // No mipmaps: the longitude wrap at l = 0 would otherwise show a seam.
+    texture.generateMipmaps = false;
+    texture.minFilter = THREE.LinearFilter;
+    const mesh = new THREE.Mesh(
+      new THREE.SphereGeometry(CMB_RADIUS_MPC, 128, 64),
+      new THREE.ShaderMaterial({ vertexShader: CMB_VERTEX, fragmentShader: CMB_FRAGMENT, uniforms: { map: { value: texture }, uOpacity: { value: 0.15 } }, side: THREE.DoubleSide, depthWrite: false }),
+    );
+    mesh.renderOrder = -20;
+    mesh.frustumCulled = false;
+    mesh.visible = this.cmbVisible;
+    this.cmb = mesh;
+    this.scene.add(mesh);
+    const sprite = textSprite('Cosmic microwave background · edge of the observable universe, 46 billion light-years', '#ffcf9a', 0.85);
+    sprite.position.set(0, CMB_RADIUS_MPC * 1.02, 0);
+    this.labels.push({ sprite, min: CMB_RADIUS_MPC * 0.8, max: 1e9 });
+    this.scene.add(sprite);
+  }
+
+  setCmbVisible(on: boolean): void {
+    this.cmbVisible = on;
+    if (this.cmb) this.cmb.visible = on;
   }
 
   get webCount(): number {
@@ -295,5 +351,10 @@ export class CosmosView {
     this.controls.update();
     const camDist = this.cameraDistance;
     for (const l of this.labels) l.sprite.visible = camDist >= l.min && camDist <= l.max;
+    if (this.cmb) {
+      // A faint backdrop from inside; full strength once you fly out past it.
+      const outside = this.camera.position.length() > CMB_RADIUS_MPC;
+      (this.cmb.material as THREE.ShaderMaterial).uniforms.uOpacity.value = outside ? 1 : 0.15;
+    }
   }
 }

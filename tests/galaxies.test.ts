@@ -84,3 +84,15 @@ describe('named galaxies beyond the Local Volume', () => {
     expect(named.every((g) => g.d > 11)).toBe(true); // nearer ones come from the Local Volume catalogue
   });
 });
+
+describe('the cosmic microwave background map', () => {
+  it('is bundled as an equirectangular galactic map at the edge of the observable universe', async () => {
+    const { CMB_RADIUS_MPC } = await import('../src/render/cosmosView');
+    expect(CMB_RADIUS_MPC * 3.2616e6 / 1e9).toBeCloseTo(45.7, 0); // ~46 billion light-years
+    const jpg = readFileSync(new URL('../public/textures/cmb.jpg', import.meta.url));
+    // JPEG SOF0 marker holds the dimensions: 2048 × 1024 (2:1 equirectangular).
+    const sof = jpg.indexOf(Buffer.from([0xff, 0xc0]));
+    expect(jpg.readUInt16BE(sof + 5)).toBe(1024);
+    expect(jpg.readUInt16BE(sof + 7)).toBe(2048);
+  });
+});

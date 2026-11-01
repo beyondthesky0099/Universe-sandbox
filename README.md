@@ -30,6 +30,8 @@ Everything except the optional companion server runs in the browser.
 | ![Saturn's rings](docs/screenshots/saturn-rings.png) | ![True scale](docs/screenshots/true-scale.png) |
 | **The Universe map: Local Group** | **The cosmic web (2MASS Redshift Survey)** |
 | ![Local Group](docs/screenshots/universe-local.png) | ![Cosmic web](docs/screenshots/universe-web.png) |
+| **The observable universe: CMB (WMAP)** | **Milky Way + Andromeda = Milkomeda** |
+| ![CMB](docs/screenshots/cmb.png) | ![Milkomeda](docs/screenshots/milkomeda.png) |
 | **Exoplanet hosts on the Milky Way map** | **NASA maps: Earth, Moon, Jupiter** |
 | ![Exoplanet hosts](docs/screenshots/milky-way-exoplanets.png) | ![Real maps](docs/screenshots/real-maps.png) |
 | **More real maps: Mercury, Mars, Phobos, Europa, Ganymede, Rhea, Iapetus, Vesta** | |
@@ -171,6 +173,10 @@ need the [companion server](#companion-server). Without one, they explain how to
   - **647 bright galaxies beyond the Local Volume** are clickable too, including M87 (Virgo A,
     home of the first black hole ever imaged), M49, M60, the Sombrero, M77 and Fornax A. They
     are placed by redshift, and their panels say so.
+  - **The edge of the observable universe:** the cosmic microwave background from NASA's WMAP
+    9-year map, on a sphere at its real distance, 46 billion light-years. From inside it's a
+    faint backdrop; zoom all the way out to see the whole observable universe from outside,
+    with every galaxy above a speck at its centre.
   - Click a galaxy for its type, distance, size, mass, gas and motion (Andromeda is
     approaching at 296 km/s). Zoom in or press **Visit** to explore it. Visited galaxies are
     procedural stand-ins shaped like the real one (spiral, elliptical, lenticular, irregular
@@ -381,6 +387,8 @@ push and pull request.
   certificate-chain error.
 - Asteroid flybys: the JPL Close-Approach Data API with JPL Horizons starting states (rebuild
   with `node scripts/build-flybys.mjs`).
+- Cosmic microwave background: the NASA WMAP 9-year ILC map from LAMBDA (public domain),
+  reprojected from HEALPix by `python3 -I scripts/build-cmb.py` (needs numpy and ImageMagick).
 - Spacecraft trajectories: NASA/JPL Horizons, state vectors every 10 days (rebuild with
   `node scripts/build-spacecraft.mjs`).
 - Galaxies: the **Updated Nearby Galaxy Catalog** (Karachentsev, Makarov & Kaisina 2013, AJ

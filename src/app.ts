@@ -971,6 +971,10 @@ export class App {
           this.cosmosLoaded = true;
           $('cosmos-credit').textContent = GALAXY_CREDIT;
           this.updateCosmosInfo();
+          new THREE.TextureLoader().load(`${import.meta.env.BASE_URL}textures/cmb.jpg`, (tex) => {
+            this.cosmos.setCmb(tex);
+            this.cosmos.setCmbVisible($<HTMLInputElement>('opt-cmb').checked);
+          });
           void loadWebGalaxies()
             .then((web) => {
               this.cosmos.setWeb(web);
@@ -2478,6 +2482,7 @@ export class App {
       this.cosmos.resetCamera();
     });
     $<HTMLInputElement>('opt-cosmic-web').addEventListener('change', (e) => this.cosmos.setWebVisible((e.target as HTMLInputElement).checked));
+    $<HTMLInputElement>('opt-cmb').addEventListener('change', (e) => this.cosmos.setCmbVisible((e.target as HTMLInputElement).checked));
     $('cosmos-search').addEventListener('input', () => this.renderCosmosSearch());
     $('cosmos-results').addEventListener('click', (e) => {
       const li = (e.target as HTMLElement).closest<HTMLElement>('[data-galaxy]');

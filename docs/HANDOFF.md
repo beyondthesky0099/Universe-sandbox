@@ -153,6 +153,15 @@ Plan, in priority order:
 - [x] G6. Halley's 2061 return (`scripts/build-halley.mjs`, `src/sim/halley.ts`) and comet tails (`bodyVisual.ts`)
 - [x] G7. Phone pass: lighter defaults on low-power devices (`LOW_POWER` in `app.ts`), pinch zoom in the Sky tab
 
+### H. Desktop app (Windows)
+- [x] Electron shell in `desktop/`, Windows installer and portable .exe built by
+  `.github/workflows/desktop.yml` on windows-latest (unsigned). Tags `v*` attach them to a
+  release.
+- [ ] Multi-core physics: the desktop shell could send cross-origin isolation headers (COOP/COEP)
+  so the simulation can use SharedArrayBuffer and split forces across several workers.
+- [ ] Run the companion server inside the desktop app (Electron's Node can run `server/`).
+- [ ] Code signing (needs a certificate) to remove the SmartScreen warning.
+
 Ideas for later: pulsars from the ATNF catalogue when reachable;
 dynamical friction for galaxy mergers; Virgo-cluster distances from redshift-independent
 measurements.

@@ -67,6 +67,9 @@ const LOW_POWER = (() => {
   return touchPhone || (nav.hardwareConcurrency ?? 8) <= 4 || (nav.deviceMemory ?? 8) <= 4;
 })();
 
+/** Running in the desktop app (desktop/, Electron): start with higher quality. */
+const DESKTOP = /\bElectron\//.test(navigator.userAgent);
+
 interface SpawnType {
   id: string;
   label: string;
@@ -172,7 +175,7 @@ export class App {
   private wasRunningBeforeRewind = false;
   private features?: Uint8Array;
   private scanToken = 0;
-  private quality: QualityName = prefs.get<QualityName>('quality', LOW_POWER ? 'low' : 'medium');
+  private quality: QualityName = prefs.get<QualityName>('quality', DESKTOP ? (LOW_POWER ? 'medium' : 'high') : LOW_POWER ? 'low' : 'medium');
   private catalog?: ExoCatalog;
   private challenge?: { def: Challenge; st: ChallengeState; result?: ChallengeResult };
   private graphOpen = false;
@@ -194,7 +197,7 @@ export class App {
   private readonly scripts: ScriptRunner;
   private embed = false;
   private postfx!: PostFX;
-  private postfxOn = prefs.get('postfx', !LOW_POWER);
+  private postfxOn = prefs.get('postfx', DESKTOP || !LOW_POWER);
   private mega?: MegaSim;
   private lesson?: { def: Lesson; step: number; events: SimEvent[]; done: Set<number> };
   private nudgeDrag?: { bodyId: number; start: THREE.Vector3; current: THREE.Vector3; lastPredict: number; path?: Float32Array };
@@ -203,7 +206,8 @@ export class App {
   private exoOpen = false;
 
   constructor() {
-    this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas, antialias: true, logarithmicDepthBuffer: true });
+    // Ask for the discrete GPU on laptops that have two.
+    this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas, antialias: true, logarithmicDepthBuffer: true, powerPreference: 'high-performance' });
     this.renderer.setClearColor(0x02030a);
     this.renderer.xr.enabled = true;
     this.postfx = new PostFX(this.renderer);
@@ -362,7 +366,7 @@ export class App {
       }
       this.forecastTimer -= dt;
       if (this.forecastTimer <= 0) {
-        this.forecastTimer = LOW_POWER ? 2 : 1;
+        this.forecastTimer = LOW_POWER && !DESKTOP ? 2 : 1;
         this.updateForecast();
       }
       if (this.frames % 6 === 0) this.updateSystemHud();

@@ -50,6 +50,33 @@ npm run build      # static site in dist/
 The web app works fully on its own. The gallery, multiplayer and "Create with Claude" buttons
 need the [companion server](#companion-server). Without one, they explain how to connect.
 
+### Desktop app (Windows)
+
+Astrarium also comes as a Windows program, built with Electron from the same code. Compared
+with a browser tab, it:
+- asks Windows for the **high-performance GPU**, so laptops with two graphics chips use the
+  dedicated one
+- is never slowed down in the background
+- starts at high graphics quality
+- works offline, with all the real data bundled
+
+Download `Astrarium-Setup-<version>.exe` (installer) or `Astrarium-Portable-<version>.exe` (runs
+without installing) from the [Releases](https://github.com/beyondthesky0099/Universe-sandbox/releases)
+page, or from the latest **Desktop app** run on the Actions tab. The files aren't code-signed,
+so the first time you run one, Windows SmartScreen may say it's from an unknown publisher:
+choose *More info → Run anyway*. Press F11 for full screen.
+
+To build or run it yourself:
+
+```
+npm run desktop       # build the web app and open it in the desktop shell
+npm run desktop:win   # build the Windows installer and portable .exe into desktop/release/
+```
+
+To publish a release, push a tag such as `v0.2.0`. GitHub Actions builds both .exe files on
+Windows and attaches them to a release for that tag. "Use my location" in the Sky tab doesn't
+work in the desktop app, so type your latitude and longitude instead.
+
 ## Features
 
 ### Play

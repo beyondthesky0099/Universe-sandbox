@@ -12,6 +12,8 @@ npx vitest run                      # 85+ tests, about 5 s; must stay green
 npm run build                       # tsc + vite build into dist/
 cd server && npm install && npm run typecheck && npm test    # server (node --test)
 node scripts/build-exoplanets.mjs   # rebuild public/data/exoplanets.json from NASA
+cd desktop && npm install           # desktop app (Electron); then `npm run desktop` at the root
+npm run desktop:win                 # Windows .exe (CI builds it on windows-latest: desktop.yml)
 ```
 
 Before every commit, run the typecheck, the app tests, the build and the server tests.
@@ -30,6 +32,10 @@ Before every commit, run the typecheck, the app tests, the build and the server 
 - `src/ui/`, `src/net/`: graphs, replays, the console, share links, and server/multiplayer clients.
 - `src/app.ts`: the big orchestrator (about 2,800 lines) that wires DOM, input, views and sim.
   UI markup is in `index.html` and styles in `src/style.css`.
+- `desktop/`: the Electron shell (`main.cjs`) that serves the built app (copied into
+  `desktop/web/`) from an `app://` origin. It requests the high-performance GPU and turns off
+  background throttling. The web app detects it (`DESKTOP` in `app.ts`) and starts at high
+  quality. The icon comes from `icon.svg` (`node desktop/make-icon.mjs`).
 - `server/`: Node 22.18+ runs `.ts` directly (type stripping), so use **no TS parameter
   properties or enums** (`erasableSyntaxOnly`). It provides the Claude scene builder
   (`scene.ts`, Anthropic SDK, structured output via `betaZodOutputFormat`), the gallery and

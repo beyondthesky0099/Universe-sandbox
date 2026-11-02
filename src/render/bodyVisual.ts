@@ -4,6 +4,7 @@ import type { Body, BodyKind } from '../sim/body';
 import type { Climate } from '../sim/climate';
 import { EARTH_MASS } from '../sim/units';
 import { makePlanetTextures, seedFromName } from './planetTextures';
+import { mulberry32 } from '../procgen/rng';
 import { accretionTexture, glowTexture } from './textures';
 import { getSolarData, poleScene, REAL_COLORS } from '../sim/solarSystemData';
 
@@ -92,6 +93,9 @@ function realTexture(file: string): THREE.Texture {
 }
 
 /** Everything drawn for one simulated body: sphere, glow, clouds, rings, trail and label. */
+/** Points in each comet tail. */
+const COMET_TAIL_POINTS = 260;
+
 export class BodyVisual {
   readonly id: number;
   kind: BodyKind;
@@ -159,9 +163,77 @@ export class BodyVisual {
     this.label = new CSS2DObject(el);
     this.label.center.set(-0.15, 1.2);
     this.group.add(this.label);
+    if (body.tag === 'comet') this.makeTails(real?.radiusKm ?? 5);
   }
 
   private isProbe = false;
+  private tails?: THREE.Points;
+  private tailJitter?: Float32Array;
+  private tailScale = 1;
+
+  /** Ion (blue, straight) and dust (yellow-white, curved) tails, as one point cloud. */
+  private makeTails(nucleusKm: number): void {
+    const n = COMET_TAIL_POINTS * 2;
+    const pos = new Float32Array(n * 3);
+    const col = new Float32Array(n * 3);
+    const rand = mulberry32(seedFromName(this.name));
+    this.tailJitter = new Float32Array(n * 3).map(() => (rand() * 2 - 1) * (0.5 + rand()));
+    for (let i = 0; i < n; i++) {
+      const ion = i < COMET_TAIL_POINTS;
+      const s = (i % COMET_TAIL_POINTS) / COMET_TAIL_POINTS;
+      const fade = Math.pow(1 - s, 1.6) * (0.6 + 0.4 * rand());
+      const c = ion ? [0.45, 0.7, 1.0] : [1.0, 0.92, 0.75];
+      col.set(c.map((v) => v * fade * (ion ? 0.8 : 0.65)), i * 3);
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3).setUsage(THREE.DynamicDrawUsage));
+    geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    this.tails = new THREE.Points(
+      geo,
+      new THREE.PointsMaterial({ size: 4, sizeAttenuation: false, vertexColors: true, map: glowTexture(), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }),
+    );
+    this.tails.frustumCulled = false;
+    this.tails.visible = false;
+    // Bigger nuclei have bigger comae and tails (Hale–Bopp's 30 km nucleus vs Halley's 5.5 km).
+    this.tailScale = Math.sqrt(nucleusKm / 5.5);
+    this.group.add(this.tails);
+  }
+
+  /**
+   * Point the tails away from the Sun. Length grows as the comet nears the Sun (illustrative:
+   * ~0.2 AU at 1 AU for a Halley-sized nucleus, ∝ 1/r², inactive beyond ~4 AU; Halley's 1986
+   * ion tail reached about 0.2 AU).
+   */
+  private updateTails(body: Body, sun: Body): void {
+    const t = this.tails!;
+    const dx = body.x - sun.x, dy = body.y - sun.y, dz = body.z - sun.z;
+    const r = Math.hypot(dx, dy, dz);
+    const activity = r > 0 ? THREE.MathUtils.clamp(1 - (r - 3) / 1.5, 0, 1) : 0;
+    t.visible = activity > 0;
+    if (!t.visible) return;
+    const L = Math.min(0.6, (0.2 * this.tailScale) / (r * r)) * activity;
+    const ux = dx / r, uy = dy / r, uz = dz / r;
+    // Dust lags behind along the orbit: bend it against the comet's motion relative to the Sun.
+    let vx = body.vx - sun.vx, vy = body.vy - sun.vy, vz = body.vz - sun.vz;
+    const vu = vx * ux + vy * uy + vz * uz;
+    vx -= vu * ux; vy -= vu * uy; vz -= vu * uz;
+    const vl = Math.hypot(vx, vy, vz) || 1;
+    vx /= vl; vy /= vl; vz /= vl;
+    const pos = t.geometry.getAttribute('position') as THREE.BufferAttribute;
+    const p = pos.array as Float32Array;
+    const j = this.tailJitter!;
+    for (let i = 0; i < COMET_TAIL_POINTS * 2; i++) {
+      const ion = i < COMET_TAIL_POINTS;
+      const s = (i % COMET_TAIL_POINTS) / COMET_TAIL_POINTS;
+      const len = (ion ? 1 : 0.7) * L * s;
+      const bend = ion ? 0 : 0.45 * L * s * s;
+      const spread = L * (ion ? 0.012 + 0.03 * s : 0.02 + 0.08 * s);
+      p[i * 3] = ux * len - vx * bend + j[i * 3] * spread;
+      p[i * 3 + 1] = uy * len - vy * bend + j[i * 3 + 1] * spread;
+      p[i * 3 + 2] = uz * len - vz * bend + j[i * 3 + 2] * spread;
+    }
+    pos.needsUpdate = true;
+  }
 
   get isPlanet(): boolean {
     return (this.kind === 'rocky' || this.kind === 'gas') && !this.isProbe;
@@ -345,8 +417,12 @@ export class BodyVisual {
   }
 
   /** Update transform. `worldPerPixel` is the world size of one screen pixel at the body's depth. */
-  update(body: Body, worldPerPixel: number, dt: number, lockTo?: Body): void {
+  update(body: Body, worldPerPixel: number, dt: number, lockTo?: Body, sun?: Body): void {
     this.group.position.set(body.x, body.y, body.z);
+    if (this.tails) {
+      if (sun) this.updateTails(body, sun);
+      else this.tails.visible = false;
+    }
     // A whole galaxy (galaxy-scale scenes) is drawn as a small bright nucleus: its stars are the particles.
     const isGalaxy = body.tag === 'galaxy';
     const r = this.isProbe ? worldPerPixel * 4 : isGalaxy ? Math.max(body.radius * 0.05, worldPerPixel * 2) : Math.max(body.radius, worldPerPixel * MIN_PIXEL_RADIUS);
@@ -477,6 +553,11 @@ export class BodyVisual {
 
   dispose(): void {
     this.disposeParts();
+    if (this.tails) {
+      this.group.remove(this.tails);
+      this.tails.geometry.dispose();
+      (this.tails.material as THREE.Material).dispose();
+    }
     this.label.element.remove();
     this.group.remove(this.label);
     this.trail.geometry.dispose();

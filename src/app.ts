@@ -18,6 +18,7 @@ import { loadGwEvent, loadGwEvents } from './sim/gwEvents';
 import { loadFlyby, loadFlybys } from './sim/flybys';
 import { loadVoyagerEncounter, loadVoyagerEncounters } from './sim/voyager';
 import { synthesizeChirp } from './sim/gwChirp';
+import { loadHalley2061, loadHalleyReturn } from './sim/halley';
 import { getSolarData, loadSolarData } from './sim/solarSystemData';
 import { isCompact, kindForMass, mainSequenceLifetime, mergedKind, NEUTRON_MAX_MASS, type Body, type BodyKind } from './sim/body';
 import { isTidallyLocked, nearResonance, orbitalPeriod } from './sim/analysis';
@@ -2991,6 +2992,14 @@ export class App {
     $('exo-list').addEventListener('click', pickHost);
     $('exo-list').addEventListener('keydown', (e) => (e as KeyboardEvent).key === 'Enter' && pickHost(e));
     $('btn-neighbourhood').addEventListener('click', () => void this.loadNeighbourhoodScene());
+    $('btn-halley').addEventListener('click', async () => {
+      try {
+        const [h] = await Promise.all([loadHalleyReturn(), loadSolarData()]);
+        this.loadScenario({ name: "Halley's return (2061)", description: "Comet Halley's real 2061 return from JPL Horizons, with the planets on that date.", load: () => loadHalley2061(this.sim, h), origin: { kind: 'sol' } });
+      } catch {
+        toast("Couldn't load Halley's data.");
+      }
+    });
     $('btn-visit').addEventListener('click', () => void this.visitSelected());
     $('btn-star-neighbourhood').addEventListener('click', async () => {
       await this.fade(true);
@@ -3375,6 +3384,7 @@ export class App {
 
 function kindLabel(b: Body): string {
   if (b.tag === 'probe') return 'Spacecraft';
+  if (b.tag === 'comet') return 'Comet';
   if (b.tag === 'galaxy') return 'Galaxy (all its mass as one point)';
   switch (b.kind) {
     case 'rocky':

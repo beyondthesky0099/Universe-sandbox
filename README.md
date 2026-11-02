@@ -240,6 +240,16 @@ traced from JPL Horizons Sun and Moon positions and agrees with NASA's catalogue
 greatest eclipse within 1 s, central duration within 1 s, and path width within 1% (about 7%
 for grazing eclipses). The corona's streamers are decorative.
 
+### Halley's return (2061)
+Press **☄️ Halley 2061** for the real Solar System in April 2061 with Comet Halley on its JPL
+Horizons path (an orbit solution that includes the comet's jets). The simulation reproduces
+JPL's perihelion on 28 July 2061 at 0.593 AU (within half a day and 0.5%), the pass 0.477 AU
+from Earth the next day, and a close pass just 0.054 AU (8 million km) from Venus on 20 August.
+All comets now grow tails as they near the Sun: a straight blue ion tail pointing directly
+away from the Sun and a curved dust tail trailing behind. The tail lengths are illustrative.
+The selected body's forecast also became more precise: it now finds the closest point between
+its samples, so fast encounters like this one are no longer missed.
+
 ### Real gravitational-wave events
 Pick one of 11 famous LIGO/Virgo/KAGRA detections and press **Replay merger**. The list
 includes GW150914 (the first ever), the neutron-star collision GW170817, GW190521 (the most
@@ -434,6 +444,7 @@ push and pull request.
   2023), from the Gaia archive TAP service, cross-matched to HYG by `node scripts/build-stars.mjs`.
   This work has made use of data from the European Space Agency (ESA) mission Gaia, processed
   by the Gaia Data Processing and Analysis Consortium (DPAC).
+- Halley's 2061 return: NASA/JPL Horizons (rebuild with `node scripts/build-halley.mjs`).
 - Voyager encounters: NASA/JPL Horizons planetocentric states of Voyager 1 and 2, the moons and
   the Sun (rebuild with `node scripts/build-voyager.mjs`).
 - Solar eclipses: the list and reference values from NASA's Five Millennium Canon of Solar

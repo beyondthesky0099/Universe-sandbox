@@ -53,27 +53,54 @@ export function forecast(sim: Simulation, bodyId: number, horizon: number, maxBo
   const best = new Map<Body, Approach>();
   let impact: Approach | undefined;
   let steps = 0;
+  // Relative state of each body at the previous sample, to find minima between samples.
+  const prevRel = new Map<Body, { p: [number, number, number]; v: [number, number, number]; t: number }>();
+  const SUB = 16;
   const sample = (time: number) => {
     for (const [copy, original] of copies) {
-      const d = Math.hypot(copy.x - self.x, copy.y - self.y, copy.z - self.z);
-      const prev = best.get(copy);
-      if (!prev || d < prev.distance) {
+      const p1: [number, number, number] = [copy.x - self.x, copy.y - self.y, copy.z - self.z];
+      const v1: [number, number, number] = [copy.vx - self.vx, copy.vy - self.vy, copy.vz - self.vz];
+      // Closest point on a cubic Hermite curve through the last two samples (relative motion).
+      let d = Math.hypot(...p1);
+      let rel = p1;
+      let back = 0; // how far before `time` the minimum falls (years)
+      const prev = prevRel.get(copy);
+      if (prev) {
+        const h = time - prev.t;
+        for (let j = 1; j < SUB; j++) {
+          const u = j / SUB;
+          const h00 = 2 * u ** 3 - 3 * u ** 2 + 1, h10 = u ** 3 - 2 * u ** 2 + u, h01 = -2 * u ** 3 + 3 * u ** 2, h11 = u ** 3 - u ** 2;
+          const q = [0, 1, 2].map((c) => h00 * prev.p[c] + h10 * h * prev.v[c] + h01 * p1[c] + h11 * h * v1[c]) as [number, number, number];
+          const dq = Math.hypot(q[0], q[1], q[2]);
+          if (dq < d) {
+            d = dq;
+            rel = q;
+            back = (1 - u) * h;
+          }
+        }
+      }
+      prevRel.set(copy, { p: p1, v: v1, t: time });
+      const best0 = best.get(copy);
+      if (!best0 || d < best0.distance) {
+        // Positions at that moment: the body stepped back along its velocity, the other offset from it.
+        const at: [number, number, number] = [self.x - self.vx * back, self.y - self.vy * back, self.z - self.vz * back];
         const a: Approach = {
           otherId: original.id,
           otherName: original.name,
           distance: d,
-          time,
+          time: time - back,
           impact: d < copy.radius + self.radius,
-          self: [self.x, self.y, self.z],
-          other: [copy.x, copy.y, copy.z],
+          self: at,
+          other: [at[0] + rel[0], at[1] + rel[1], at[2] + rel[2]],
         };
         best.set(copy, a);
-        if (a.impact && (!impact || time < impact.time)) impact = a;
+        if (a.impact && (!impact || a.time < impact.time)) impact = a;
       }
     }
   };
 
-  const slices = 300;
+  sample(0);
+  const slices = 1500;
   const slice = horizon / slices;
   for (let i = 1; i <= slices && !impact && steps < maxSteps; i++) {
     steps += ghost.advance(slice, Math.max(1, maxSteps - steps), 1e9).steps;

@@ -150,7 +150,7 @@ Plan, in priority order:
 - [x] G3. Solar eclipses (`scripts/build-eclipses.mjs`, `src/sim/eclipse.ts`)
 - [x] G4. Gaia DR3 distances and velocities for nearby stars (in `scripts/build-stars.mjs`)
 - [x] G5. Gravitational-wave chirps as sound (`src/sim/gwChirp.ts`, button in the GW row)
-- [ ] G6. Halley's return in 2061, with comet tails pointing away from the Sun
+- [x] G6. Halley's 2061 return (`scripts/build-halley.mjs`, `src/sim/halley.ts`) and comet tails (`bodyVisual.ts`)
 - [ ] G7. Phone performance pass
 
 Ideas for later: pulsars from the ATNF catalogue when reachable;

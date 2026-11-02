@@ -425,13 +425,16 @@ export class SystemView {
     const tmp = new THREE.Vector3();
     const spacing = camDist * 0.004;
     let detailCandidate: { v: BodyVisual; b: Body; px: number } | undefined;
+    // The Sun (the heaviest star) sets comet tail directions; only in AU-scale scenes.
+    let sun: Body | undefined;
+    if (this.sim.units === 'au-yr') for (const b of this.sim.bodies) if (b.kind === 'star' && (!sun || b.mass > sun.mass)) sun = b;
     for (const b of this.sim.bodies) {
       const v = this.visuals.get(b.id);
       if (!v) continue;
       tmp.set(b.x, b.y, b.z);
       const wpp = this.worldPerPixel(tmp, viewportHeight);
       const lockId = this.locks.get(b.id);
-      v.update(b, wpp, dt, lockId !== undefined ? this.sim.getBody(lockId) : undefined);
+      v.update(b, wpp, dt, lockId !== undefined ? this.sim.getBody(lockId) : undefined, sun);
       if (updateClimate && v.isPlanet) {
         v.setClimate(climateFor(b.kind, bodyTemperature(this.sim.bodies, b)));
         const parent = this.sim.parentOf(b);

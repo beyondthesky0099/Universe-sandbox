@@ -291,6 +291,7 @@ export class App {
             })),
           );
           this.sky.setNebulaeVisible($<HTMLInputElement>('opt-sky-nebulae').checked);
+          $('sky-nebula-count').textContent = `${list.length.toLocaleString('en-US')} nebulae from real catalogues`;
         });
         return this.system.setSky(createRealSky(stars));
       })
@@ -1432,10 +1433,10 @@ export class App {
     if (!all || this.galaxySeed !== seed) return;
     // The ten hand-placed showpieces already carry labels; don't name them twice.
     const shown = MW_NEBULAE.map((n) => n.name.split(' (')[0].toLowerCase());
-    const placed = all.filter((n) => n.distanceKpc && n.kind !== 'snr');
+    const placed = all.filter((n) => n.distanceKpc);
     this.galaxy.setRealNebulae(
       placed.map((n) => {
-        const pc = diameterPc(n) ?? (n.kind === 'pn' ? 0.5 : 5);
+        const pc = diameterPc(n) ?? (n.kind === 'pn' ? 0.5 : n.kind === 'snr' ? 20 : 5);
         // Exaggerated so they read on a 100,000-light-year map, but never below a visible dot.
         const size = Math.max(n.kind === 'pn' ? 0.12 : 0.22, (pc / 1000) * UNITS_PER_KPC * 8);
         const named = n.name && !shown.some((s) => n.name!.toLowerCase().startsWith(s));
@@ -1444,8 +1445,8 @@ export class App {
       }),
     );
     this.galaxy.setRealNebulaeVisible($<HTMLInputElement>('opt-real-nebulae').checked);
-    const hii = placed.filter((n) => n.kind === 'hii').length;
-    $('galaxy-info').textContent += ` ${hii.toLocaleString('en-US')} real HII regions (pink) and ${(placed.length - hii).toLocaleString('en-US')} planetary nebulae (teal) sit at their measured distances; star-forming regions trace the spiral arms.`;
+    const count = (k: string) => placed.filter((n) => n.kind === k).length.toLocaleString('en-US');
+    $('galaxy-info').textContent += ` ${count('hii')} real HII regions (pink), ${count('pn')} planetary nebulae (teal) and ${count('snr')} supernova remnants (blue) sit at their measured distances; star-forming regions trace the spiral arms.`;
   }
 
   private async showExoHostsOnMap(seed: number): Promise<void> {

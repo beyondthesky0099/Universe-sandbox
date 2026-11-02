@@ -91,7 +91,7 @@ export class SkyView {
     );
     this.scene.add(horizon);
     for (const [name, az] of [['N', 0], ['NE', 45], ['E', 90], ['SE', 135], ['S', 180], ['SW', 225], ['W', 270], ['NW', 315]] as [string, number][]) {
-      const s = textSprite(name, name.length === 1 ? '#ffd27a' : '#b9a77d', name.length === 1 ? 1.3 : 0.9);
+      const s = this.label(name, name.length === 1 ? '#ffd27a' : '#b9a77d', name.length === 1 ? 1.3 : 0.9);
       s.position.set(...altAzToScene(1.5, az)).multiplyScalar(R_GROUND * 0.98);
       s.center.set(0.5, 0);
       this.scene.add(s);
@@ -135,7 +135,7 @@ export class SkyView {
     }
     // Name the brightest stars.
     for (const s of stars.filter((x) => x[5] && x[3] < 1.6)) {
-      const sprite = textSprite(s[5]!, '#9fb4d8', 0.75);
+      const sprite = this.label(s[5]!, '#9fb4d8', 0.75);
       sprite.center.set(-0.08, 0.5);
       this.starLabels.push({ sprite, v: new THREE.Vector3(s[0], s[1], s[2]) });
       this.scene.add(sprite);
@@ -156,7 +156,7 @@ export class SkyView {
       col.set(it.color, i * 3);
       rad[i] = it.radiusDeg * DEG;
       if (it.label) {
-        const sprite = textSprite(it.label, '#ffb3c8', 0.7);
+        const sprite = this.label(it.label, '#ffb3c8', 0.7);
         sprite.center.set(0.5, 1.4);
         this.nebulaLabels.push({ sprite, v: new THREE.Vector3(...it.v) });
         this.scene.add(sprite);
@@ -183,7 +183,8 @@ export class SkyView {
           void main() {
             float r = length(gl_PointCoord - 0.5) * (vPx + 2.0);
             float edge = 1.0 - smoothstep(0.0, 1.5, abs(r - vPx * 0.5 + 0.75));
-            float fill = 0.12 * (1.0 - smoothstep(vPx * 0.5 - 1.0, vPx * 0.5, r));
+            // Small objects get a faint fill; big ones (several degrees across) only their outline.
+            float fill = 0.12 * (1.0 - smoothstep(30.0, 90.0, vPx)) * (1.0 - smoothstep(vPx * 0.5 - 1.0, vPx * 0.5, r));
             float a = max(edge * 0.8, fill) * uOpacity;
             if (a < 0.01) discard;
             gl_FragColor = vec4(vColor, a);
@@ -207,7 +208,7 @@ export class SkyView {
   private addBodies(): void {
     const add = (name: string, color: string, map: THREE.Texture) => {
       const dot = new THREE.Sprite(new THREE.SpriteMaterial({ map, color, transparent: true, depthWrite: false, blending: name === 'Moon' ? THREE.NormalBlending : THREE.AdditiveBlending }));
-      const label = textSprite(name, color, 0.85);
+      const label = this.label(name, color, 0.85);
       label.center.set(0.5, -0.9);
       this.scene.add(dot, label);
       this.bodies.set(name, { dot, label });
@@ -311,8 +312,20 @@ export class SkyView {
     this.moonTexture.needsUpdate = true;
   }
 
+  /** Every text label, with its scale at the default field of view. */
+  private readonly labels: { sprite: THREE.Sprite; base: THREE.Vector3 }[] = [];
+
+  private label(text: string, color: string, scale: number): THREE.Sprite {
+    const sprite = textSprite(text, color, scale);
+    this.labels.push({ sprite, base: sprite.scale.clone() });
+    return sprite;
+  }
+
   /** Real angular sizes, but never smaller than a few pixels. */
   private sizeBodies(): void {
+    // Labels keep the same size on screen whatever the zoom.
+    const k = Math.tan((this.camera.fov * DEG) / 2) / Math.tan((70 * DEG) / 2);
+    for (const l of this.labels) l.sprite.scale.copy(l.base).multiplyScalar(k);
     if (!this.snapshot) return;
     const pxPerRad = this.height / (2 * Math.tan((this.camera.fov * DEG) / 2));
     if (this.nebulaPoints) (this.nebulaPoints.material as THREE.ShaderMaterial).uniforms.uPxPerRad.value = pxPerRad * this.pixelRatio;

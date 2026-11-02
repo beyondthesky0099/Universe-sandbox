@@ -6,11 +6,31 @@ const nebulae = parseNebulae(JSON.parse(readFileSync(new URL('../public/data/neb
 const byName = (n: string) => nebulae.find((x) => x.name === n)!;
 
 describe('real nebulae', () => {
-  it('includes every confirmed WISE HII region, every Strasbourg-ESO planetary nebula and every Green SNR', () => {
-    expect(nebulae.filter((n) => n.kind === 'hii').length).toBe(2174);
-    expect(nebulae.filter((n) => n.kind === 'pn').length).toBe(1143);
-    expect(nebulae.filter((n) => n.kind === 'snr').length).toBe(294);
+  it('includes every confirmed WISE HII region, every Strasbourg-ESO planetary nebula, every Green SNR, and the dark and reflection nebulae', () => {
+    const count = (k: string) => nebulae.filter((n) => n.kind === k).length;
+    expect(count('hii')).toBe(2174);
+    expect(count('pn')).toBe(1143);
+    expect(count('snr')).toBe(294);
+    expect(count('dark')).toBe(1907); // Barnard's 349 plus the Lynds clouds Barnard didn't list
+    expect(count('refl')).toBe(158); // van den Bergh
     expect(nebulae.filter((n) => n.kind === 'hii' && n.distanceKpc).length).toBeGreaterThan(900);
+    expect(nebulae.filter((n) => n.kind === 'snr' && n.distanceKpc).length).toBeGreaterThan(150);
+  });
+
+  it('places supernova remnants at their measured distances (Ranasinghe & Leahy 2023)', () => {
+    expect(byName('Vela Supernova Remnant').distanceKpc!).toBeCloseTo(0.25, 1);
+    expect(byName('Cygnus Loop (Veil Nebula)').distanceKpc!).toBeCloseTo(0.73, 1);
+    expect(byName('Cassiopeia A').distanceKpc!).toBeCloseTo(3.3, 0);
+  });
+
+  it('finds the Horsehead (Barnard 33) and the Iris Nebula where they are', () => {
+    const horsehead = byName('Horsehead Nebula (B33)');
+    expect(horsehead.kind).toBe('dark');
+    expect(horsehead.l).toBeCloseTo(206.95, 1);
+    expect(horsehead.b).toBeCloseTo(-16.8, 1);
+    const iris = byName('Iris Nebula');
+    expect(iris.kind).toBe('refl');
+    expect(iris.star).toBe('HD 200775'); // the star that lights it
   });
 
   it('puts famous nebulae at their measured distances', () => {

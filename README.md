@@ -243,16 +243,25 @@ true scale. The simulation then reproduces the encounter: the tests confirm Apop
 distance to within 2% and its time to within an hour.
 
 ### Real nebulae
-The map shows **3,611 real nebulae** from professional catalogues:
-- **HII regions:** all 2,174 confirmed HII regions in the WISE catalogue. These are glowing clouds where stars are being born.
-- **Planetary nebulae:** all 1,143 in the Strasbourg-ESO catalogue. These are shells of gas thrown off by dying stars.
-- **Supernova remnants:** all 294 in Green's catalogue.
+The map shows **5,676 real nebulae** from professional catalogues:
 
-**Galaxy Map:** the 945 HII regions and 790 planetary nebulae with measured distances sit at their true 3D positions. The HII regions trace the spiral arms. Planetary-nebula distances come from Gaia parallaxes of their central stars where those are good, and otherwise from statistical estimates. Some HII distances are kinematic estimates (from the gas's motion), which can be off in the outer Galaxy. Supernova remnants have no catalogued distances, so they appear on the sky only.
+| Type | How many | Catalogue |
+|---|---|---|
+| HII regions (where stars are being born) | 2,174 | every confirmed one in the WISE catalogue |
+| Planetary nebulae (shells from dying stars) | 1,143 | the Strasbourg-ESO catalogue |
+| Supernova remnants | 294 | Green's catalogue, with distances for 187 from Ranasinghe & Leahy (2023) |
+| Dark nebulae | 1,907 | Barnard's 349 dark objects, plus the Lynds clouds Barnard didn't list |
+| Reflection nebulae | 158 | van den Bergh's catalogue |
+
+**Galaxy Map:** the nebulae with measured distances sit at their true 3D positions: 945 HII regions, 790 planetary nebulae and 187 supernova remnants. The HII regions trace the spiral arms.
+- Planetary-nebula distances come from Gaia parallaxes of their central stars where those are good, and otherwise from statistical estimates.
+- Some HII distances are kinematic estimates, which can be off in the outer Galaxy.
+- The remnant catalogue puts the Crab Nebula at 3.4 kpc (−1.0/+4.0), from the Crab pulsar's Gaia DR2 parallax. The long-standing estimate is about 2 kpc.
+- Dark and reflection nebulae have no catalogued distances, so they appear on the sky only.
 
 **Sky tab:** every nebula is outlined at its real position and angular size, and fades out in daylight.
 
-Famous nebulae are labelled: Orion, Lagoon, Eagle, Helix, Ring, Cat's Eye, the Crab, Cassiopeia A, the Veil and others. The names are matched to the catalogues through the SIMBAD astronomy database, not typed in by hand. The California and Crescent nebulae aren't in these catalogues, so they're left unlabelled. Toggle the layer with **Real nebulae** in the Galaxy Map panel, or **Nebulae** in the Sky tab.
+Famous nebulae are labelled: Orion, Lagoon, Eagle, Helix, Ring, Cat's Eye, the Crab, Cassiopeia A, the Veil, the Horsehead, the Pipe, the Iris and others. The names are matched to the catalogues through the SIMBAD astronomy database, not typed in by hand. The California, Crescent and Witch Head nebulae aren't in these catalogues, so they're left unlabelled. Toggle the layer with **Real nebulae** in the Galaxy Map panel, or **Nebulae** in the Sky tab.
 
 ### Voyager Grand Tour
 Pick a flyby and press **Fly with Voyager** to ride along on one of the six real planetary
@@ -494,8 +503,10 @@ push and pull request.
 - Nebulae: the WISE Catalog of Galactic HII Regions (Anderson et al. 2014, ApJS 212, 1), the
   Strasbourg-ESO Catalogue of Galactic Planetary Nebulae (Acker et al. 1992), Gaia EDR3 distances
   of planetary-nebula central stars (Gonzalez-Santamaria et al. 2021, A&A 656, A51), statistical
-  distances (Stanghellini & Haywood 2010, ApJ 714, 1096), and Green's catalogue of Galactic
-  supernova remnants (Green 2019), via VizieR (CDS). Familiar names resolved with SIMBAD (rebuild
+  distances (Stanghellini & Haywood 2010, ApJ 714, 1096), Green's catalogue of Galactic
+  supernova remnants (Green 2019) with distances from Ranasinghe & Leahy (2023, ApJS 265, 53),
+  Lynds' Catalogue of Dark Nebulae (1962), Barnard's dark objects (1927) and van den Bergh's
+  reflection nebulae (1966), via VizieR (CDS). Familiar names resolved with SIMBAD (rebuild
   with `node scripts/build-nebulae.mjs`).
 - Voyager encounters: NASA/JPL Horizons planetocentric states of Voyager 1 and 2, the moons and
   the Sun (rebuild with `node scripts/build-voyager.mjs`).

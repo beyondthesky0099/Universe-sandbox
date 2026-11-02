@@ -1,9 +1,11 @@
 /**
  * Real Milky Way nebulae (scripts/build-nebulae.mjs): HII regions from the WISE catalogue,
- * planetary nebulae from the Strasbourg-ESO catalogue with Gaia or statistical distances, and
- * supernova remnants from Green's catalogue. Positions are galactic (l, b) in degrees.
+ * planetary nebulae from the Strasbourg-ESO catalogue with Gaia or statistical distances,
+ * supernova remnants from Green's catalogue (with distances where measured), dark nebulae from
+ * the Lynds and Barnard catalogues, and reflection nebulae from van den Bergh's. Positions are
+ * galactic (l, b) in degrees.
  */
-export type NebulaKind = 'hii' | 'pn' | 'snr';
+export type NebulaKind = 'hii' | 'pn' | 'snr' | 'dark' | 'refl';
 
 export interface Nebula {
   kind: NebulaKind;
@@ -20,6 +22,9 @@ export interface Nebula {
   name?: string;
   /** Supernova remnant morphology: S shell, F filled centre, C composite. */
   snrType?: string;
+  /** Reflection nebulae: the star that lights them. Dark nebulae: Lynds opacity class (1–6). */
+  star?: string;
+  opacity?: number;
 }
 
 type Row = (string | number | null)[];
@@ -27,6 +32,8 @@ interface RawCatalog {
   hii: Row[];
   pn: Row[];
   snr: Row[];
+  dark?: Row[];
+  refl?: Row[];
 }
 
 export function parseNebulae(raw: RawCatalog): Nebula[] {
@@ -37,8 +44,14 @@ export function parseNebulae(raw: RawCatalog): Nebula[] {
   for (const [l, b, d, rad, id, src, name] of raw.pn as [number, number, number | null, number | null, string, string | null, string?][]) {
     out.push({ kind: 'pn', l, b, distanceKpc: d ?? undefined, distanceSource: src === 'g' ? 'gaia' : src === 's' ? 'statistical' : undefined, radiusDeg: (rad ?? 0) / 3600, id, name });
   }
-  for (const [l, b, maj, min, type, id, name] of raw.snr as [number, number, number, number, string, string, string?][]) {
-    out.push({ kind: 'snr', l, b, radiusDeg: Math.sqrt(maj * min) / 2 / 60, id, name, snrType: type });
+  for (const [l, b, maj, min, type, id, d, name] of raw.snr as [number, number, number, number, string, string, number | null, string?][]) {
+    out.push({ kind: 'snr', l, b, radiusDeg: Math.sqrt(maj * min) / 2 / 60, id, name, snrType: type, distanceKpc: d ?? undefined });
+  }
+  for (const [l, b, rad, id, opacity, name] of (raw.dark ?? []) as [number, number, number, string, number | null, string?][]) {
+    out.push({ kind: 'dark', l, b, radiusDeg: rad / 60, id, name, opacity: opacity ?? undefined });
+  }
+  for (const [l, b, rad, id, star, name] of (raw.refl ?? []) as [number, number, number, string, string, string?][]) {
+    out.push({ kind: 'refl', l, b, radiusDeg: rad / 60, id, name, star });
   }
   return out;
 }
@@ -84,13 +97,17 @@ export const NEBULA_COLORS: Record<NebulaKind, [number, number, number]> = {
   hii: [1, 0.38, 0.52],
   pn: [0.4, 0.95, 0.85],
   snr: [0.55, 0.7, 1],
+  dark: [0.62, 0.5, 0.4],
+  refl: [0.45, 0.6, 1],
 };
 
 export const NEBULA_KIND_LABEL: Record<NebulaKind, string> = {
   hii: 'HII region',
   pn: 'planetary nebula',
   snr: 'supernova remnant',
+  dark: 'dark nebula',
+  refl: 'reflection nebula',
 };
 
 export const NEBULA_CREDIT =
-  'Nebulae: WISE Catalog of Galactic HII Regions (Anderson et al. 2014), Strasbourg-ESO catalogue of planetary nebulae (Acker et al. 1992) with Gaia EDR3 (Gonzalez-Santamaria et al. 2021) and statistical (Stanghellini & Haywood 2010) distances, and Green’s catalogue of supernova remnants (2019), via VizieR.';
+  'Nebulae: WISE Catalog of Galactic HII Regions (Anderson et al. 2014), Strasbourg-ESO catalogue of planetary nebulae (Acker et al. 1992) with Gaia EDR3 (Gonzalez-Santamaria et al. 2021) and statistical (Stanghellini & Haywood 2010) distances, Green’s catalogue of supernova remnants (2019) with distances from Ranasinghe & Leahy (2023), Lynds’ (1962) and Barnard’s (1927) dark nebulae, and van den Bergh’s reflection nebulae (1966), via VizieR.';

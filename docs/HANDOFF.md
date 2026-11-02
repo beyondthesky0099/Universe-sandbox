@@ -154,12 +154,13 @@ Plan, in priority order:
 - [x] G7. Phone pass: lighter defaults on low-power devices (`LOW_POWER` in `app.ts`), pinch zoom in the Sky tab
 
 ### I. Real nebulae
-- [x] 3,611 nebulae from VizieR catalogues (`scripts/build-nebulae.mjs`, `src/sim/nebulae.ts`): on the
-  galaxy map in 3D where distances exist, and outlined on the Sky tab.
-- [ ] Supernova-remnant distances (no machine-readable catalogue was reachable; SNRcat or
-  Ranasinghe & Leahy 2023 could provide them).
-- [ ] Dark nebulae (Lynds, Barnard) and reflection nebulae (van den Bergh) on the Sky tab; the
-  Harvard VizieR mirror timed out for these catalogues during this build.
+- [x] 5,676 nebulae from VizieR catalogues (`scripts/build-nebulae.mjs`, `src/sim/nebulae.ts`):
+  HII regions, planetary nebulae and supernova remnants (with Ranasinghe & Leahy 2023
+  distances) in 3D where distances exist; dark (Lynds, Barnard) and reflection (van den Bergh)
+  nebulae on the Sky tab. The Harvard VizieR mirror drops connections often: the script retries
+  and caches in `node_modules/.cache/nebulae/`.
+- [ ] Reflection-nebula distances from their illuminating stars (van den Bergh lists the HD star;
+  cross-match it with Gaia).
 
 ### H. Desktop app (Windows)
 - [x] Electron shell in `desktop/`, Windows installer and portable .exe built by

@@ -98,12 +98,13 @@ need the [companion server](#companion-server). Without one, they explain how to
   light-years) at their true 3D positions, including red dwarfs, white dwarfs and binaries.
   Colours come from B−V, masses are estimated from spectral type, and the 29 stars with known
   exoplanets can be visited.
-- **Moving stars:** the nearby stars move with their real space velocities (proper motion plus
-  radial velocity, from HYG). Speed time up to millions of years per second to watch the
-  neighbourhood rearrange. The scene lists upcoming close passes: Ross 248 becoming our nearest
-  star in about 36,000 years, and Gliese 710 passing about 1.2 light-years away in 1.4 million
-  years. Those are HYG's Hipparcos-era velocities; newer Gaia measurements bring Gliese 710
-  much closer, through the Oort cloud.
+- **Moving stars:** the nearby stars move with their real space velocities: for three quarters
+  of them, distances and motions come from ESA's **Gaia DR3**; the brightest (such as Alpha
+  Centauri A and B, too bright for Gaia) keep HYG's Hipparcos-era values. Speed time up to
+  millions of years per second to watch the neighbourhood rearrange. The scene lists upcoming
+  close passes: Ross 248 becoming our nearest star in about 36,000 years, and Gliese 710 passing
+  just 0.05 parsecs (about 10,500 AU) from the Sun in 1.29 million years, through the Oort cloud,
+  as Gaia studies predict.
 - **The real night sky:** the sandbox background shows the 8,920 naked-eye stars
   (magnitude ≤ 6.5) in their true directions, so the constellations are where they should be.
 
@@ -422,6 +423,10 @@ push and pull request.
   reprojected from HEALPix by `python3 -I scripts/build-cmb.py` (needs numpy and ImageMagick).
 - Spacecraft trajectories: NASA/JPL Horizons, state vectors every 10 days (rebuild with
   `node scripts/build-spacecraft.mjs`).
+- Nearby-star distances and motions: ESA **Gaia DR3** (Gaia Collaboration, Vallenari et al.
+  2023), from the Gaia archive TAP service, cross-matched to HYG by `node scripts/build-stars.mjs`.
+  This work has made use of data from the European Space Agency (ESA) mission Gaia, processed
+  by the Gaia Data Processing and Analysis Consortium (DPAC).
 - Voyager encounters: NASA/JPL Horizons planetocentric states of Voyager 1 and 2, the moons and
   the Sun (rebuild with `node scripts/build-voyager.mjs`).
 - Solar eclipses: the list and reference values from NASA's Five Millennium Canon of Solar

@@ -122,11 +122,23 @@ describe('moving stars', () => {
     const acen = closestApproach(star('Rigil Kentaurus'))!;
     expect(acen.years).toBeGreaterThan(20000);
     expect(acen.years).toBeLessThan(35000);
-    // Gliese 710 is the closest known future encounter, about 1.3 million years from now.
+    // Gliese 710 is the closest known future encounter, about 1.3 million years from now. With
+    // Gaia DR3 motions it passes inside the Oort cloud: Bailer-Jones et al. 2018 (arXiv:1805.07581)
+    // give a 95% chance of it coming closer than 0.08 pc (17,000 AU).
     const top = upcomingEncounters(near)[0];
     expect(top.star.name).toMatch(/710/);
-    expect(top.years).toBeGreaterThan(1.0e6);
-    expect(top.years).toBeLessThan(1.6e6);
+    expect(top.years).toBeGreaterThan(1.2e6);
+    expect(top.years).toBeLessThan(1.4e6);
+    expect(top.pc).toBeLessThan(0.08);
+    expect((top.star as { gaia?: string }).gaia).toBeDefined();
+  });
+
+  it('uses Gaia DR3 for most nearby stars, and HYG for the brightest', () => {
+    const fromGaia = near.filter((s) => (s as { gaia?: string }).gaia).length;
+    expect(fromGaia / near.length).toBeGreaterThan(0.7);
+    // Too bright for Gaia's detectors: Alpha Centauri A keeps its Hipparcos-era values.
+    expect((star('Rigil Kentaurus') as { gaia?: string }).gaia).toBeUndefined();
+    expect((star('Proxima Centauri') as { gaia?: string }).gaia).toBeDefined();
   });
 
   it('moves the neighbourhood with real velocities', () => {

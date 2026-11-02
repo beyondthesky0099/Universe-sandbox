@@ -10,7 +10,7 @@ import type { Simulation } from './simulation';
  * scripts/build-stars.mjs. Positions are ecliptic J2000.
  */
 
-export const STAR_CREDIT = 'Star data: HYG database v4.1 by David Nash (astronexus), CC BY-SA 4.0.';
+export const STAR_CREDIT = 'Star data: HYG database v4.1 by David Nash (astronexus), CC BY-SA 4.0, with distances and motions from ESA Gaia DR3.';
 export const AU_PER_PC = 206264.806;
 
 export interface NearStar {

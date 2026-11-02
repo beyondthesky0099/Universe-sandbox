@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { CSS2DRenderer } from 'three/addons/renderers/CSS2DRenderer.js';
-import { AudioEngine } from './audio';
+import { AudioEngine, playSamples } from './audio';
 import { FEATURE, systemFeatures, type FeatureName } from './procgen/galaxy';
 import { mulberry32, pick, seedFromString } from './procgen/rng';
 import { generateStarSystem, starSummary, type StarSystemSpec } from './procgen/starSystem';
@@ -17,6 +17,7 @@ import { setTrueScale } from './sim/trueScale';
 import { loadGwEvent, loadGwEvents } from './sim/gwEvents';
 import { loadFlyby, loadFlybys } from './sim/flybys';
 import { loadVoyagerEncounter, loadVoyagerEncounters } from './sim/voyager';
+import { synthesizeChirp } from './sim/gwChirp';
 import { getSolarData, loadSolarData } from './sim/solarSystemData';
 import { isCompact, kindForMass, mainSequenceLifetime, mergedKind, NEUTRON_MAX_MASS, type Body, type BodyKind } from './sim/body';
 import { isTidallyLocked, nearResonance, orbitalPeriod } from './sim/analysis';
@@ -2959,6 +2960,20 @@ export class App {
       // The next press continues the tour with the same spacecraft.
       const next = list.findIndex((x, j) => j > i && x.craft === e.craft);
       if (next >= 0) select.value = String(next);
+    });
+    $('btn-gw-hear').addEventListener('click', async () => {
+      const events = await loadGwEvents().catch(() => []);
+      const ev = events[Number($<HTMLSelectElement>('gw-select').value)];
+      if (!ev) return;
+      const pitch = $<HTMLInputElement>('gw-pitch').checked ? 4 : 1;
+      const c = synthesizeChirp(ev, { pitch });
+      const seconds = playSamples(c.samples, c.sampleRate);
+      const hz = (f: number) => `${Math.round(f * pitch).toLocaleString('en-US')} Hz`;
+      toast(
+        `${ev.name}: ${seconds < 1 ? `${seconds.toFixed(2)} s` : `${seconds.toFixed(1)} s`} rising from ${hz(c.fStart)}${
+          c.fRing ? ` to the final black hole's ring at ${hz(c.fRing)}` : ` to ${hz(c.fIsco)}, where the neutron stars touch`
+        }${pitch > 1 ? ' (4× real pitch)' : ''}. Synthesized from the real masses at redshift ${c.redshift.toFixed(2)}, not the detector recording.`,
+      );
     });
     $('btn-gw-load').addEventListener('click', async () => {
       const events = await loadGwEvents().catch(() => []);

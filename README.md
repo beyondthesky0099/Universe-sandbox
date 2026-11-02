@@ -248,6 +248,13 @@ uses the event's published masses, and the panel shows its real distance and how
 became gravitational-wave energy. The orbit and speed of light are scaled so the final orbits
 play out in seconds, and the pair merges at the innermost stable orbit (6GM/c²).
 
+Press **🔊 Hear the chirp** to hear the event as the detectors heard it: the leading-order
+inspiral chirp of the real masses, redshifted by the source's distance (flat ΛCDM), ending in
+the final black hole's ringdown at its fundamental frequency. GW150914 sweeps up through about
+0.2 s to ring near 250 Hz, as observed; GW170817 is a 12-second excerpt of a chirp that lasted
+about 100 s. Tick "4× higher" to make low chirps audible on small speakers. It is a
+sonification from the published parameters, not the detector recording.
+
 ### Milky Way meets Andromeda
 The **Milky Way meets Andromeda (real)** scenario simulates the coming collision in
 kiloparsecs and millions of years:

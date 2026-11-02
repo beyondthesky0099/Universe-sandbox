@@ -149,7 +149,7 @@ Plan, in priority order:
 - [x] G2. Planetarium: Sky tab (`src/sim/sky.ts`, `src/render/skyView.ts`)
 - [x] G3. Solar eclipses (`scripts/build-eclipses.mjs`, `src/sim/eclipse.ts`)
 - [x] G4. Gaia DR3 distances and velocities for nearby stars (in `scripts/build-stars.mjs`)
-- [ ] G5. Play gravitational-wave chirps as sound
+- [x] G5. Gravitational-wave chirps as sound (`src/sim/gwChirp.ts`, button in the GW row)
 - [ ] G6. Halley's return in 2061, with comet tails pointing away from the Sun
 - [ ] G7. Phone performance pass
 

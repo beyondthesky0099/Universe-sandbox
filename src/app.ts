@@ -10,7 +10,8 @@ import { SkyView } from './render/skyView';
 import { moonPhaseName, skyAt } from './sim/sky';
 import { dateToJdTT, eclipsePath, greatestEclipse, jdTTToDate, loadEclipses, localCircumstances, shadowAt, topocentric, type Eclipse } from './sim/eclipse';
 import { displayName, GALAXY_CREDIT, galaxyForm, loadLocalGalaxies, loadNamedGalaxies, loadWebGalaxies, LY_PER_MPC, type LocalGalaxy } from './sim/galaxies';
-import { equatorialToGalactic, galacticToMap, MILKY_WAY_SEED, type GalaxyOptions } from './procgen/galaxy';
+import { equatorialToGalactic, galacticToMap, MILKY_WAY_SEED, MW_NEBULAE, UNITS_PER_KPC, type GalaxyOptions } from './procgen/galaxy';
+import { diameterPc, galacticToEcliptic, loadNebulae, NEBULA_COLORS } from './sim/nebulae';
 import { QUALITY_PRESETS, SystemView } from './render/systemView';
 import { createRealSky } from './render/starfield';
 import { setTrueScale } from './sim/trueScale';
@@ -280,6 +281,17 @@ export class App {
     void loadBrightStars()
       .then((stars) => {
         this.sky.setStars(stars);
+        void loadNebulae().then((list) => {
+          this.sky.setNebulae(
+            list.map((n) => ({
+              v: galacticToEcliptic(n.l, n.b),
+              radiusDeg: n.radiusDeg,
+              color: NEBULA_COLORS[n.kind],
+              label: n.name,
+            })),
+          );
+          this.sky.setNebulaeVisible($<HTMLInputElement>('opt-sky-nebulae').checked);
+        });
         return this.system.setSky(createRealSky(stars));
       })
       .catch(() => undefined);
@@ -547,7 +559,7 @@ export class App {
     this.system.setViewport(this.width, this.height);
     this.galaxy.setViewport(this.width, this.height, this.renderer.getPixelRatio());
     this.cosmos.setViewport(this.width, this.height, this.renderer.getPixelRatio());
-    this.sky.setViewport(this.width, this.height);
+    this.sky.setViewport(this.width, this.height, this.renderer.getPixelRatio());
     this.postfx?.setSize(this.width, this.height);
   }
 
@@ -911,6 +923,7 @@ export class App {
         if (t.sun.alt > -1) this.sky.lookAt(t.sun.alt, t.sun.az);
       }
     });
+    $<HTMLInputElement>('opt-sky-nebulae').addEventListener('change', (e) => this.sky.setNebulaeVisible((e.target as HTMLInputElement).checked));
     $('sky-speed').addEventListener('change', () => (this.skySpeed = Number($<HTMLSelectElement>('sky-speed').value)));
     $('sky-list').addEventListener('click', (e) => {
       const li = (e.target as HTMLElement).closest<HTMLElement>('li[data-sky]');
@@ -1413,6 +1426,28 @@ export class App {
     );
   }
 
+  /** Real HII regions and planetary nebulae with measured distances (Milky Way only). */
+  private async showNebulaeOnMap(seed: number): Promise<void> {
+    const all = await loadNebulae().catch(() => undefined);
+    if (!all || this.galaxySeed !== seed) return;
+    // The ten hand-placed showpieces already carry labels; don't name them twice.
+    const shown = MW_NEBULAE.map((n) => n.name.split(' (')[0].toLowerCase());
+    const placed = all.filter((n) => n.distanceKpc && n.kind !== 'snr');
+    this.galaxy.setRealNebulae(
+      placed.map((n) => {
+        const pc = diameterPc(n) ?? (n.kind === 'pn' ? 0.5 : 5);
+        // Exaggerated so they read on a 100,000-light-year map, but never below a visible dot.
+        const size = Math.max(n.kind === 'pn' ? 0.12 : 0.22, (pc / 1000) * UNITS_PER_KPC * 8);
+        const named = n.name && !shown.some((s) => n.name!.toLowerCase().startsWith(s));
+        const ly = Math.round((n.distanceKpc! * 3261.6) / 10) * 10;
+        return { pos: galacticToMap(n.l, n.b, n.distanceKpc!), color: NEBULA_COLORS[n.kind], size, label: named ? `${n.name} · ${ly.toLocaleString('en-US')} ly` : undefined };
+      }),
+    );
+    this.galaxy.setRealNebulaeVisible($<HTMLInputElement>('opt-real-nebulae').checked);
+    const hii = placed.filter((n) => n.kind === 'hii').length;
+    $('galaxy-info').textContent += ` ${hii.toLocaleString('en-US')} real HII regions (pink) and ${(placed.length - hii).toLocaleString('en-US')} planetary nebulae (teal) sit at their measured distances; star-forming regions trace the spiral arms.`;
+  }
+
   private async showExoHostsOnMap(seed: number): Promise<void> {
     const catalog = await this.getCatalog().catch(() => undefined);
     if (!catalog || this.galaxySeed !== seed) return;
@@ -1446,6 +1481,7 @@ export class App {
     if (data.name === 'Milky Way') {
       void this.showExoHostsOnMap(seed);
       void this.showCompactObjectsOnMap(seed);
+      void this.showNebulaeOnMap(seed);
     }
     $<HTMLInputElement>('galaxy-seed').value = String(seed);
     $('star-panel').classList.add('hidden');
@@ -2833,6 +2869,7 @@ export class App {
       this.cosmos.resetCamera();
     });
     $<HTMLInputElement>('opt-cosmic-web').addEventListener('change', (e) => this.cosmos.setWebVisible((e.target as HTMLInputElement).checked));
+    $<HTMLInputElement>('opt-real-nebulae').addEventListener('change', (e) => this.galaxy.setRealNebulaeVisible((e.target as HTMLInputElement).checked));
     $<HTMLInputElement>('opt-cmb').addEventListener('change', (e) => this.cosmos.setCmbVisible((e.target as HTMLInputElement).checked));
     $('cosmos-search').addEventListener('input', () => this.renderCosmosSearch());
     $('cosmos-results').addEventListener('click', (e) => {

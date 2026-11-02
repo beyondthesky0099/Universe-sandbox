@@ -153,6 +153,14 @@ Plan, in priority order:
 - [x] G6. Halley's 2061 return (`scripts/build-halley.mjs`, `src/sim/halley.ts`) and comet tails (`bodyVisual.ts`)
 - [x] G7. Phone pass: lighter defaults on low-power devices (`LOW_POWER` in `app.ts`), pinch zoom in the Sky tab
 
+### I. Real nebulae
+- [x] 3,611 nebulae from VizieR catalogues (`scripts/build-nebulae.mjs`, `src/sim/nebulae.ts`): on the
+  galaxy map in 3D where distances exist, and outlined on the Sky tab.
+- [ ] Supernova-remnant distances (no machine-readable catalogue was reachable; SNRcat or
+  Ranasinghe & Leahy 2023 could provide them).
+- [ ] Dark nebulae (Lynds, Barnard) and reflection nebulae (van den Bergh) on the Sky tab; the
+  Harvard VizieR mirror timed out for these catalogues during this build.
+
 ### H. Desktop app (Windows)
 - [x] Electron shell in `desktop/`, Windows installer and portable .exe built by
   `.github/workflows/desktop.yml` on windows-latest (unsigned). Tags `v*` attach them to a

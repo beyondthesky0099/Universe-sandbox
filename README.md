@@ -242,6 +242,18 @@ closest approach, using the asteroid's, Moon's and Sun's real positions from JPL
 true scale. The simulation then reproduces the encounter: the tests confirm Apophis's closest
 distance to within 2% and its time to within an hour.
 
+### Real nebulae
+The map shows **3,611 real nebulae** from professional catalogues:
+- **HII regions:** all 2,174 confirmed HII regions in the WISE catalogue. These are glowing clouds where stars are being born.
+- **Planetary nebulae:** all 1,143 in the Strasbourg-ESO catalogue. These are shells of gas thrown off by dying stars.
+- **Supernova remnants:** all 294 in Green's catalogue.
+
+**Galaxy Map:** the 945 HII regions and 790 planetary nebulae with measured distances sit at their true 3D positions. The HII regions trace the spiral arms. Planetary-nebula distances come from Gaia parallaxes of their central stars where those are good, and otherwise from statistical estimates. Some HII distances are kinematic estimates (from the gas's motion), which can be off in the outer Galaxy. Supernova remnants have no catalogued distances, so they appear on the sky only.
+
+**Sky tab:** every nebula is outlined at its real position and angular size, and fades out in daylight.
+
+Famous nebulae are labelled: Orion, Lagoon, Eagle, Helix, Ring, Cat's Eye, the Crab, Cassiopeia A, the Veil and others. The names are matched to the catalogues through the SIMBAD astronomy database, not typed in by hand. The California and Crescent nebulae aren't in these catalogues, so they're left unlabelled. Toggle the layer with **Real nebulae** in the Galaxy Map panel, or **Nebulae** in the Sky tab.
+
 ### Voyager Grand Tour
 Pick a flyby and press **Fly with Voyager** to ride along on one of the six real planetary
 encounters: Voyager 1 at Jupiter and Saturn, and Voyager 2 at Jupiter, Saturn, Uranus and
@@ -479,6 +491,12 @@ push and pull request.
   This work has made use of data from the European Space Agency (ESA) mission Gaia, processed
   by the Gaia Data Processing and Analysis Consortium (DPAC).
 - Halley's 2061 return: NASA/JPL Horizons (rebuild with `node scripts/build-halley.mjs`).
+- Nebulae: the WISE Catalog of Galactic HII Regions (Anderson et al. 2014, ApJS 212, 1), the
+  Strasbourg-ESO Catalogue of Galactic Planetary Nebulae (Acker et al. 1992), Gaia EDR3 distances
+  of planetary-nebula central stars (Gonzalez-Santamaria et al. 2021, A&A 656, A51), statistical
+  distances (Stanghellini & Haywood 2010, ApJ 714, 1096), and Green's catalogue of Galactic
+  supernova remnants (Green 2019), via VizieR (CDS). Familiar names resolved with SIMBAD (rebuild
+  with `node scripts/build-nebulae.mjs`).
 - Voyager encounters: NASA/JPL Horizons planetocentric states of Voyager 1 and 2, the moons and
   the Sun (rebuild with `node scripts/build-voyager.mjs`).
 - Solar eclipses: the list and reference values from NASA's Five Millennium Canon of Solar

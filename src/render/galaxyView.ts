@@ -143,6 +143,9 @@ export class GalaxyView {
   /** Real exoplanet hosts (Milky Way only). */
   exoHosts: ExoMarker[] = [];
   private exoPoints?: THREE.Points;
+  /** Real catalogued nebulae (Milky Way only), and their labels. */
+  private realNebulae?: THREE.Points;
+  private readonly realNebulaLabels = new THREE.Group();
   /** Names of real objects (Milky Way clusters and nebulae). */
   private readonly labelGroup = new THREE.Group();
   private readonly nebulaTextures: THREE.Texture[] = [];
@@ -229,6 +232,7 @@ export class GalaxyView {
     }
     for (const t of this.nebulaTextures) t.dispose();
     this.nebulaTextures.length = 0;
+    this.setRealNebulae([]);
 
     this.data = generateGalaxy(seed, 30000, 60000, 9000, opts);
     // "You are here" only belongs in our own galaxy, not in stand-ins for other real galaxies.
@@ -303,7 +307,7 @@ export class GalaxyView {
   }
 
   private applyPointScale(): void {
-    for (const pts of [this.stars, this.glow, this.dust]) {
+    for (const pts of [this.stars, this.glow, this.dust, this.realNebulae]) {
       if (pts) (pts.material as THREE.ShaderMaterial).uniforms.uScale.value = this.pointScale;
     }
   }
@@ -393,6 +397,49 @@ export class GalaxyView {
     this.exoPoints.geometry = new THREE.BufferGeometry();
     this.exoPoints.geometry.setAttribute('position', new THREE.BufferAttribute(pos, 3));
     this.exoPoints.geometry.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  }
+
+  /**
+   * Real nebulae with measured distances, as glowing points sized by their physical size (but
+   * never smaller than a few pixels), plus labels for the named ones. Cleared on rebuild.
+   */
+  setRealNebulae(items: { pos: [number, number, number]; color: [number, number, number]; size: number; label?: string }[]): void {
+    if (this.realNebulae) {
+      this.scene.remove(this.realNebulae);
+      this.realNebulae.geometry.dispose();
+      (this.realNebulae.material as THREE.Material).dispose();
+      this.realNebulae = undefined;
+    }
+    for (const child of [...this.realNebulaLabels.children]) {
+      this.realNebulaLabels.remove(child);
+      const sprite = child as THREE.Sprite;
+      sprite.material.map?.dispose();
+      sprite.material.dispose();
+    }
+    if (!items.length) return;
+    const pos = new Float32Array(items.length * 3);
+    const col = new Float32Array(items.length * 3);
+    const size = new Float32Array(items.length);
+    items.forEach((it, i) => {
+      pos.set(it.pos, i * 3);
+      col.set(it.color, i * 3);
+      size[i] = it.size;
+      if (it.label) {
+        const text = textSprite(it.label, '#ffb3c8', 0.55);
+        text.position.set(...it.pos);
+        this.realNebulaLabels.add(text);
+      }
+    });
+    this.realNebulae = pointCloud(pos, col, size, pointsMaterial(0.95, 26));
+    (this.realNebulae.material as THREE.ShaderMaterial).uniforms.uScale.value = this.pointScale;
+    this.realNebulae.renderOrder = 5;
+    this.scene.add(this.realNebulae);
+    if (!this.realNebulaLabels.parent) this.scene.add(this.realNebulaLabels);
+  }
+
+  setRealNebulaeVisible(on: boolean): void {
+    if (this.realNebulae) this.realNebulae.visible = on;
+    this.realNebulaLabels.visible = on;
   }
 
   /** Labelled markers for real black holes and pulsars (Milky Way only). Cleared on rebuild. */

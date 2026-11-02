@@ -50,9 +50,14 @@ describe('forecast refinement', () => {
     const sim = new Simulation();
     loadHalley2061(sim, h);
     const comet = sim.bodies.find((b) => b.name === 'Halley')!;
+    // A one-year look-ahead pins it down closely...
     const f = forecast(sim, comet.id, 1, 25, 6000);
     expect(f.closest?.otherName).toBe('Venus');
     expect(Math.abs(f.closest!.distance - h.venusApproach.au) / h.venusApproach.au).toBeLessThan(0.03);
     expect(Math.abs(f.closest!.time * 365.25 - (h.venusApproach.jd - h.startJd))).toBeLessThan(1);
+    // ...and a whole orbit (74.6 yr, as the app asks for the selected body) still finds it, within 6%.
+    const orbit = forecast(sim, comet.id, 74.6, 25, 6000);
+    expect(orbit.closest?.otherName).toBe('Venus');
+    expect(Math.abs(orbit.closest!.distance - h.venusApproach.au) / h.venusApproach.au).toBeLessThan(0.06);
   }, 60000);
 });

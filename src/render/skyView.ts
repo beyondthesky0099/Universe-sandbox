@@ -321,26 +321,46 @@ export class SkyView {
   }
 
   private attachInput(): void {
-    let drag: { x: number; y: number } | undefined;
+    // One pointer drags the view; two (a pinch on touch screens) zoom.
+    const pointers = new Map<number, { x: number; y: number }>();
+    let pinch = 0;
+    const spread = () => {
+      const [a, b] = [...pointers.values()];
+      return Math.hypot(a.x - b.x, a.y - b.y);
+    };
     this.canvas.addEventListener('pointerdown', (e) => {
-      if (this.enabled) drag = { x: e.clientX, y: e.clientY };
+      if (!this.enabled) return;
+      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (pointers.size === 2) pinch = spread();
     });
-    window.addEventListener('pointerup', () => (drag = undefined));
+    const up = (e: PointerEvent) => {
+      pointers.delete(e.pointerId);
+      pinch = 0;
+    };
+    window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', up);
     window.addEventListener('pointermove', (e) => {
-      if (!drag || !this.enabled) return;
-      const k = (this.camera.fov * DEG) / this.height;
-      this.yaw += (e.clientX - drag.x) * k;
-      this.pitch += (e.clientY - drag.y) * k;
-      drag = { x: e.clientX, y: e.clientY };
+      const p = pointers.get(e.pointerId);
+      if (!p || !this.enabled) return;
+      if (pointers.size === 1) {
+        const k = (this.camera.fov * DEG) / this.height;
+        this.yaw += (e.clientX - p.x) * k;
+        this.pitch += (e.clientY - p.y) * k;
+      }
+      p.x = e.clientX;
+      p.y = e.clientY;
+      if (pointers.size === 2 && pinch > 0) {
+        const now = spread();
+        if (now > 0) this.setFov(this.camera.fov * (pinch / now));
+        pinch = now;
+      }
     });
     this.canvas.addEventListener(
       'wheel',
       (e) => {
         if (!this.enabled) return;
         e.preventDefault();
-        this.camera.fov = THREE.MathUtils.clamp(this.camera.fov * Math.exp(e.deltaY * 0.001), 2, 100);
-        this.camera.updateProjectionMatrix();
-        this.sizeBodies();
+        this.setFov(this.camera.fov * Math.exp(e.deltaY * 0.001));
       },
       { passive: false },
     );

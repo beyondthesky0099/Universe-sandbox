@@ -151,7 +151,7 @@ Plan, in priority order:
 - [x] G4. Gaia DR3 distances and velocities for nearby stars (in `scripts/build-stars.mjs`)
 - [x] G5. Gravitational-wave chirps as sound (`src/sim/gwChirp.ts`, button in the GW row)
 - [x] G6. Halley's 2061 return (`scripts/build-halley.mjs`, `src/sim/halley.ts`) and comet tails (`bodyVisual.ts`)
-- [ ] G7. Phone performance pass
+- [x] G7. Phone pass: lighter defaults on low-power devices (`LOW_POWER` in `app.ts`), pinch zoom in the Sky tab
 
 Ideas for later: pulsars from the ATNF catalogue when reachable;
 dynamical friction for galaxy mergers; Virgo-cluster distances from redshift-independent

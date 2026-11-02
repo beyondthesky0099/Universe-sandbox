@@ -56,6 +56,17 @@ type ViewName = 'cosmos' | 'galaxy' | 'system' | 'sky';
 type Tool = 'select' | 'spawn' | 'nudge';
 type QualityName = keyof typeof QUALITY_PRESETS;
 
+/**
+ * Phones, tablets and small laptops: start with lighter graphics (low quality, no bloom or
+ * lensing) unless the user has chosen otherwise. In a phone emulation (4× slower CPU) this took
+ * the default Solar System from about 2.5 to 17 frames per second.
+ */
+const LOW_POWER = (() => {
+  const nav = navigator as Navigator & { deviceMemory?: number };
+  const touchPhone = window.matchMedia?.('(pointer: coarse)').matches && Math.min(screen.width, screen.height) < 900;
+  return touchPhone || (nav.hardwareConcurrency ?? 8) <= 4 || (nav.deviceMemory ?? 8) <= 4;
+})();
+
 interface SpawnType {
   id: string;
   label: string;
@@ -161,7 +172,7 @@ export class App {
   private wasRunningBeforeRewind = false;
   private features?: Uint8Array;
   private scanToken = 0;
-  private quality: QualityName = prefs.get<QualityName>('quality', 'medium');
+  private quality: QualityName = prefs.get<QualityName>('quality', LOW_POWER ? 'low' : 'medium');
   private catalog?: ExoCatalog;
   private challenge?: { def: Challenge; st: ChallengeState; result?: ChallengeResult };
   private graphOpen = false;
@@ -183,7 +194,7 @@ export class App {
   private readonly scripts: ScriptRunner;
   private embed = false;
   private postfx!: PostFX;
-  private postfxOn = prefs.get('postfx', true);
+  private postfxOn = prefs.get('postfx', !LOW_POWER);
   private mega?: MegaSim;
   private lesson?: { def: Lesson; step: number; events: SimEvent[]; done: Set<number> };
   private nudgeDrag?: { bodyId: number; start: THREE.Vector3; current: THREE.Vector3; lastPredict: number; path?: Float32Array };
@@ -351,7 +362,7 @@ export class App {
       }
       this.forecastTimer -= dt;
       if (this.forecastTimer <= 0) {
-        this.forecastTimer = 1;
+        this.forecastTimer = LOW_POWER ? 2 : 1;
         this.updateForecast();
       }
       if (this.frames % 6 === 0) this.updateSystemHud();

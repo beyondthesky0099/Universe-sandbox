@@ -285,6 +285,13 @@ Figure-8 Three-Body · Rogue Star Flyby · Black Hole Feast · Supernova · The 
 Relativistic Precession · Black Hole Inspiral · Galactic Core · Star Cluster Collapse ·
 Self-Gravitating Disk · Galaxy Collision · Empty Space
 
+### Phones and tablets
+On a touch-screen phone or tablet, or a device with 4 or fewer CPU cores or 4 GB of memory or
+less, the app starts with lighter graphics (low quality, bloom and lensing off) unless you've
+chosen your own settings, and runs the orbit forecast every 2 s instead of every second. In
+a phone emulation (390×844 screen, 4× slower CPU) this took the default Solar System from
+about 2.5 to 17 frames per second. In the Sky tab, pinch to zoom.
+
 ## Controls
 
 | Input | Action |

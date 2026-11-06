@@ -169,6 +169,14 @@ Plan, in priority order:
   software rendering saturates its 4 cores, so measure on a real machine. Next: the Barnes–Hut
   tree path (cluster/spiral presets) is still single-threaded.
 
+### J. Real supernovae
+- [x] `src/sim/supernovaPhysics.ts` (tests in `tests/supernova-physics.test.ts`): ejecta speeds,
+  ⁵⁶Ni/⁵⁶Co light curves (Arnett; Type II-P plateau from Kasen & Woosley 2009), blast-wave radius
+  (free expansion → Sedov–Taylor → snowplow), body destruction by energy vs binding energy,
+  neutron-star kicks. Shockwaves carry `t0` and `explosion` (protocol SHOCK_STRIDE = 15, saved in
+  state); `systemView` draws the light from the light curve with the photosphere's colour. The
+  Supernova scenario is a 15 M☉ red supergiant at about two days per second.
+
 ### I. Real nebulae
 - [x] 5,676 nebulae from VizieR catalogues (`scripts/build-nebulae.mjs`, `src/sim/nebulae.ts`):
   HII regions, planetary nebulae and supernova remnants (with Ranasinghe & Leahy 2023

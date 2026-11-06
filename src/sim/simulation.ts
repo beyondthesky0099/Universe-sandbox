@@ -16,9 +16,10 @@ import {
 import { kelvinToRgb } from './color';
 import { Octree } from './octree';
 import { ParticleSet } from './particles';
+import { blastOnBody, coreCollapse, L_SUN, peakLuminosity, maxEjectaSpeed, neutronStarKick, remnantInAu, thermonuclear, type Explosion } from './supernovaPhysics';
 import { BODY_FIELDS, particleAccelSlice } from './particleKernel';
 import type { ParallelForces } from './parallel';
-import { C_AU_PER_YEAR, EARTH_MASS, G, type UnitSystem } from './units';
+import { AU_PER_YEAR_IN_KMS, C_AU_PER_YEAR, KPC_PER_MYR_IN_KMS, EARTH_MASS, G, type UnitSystem } from './units';
 
 export type SimEventType = 'merge' | 'ignite' | 'collapse' | 'shatter' | 'disrupt' | 'supernova' | 'gwmerger' | 'redgiant' | 'nebula' | 'script';
 
@@ -49,6 +50,9 @@ export interface Shockwave {
   maxRadius: number;
   sourceId: number;
   hit: Set<number>;
+  /** Simulation time of the explosion, and its physics (supernovae; see supernovaPhysics.ts). */
+  t0?: number;
+  explosion?: Explosion;
 }
 
 export interface AdvanceResult {
@@ -1020,24 +1024,14 @@ export class Simulation {
     });
   }
 
-  /** A white dwarf pushed past the Chandrasekhar limit detonates completely. */
+  /** A white dwarf pushed past the Chandrasekhar limit detonates completely (Type Ia). */
   private typeIa(wd: Body): void {
-    const g = Math.max(this.effectiveG, G * 0.1);
-    const vEj = Math.max(40, 4 * Math.sqrt((2 * g * wd.mass) / 0.03));
-    const p = this.particles;
-    const count = Math.min(1600, p.capacity - p.count);
-    for (let i = 0; i < count; i++) {
-      const u = 2 * Math.random() - 1;
-      const th = Math.random() * Math.PI * 2;
-      const s = Math.sqrt(1 - u * u);
-      const dx = s * Math.cos(th), dy = u, dz = s * Math.sin(th);
-      const v = vEj * (0.8 + Math.random() * 0.4);
-      p.add(wd.x, wd.y, wd.z, wd.vx + dx * v, wd.vy + dy * v, wd.vz + dz * v, kelvinToRgb(7000 + Math.random() * 8000));
-    }
-    this.shockwaves.push({ x: wd.x, y: wd.y, z: wd.z, radius: 0.05, speed: vEj, momentum: wd.mass * vEj, maxRadius: Math.min(3000, vEj * 20), sourceId: wd.id, hit: new Set([wd.id]) });
+    const e = thermonuclear();
+    this.launchEjecta(wd, e, wd.radius, () => kelvinToRgb(7000 + Math.random() * 8000));
+    this.addBlast(wd, e);
     this.events.push({
       type: 'supernova',
-      message: `${wd.name} passed the Chandrasekhar limit and exploded as a Type Ia supernova!`,
+      message: `${wd.name} passed the Chandrasekhar limit and exploded as a Type Ia supernova: ${describeExplosion(e)}`,
       x: wd.x,
       y: wd.y,
       z: wd.z,
@@ -1046,6 +1040,55 @@ export class Simulation {
     wd.radius = 0;
     this.doomed.add(wd);
     this.forcesDirty = true;
+  }
+
+  /**
+   * Ejecta as test particles: a uniform, homologously expanding sphere, so speeds are spread
+   * as v_max·u^(1/3) with v_max = √(10E/3M_ej) (thousands of km/s).
+   */
+  private launchEjecta(star: Body, e: Explosion, r: number, color: () => [number, number, number]): void {
+    const vmax = this.kms(maxEjectaSpeed(e));
+    const p = this.particles;
+    const count = Math.min(1600, p.capacity - p.count);
+    for (let i = 0; i < count; i++) {
+      const u = 2 * Math.random() - 1;
+      const th = Math.random() * Math.PI * 2;
+      const s = Math.sqrt(1 - u * u);
+      const dx = s * Math.cos(th), dy = u, dz = s * Math.sin(th);
+      const v = vmax * Math.cbrt(Math.random());
+      p.add(star.x + dx * r * 1.2, star.y + dy * r * 1.2, star.z + dz * r * 1.2, star.vx + dx * v, star.vy + dy * v, star.vz + dz * v, color());
+    }
+  }
+
+  /** A speed in km/s in this scene's units (AU/yr, or kpc/Myr for galaxy scenes). */
+  private kms(v: number): number {
+    return v / (this.units === 'au-yr' ? AU_PER_YEAR_IN_KMS : KPC_PER_MYR_IN_KMS);
+  }
+
+  /** AU per scene length unit, and years per scene time unit. */
+  private get auPerUnit(): number {
+    return this.units === 'au-yr' ? 1 : 2.0626e8;
+  }
+  private get yearsPerUnit(): number {
+    return this.units === 'au-yr' ? 1 : 1e6;
+  }
+
+  /** Start tracking the blast wave of an explosion. */
+  private addBlast(star: Body, e: Explosion): void {
+    this.shockwaves.push({
+      x: star.x,
+      y: star.y,
+      z: star.z,
+      radius: star.radius,
+      speed: this.kms(maxEjectaSpeed(e)),
+      momentum: 0,
+      // Followed out to ~10 pc (2 million AU).
+      maxRadius: 2e6 / this.auPerUnit,
+      sourceId: star.id,
+      hit: new Set([star.id]),
+      t0: this.time,
+      explosion: e,
+    });
   }
 
   /**
@@ -1059,41 +1102,25 @@ export class Simulation {
     const R = star.radius;
     const remnantKind = M >= 20 ? 'blackhole' : 'neutron';
     const remnant = remnantKind === 'blackhole' ? Math.max(3, M * 0.3) : 1.4;
-    const ejecta = M - remnant;
-    const g = Math.max(this.effectiveG, G * 0.1);
-    const vEj = Math.max(30, 3 * Math.sqrt((2 * g * M) / R));
-
-    const p = this.particles;
-    const count = Math.min(1600, p.capacity - p.count);
-    for (let i = 0; i < count; i++) {
-      const u = 2 * Math.random() - 1;
-      const th = Math.random() * Math.PI * 2;
-      const s = Math.sqrt(1 - u * u);
-      const dx = s * Math.cos(th), dy = u, dz = s * Math.sin(th);
-      const v = vEj * (0.8 + Math.random() * 0.4);
-      const rgb = kelvinToRgb(4000 + Math.random() * 12000);
-      p.add(star.x + dx * R * 1.2, star.y + dy * R * 1.2, star.z + dz * R * 1.2, star.vx + dx * v, star.vy + dy * v, star.vz + dz * v, rgb);
-    }
-    this.shockwaves.push({
-      x: star.x,
-      y: star.y,
-      z: star.z,
-      radius: R,
-      speed: vEj,
-      momentum: ejecta * vEj,
-      maxRadius: Math.min(3000, vEj * 20),
-      sourceId: star.id,
-      hit: new Set([star.id]),
-    });
+    const e = coreCollapse(M, remnant);
+    this.launchEjecta(star, e, R, () => kelvinToRgb(4000 + Math.random() * 12000));
+    this.addBlast(star, e);
 
     const name = star.name;
     star.kind = remnantKind;
     star.mass = remnant;
     star.radius = this.bodyRadius(remnantKind, remnant);
     star.color = defaultColor(remnantKind, remnant);
+    // Neutron stars are born with a kick of a few hundred km/s.
+    if (remnantKind === 'neutron') {
+      const [kx, ky, kz] = neutronStarKick();
+      star.vx += this.kms(kx);
+      star.vy += this.kms(ky);
+      star.vz += this.kms(kz);
+    }
     this.events.push({
       type: 'supernova',
-      message: `${name} went supernova, leaving a ${remnantKind === 'blackhole' ? 'black hole' : 'neutron star'}!`,
+      message: `${name} went supernova (Type II), leaving a ${remnantKind === 'blackhole' ? 'black hole' : 'neutron star'}: ${describeExplosion(e)}`,
       x: star.x,
       y: star.y,
       z: star.z,
@@ -1108,17 +1135,37 @@ export class Simulation {
     for (let w = this.shockwaves.length - 1; w >= 0; w--) {
       const sw = this.shockwaves[w];
       const prev = sw.radius;
-      sw.radius += sw.speed * dt;
+      if (sw.explosion && sw.t0 !== undefined) {
+        // The real blast wave: free expansion, then Sedov–Taylor (see supernovaPhysics.ts).
+        const r = remnantInAu(sw.explosion, (this.time - sw.t0) * this.yearsPerUnit);
+        sw.radius = Math.max(prev, r.radius / this.auPerUnit);
+        sw.speed = (r.speed / this.auPerUnit) * this.yearsPerUnit;
+      } else {
+        sw.radius += sw.speed * dt;
+      }
       for (const b of this.bodies) {
         if (sw.hit.has(b.id)) continue;
         const dx = b.x - sw.x, dy = b.y - sw.y, dz = b.z - sw.z;
         const d = Math.hypot(dx, dy, dz);
         if (d > sw.radius) continue;
         sw.hit.add(b.id);
+        const inv = 1 / (d || 1);
+        if (sw.explosion) {
+          // Its share of the explosion energy against its binding energy (real sizes, not game sizes).
+          const blast = blastOnBody(sw.explosion, Math.max(d * this.auPerUnit, 1e-6), b.mass, physicalRadius(b.kind, b.mass));
+          if (blast.destroyed && !isCompact(b.kind)) {
+            this.vaporize(b, sw, dx * inv, dy * inv, dz * inv);
+            continue;
+          }
+          const dv = this.kms(Math.min(blast.deltaVKms, maxEjectaSpeed(sw.explosion)));
+          b.vx += dx * inv * dv;
+          b.vy += dy * inv * dv;
+          b.vz += dz * inv * dv;
+          continue;
+        }
         // Momentum intercepted ∝ cross-section / shell area.
         const frac = Math.min(0.5, (b.radius * b.radius) / (4 * d * d));
         const dv = Math.min((sw.momentum * frac) / b.mass, 0.6 * sw.speed);
-        const inv = 1 / (d || 1);
         b.vx += dx * inv * dv;
         b.vy += dy * inv * dv;
         b.vz += dz * inv * dv;
@@ -1128,13 +1175,49 @@ export class Simulation {
         const dx = p.pos[k] - sw.x, dy = p.pos[k + 1] - sw.y, dz = p.pos[k + 2] - sw.z;
         const d = Math.hypot(dx, dy, dz);
         if (d <= prev || d > sw.radius) continue;
-        const dv = 0.3 * sw.speed * Math.min(1, (sw.maxRadius * 0.05) / d);
+        let dv: number;
+        if (sw.explosion) {
+          // Gas swept up by the blast moves out at about the post-shock speed, 3/4 of the shock's.
+          const vr = (p.vel[k] * dx + p.vel[k + 1] * dy + p.vel[k + 2] * dz) / d;
+          dv = Math.max(0, 0.75 * sw.speed - vr);
+        } else {
+          dv = 0.3 * sw.speed * Math.min(1, (sw.maxRadius * 0.05) / d);
+        }
         p.vel[k] += (dx / d) * dv;
         p.vel[k + 1] += (dy / d) * dv;
         p.vel[k + 2] += (dz / d) * dv;
       }
       if (sw.radius > sw.maxRadius) this.shockwaves.splice(w, 1);
     }
+  }
+
+  /** A body that took more energy from the blast than holds it together: blown apart into vapour and debris. */
+  private vaporize(b: Body, sw: Shockwave, ux: number, uy: number, uz: number): void {
+    const count = Math.min(b.kind === 'star' || b.kind === 'giant' ? 900 : 300, this.particles.capacity - this.particles.count);
+    const base = b.kind === 'star' || b.kind === 'giant' ? kelvinToRgb(6000) : hexToRgb(b.color);
+    const push = sw.speed * 0.5;
+    for (let i = 0; i < count; i++) {
+      const spread = sw.speed * 0.15;
+      this.particles.add(
+        b.x + gaussian() * b.radius,
+        b.y + gaussian() * b.radius,
+        b.z + gaussian() * b.radius,
+        b.vx + ux * push + gaussian() * spread,
+        b.vy + uy * push + gaussian() * spread,
+        b.vz + uz * push + gaussian() * spread,
+        [Math.min(1, base[0] * 1.2), Math.min(1, base[1] * 0.9), Math.min(1, base[2] * 0.8)],
+      );
+    }
+    this.events.push({
+      type: 'disrupt',
+      message: `${b.name} was blown apart by the supernova: it caught more energy than its own gravitational binding energy.`,
+      x: b.x,
+      y: b.y,
+      z: b.z,
+      size: b.radius * 6,
+    });
+    this.doomed.add(b);
+    this.forcesDirty = true;
   }
 
   // ---------------------------------------------------------------------------
@@ -1273,4 +1356,10 @@ function gaussian(): number {
   const u = 1 - Math.random();
   const v = Math.random();
   return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+}
+
+/** One-line summary of an explosion in real units. */
+function describeExplosion(e: Explosion): string {
+  const peak = peakLuminosity(e);
+  return `${(e.energy / 1e51).toFixed(1)}×10⁵¹ erg, ${e.ejectaMass.toFixed(1)} M☉ of ejecta at up to ${Math.round(maxEjectaSpeed(e)).toLocaleString('en-US')} km/s, peaking at ${(peak / L_SUN / 1e9).toFixed(2)} billion Suns.`;
 }

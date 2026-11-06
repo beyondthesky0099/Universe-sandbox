@@ -11,6 +11,8 @@ import type { SimEvent, Simulation } from '../sim/simulation';
 import { atmosphereMaterial, BodyVisual, DETAIL_PIXEL_RADIUS } from './bodyVisual';
 import { createStarfield } from './starfield';
 import { dotTexture, glowTexture, ringTexture } from './textures';
+import { kelvinToRgb } from '../sim/color';
+import { luminosity as snLuminosity, peakLuminosity, photosphereTemperature } from '../sim/supernovaPhysics';
 
 const MAX_LIGHTS = 4;
 const MAX_HZ = 4;
@@ -73,6 +75,9 @@ export class SystemView {
   private readonly approachMarkers: THREE.Sprite[];
   private readonly hzRings: THREE.Mesh[] = [];
   private readonly shockShells: THREE.Mesh[] = [];
+  /** The light of each supernova, following its real light curve, and the light it casts. */
+  private readonly snGlows: THREE.Sprite[] = [];
+  private readonly snLight = new THREE.PointLight(0xffffff, 0, 0, 0);
   private readonly trailGroup = new THREE.Group();
   private fullIds = new Set<number>();
   private frame = 0;
@@ -115,6 +120,7 @@ export class SystemView {
       this.scene.add(light);
     }
     this.scene.add(this.trailGroup);
+    this.scene.add(this.snLight);
 
     // Particles share one buffer sized to the simulation's capacity.
     const cap = sim.particles.capacity;
@@ -237,6 +243,8 @@ export class SystemView {
   /** Remove all visuals (e.g. before loading a new scene) and frame the camera. */
   reset(setup: SceneSetup, zoomFrom = 1): void {
     this.rebuildAll();
+    for (const g of this.snGlows) g.visible = false;
+    this.snLight.intensity = 0;
     for (const f of this.flashes) this.scene.remove(f.sprite);
     this.flashes.length = 0;
     this.selectedId = undefined;
@@ -672,14 +680,47 @@ export class SystemView {
       this.shockShells.push(shell);
       this.scene.add(shell);
     }
+    while (this.snGlows.length < waves.length) {
+      const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+      this.snGlows.push(glow);
+      this.scene.add(glow);
+    }
+    let brightest = 0;
     this.shockShells.forEach((shell, i) => {
       const w = waves[i];
+      const glow = this.snGlows[i];
       shell.visible = !!w;
+      glow.visible = false;
       if (!w) return;
       shell.position.set(w.x, w.y, w.z);
       shell.scale.setScalar(w.radius);
-      (shell.material as THREE.ShaderMaterial).uniforms.uIntensity.value = 0.9 * (1 - w.radius / w.maxRadius);
+      const uniforms = (shell.material as THREE.ShaderMaterial).uniforms;
+      if (!w.explosion || w.t0 === undefined) {
+        uniforms.uIntensity.value = 0.9 * (1 - w.radius / w.maxRadius);
+        return;
+      }
+      // Its real light curve: brightness relative to peak on a log scale (the eye's response),
+      // coloured by the photosphere's temperature.
+      const days = (this.sim.time - w.t0) * (this.sim.units === 'au-yr' ? 365.25 : 365.25e6);
+      const e = w.explosion;
+      const L = snLuminosity(e, days);
+      const level = THREE.MathUtils.clamp((Math.log10(L + 1) - 39) / (Math.log10(peakLuminosity(e)) - 39), 0, 1);
+      const [r, g, b] = kelvinToRgb(photosphereTemperature(e, days));
+      glow.visible = level > 0;
+      glow.position.set(w.x, w.y, w.z);
+      glow.scale.setScalar((60 + 3 * Math.min(w.radius, 400)) * level * level);
+      glow.material.color.setRGB(r, g, b);
+      glow.material.opacity = level;
+      // The expanding ejecta glow faintly while the remnant is young.
+      uniforms.uIntensity.value = 0.25 + 0.65 * level;
+      if (level > brightest) {
+        brightest = level;
+        this.snLight.position.set(w.x, w.y, w.z);
+        this.snLight.color.setRGB(r, g, b);
+      }
     });
+    // A supernova outshines its star by up to ten billion times.
+    this.snLight.intensity = brightest * 6;
   }
 
   private addFlash(e: SimEvent): void {
@@ -713,7 +754,7 @@ export class SystemView {
     );
     sprite.position.set(e.x, e.y, e.z);
     this.scene.add(sprite);
-    const life = e.type === 'supernova' ? 4 : e.type === 'merge' || e.type === 'shatter' ? 0.9 : 2.2;
+    const life = e.type === 'supernova' ? 1.5 : e.type === 'merge' || e.type === 'shatter' ? 0.9 : 2.2;
     this.flashes.push({ sprite, age: 0, life, size: Math.max(e.size * 10, 0.05) });
   }
 

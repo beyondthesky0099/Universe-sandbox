@@ -160,7 +160,15 @@ work in the desktop app, so type your latitude and longitude instead.
   happens inside the Roche limit.
 - **Stellar evolution:** stars age along their main-sequence lifetime and become giants, then
   a planetary nebula, then a white dwarf. Massive stars go **supernova** and leave neutron
-  stars or black holes. White dwarfs pushed past 1.4 M☉ explode as Type Ia supernovae.
+  stars (with a natal kick, Hobbs et al. 2005) or black holes. White dwarfs pushed past 1.4 M☉
+  explode as Type Ia supernovae.
+- **Supernova physics** (`src/sim/supernovaPhysics.ts`): 10⁵¹ erg of ejecta expanding
+  homologously at up to √(10E/3M) (about 3,500 km/s for a Type II, 11,000 km/s for a Type Ia);
+  a light curve from ⁵⁶Ni → ⁵⁶Co decay (Nadyozhin 1994) diffused out as in Arnett's model, plus
+  the Type II-P hydrogen plateau (Kasen & Woosley 2009); a blast wave in free expansion, then
+  Sedov–Taylor, then the radiative snowplow (Cioffi et al. 1988). A body is blown apart when the
+  energy it intercepts exceeds its gravitational binding energy; otherwise it survives, but loses
+  its orbit if the star lost more than half its mass.
 - **Analysis:** Lagrange-point markers, near-resonance detection (for example "2:1 with
   Jupiter"), tidal locking, climate and habitable zones, and forecasts of collisions and close
   approaches.

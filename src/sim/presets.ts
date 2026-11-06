@@ -249,22 +249,33 @@ const empty: Preset = {
 const supernova: Preset = {
   id: 'supernova',
   name: 'Supernova',
-  description: 'A 25 M☉ blue supergiant at the end of its life, with planets and a debris belt. It detonates after a few years. Watch the shockwave strip its system.',
+  description:
+    'A 15 M☉ red supergiant with planets, a debris belt and a distant companion explodes as a Type II supernova. The ejecta, blast wave and light curve follow the published models: 10⁵¹ erg, 3,500 km/s, a 4-month plateau.',
   load(sim) {
-    const star = sim.addBody({ name: 'Vela Prime', kind: 'star', mass: 25 });
+    const star = sim.addBody({ name: 'Kessra', kind: 'giant', mass: 15 });
     const planets: [string, number, number, Body['kind'], number][] = [
-      ['Vela Prime b', 3 * EARTH_MASS, 6, 'rocky', 0xa0785a],
-      ['Vela Prime c', 400 * EARTH_MASS, 11, 'gas', 0x6fa8c9],
-      ['Vela Prime d', 90 * EARTH_MASS, 18, 'gas', 0xc99e6b],
+      ['Kessra b', 2 * EARTH_MASS, 8, 'rocky', 0xa0785a],
+      ['Kessra c', 300 * EARTH_MASS, 25, 'gas', 0x6fa8c9],
+      ['Kessra d', 60 * EARTH_MASS, 50, 'gas', 0x7fb0d0],
     ];
     for (const [name, mass, a, kind, color] of planets) {
       addOrbiting(sim, star, { name, mass, kind, color }, { a, nu: Math.random() * Math.PI * 2 });
     }
-    addParticleDisk(sim, star, { count: 2500, inner: 24, outer: 32, thickness: 0.03, color: [0.62, 0.58, 0.52] });
-    addOrbiting(sim, star, { name: 'Vela Minor', mass: 0.8, kind: 'star' }, { a: 70, e: 0.1, nu: 2 });
+    addParticleDisk(sim, star, { count: 3000, inner: 100, outer: 130, thickness: 0.03, color: [0.62, 0.58, 0.52] });
+    addOrbiting(sim, star, { name: 'Kessra B', mass: 0.9, kind: 'star' }, { a: 400, e: 0.1, nu: 2 });
     sim.recenter();
-    sim.scheduleSupernova(star.id, 4);
-    return { cameraDistance: 60, timeScale: 0.5, elevation: 0.9, tip: 'Vela Prime will explode in about 4 years…' };
+    // The ejecta travel 10⁴ AU in about 14 years: keep them in the scene.
+    sim.particleCullDistance = 3e4;
+    // It explodes ten days in.
+    sim.scheduleSupernova(star.id, 10 / 365.25);
+    return {
+      cameraDistance: 420,
+      // About two days per second, so the light curve and the blast wave play out over minutes.
+      timeScale: 2 / 365.25,
+      elevation: 0.8,
+      tip:
+        'Kessra explodes ten days in. Time runs at about two days per second: the ejecta leave at up to 3,500 km/s and reach the belt in seven weeks while the light stays on a ~4-month plateau (Kasen & Woosley 2009) and then fades on the radioactive cobalt tail. The inner rocky planet is blown apart; the gas giants survive the blast but, with 90% of the star’s mass gone, are no longer bound. Speed time up to watch the system fly apart.',
+    };
   },
 };
 

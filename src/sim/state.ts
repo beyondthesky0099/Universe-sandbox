@@ -1,5 +1,6 @@
 import type { UnitSystem } from './units';
 import type { BodyKind } from './body';
+import type { Explosion } from './supernovaPhysics';
 import { PARTICLE_CULL_DISTANCE, type GravityMode, type Simulation } from './simulation';
 
 export interface BodyState {
@@ -61,6 +62,8 @@ export interface ShockwaveState {
   maxRadius: number;
   sourceId: number;
   hit: number[];
+  t0?: number;
+  explosion?: Explosion;
 }
 
 export interface SimState {

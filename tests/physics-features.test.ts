@@ -112,17 +112,19 @@ describe('tidal disruption', () => {
 });
 
 describe('supernovae', () => {
-  it('massive stars leave a black hole and push neighbours away', () => {
+  it('massive stars leave a black hole, and losing most of their mass unbinds their planets', () => {
     const sim = new Simulation();
     const star = sim.addBody({ name: 'Big', kind: 'star', mass: 25 });
     const planet = addOrbiting(sim, star, { name: 'P', mass: JUPITER_MASS, kind: 'gas' }, { a: 8 });
-    const speedBefore = Math.hypot(planet.vx, planet.vy, planet.vz);
     expect(sim.supernova(star)).toBe(true);
     expect(star.kind).toBe('blackhole');
     expect(star.mass).toBeCloseTo(7.5);
     expect(sim.particles.count).toBeGreaterThan(500);
     sim.advance(0.5, 1e6, 1e9);
-    expect(Math.hypot(planet.vx, planet.vy, planet.vz)).toBeGreaterThan(speedBefore * 1.5);
+    const dx = planet.x - star.x, dy = planet.y - star.y, dz = planet.z - star.z;
+    const v2 = (planet.vx - star.vx) ** 2 + (planet.vy - star.vy) ** 2 + (planet.vz - star.vz) ** 2;
+    const energy = v2 / 2 - (4 * Math.PI ** 2 * (star.mass + planet.mass)) / Math.hypot(dx, dy, dz);
+    expect(energy).toBeGreaterThan(0);
   });
 
   it('mid-mass stars leave neutron stars; small stars cannot explode', () => {
@@ -136,9 +138,9 @@ describe('supernovae', () => {
 
   it('scheduled supernovae fire on time', () => {
     const sim = load('supernova');
-    sim.advance(3.5, 1e6, 1e9);
+    sim.advance(9 / 365.25, 1e6, 1e9);
     expect(sim.events.some((e) => e.type === 'supernova')).toBe(false);
-    sim.advance(1, 1e6, 1e9);
+    sim.advance(2 / 365.25, 1e6, 1e9);
     expect(sim.events.some((e) => e.type === 'supernova')).toBe(true);
   });
 

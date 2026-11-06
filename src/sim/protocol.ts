@@ -1,4 +1,5 @@
 import { BODY_KINDS } from './body';
+import type { Explosion } from './supernovaPhysics';
 import type { AdvanceResult, SimEvent, Simulation } from './simulation';
 import type { SimSettings, SimState } from './state';
 
@@ -29,13 +30,17 @@ export interface Frame {
   pvel: Float32Array;
   pcol: Float32Array;
   events: SimEvent[];
-  /** SHOCK_STRIDE numbers per active shockwave: x, y, z, radius, maxRadius, speed, momentum, sourceId. */
+  /**
+   * SHOCK_STRIDE numbers per active shockwave: x, y, z, radius, maxRadius, speed, momentum,
+   * sourceId, then for supernovae t0, type (1 = Ia, 0 = II, −1 = none), energy, ejecta mass,
+   * nickel mass, progenitor radius, ISM density.
+   */
   shockwaves: number[];
   fuses: [number, number][];
 }
 
 export const BODY_STRIDE = 13;
-export const SHOCK_STRIDE = 8;
+export const SHOCK_STRIDE = 15;
 const KINDS = BODY_KINDS;
 
 /** Encode the simulation into a compact, transferable frame. */
@@ -62,7 +67,12 @@ export function encodeFrame(sim: Simulation, version: number, result: AdvanceRes
   const p = sim.particles;
   const n3 = p.count * 3;
   const shockwaves: number[] = [];
-  for (const w of sim.shockwaves) shockwaves.push(w.x, w.y, w.z, w.radius, w.maxRadius, w.speed, w.momentum, w.sourceId);
+  for (const w of sim.shockwaves) {
+    const e = w.explosion;
+    shockwaves.push(w.x, w.y, w.z, w.radius, w.maxRadius, w.speed, w.momentum, w.sourceId);
+    if (e) shockwaves.push(w.t0 ?? 0, e.type === 'Ia' ? 1 : 0, e.energy, e.ejectaMass, e.nickelMass, e.progenitorRadius, e.ismDensity);
+    else shockwaves.push(0, -1, 0, 0, 0, 0, 0);
+  }
   return {
     type: 'frame',
     version,
@@ -137,11 +147,12 @@ export function applyFrame(sim: Simulation, f: Frame): void {
 
   sim.shockwaves = [];
   for (let i = 0; i < f.shockwaves.length; i += SHOCK_STRIDE) {
-    const [x, y, z, radius, maxRadius, speed, momentum, sourceId] = f.shockwaves.slice(i, i + SHOCK_STRIDE);
+    const [x, y, z, radius, maxRadius, speed, momentum, sourceId, t0, type, energy, ejectaMass, nickelMass, progenitorRadius, ismDensity] = f.shockwaves.slice(i, i + SHOCK_STRIDE);
     // Bodies inside the shell have already been hit.
     const hit = new Set<number>([sourceId]);
     for (const b of next) if (Math.hypot(b.x - x, b.y - y, b.z - z) <= radius) hit.add(b.id);
-    sim.shockwaves.push({ x, y, z, radius, maxRadius, speed, momentum, sourceId, hit });
+    const explosion: Explosion | undefined = type < 0 ? undefined : { type: type === 1 ? 'Ia' : 'II', energy, ejectaMass, nickelMass, progenitorRadius, ismDensity };
+    sim.shockwaves.push({ x, y, z, radius, maxRadius, speed, momentum, sourceId, hit, ...(explosion ? { t0, explosion } : {}) });
   }
   sim.fuses.clear();
   for (const [id, at] of f.fuses) sim.fuses.set(id, at);

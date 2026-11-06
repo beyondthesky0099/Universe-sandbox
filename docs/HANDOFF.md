@@ -157,7 +157,7 @@ Plan, in priority order:
 - [x] J1. Star clusters: Hunt & Reffert 2023 (Gaia DR3) and Harris globulars (`scripts/build-clusters.mjs`,
   `src/sim/clusters.ts`), on the galaxy map and the Sky tab. Westerlund 1 isn't labelled: the Gaia
   census doesn't seem to contain it, and the only shared alias was on an unrelated cluster.
-- [ ] J4. Reflection-nebula distances from their illuminating stars
+- [x] J4. Reflection-nebula distances from their illuminating stars (SIMBAD TAP parallaxes, 140 of 158)
 - [ ] J5. Stars within 100 pc from Gaia
 - [ ] J6. Multi-core physics in the desktop app
 
@@ -167,8 +167,6 @@ Plan, in priority order:
   distances) in 3D where distances exist; dark (Lynds, Barnard) and reflection (van den Bergh)
   nebulae on the Sky tab. The Harvard VizieR mirror drops connections often: the script retries
   and caches in `node_modules/.cache/nebulae/`.
-- [ ] Reflection-nebula distances from their illuminating stars (van den Bergh lists the HD star;
-  cross-match it with Gaia).
 
 ### H. Desktop app (Windows)
 - [x] Electron shell in `desktop/`, Windows installer and portable .exe built by

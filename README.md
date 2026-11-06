@@ -253,11 +253,12 @@ The map shows **5,676 real nebulae** from professional catalogues:
 | Dark nebulae | 1,907 | Barnard's 349 dark objects, plus the Lynds clouds Barnard didn't list |
 | Reflection nebulae | 158 | van den Bergh's catalogue |
 
-**Galaxy Map:** the nebulae with measured distances sit at their true 3D positions: 945 HII regions, 790 planetary nebulae and 187 supernova remnants. The HII regions trace the spiral arms.
+**Galaxy Map:** the nebulae with measured distances sit at their true 3D positions: 945 HII regions, 790 planetary nebulae, 187 supernova remnants and 140 reflection nebulae. The HII regions trace the spiral arms.
 - Planetary-nebula distances come from Gaia parallaxes of their central stars where those are good, and otherwise from statistical estimates.
 - Some HII distances are kinematic estimates, which can be off in the outer Galaxy.
 - The remnant catalogue puts the Crab Nebula at 3.4 kpc (−1.0/+4.0), from the Crab pulsar's Gaia DR2 parallax. The long-standing estimate is about 2 kpc.
-- Dark and reflection nebulae have no catalogued distances, so they appear on the sky only.
+- Reflection nebulae are placed at the distance of the star that lights them. That's 140 of the 158, mostly from Gaia parallaxes via SIMBAD.
+- Dark nebulae have no catalogued distances, so they appear on the sky only.
 
 **Sky tab:** every nebula is outlined at its real position and angular size, and fades out in daylight.
 
@@ -517,7 +518,8 @@ push and pull request.
   distances (Stanghellini & Haywood 2010, ApJ 714, 1096), Green's catalogue of Galactic
   supernova remnants (Green 2019) with distances from Ranasinghe & Leahy (2023, ApJS 265, 53),
   Lynds' Catalogue of Dark Nebulae (1962), Barnard's dark objects (1927) and van den Bergh's
-  reflection nebulae (1966), via VizieR (CDS). Familiar names resolved with SIMBAD (rebuild
+  reflection nebulae (1966), via VizieR (CDS), placed at the distances of their illuminating stars
+  (parallaxes from SIMBAD's TAP service, mostly Gaia EDR3). Familiar names resolved with SIMBAD (rebuild
   with `node scripts/build-nebulae.mjs`).
 - Star clusters: Hunt & Reffert 2023 ("Improving the open cluster census. II.", A&A 673, A114),
   based on ESA Gaia DR3, and the Harris catalogue of Milky Way globular clusters (VII/202), via

@@ -50,8 +50,8 @@ export function parseNebulae(raw: RawCatalog): Nebula[] {
   for (const [l, b, rad, id, opacity, name] of (raw.dark ?? []) as [number, number, number, string, number | null, string?][]) {
     out.push({ kind: 'dark', l, b, radiusDeg: rad / 60, id, name, opacity: opacity ?? undefined });
   }
-  for (const [l, b, rad, id, star, name] of (raw.refl ?? []) as [number, number, number, string, string, string?][]) {
-    out.push({ kind: 'refl', l, b, radiusDeg: rad / 60, id, name, star });
+  for (const [l, b, rad, id, star, d, name] of (raw.refl ?? []) as [number, number, number, string, string, number | null, string?][]) {
+    out.push({ kind: 'refl', l, b, radiusDeg: rad / 60, id, name, star, distanceKpc: d ?? undefined });
   }
   return out;
 }

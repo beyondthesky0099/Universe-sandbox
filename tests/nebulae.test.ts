@@ -31,6 +31,10 @@ describe('real nebulae', () => {
     const iris = byName('Iris Nebula');
     expect(iris.kind).toBe('refl');
     expect(iris.star).toBe('HD 200775'); // the star that lights it
+    // At its star's distance: Gaia parallax 2.82 mas → about 355 pc.
+    expect(iris.distanceKpc!).toBeCloseTo(0.355, 2);
+    const refl = nebulae.filter((n) => n.kind === 'refl');
+    expect(refl.filter((n) => n.distanceKpc).length).toBeGreaterThan(130);
   });
 
   it('puts famous nebulae at their measured distances', () => {

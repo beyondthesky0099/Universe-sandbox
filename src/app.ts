@@ -1476,7 +1476,7 @@ export class App {
     this.galaxy.setRealLayer(
       'nebulae',
       placed.map((n) => {
-        const pc = diameterPc(n) ?? (n.kind === 'pn' ? 0.5 : n.kind === 'snr' ? 20 : 5);
+        const pc = diameterPc(n) ?? (n.kind === 'pn' ? 0.5 : n.kind === 'snr' ? 20 : n.kind === 'refl' ? 1 : 5);
         // Exaggerated so they read on a 100,000-light-year map, but never below a visible dot.
         const size = Math.max(n.kind === 'pn' ? 0.12 : 0.22, (pc / 1000) * UNITS_PER_KPC * 8);
         const named = n.name && !shown.some((s) => n.name!.toLowerCase().startsWith(s));
@@ -1486,7 +1486,7 @@ export class App {
     );
     this.galaxy.setRealLayerVisible('nebulae', $<HTMLInputElement>('opt-real-nebulae').checked);
     const count = (k: string) => placed.filter((n) => n.kind === k).length.toLocaleString('en-US');
-    $('galaxy-info').textContent += ` ${count('hii')} real HII regions (pink), ${count('pn')} planetary nebulae (teal) and ${count('snr')} supernova remnants (blue) sit at their measured distances; star-forming regions trace the spiral arms.`;
+    $('galaxy-info').textContent += ` ${count('hii')} real HII regions (pink), ${count('pn')} planetary nebulae (teal), ${count('snr')} supernova remnants (pale blue) and ${count('refl')} reflection nebulae (blue, at their lighting star's distance) sit at their measured distances; star-forming regions trace the spiral arms.`;
   }
 
   private async showExoHostsOnMap(seed: number): Promise<void> {

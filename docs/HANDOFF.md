@@ -193,8 +193,10 @@ Plan, in priority order:
   `src/sim/nebulaImages.ts`). The images are in galactic orientation; the Sky tab pins them to
   the sphere (`SkyView.setImages`). DSS2 Blue has gaps: the script falls back to DSS1 Blue, then
   the SERC-J plates (first-generation DSS south of −17.5°), then the Mellinger mosaic.
-- [x] Photographs for every 3D nebula ≥ 1.2′ in radius (128-px tiles on atlas pages 1…; phones
-  load page 0 only). Dark nebulae at Zucker et al. 2020 cloud distances, drawn as absorbing
+- [x] Photographs for 3D nebulae ≥ 1.2′ in radius whose plates show diffuse light
+  (`nebulosity()`: 20th-percentile brightness of 8×8 blocks; plate-edge fields dropped; dark
+  clouds always kept), 128-px tiles on atlas pages 1–3; phones load page 0 only. Images match
+  catalogue rows by `nebulaKey` (kind, id and position: WISE reuses ids within complexes). Dark nebulae at Zucker et al. 2020 cloud distances, drawn as absorbing
   puffs (`NebulaClouds` with `absorb`).
 
 ### H. Desktop app (Windows)

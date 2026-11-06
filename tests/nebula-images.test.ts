@@ -32,7 +32,7 @@ function tileStats(page: number, tile: number) {
 }
 
 describe('nebula images (DSS via SkyView)', () => {
-  it('cover every named nebula on page 0, and on later pages only nebulae with distances', () => {
+  it('cover every named nebula on page 0, and hundreds more nebulae with distances', () => {
     const named = nebulae.filter((n) => n.name);
     const page0 = atlas.images.filter((i) => i.page === 0);
     expect(page0.length).toBe(named.length);
@@ -46,6 +46,9 @@ describe('nebula images (DSS via SkyView)', () => {
       expect(im!.fieldDeg).toBeCloseTo(Math.min(12, Math.max(0.05, 2.6 * n.radiusDeg)), 3);
     }
     const others = atlas.images.filter((i) => i.page > 0);
+    // Glowing nebulae whose plates show them, and dark clouds (which show as a starless patch).
+    expect(others.filter((i) => i.kind !== 'dark').length).toBeGreaterThan(150);
+    expect(others.filter((i) => i.kind === 'dark').length).toBeGreaterThan(350);
     const byKey = new Map(nebulae.map((n) => [nebulaKey(n), n]));
     for (const im of others) {
       const n = byKey.get(nebulaKey(im));

@@ -17,7 +17,10 @@
  * sky. Two sets:
  *   - page 0 (public/data/nebula-images.jpg): the named nebulae, 256 pixels each;
  *   - pages 1… (nebula-images-1.jpg, …): every other nebula with a measured distance that is at
- *     least 1.2′ in radius (big enough for the plates to show its shape), 128 pixels each.
+ *     least 1.2′ in radius (big enough for the plates to show its shape) and whose photograph
+ *     really shows it, 128 pixels each. Many HII regions found by WISE in the infrared are hidden
+ *     behind dust in visible light; their photographs show only stars and are left out (see
+ *     nebulosity()), as are fields where one plate is missing over part of the image.
  * public/data/nebula-images.json indexes them.
  *
  * Usage: node scripts/build-nebula-images.mjs   (FITS downloads are cached in
@@ -163,6 +166,38 @@ async function picture(n, size, pixels) {
   return { R, G, B, source: 'Mellinger' };
 }
 
+/**
+ * How much of the field glows with diffuse light: the fraction of 8×8-pixel blocks in the central
+ * disc whose 20th-percentile brightness is above 0.12 of full scale. Stars cover only some of a
+ * block's pixels, so even a crowded star field stays below that; glowing gas fills the block.
+ */
+function nebulosity(pic, pixels) {
+  const n = pixels / 8;
+  let bright = 0, total = 0;
+  const block = [];
+  for (let by = 0; by < n; by++) {
+    for (let bx = 0; bx < n; bx++) {
+      if (Math.hypot(bx - n / 2 + 0.5, by - n / 2 + 0.5) > n * 0.42) continue;
+      block.length = 0;
+      for (let y = by * 8; y < by * 8 + 8; y++) for (let x = bx * 8; x < bx * 8 + 8; x++) block.push(0.5 * ((pic.R[y * pixels + x] || 0) + (pic.B[y * pixels + x] || 0)));
+      block.sort((a, b) => a - b);
+      total++;
+      if (block[12] > 0.12) bright++;
+    }
+  }
+  return bright / total;
+}
+
+/** Fraction of pixels lit on one plate and black on the other: a plate edge, not the sky. */
+function plateEdge(pic) {
+  let bad = 0;
+  for (let i = 0; i < pic.R.length; i++) {
+    const r = pic.R[i] || 0, b = pic.B[i] || 0;
+    if ((b > 0.6 && r < 0.08) || (r > 0.6 && b < 0.08)) bad++;
+  }
+  return bad / pic.R.length;
+}
+
 /** Run `fn` over `items`, `limit` at a time, keeping the order of the results. */
 async function pool(items, limit, fn) {
   const out = new Array(items.length);
@@ -185,7 +220,14 @@ async function buildPages(list, pixels, firstPage) {
   const cols = PAGE_WIDTH / pixels;
   const perPage = list === named ? list.length : PER_PAGE;
   const pics = await pool(list, CONCURRENCY, (n) => picture(n, fieldDeg(n.radius), pixels).catch((e) => (console.warn(`${n.id}: ${e.message}`), undefined)));
-  const kept = list.map((n, i) => [n, pics[i]]).filter(([, p]) => p);
+  const MIN_NEBULOSITY = Number(process.env.MIN_NEBULOSITY ?? 0.15);
+  const scored = list.map((n, i) => [n, pics[i]]).filter(([, p]) => p).map(([n, p]) => [n, p, nebulosity(p, pixels), plateEdge(p)]);
+  if (list !== named) {
+    const hist = [0, 0.05, 0.1, 0.15, 0.2, 0.3, 0.5].map((t) => `≥${t}: ${scored.filter(([n, , s, e]) => n.kind !== 'dark' && s >= t && e < 0.03).length}`);
+    console.log(`nebulosity (non-dark, no plate edge) ${hist.join(', ')}; dark: ${scored.filter(([n]) => n.kind === 'dark').length}`);
+  }
+  // Named nebulae are always kept; dark clouds show as stars around a dark patch, which is the point.
+  const kept = scored.filter(([n, , score, edge]) => list === named || (edge < 0.03 && (n.kind === 'dark' || score >= MIN_NEBULOSITY)));
   for (let start = 0, page = firstPage; start < kept.length; start += perPage, page++) {
     const chunk = kept.slice(start, start + perPage);
     const rows = Math.ceil(chunk.length / cols);

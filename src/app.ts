@@ -1492,9 +1492,9 @@ export class App {
   }
 
   /**
-   * Real nebulae with measured distances (Milky Way only), as clouds at their true size. Those big
-   * enough to photograph show their real survey images (all the named ones, and about a thousand
-   * more on desktops); the rest glow in their emission-line colours; dark nebulae dim the light
+   * Real nebulae with measured distances (Milky Way only), as clouds at their true size. Those the
+   * survey plates capture show their real photographs (the named ones, and about 200 more on
+   * desktops); the rest glow in their emission-line colours; dark nebulae dim the light
    * behind them.
    */
   private async showNebulaeOnMap(seed: number): Promise<void> {

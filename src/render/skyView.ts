@@ -207,16 +207,17 @@ export class SkyView {
     if (!layer) return;
     layer.points.visible = on;
     for (const l of layer.labels) l.sprite.visible = on;
-    if (key === 'nebulae' && this.images) this.images.visible = on;
+    if (key === 'nebulae') for (const m of this.images.values()) m.visible = on;
   }
 
-  private images?: THREE.Mesh;
+  /** Nebula photographs, one mesh per atlas page. */
+  private readonly images = new Map<number, THREE.Mesh>();
   /**
    * Real survey images pinned to the sky at their true angular size: each is centred on `v`
    * (a unit vector in the stars' frame), `fieldDeg` across, with `up` pointing to the top of the
    * image and its left edge to the east, as on a sky photograph.
    */
-  setImages(items: { v: [number, number, number]; up: [number, number, number]; fieldDeg: number; rect: [number, number, number, number] }[], atlas: THREE.Texture): void {
+  setImages(page: number, items: { v: [number, number, number]; up: [number, number, number]; fieldDeg: number; rect: [number, number, number, number] }[], atlas: THREE.Texture): void {
     const pos = new Float32Array(items.length * 12);
     const uv = new Float32Array(items.length * 8);
     const index: number[] = [];
@@ -241,17 +242,19 @@ export class SkyView {
     geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
     geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
     geo.setIndex(index);
-    if (this.images) {
-      this.stars.remove(this.images);
-      this.images.geometry.dispose();
-      (this.images.material as THREE.Material).dispose();
+    const old = this.images.get(page);
+    if (old) {
+      this.stars.remove(old);
+      old.geometry.dispose();
+      (old.material as THREE.Material).dispose();
     }
-    this.images = new THREE.Mesh(
+    const mesh = new THREE.Mesh(
       geo,
       new THREE.MeshBasicMaterial({ map: atlas, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }),
     );
-    this.images.frustumCulled = false;
-    this.stars.add(this.images);
+    mesh.frustumCulled = false;
+    this.images.set(page, mesh);
+    this.stars.add(mesh);
     if (this.snapshot) this.place();
   }
 
@@ -317,7 +320,7 @@ export class SkyView {
     this.starMaterials.forEach((mat, i) => (mat.opacity = i === 0 ? Math.max(dark, 0.05) : dark));
     for (const l of this.starLabels) (l.sprite.material as THREE.SpriteMaterial).opacity = dark * 0.85;
     // Nebulae are faint: they show only in a dark sky.
-    if (this.images) (this.images.material as THREE.MeshBasicMaterial).opacity = dark * 0.9;
+    for (const m of this.images.values()) (m.material as THREE.MeshBasicMaterial).opacity = dark * 0.9;
     for (const layer of this.outlineLayers.values()) {
       for (const l of layer.labels) (l.sprite.material as THREE.SpriteMaterial).opacity = dark * 0.8;
       (layer.points.material as THREE.ShaderMaterial).uniforms.uOpacity.value = dark;

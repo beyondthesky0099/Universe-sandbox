@@ -66,6 +66,43 @@ export function thermonuclear(opts: Partial<Explosion> = {}): Explosion {
   return { type: 'Ia', energy: 1.3e51, ejectaMass: 1.4, nickelMass: 0.6, progenitorRadius: 0.01, ismDensity: 1, ...opts };
 }
 
+/**
+ * The ejecta's composition shells from the inside out, as mass fractions, with the colour each
+ * glows in a remnant (its strongest optical lines): iron-group elements and silicon/sulphur from
+ * the core, then oxygen, helium and, for core collapse, the hydrogen envelope. The yields are
+ * typical of the models (Woosley & Weaver 1995; Sukhbold et al. 2016 for core collapse; the W7
+ * model of Nomoto et al. 1984 for Type Ia: ~0.6 M☉ of ⁵⁶Ni, ~0.5 M☉ of Si–Ca, unburnt C/O outside).
+ */
+export interface EjectaLayer {
+  element: string;
+  /** Mass in M☉, and the colour it glows (RGB 0–1). */
+  mass: number;
+  color: [number, number, number];
+}
+
+const LINE_COLORS = {
+  iron: [1, 0.72, 0.35], // [Fe II], [Fe III]: warm gold
+  silicon: [1, 0.45, 0.28], // [S II] 672 nm, [S III]: orange-red
+  oxygen: [0.35, 0.95, 0.85], // [O III] 501 nm: teal
+  helium: [0.98, 0.9, 0.62], // He I 588 nm: pale yellow
+  hydrogen: [1, 0.3, 0.38], // Hα 656 nm: red
+  carbon: [0.8, 0.85, 1], // unburnt C/O, little emission: pale
+} as const;
+
+export function ejectaLayers(e: Explosion): EjectaLayer[] {
+  const layer = (element: keyof typeof LINE_COLORS, mass: number): EjectaLayer => ({ element, mass, color: [...LINE_COLORS[element]] as [number, number, number] });
+  if (e.type === 'Ia') {
+    const iron = e.nickelMass + 0.1;
+    const silicon = Math.min(0.5, Math.max(0, e.ejectaMass - iron) * 0.7);
+    return [layer('iron', iron), layer('silicon', silicon), layer('carbon', Math.max(0, e.ejectaMass - iron - silicon))];
+  }
+  const iron = e.nickelMass + 0.05;
+  const silicon = 0.15;
+  const oxygen = 0.1 * e.ejectaMass;
+  const helium = 0.12 * e.ejectaMass;
+  return [layer('iron', iron), layer('silicon', silicon), layer('oxygen', oxygen), layer('helium', helium), layer('hydrogen', Math.max(0, e.ejectaMass - iron - silicon - oxygen - helium))];
+}
+
 /** Fastest ejecta speed (km/s) of a uniform, homologous sphere: KE = (3/10) M v_max². */
 export function maxEjectaSpeed(e: Explosion): number {
   return Math.sqrt((10 * e.energy) / (3 * e.ejectaMass * M_SUN_G)) / 1e5;

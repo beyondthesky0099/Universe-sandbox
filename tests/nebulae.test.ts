@@ -17,6 +17,21 @@ describe('real nebulae', () => {
     expect(nebulae.filter((n) => n.kind === 'snr' && n.distanceKpc).length).toBeGreaterThan(150);
   });
 
+  it('puts dark nebulae at the distances of their molecular clouds (Zucker et al. 2020, from Gaia)', () => {
+    expect(nebulae.filter((n) => n.kind === 'dark' && n.distanceKpc).length).toBeGreaterThan(400);
+    // Literature: Orion B ~400 pc, the Pipe ~145–180 pc, Rho Ophiuchi ~140 pc, Taurus ~140 pc.
+    const horsehead = byName('Horsehead Nebula (B33)');
+    expect(horsehead.cloud).toBe('Orion');
+    expect(horsehead.distanceKpc).toBeGreaterThan(0.38);
+    expect(horsehead.distanceKpc).toBeLessThan(0.44);
+    expect(byName('Pipe Nebula (B59)').distanceKpc).toBeGreaterThan(0.13);
+    expect(byName('Pipe Nebula (B59)').distanceKpc).toBeLessThan(0.2);
+    expect(byName('LDN 1689 (Rho Ophiuchi)').distanceKpc).toBeCloseTo(0.14, 1);
+    const taurus = nebulae.filter((n) => n.cloud === 'Taurus');
+    expect(taurus.length).toBeGreaterThan(10);
+    for (const n of taurus) expect(n.distanceKpc).toBeLessThan(0.2);
+  });
+
   it('places supernova remnants at their measured distances (Ranasinghe & Leahy 2023)', () => {
     expect(byName('Vela Supernova Remnant').distanceKpc!).toBeCloseTo(0.25, 1);
     expect(byName('Cygnus Loop (Veil Nebula)').distanceKpc!).toBeCloseTo(0.73, 1);

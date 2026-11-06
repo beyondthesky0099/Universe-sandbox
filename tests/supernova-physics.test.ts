@@ -3,6 +3,7 @@ import { addOrbiting } from '../src/sim/presets';
 import { Simulation } from '../src/sim/simulation';
 import { EARTH_MASS, JUPITER_MASS } from '../src/sim/units';
 import {
+  ejectaLayers,
   arnettLuminosity, blastOnBody, bolometricMagnitude, coreCollapse, decayPower, L_SUN, luminosity, maxEjectaSpeed,
   neutronStarKick, plateau, remnantRadiusPc, thermonuclear,
 } from '../src/sim/supernovaPhysics';
@@ -119,5 +120,58 @@ describe('supernovae in the simulation', () => {
     const sn = sim.shockwaves.find((w) => w.explosion);
     expect(sn?.explosion?.type).toBe('Ia');
     expect(sim.bodies.length).toBe(0);
+  });
+});
+
+describe('the ejecta', () => {
+  it('are layered like the models: iron inside, hydrogen outside (core collapse), no hydrogen in a Type Ia', () => {
+    const ii = ejectaLayers(coreCollapse(15, 1.4));
+    expect(ii.map((l) => l.element)).toEqual(['iron', 'silicon', 'oxygen', 'helium', 'hydrogen']);
+    expect(ii.reduce((s, l) => s + l.mass, 0)).toBeCloseTo(13.6, 6);
+    expect(ii.at(-1)!.mass).toBeGreaterThan(8); // a red supergiant's hydrogen envelope
+    const ia = ejectaLayers(thermonuclear());
+    expect(ia.map((l) => l.element)).not.toContain('hydrogen');
+    expect(ia[0].mass).toBeCloseTo(0.7, 6); // 0.6 M☉ of ⁵⁶Ni plus stable iron
+    expect(ia.reduce((s, l) => s + l.mass, 0)).toBeCloseTo(1.4, 6);
+  });
+
+  it('glow red (Hα) in the fast outer layers and gold (iron) in the slow core', () => {
+    const sim = new Simulation();
+    const star = sim.addBody({ name: 'Star', kind: 'giant', mass: 15 });
+    sim.supernova(star); // the star was at rest; the neutron star then gets its kick
+    const p = sim.particles;
+    const vmax = maxEjectaSpeed(coreCollapse(15, 1.4)) / 4.7406;
+    let fastRed = 0, fast = 0, slowGold = 0, slow = 0;
+    for (let i = 0; i < p.count; i++) {
+      const v = Math.hypot(p.vel[i * 3], p.vel[i * 3 + 1], p.vel[i * 3 + 2]) / vmax;
+      const [r, g, b] = [p.color[i * 3], p.color[i * 3 + 1], p.color[i * 3 + 2]];
+      if (v > 0.9) {
+        fast++;
+        if (r > 2 * g && r > 2 * b) fastRed++;
+      }
+      if (v < 0.25) {
+        slow++;
+        if (r > g && g > b && b < 0.5 * r) slowGold++;
+      }
+    }
+    expect(fastRed / fast).toBeGreaterThan(0.95);
+    expect(slowGold / slow).toBeGreaterThan(0.9);
+  });
+
+  it('pile up behind the decelerating blast wave instead of outrunning it', () => {
+    const sim = new Simulation();
+    sim.particleCullDistance = 1e9;
+    const star = sim.addBody({ name: 'Star', kind: 'giant', mass: 15 });
+    sim.supernova(star);
+    sim.dtMax = 5;
+    for (let i = 0; i < 100; i++) sim.advance(30, 1e6, 1e9);
+    const w = sim.shockwaves[0];
+    // 3,000 years on, the Sedov–Taylor wave (≈ 7.7 pc) has fallen behind free expansion (≈ 10.7 pc).
+    expect(w.radius).toBeLessThan(0.8 * (maxEjectaSpeed(w.explosion!) / 4.7406) * 3000);
+    const p = sim.particles;
+    let beyond = 0;
+    for (let i = 0; i < p.count; i++) if (Math.hypot(p.pos[i * 3] - w.x, p.pos[i * 3 + 1] - w.y, p.pos[i * 3 + 2] - w.z) > w.radius * 1.1) beyond++;
+    expect(p.count).toBeGreaterThan(1000);
+    expect(beyond).toBe(0);
   });
 });

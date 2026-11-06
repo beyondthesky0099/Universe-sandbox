@@ -176,6 +176,9 @@ Plan, in priority order:
   neutron-star kicks. Shockwaves carry `t0` and `explosion` (protocol SHOCK_STRIDE = 15, saved in
   state); `systemView` draws the light from the light curve with the photosphere's colour. The
   Supernova scenario is a 15 M☉ red supergiant at about two days per second.
+- [x] Layered, clumpy ejecta (`ejectaLayers`): particles and a seeded puff cloud
+  (`remnantClouds` in systemView, scaled to the ejecta edge each frame) coloured by element;
+  ejecta are capped at the decelerating shock's speed (reverse shock).
 
 ### I. Real nebulae
 - [x] 5,676 nebulae from VizieR catalogues (`scripts/build-nebulae.mjs`, `src/sim/nebulae.ts`):
@@ -190,6 +193,9 @@ Plan, in priority order:
   `src/sim/nebulaImages.ts`). The images are in galactic orientation; the Sky tab pins them to
   the sphere (`SkyView.setImages`). DSS2 Blue has gaps: the script falls back to DSS1 Blue, then
   the SERC-J plates (first-generation DSS south of −17.5°), then the Mellinger mosaic.
+- [x] Photographs for every 3D nebula ≥ 1.2′ in radius (128-px tiles on atlas pages 1…; phones
+  load page 0 only). Dark nebulae at Zucker et al. 2020 cloud distances, drawn as absorbing
+  puffs (`NebulaClouds` with `absorb`).
 
 ### H. Desktop app (Windows)
 - [x] Electron shell in `desktop/`, Windows installer and portable .exe built by

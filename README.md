@@ -169,6 +169,11 @@ work in the desktop app, so type your latitude and longitude instead.
   Sedov–Taylor, then the radiative snowplow (Cioffi et al. 1988). A body is blown apart when the
   energy it intercepts exceeds its gravitational binding energy; otherwise it survives, but loses
   its orbit if the star lost more than half its mass.
+  The ejecta are layered as in the explosion models (Woosley & Weaver 1995; Sukhbold et al. 2016;
+  the W7 Type Ia model): iron and silicon in the slow core, then oxygen and helium, then the
+  hydrogen envelope outside. Each glows in its strongest emission line: gold iron, orange-red
+  sulphur, teal oxygen, red hydrogen-alpha. Most of the gas is in knots, as in Cassiopeia A,
+  and it piles up behind the blast wave once that slows down, instead of outrunning it.
 - **Analysis:** Lagrange-point markers, near-resonance detection (for example "2:1 with
   Jupiter"), tidal locking, climate and habitable zones, and forecasts of collisions and close
   approaches.
@@ -265,17 +270,18 @@ The map shows **5,676 real nebulae** from professional catalogues:
 | HII regions (where stars are being born) | 2,174 | every confirmed one in the WISE catalogue |
 | Planetary nebulae (shells from dying stars) | 1,143 | the Strasbourg-ESO catalogue |
 | Supernova remnants | 294 | Green's catalogue, with distances for 187 from Ranasinghe & Leahy (2023) |
-| Dark nebulae | 1,907 | Barnard's 349 dark objects, plus the Lynds clouds Barnard didn't list |
+| Dark nebulae | 1,907 | Barnard's 349 dark objects, plus the Lynds clouds Barnard didn't list; 442 at Gaia distances of their molecular clouds (Zucker et al. 2020) |
 | Reflection nebulae | 158 | van den Bergh's catalogue |
 
 **Galaxy Map:** the nebulae with measured distances sit at their true 3D positions, as glowing clouds at their true physical size: 945 HII regions, 790 planetary nebulae, 187 supernova remnants and 140 reflection nebulae. The HII regions trace the spiral arms.
 - Colours are the light each kind really emits: HII regions glow pink-red in hydrogen-alpha, planetary nebulae teal in doubly ionised oxygen, and reflection nebulae blue from scattered starlight. Each cloud is a few overlapping puffs spread through its volume, so it has depth as you orbit it. Clouds too small to see from far away are drawn at a minimum size and dimmed to match.
-- The 55 named nebulae (Orion, Carina, Lagoon, Eagle, the Crab, the Helix, the Horsehead, ...) show their **real photographs** from the Digitized Sky Survey: the red plate in red, the blue plate in blue and the fainter of the two in green, so stars stay white and hydrogen glow stays red. `node scripts/build-nebula-images.mjs` downloads them from NASA SkyView and packs them into one 1 MB atlas.
+- Nebulae big enough to photograph show their **real photographs** from the Digitized Sky Survey: the 55 named ones (Orion, Carina, Lagoon, Eagle, the Crab, the Helix, the Horsehead, ...) and every other nebula with a distance that is at least 1.2′ in radius. The red plate is shown in red, the blue plate in blue and the fainter of the two in green, so stars stay white and hydrogen glow stays red. `node scripts/build-nebula-images.mjs` downloads them from NASA SkyView and packs them into JPEG atlas pages. Phones load only the named ones' page.
+- Dark nebulae dim the light behind them. 442 of them are placed at the distance of their molecular cloud, measured with Gaia by Zucker et al. 2020: for example the Horsehead in Orion B at 411 pc, the Pipe at 180 pc and Rho Ophiuchi at 139 pc.
 - Planetary-nebula distances come from Gaia parallaxes of their central stars where those are good, and otherwise from statistical estimates.
 - Some HII distances are kinematic estimates, which can be off in the outer Galaxy.
 - The remnant catalogue puts the Crab Nebula at 3.4 kpc (−1.0/+4.0), from the Crab pulsar's Gaia DR2 parallax. The long-standing estimate is about 2 kpc.
 - Reflection nebulae are placed at the distance of the star that lights them. That's 140 of the 158, mostly from Gaia parallaxes via SIMBAD.
-- Dark nebulae have no catalogued distances, so they appear on the sky only.
+- Dark nebulae have no distances in their own catalogues. A cloud takes the distance of the nearest Zucker et al. 2020 sightline within 1° of its edge; the rest (1,465) appear on the sky only.
 
 **Sky tab:** every nebula is outlined at its real position and angular size, and fades out in daylight. The 55 named ones show their Digitized Sky Survey photographs on the sky, at their true size and orientation.
 
@@ -542,7 +548,8 @@ push and pull request.
   of planetary-nebula central stars (Gonzalez-Santamaria et al. 2021, A&A 656, A51), statistical
   distances (Stanghellini & Haywood 2010, ApJ 714, 1096), Green's catalogue of Galactic
   supernova remnants (Green 2019) with distances from Ranasinghe & Leahy (2023, ApJS 265, 53),
-  Lynds' Catalogue of Dark Nebulae (1962), Barnard's dark objects (1927) and van den Bergh's
+  Lynds' Catalogue of Dark Nebulae (1962), Barnard's dark objects (1927) with molecular-cloud
+  distances from Zucker et al. (2020, A&A 633, A51), and van den Bergh's
   reflection nebulae (1966), via VizieR (CDS), placed at the distances of their illuminating stars
   (parallaxes from SIMBAD's TAP service, mostly Gaia EDR3). Familiar names resolved with SIMBAD (rebuild
   with `node scripts/build-nebulae.mjs`).

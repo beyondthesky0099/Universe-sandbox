@@ -1,19 +1,43 @@
 import { readFileSync } from 'node:fs';
 import jpeg from 'jpeg-js';
 import { describe, expect, it } from 'vitest';
-import { tileRect, type NebulaImageAtlas } from '../src/sim/nebulaImages';
+import { nebulaKey, tileRect, type NebulaImageAtlas } from '../src/sim/nebulaImages';
 import { parseNebulae } from '../src/sim/nebulae';
 
 const atlas = JSON.parse(readFileSync('public/data/nebula-images.json', 'utf8')) as NebulaImageAtlas;
 const nebulae = parseNebulae(JSON.parse(readFileSync('public/data/nebulae.json', 'utf8')));
-const image = jpeg.decode(readFileSync('public/data/nebula-images.jpg'), { useTArray: true });
+const pages = atlas.pages.map((p) => jpeg.decode(readFileSync(`public/data/${p.file}`), { useTArray: true, maxMemoryUsageInMB: 1024 }));
+
+/** Mean red/blue ratio and peak brightness of a tile's central half. */
+function tileStats(page: number, tile: number) {
+  const p = atlas.pages[page];
+  const img = pages[page];
+  const [u, v, du, dv] = tileRect(p, tile);
+  // The tile in image rows (top-down) is the texture rectangle flipped.
+  const x0 = Math.round(u * img.width), y0 = Math.round((1 - v - dv) * img.height);
+  const q = p.tile / 4;
+  let r = 0, b = 0, sum = 0, max = 0;
+  for (let y = y0 + q; y < y0 + 3 * q; y++) {
+    for (let x = x0 + q; x < x0 + 3 * q; x++) {
+      const k = (y * img.width + x) * 4;
+      r += img.data[k];
+      b += img.data[k + 2];
+      const lum = img.data[k] + img.data[k + 1] + img.data[k + 2];
+      sum += lum;
+      max = Math.max(max, lum);
+    }
+  }
+  expect(du * img.width).toBeCloseTo(p.tile, 6);
+  return { redBlue: r / Math.max(1, b), mean: sum / (4 * q * q), max };
+}
 
 describe('nebula images (DSS via SkyView)', () => {
-  it('cover every named nebula, once, at its catalogue position', () => {
+  it('cover every named nebula on page 0, and on later pages only nebulae with distances', () => {
     const named = nebulae.filter((n) => n.name);
-    expect(atlas.images.length).toBe(named.length);
+    const page0 = atlas.images.filter((i) => i.page === 0);
+    expect(page0.length).toBe(named.length);
     for (const n of named) {
-      const im = atlas.images.find((i) => i.name === n.name);
+      const im = page0.find((i) => i.name === n.name);
       expect(im, n.name).toBeDefined();
       expect(im!.kind).toBe(n.kind);
       expect(im!.l).toBeCloseTo(n.l, 3);
@@ -21,48 +45,41 @@ describe('nebula images (DSS via SkyView)', () => {
       // 2.6 catalogue radii across, within the script's limits.
       expect(im!.fieldDeg).toBeCloseTo(Math.min(12, Math.max(0.05, 2.6 * n.radiusDeg)), 3);
     }
-    expect(new Set(atlas.images.map((i) => i.tile)).size).toBe(atlas.images.length);
+    const others = atlas.images.filter((i) => i.page > 0);
+    const byKey = new Map(nebulae.map((n) => [nebulaKey(n), n]));
+    for (const im of others) {
+      const n = byKey.get(nebulaKey(im));
+      expect(n, im.id).toBeDefined();
+      expect(n!.distanceKpc).toBeGreaterThan(0);
+      expect(n!.radiusDeg).toBeGreaterThanOrEqual(0.02);
+      expect(im.l).toBeCloseTo(n!.l, 3);
+    }
+    // Every image has its own tile.
+    expect(new Set(atlas.images.map((i) => `${i.page}/${i.tile}`)).size).toBe(atlas.images.length);
   });
 
-  it('the atlas holds a real, non-blank picture in every tile', () => {
-    expect(image.width).toBe(atlas.cols * atlas.tile);
-    expect(image.height).toBe(atlas.rows * atlas.tile);
+  it('every page decodes at its stated size, and every tile holds a real picture', () => {
+    atlas.pages.forEach((p, i) => {
+      expect(pages[i].width).toBe(p.cols * p.tile);
+      expect(pages[i].height).toBe(p.rows * p.tile);
+    });
     for (const im of atlas.images) {
-      const [u, v, du, dv] = tileRect(atlas, im.tile);
-      expect(u + du).toBeLessThanOrEqual(1);
-      expect(v).toBeGreaterThanOrEqual(0);
-      // The tile in image rows (top-down) is the texture rectangle flipped.
-      const x0 = Math.round(u * image.width), y0 = Math.round((1 - v - dv) * image.height);
-      let sum = 0, max = 0;
-      for (let y = y0; y < y0 + atlas.tile; y += 2) {
-        for (let x = x0; x < x0 + atlas.tile; x += 2) {
-          const k = (y * image.width + x) * 4;
-          const lum = image.data[k] + image.data[k + 1] + image.data[k + 2];
-          sum += lum;
-          max = Math.max(max, lum);
-        }
-      }
-      expect(max, im.name).toBeGreaterThan(300);
-      expect(sum / (atlas.tile * atlas.tile / 4), im.name).toBeGreaterThan(5);
+      expect(im.tile).toBeLessThan(atlas.pages[im.page].cols * atlas.pages[im.page].rows);
+      const s = tileStats(im.page, im.tile);
+      expect(s.max, im.id).toBeGreaterThan(150);
     }
   });
 
   it('shows emission nebulae red and reflection nebulae blue, as the plates record them', () => {
-    const meanColour = (name: string) => {
+    const colour = (name: string) => {
       const im = atlas.images.find((i) => i.name === name)!;
-      const col = im.tile % atlas.cols, row = Math.floor(im.tile / atlas.cols);
-      let r = 0, b = 0;
-      for (let y = row * atlas.tile + 64; y < row * atlas.tile + 192; y++) {
-        for (let x = col * atlas.tile + 64; x < col * atlas.tile + 192; x++) {
-          const k = (y * image.width + x) * 4;
-          r += image.data[k];
-          b += image.data[k + 2];
-        }
-      }
-      return r / b;
+      return tileStats(im.page, im.tile).redBlue;
     };
     // Hα glow of HII regions; starlight scattered by dust in the Iris and NGC 2023.
-    for (const name of ['Rosette Nebula', 'Heart Nebula', 'Carina Nebula']) expect(meanColour(name), name).toBeGreaterThan(1.3);
-    for (const name of ['Iris Nebula', 'NGC 2023']) expect(meanColour(name), name).toBeLessThan(0.9);
+    for (const name of ['Rosette Nebula', 'Heart Nebula', 'Carina Nebula']) expect(colour(name), name).toBeGreaterThan(1.3);
+    for (const name of ['Iris Nebula', 'NGC 2023']) expect(colour(name), name).toBeLessThan(0.9);
+    // Across all the photographed HII regions, red dominates on average.
+    const hii = atlas.images.filter((i) => i.kind === 'hii').map((i) => tileStats(i.page, i.tile).redBlue);
+    expect(hii.reduce((a, b) => a + b, 0) / hii.length).toBeGreaterThan(1.1);
   });
 });

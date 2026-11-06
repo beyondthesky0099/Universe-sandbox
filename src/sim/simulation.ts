@@ -16,7 +16,7 @@ import {
 import { kelvinToRgb } from './color';
 import { Octree } from './octree';
 import { ParticleSet } from './particles';
-import { blastOnBody, coreCollapse, L_SUN, peakLuminosity, maxEjectaSpeed, neutronStarKick, remnantInAu, thermonuclear, type Explosion } from './supernovaPhysics';
+import { blastOnBody, coreCollapse, ejectaLayers, L_SUN, peakLuminosity, maxEjectaSpeed, neutronStarKick, remnantInAu, thermonuclear, type Explosion } from './supernovaPhysics';
 import { BODY_FIELDS, particleAccelSlice } from './particleKernel';
 import type { ParallelForces } from './parallel';
 import { AU_PER_YEAR_IN_KMS, C_AU_PER_YEAR, KPC_PER_MYR_IN_KMS, EARTH_MASS, G, type UnitSystem } from './units';
@@ -1027,7 +1027,7 @@ export class Simulation {
   /** A white dwarf pushed past the Chandrasekhar limit detonates completely (Type Ia). */
   private typeIa(wd: Body): void {
     const e = thermonuclear();
-    this.launchEjecta(wd, e, wd.radius, () => kelvinToRgb(7000 + Math.random() * 8000));
+    this.launchEjecta(wd, e, wd.radius);
     this.addBlast(wd, e);
     this.events.push({
       type: 'supernova',
@@ -1043,20 +1043,44 @@ export class Simulation {
   }
 
   /**
-   * Ejecta as test particles: a uniform, homologously expanding sphere, so speeds are spread
-   * as v_max·u^(1/3) with v_max = √(10E/3M_ej) (thousands of km/s).
+   * Ejecta as test particles. They expand homologously (speed ∝ distance), so a particle's speed
+   * fixes its mass coordinate in the uniform sphere: v = v_max·m^(1/3) with v_max = √(10E/3M_ej).
+   * Each glows in the colour of its composition shell (iron and silicon inside, then oxygen,
+   * helium and hydrogen; see ejectaLayers), and most of it is in clumps, as the Rayleigh–Taylor
+   * instability breaks the ejecta into the knots seen in young remnants such as Cassiopeia A.
    */
-  private launchEjecta(star: Body, e: Explosion, r: number, color: () => [number, number, number]): void {
+  private launchEjecta(star: Body, e: Explosion, r: number): void {
     const vmax = this.kms(maxEjectaSpeed(e));
+    const layers = ejectaLayers(e);
+    const total = layers.reduce((sum, l) => sum + l.mass, 0) || 1;
     const p = this.particles;
-    const count = Math.min(1600, p.capacity - p.count);
+    const count = Math.min(2400, p.capacity - p.count);
+    const clumps = Array.from({ length: 60 }, () => randomUnit());
     for (let i = 0; i < count; i++) {
-      const u = 2 * Math.random() - 1;
-      const th = Math.random() * Math.PI * 2;
-      const s = Math.sqrt(1 - u * u);
-      const dx = s * Math.cos(th), dy = u, dz = s * Math.sin(th);
-      const v = vmax * Math.cbrt(Math.random());
-      p.add(star.x + dx * r * 1.2, star.y + dy * r * 1.2, star.z + dz * r * 1.2, star.vx + dx * v, star.vy + dy * v, star.vz + dz * v, color());
+      let [dx, dy, dz] = randomUnit();
+      if (Math.random() < 0.65) {
+        // Into a knot: a direction close to one of the clumps'.
+        const c = clumps[Math.floor(Math.random() * clumps.length)];
+        const spread = 0.09;
+        const nx = c[0] + dx * spread, ny = c[1] + dy * spread, nz = c[2] + dz * spread;
+        const n = Math.hypot(nx, ny, nz);
+        dx = nx / n;
+        dy = ny / n;
+        dz = nz / n;
+      }
+      const m = Math.random();
+      const v = vmax * Math.cbrt(m);
+      let acc = 0;
+      let color = layers[layers.length - 1].color;
+      for (const l of layers) {
+        acc += l.mass / total;
+        if (m <= acc) {
+          color = l.color;
+          break;
+        }
+      }
+      const glow = 0.75 + 0.25 * Math.random();
+      p.add(star.x + dx * r * 1.2, star.y + dy * r * 1.2, star.z + dz * r * 1.2, star.vx + dx * v, star.vy + dy * v, star.vz + dz * v, [color[0] * glow, color[1] * glow, color[2] * glow]);
     }
   }
 
@@ -1103,7 +1127,7 @@ export class Simulation {
     const remnantKind = M >= 20 ? 'blackhole' : 'neutron';
     const remnant = remnantKind === 'blackhole' ? Math.max(3, M * 0.3) : 1.4;
     const e = coreCollapse(M, remnant);
-    this.launchEjecta(star, e, R, () => kelvinToRgb(4000 + Math.random() * 12000));
+    this.launchEjecta(star, e, R);
     this.addBlast(star, e);
 
     const name = star.name;
@@ -1174,6 +1198,18 @@ export class Simulation {
         const k = i * 3;
         const dx = p.pos[k] - sw.x, dy = p.pos[k + 1] - sw.y, dz = p.pos[k + 2] - sw.z;
         const d = Math.hypot(dx, dy, dz);
+        if (sw.explosion && d > sw.radius && d > 0) {
+          // Nothing outruns the forward shock: once it decelerates (Sedov–Taylor), ejecta that
+          // reach it pile up behind it, slowed by the reverse shock.
+          const vr = (p.vel[k] * dx + p.vel[k + 1] * dy + p.vel[k + 2] * dz) / d;
+          if (vr > sw.speed && d < sw.radius * 1.05 + sw.speed * 0.01) {
+            const cut = (vr - sw.speed) / d;
+            p.vel[k] -= dx * cut;
+            p.vel[k + 1] -= dy * cut;
+            p.vel[k + 2] -= dz * cut;
+          }
+          continue;
+        }
         if (d <= prev || d > sw.radius) continue;
         let dv: number;
         if (sw.explosion) {
@@ -1362,4 +1398,12 @@ function gaussian(): number {
 function describeExplosion(e: Explosion): string {
   const peak = peakLuminosity(e);
   return `${(e.energy / 1e51).toFixed(1)}×10⁵¹ erg, ${e.ejectaMass.toFixed(1)} M☉ of ejecta at up to ${Math.round(maxEjectaSpeed(e)).toLocaleString('en-US')} km/s, peaking at ${(peak / L_SUN / 1e9).toFixed(2)} billion Suns.`;
+}
+
+/** A random direction (unit vector), uniform on the sphere. */
+function randomUnit(): [number, number, number] {
+  const u = 2 * Math.random() - 1;
+  const th = Math.random() * Math.PI * 2;
+  const s = Math.sqrt(1 - u * u);
+  return [s * Math.cos(th), u, s * Math.sin(th)];
 }

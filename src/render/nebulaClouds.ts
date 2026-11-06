@@ -59,6 +59,7 @@ const VERTEX = /* glsl */ `
   attribute vec3 iParams; // min pixels, brightness, rotation
   attribute float iPuff;
   uniform float uViewHeight;
+  uniform float uSizeScale;
   varying vec2 vUv;
   varying vec3 vColor;
   varying vec4 vTile;
@@ -68,9 +69,10 @@ const VERTEX = /* glsl */ `
     vec4 mv = modelViewMatrix * vec4(iCenter, 1.0);
     float dist = max(-mv.z, 1e-6);
     float pxPerUnit = projectionMatrix[1][1] * uViewHeight * 0.5 / dist;
-    float size = max(iSize, iParams.x / pxPerUnit);
+    float trueSize = iSize * uSizeScale;
+    float size = max(trueSize, iParams.x / pxPerUnit);
     // Clouds enlarged to stay visible from afar are dimmed in proportion.
-    vBright = iParams.y * mix(1.0, sqrt(iSize / size), 0.7);
+    vBright = iParams.y * mix(1.0, sqrt(trueSize / size), 0.7);
     float c = cos(iParams.z), s = sin(iParams.z);
     vec2 corner = vec2(c * position.x - s * position.y, s * position.x + c * position.y);
     mv.xy += corner * size;
@@ -86,6 +88,7 @@ const FRAGMENT = /* glsl */ `
   uniform sampler2D uAtlas;
   uniform sampler2D uPuffs;
   uniform float uOpacity;
+  uniform float uAbsorb;
   varying vec2 vUv;
   varying vec3 vColor;
   varying vec4 vTile;
@@ -93,6 +96,14 @@ const FRAGMENT = /* glsl */ `
   varying float vPuff;
   void main() {
     vec3 rgb;
+    if (uAbsorb > 0.5) {
+      // Dust: dims what lies behind it (normal blending), faintly tinted by its own colour.
+      vec2 cell = vec2(mod(vPuff, 2.0), floor(vPuff / 2.0)) * 0.5;
+      float a = texture2D(uPuffs, cell + vUv * 0.5).a * vBright * uOpacity;
+      if (a < 0.01) discard;
+      gl_FragColor = vec4(vColor * 0.06, min(a, 0.92));
+      return;
+    }
     if (vTile.z > 0.0) {
       rgb = texture2D(uAtlas, vTile.xy + vUv * vTile.zw).rgb;
     } else {
@@ -110,7 +121,8 @@ export class NebulaClouds {
   private readonly material: THREE.ShaderMaterial;
   private readonly puffs = puffAtlas();
 
-  constructor(clouds: Cloud[], atlas?: THREE.Texture) {
+  /** `absorb`: dark dust clouds that dim the light behind them instead of glowing. */
+  constructor(clouds: Cloud[], atlas?: THREE.Texture, absorb = false) {
     const geo = new THREE.InstancedBufferGeometry();
     geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array([-0.5, -0.5, 0, 0.5, -0.5, 0, 0.5, 0.5, 0, -0.5, 0.5, 0]), 3));
     geo.setIndex([0, 1, 2, 0, 2, 3]);
@@ -135,11 +147,11 @@ export class NebulaClouds {
     this.material = new THREE.ShaderMaterial({
       vertexShader: VERTEX,
       fragmentShader: FRAGMENT,
-      uniforms: { uAtlas: { value: atlas ?? this.puffs }, uPuffs: { value: this.puffs }, uOpacity: { value: 1 }, uViewHeight: { value: 800 } },
+      uniforms: { uAtlas: { value: atlas ?? this.puffs }, uPuffs: { value: this.puffs }, uOpacity: { value: 1 }, uViewHeight: { value: 800 }, uSizeScale: { value: 1 }, uAbsorb: { value: absorb ? 1 : 0 } },
       transparent: true,
       depthWrite: false,
       depthTest: false,
-      blending: THREE.AdditiveBlending,
+      blending: absorb ? THREE.NormalBlending : THREE.AdditiveBlending,
     });
     this.mesh = new THREE.Mesh(geo, this.material);
     this.mesh.frustumCulled = false;
@@ -148,6 +160,17 @@ export class NebulaClouds {
   /** Viewport height in device pixels (for the minimum on-screen size). */
   setViewHeight(px: number): void {
     this.material.uniforms.uViewHeight.value = px;
+  }
+
+  /**
+   * Place the whole cloud: clouds were given in local units; this centres them on `center` and
+   * scales positions and sizes by `scale` (a homologous expansion), at `opacity`.
+   */
+  place(center: { x: number; y: number; z: number }, scale: number, opacity = 1): void {
+    this.mesh.position.set(center.x, center.y, center.z);
+    this.mesh.scale.setScalar(scale);
+    this.material.uniforms.uSizeScale.value = scale;
+    this.material.uniforms.uOpacity.value = opacity;
   }
 
   dispose(): void {

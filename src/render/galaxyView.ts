@@ -147,7 +147,7 @@ export class GalaxyView {
   /** Layers of real catalogued objects (Milky Way only: nebulae, star clusters), with labels. */
   private readonly realLayers = new Map<string, { points: THREE.Points; labels: THREE.Group }>();
   /** Real nebulae drawn as clouds at their true size (Milky Way only), with labels. */
-  private readonly cloudLayers = new Map<string, { clouds: NebulaClouds; labels: THREE.Group; on: boolean }>();
+  private readonly cloudLayers = new Map<string, { clouds: NebulaClouds[]; labels: THREE.Group; on: boolean }>();
   private highlighting = false;
   /** Labels of the hand-placed showpiece nebulae, hidden once the real clouds replace them. */
   private readonly showpieceLabels: THREE.Sprite[] = [];
@@ -314,7 +314,7 @@ export class GalaxyView {
     this.camera.updateProjectionMatrix();
     this.pointScale = 0.45 * height * pixelRatio;
     this.viewHeight = height * pixelRatio;
-    for (const layer of this.cloudLayers.values()) layer.clouds.setViewHeight(this.viewHeight);
+    for (const layer of this.cloudLayers.values()) for (const c of layer.clouds) c.setViewHeight(this.viewHeight);
     this.applyPointScale();
   }
 
@@ -386,7 +386,7 @@ export class GalaxyView {
     for (const pts of [this.glow, this.dust]) if (pts) pts.visible = !match;
     this.nebulaGroup.visible = !match && !this.cloudLayers.size;
     this.highlighting = !!match;
-    for (const layer of this.cloudLayers.values()) layer.clouds.mesh.visible = layer.on && !match;
+    for (const layer of this.cloudLayers.values()) for (const c of layer.clouds) c.mesh.visible = layer.on && !match;
   }
 
   /** Show real exoplanet hosts: cyan rings, green for systems with a temperate planet. */
@@ -459,7 +459,7 @@ export class GalaxyView {
     const clouds = this.cloudLayers.get(key);
     if (clouds) {
       clouds.on = on;
-      clouds.clouds.mesh.visible = on && !this.highlighting;
+      for (const c of clouds.clouds) c.mesh.visible = on && !this.highlighting;
       clouds.labels.visible = on;
     }
   }
@@ -468,11 +468,18 @@ export class GalaxyView {
    * Real nebulae as clouds at their true size (see nebulaClouds.ts). They replace the hand-placed
    * showpiece nebulae of the procedural Milky Way. An empty list removes the layer.
    */
-  setCloudLayer(key: string, clouds: Cloud[], labels: { pos: [number, number, number]; label: string; color: string }[], atlas?: THREE.Texture): void {
+  setCloudLayer(
+    key: string,
+    sets: { clouds: Cloud[]; atlas?: THREE.Texture; absorb?: boolean }[],
+    labels: { pos: [number, number, number]; label: string; color: string }[],
+  ): void {
     const old = this.cloudLayers.get(key);
     if (old) {
-      this.scene.remove(old.clouds.mesh, old.labels);
-      old.clouds.dispose();
+      this.scene.remove(old.labels);
+      for (const c of old.clouds) {
+        this.scene.remove(c.mesh);
+        c.dispose();
+      }
       for (const child of old.labels.children) {
         const sprite = child as THREE.Sprite;
         sprite.material.map?.dispose();
@@ -480,21 +487,27 @@ export class GalaxyView {
       }
       this.cloudLayers.delete(key);
     }
-    const replaced = clouds.length > 0;
+    const replaced = sets.some((set) => set.clouds.length > 0);
     this.nebulaGroup.visible = !replaced;
     for (const l of this.showpieceLabels) l.visible = !replaced;
     if (!replaced) return;
-    const layer = new NebulaClouds(clouds, atlas);
-    layer.setViewHeight(this.viewHeight);
-    layer.mesh.renderOrder = 3;
+    // Dark dust first, so glowing gas in front of it still shows; stars draw over both.
+    const layers = sets
+      .filter((set) => set.clouds.length)
+      .map((set) => {
+        const layer = new NebulaClouds(set.clouds, set.atlas, set.absorb);
+        layer.setViewHeight(this.viewHeight);
+        layer.mesh.renderOrder = set.absorb ? 2.5 : 3;
+        return layer;
+      });
     const group = new THREE.Group();
     for (const l of labels) {
       const text = textSprite(l.label, l.color, 0.55);
       text.position.set(...l.pos);
       group.add(text);
     }
-    this.scene.add(layer.mesh, group);
-    this.cloudLayers.set(key, { clouds: layer, labels: group, on: true });
+    this.scene.add(...layers.map((l) => l.mesh), group);
+    this.cloudLayers.set(key, { clouds: layers, labels: group, on: true });
   }
 
   /** Labelled markers for real black holes and pulsars (Milky Way only). Cleared on rebuild. */

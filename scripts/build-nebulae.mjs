@@ -14,7 +14,10 @@
  *   with heliocentric distances from Ranasinghe & Leahy 2023 (ApJS 265, 53; J/ApJS/265/53)
  *   where measured (limits are left out).
  * - Dark nebulae: Lynds' Catalogue of Dark Nebulae (Lynds 1962; VII/7A) and Barnard's 349 dark
- *   objects (Barnard 1927; VII/220A). These have no distances, so they appear on the sky only.
+ *   objects (Barnard 1927; VII/220A). Neither catalogue gives distances; a cloud gets the distance
+ *   of the nearest sightline (within 1° of its edge) of Zucker et al. 2020 (A&A 633, A51;
+ *   J/A+A/633/A51), who measured the distances to the local molecular clouds from Gaia DR2
+ *   parallaxes and stellar photometry of the stars in front of and behind them.
  * - Reflection nebulae: van den Bergh 1966 (VII/21). Each is lit by a catalogued star, so its
  *   distance is that star's: the parallax from SIMBAD (TAP), which for these stars is almost
  *   always Gaia's, kept when it is measured to better than 20%.
@@ -91,6 +94,9 @@ const lynds = parseTsv(await vizier('dark-lynds', {
 }));
 const barnard = parseTsv(await vizier('dark-barnard', {
   '-source': 'VII/220A/barnard', '-out': 'Barn,Diam', '-out.add': '_Glon,_Glat', '-out.max': 'unlimited',
+}));
+const zucker = parseTsv(await vizier('dark-zucker2020', {
+  '-source': 'J/A+A/633/A51', '-out': 'Name,GLON,GLAT,d50,d16,d84', '-out.max': 'unlimited',
 }));
 const vdb = parseTsv(await vizier('refl-vdb', {
   '-source': 'VII/21/catalog', '-out': 'VdB,HD,DM,BRadMax,RRadMax,oGLON,oGLAT', '-out.add': '_Glon,_Glat', '-out.max': 'unlimited',
@@ -198,6 +204,22 @@ const dark = [
     .filter((r) => !r.Barn)
     .map((r) => ({ l: num(r.GLON), b: num(r.GLAT), rad: Math.sqrt((num(r.Area) ?? 0.01) / Math.PI) * 60, id: `LDN ${r.LDN.trim()}`, opacity: num(r.Opacity) })),
 ];
+// Distances from the nearest Zucker et al. 2020 sightline (pc → kpc).
+const sightlines = zucker.map((r) => ({ l: num(r.GLON), b: num(r.GLAT), d: num(r.d50) / 1000, cloud: r.Name.replace(/_/g, ' ').trim() }));
+for (const o of dark) {
+  let best, bestSep = Infinity;
+  for (const z of sightlines) {
+    const d = sep(o.l, o.b, z.l, z.b);
+    if (d < bestSep) {
+      bestSep = d;
+      best = z;
+    }
+  }
+  if (best && bestSep <= o.rad / 60 + 1) {
+    o.d = best.d;
+    o.cloud = best.cloud;
+  }
+}
 
 // --- Reflection nebulae: van den Bergh (radius on the blue plates, arcmin) ----------------------
 const refl = vdb.map((r) => ({
@@ -274,20 +296,20 @@ FAMOUS.forEach(([, display, kind], i) => {
 
 const out = {
   source:
-    'HII: WISE Catalog of Galactic HII Regions (Anderson et al. 2014); PNe: Strasbourg-ESO catalogue (Acker et al. 1992), Gaia EDR3 distances (Gonzalez-Santamaria et al. 2021) and statistical distances (Stanghellini & Haywood 2010); SNRs: Green (2019) with distances from Ranasinghe & Leahy (2023); dark nebulae: Lynds (1962) and Barnard (1927); reflection nebulae: van den Bergh (1966), at the distances of their illuminating stars (SIMBAD parallaxes, mostly Gaia). Via VizieR (CDS). Familiar names resolved with SIMBAD.',
+    'HII: WISE Catalog of Galactic HII Regions (Anderson et al. 2014); PNe: Strasbourg-ESO catalogue (Acker et al. 1992), Gaia EDR3 distances (Gonzalez-Santamaria et al. 2021) and statistical distances (Stanghellini & Haywood 2010); SNRs: Green (2019) with distances from Ranasinghe & Leahy (2023); dark nebulae: Lynds (1962) and Barnard (1927), at the distances of their molecular clouds (Zucker et al. 2020); reflection nebulae: van den Bergh (1966), at the distances of their illuminating stars (SIMBAD parallaxes, mostly Gaia). Via VizieR (CDS). Familiar names resolved with SIMBAD.',
   fields: {
     hii: ['l', 'b', 'distanceKpc|null', 'radiusArcsec', 'id', 'name?'],
     pn: ['l', 'b', 'distanceKpc|null', 'radiusArcsec|null', 'id', 'distanceSource (g=Gaia, s=statistical, null)', 'name?'],
     snr: ['l', 'b', 'majorArcmin', 'minorArcmin', 'type (S shell, F filled, C composite)', 'id', 'distanceKpc|null', 'name?'],
-    dark: ['l', 'b', 'radiusArcmin', 'id', 'opacity 1-6 (Lynds)|null', 'name?'],
+    dark: ['l', 'b', 'radiusArcmin', 'id', 'opacity 1-6 (Lynds)|null', 'distanceKpc (Zucker et al. 2020 cloud)|null', 'cloud|null', 'name?'],
     refl: ['l', 'b', 'radiusArcmin', 'id', 'illuminating star', "distanceKpc (the star's parallax)|null", 'name?'],
   },
   hii: hii.map((o) => [round(o.l, 3), round(o.b, 3), o.d ? round(o.d, 2) : null, o.rad ?? 0, o.id, ...(o.name ? [o.name] : [])]),
   pn: pn.map((o) => [round(o.l, 3), round(o.b, 3), o.d ? round(o.d, 3) : null, o.rad ? round(o.rad, 1) : null, o.id, o.src === 'gaia' ? 'g' : o.src === 'stat' ? 's' : null, ...(o.name ? [o.name] : [])]),
   snr: snr.map((o) => [round(o.l, 3), round(o.b, 3), o.maj ?? 1, o.min ?? 1, o.type, o.id, o.d ? round(o.d, 2) : null, ...(o.name ? [o.name] : [])]),
-  dark: dark.map((o) => [round(o.l, 3), round(o.b, 3), round(o.rad, 2), o.id, o.opacity ?? null, ...(o.name ? [o.name] : [])]),
+  dark: dark.map((o) => [round(o.l, 3), round(o.b, 3), round(o.rad, 2), o.id, o.opacity ?? null, o.d ? round(o.d, 3) : null, o.cloud ?? null, ...(o.name ? [o.name] : [])]),
   refl: refl.map((o) => [round(o.l, 3), round(o.b, 3), round(o.rad, 2), o.id, o.star, o.d ? round(o.d, 3) : null, ...(o.name ? [o.name] : [])]),
 };
 writeFileSync(new URL('../public/data/nebulae.json', import.meta.url), JSON.stringify(out) + '\n');
 const named = [...hii, ...pn, ...snr, ...dark, ...refl].filter((o) => o.name).length;
-console.log(`HII regions: ${hii.length} (${hii.filter((o) => o.d).length} with distances); planetary nebulae: ${pn.length} (${pn.filter((o) => o.src === 'gaia').length} Gaia, ${pn.filter((o) => o.src === 'stat').length} statistical distances); supernova remnants: ${snr.length} (${snr.filter((o) => o.d).length} with distances); dark nebulae: ${dark.length}; reflection nebulae: ${refl.length} (${reflWithDistance} with their star's distance, ${refl.filter((r) => r.src === 'gaia').length} from Gaia); ${named} with familiar names`);
+console.log(`HII regions: ${hii.length} (${hii.filter((o) => o.d).length} with distances); planetary nebulae: ${pn.length} (${pn.filter((o) => o.src === 'gaia').length} Gaia, ${pn.filter((o) => o.src === 'stat').length} statistical distances); supernova remnants: ${snr.length} (${snr.filter((o) => o.d).length} with distances); dark nebulae: ${dark.length} (${dark.filter((o) => o.d).length} with cloud distances); reflection nebulae: ${refl.length} (${reflWithDistance} with their star's distance, ${refl.filter((r) => r.src === 'gaia').length} from Gaia); ${named} with familiar names`);

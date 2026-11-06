@@ -1,5 +1,5 @@
 import { applyFrame, type Frame, type ToWorker } from './protocol';
-import { Simulation, type SimEvent } from './simulation';
+import { PARTICLE_CAPACITY, Simulation, type SimEvent } from './simulation';
 import { captureState, type SimSettings } from './state';
 
 export interface HostStatus {
@@ -16,7 +16,7 @@ export interface HostStatus {
  * the real simulation and `commit()` is a no-op.
  */
 export class SimHost {
-  readonly sim = new Simulation(20000);
+  readonly sim = new Simulation(PARTICLE_CAPACITY);
   private worker?: Worker;
   private version = 0;
   private busy = false;

@@ -21,6 +21,7 @@ import { loadFlyby, loadFlybys } from './sim/flybys';
 import { loadVoyagerEncounter, loadVoyagerEncounters } from './sim/voyager';
 import { synthesizeChirp } from './sim/gwChirp';
 import { loadHalley2061, loadHalleyReturn } from './sim/halley';
+import { loadNeighbourhood100, loadStars100 } from './sim/gaia100';
 import { getSolarData, loadSolarData } from './sim/solarSystemData';
 import { isCompact, kindForMass, mainSequenceLifetime, mergedKind, NEUTRON_MAX_MASS, type Body, type BodyKind } from './sim/body';
 import { isTidallyLocked, nearResonance, orbitalPeriod } from './sim/analysis';
@@ -31,7 +32,7 @@ import { SimHost } from './sim/host';
 import { circularOrbitVelocity } from './sim/orbits';
 import { predictPath } from './sim/predict';
 import { galacticCore, loadSolarSystemOnDate, loadStarSystem, PRESETS, type SceneSetup } from './sim/presets';
-import { type SimEvent } from './sim/simulation';
+import { PARTICLE_CULL_DISTANCE, type SimEvent } from './sim/simulation';
 import { captureState, restoreState } from './sim/state';
 import { EXOPLANET_ACKNOWLEDGEMENT, loadCatalog, loadExoSystem, type ExoCatalog, type ExoHost } from './sim/exoplanets';
 import { loadBrightStars, loadNearStars, loadStarNeighbourhood } from './sim/stars';
@@ -1007,6 +1008,8 @@ export class App {
       evolutionRate: 1,
       trueScale: false,
       units: 'au-yr',
+      particleCullDistance: PARTICLE_CULL_DISTANCE,
+      absorbParticles: true,
     });
   }
 
@@ -2477,6 +2480,17 @@ export class App {
     }
   }
 
+  private async loadGaia100Scene(): Promise<void> {
+    try {
+      toast('Loading 44,500 Gaia stars…');
+      const [data, near] = await Promise.all([loadStars100(), loadNearStars().catch(() => [])]);
+      this.loadScenario({ name: 'stars within 326 light-years (Gaia)', load: () => loadNeighbourhood100(this.sim, data, near), origin: { kind: 'neighbourhood' } });
+      this.setView('system');
+    } catch (err) {
+      toast((err as Error).message);
+    }
+  }
+
   private async visitSelected(): Promise<void> {
     const body = this.selectedBody();
     if (!body?.tag) return;
@@ -3087,6 +3101,7 @@ export class App {
     $('exo-list').addEventListener('click', pickHost);
     $('exo-list').addEventListener('keydown', (e) => (e as KeyboardEvent).key === 'Enter' && pickHost(e));
     $('btn-neighbourhood').addEventListener('click', () => void this.loadNeighbourhoodScene());
+    $('btn-gaia100').addEventListener('click', () => void this.loadGaia100Scene());
     $('btn-halley').addEventListener('click', async () => {
       try {
         const [h] = await Promise.all([loadHalleyReturn(), loadSolarData()]);

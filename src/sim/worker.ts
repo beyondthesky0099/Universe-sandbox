@@ -1,9 +1,9 @@
 /// <reference lib="webworker" />
 import { encodeFrame, frameTransferables, type ToWorker } from './protocol';
-import { Simulation } from './simulation';
+import { PARTICLE_CAPACITY, Simulation } from './simulation';
 import { restoreState } from './state';
 
-const sim = new Simulation(20000);
+const sim = new Simulation(PARTICLE_CAPACITY);
 let version = 0;
 let lastIds = '';
 

@@ -57,7 +57,8 @@ export interface AdvanceResult {
 
 export type GravityMode = 'auto' | 'direct' | 'tree';
 
-const PARTICLE_CULL_DISTANCE = 5000; // AU
+/** Default distance (AU) beyond which test particles are discarded as lost. */
+export const PARTICLE_CULL_DISTANCE = 5000;
 /** Minimum fragment mass for shattering collisions. */
 const MIN_FRAGMENT_MASS = 0.002 * EARTH_MASS;
 /** Stars at or above this mass can go supernova. */
@@ -76,6 +77,9 @@ type Rgb = [number, number, number];
  * fragments. Bodies that stray inside another's Roche limit are torn into debris, and massive
  * stars can go supernova, launching a shockwave.
  */
+/** Test particles the app's simulation can hold (the 100-parsec Gaia scene needs about 45,000). */
+export const PARTICLE_CAPACITY = 50000;
+
 export class Simulation {
   bodies: Body[] = [];
   readonly particles: ParticleSet;
@@ -137,7 +141,12 @@ export class Simulation {
   /** Pending supernovae: body id → simulation time of detonation. */
   readonly fuses = new Map<number, number>();
 
-  constructor(particleCapacity = 20000) {
+  /** Test particles beyond this distance from the origin are discarded (scene units). */
+  particleCullDistance = PARTICLE_CULL_DISTANCE;
+  /** Whether bodies swallow test particles that enter them (off for star fields, where both are stars). */
+  absorbParticles = true;
+
+  constructor(particleCapacity = PARTICLE_CAPACITY) {
     this.particles = new ParticleSet(particleCapacity);
   }
 
@@ -385,7 +394,7 @@ export class Simulation {
     const acc = p.acc;
     const absorbed = this.absorbed;
     absorbed.length = 0;
-    const cull2 = PARTICLE_CULL_DISTANCE * PARTICLE_CULL_DISTANCE;
+    const cull2 = this.particleCullDistance * this.particleCullDistance;
     for (let i = 0; i < p.count; i++) {
       const k = i * 3;
       const px = pos[k];
@@ -402,7 +411,7 @@ export class Simulation {
         const dz = b.z - pz;
         const d2 = dx * dx + dy * dy + dz * dz;
         // Bodies swallow test particles that hit them, except whole galaxies (stars pass through a galaxy's core).
-        if (d2 < b.radius * b.radius && b.tag !== 'galaxy') {
+        if (this.absorbParticles && d2 < b.radius * b.radius && b.tag !== 'galaxy') {
           dead = true;
           break;
         }
@@ -501,7 +510,7 @@ export class Simulation {
     const acc = p.acc;
     const absorbed = this.absorbed;
     absorbed.length = 0;
-    const cull2 = PARTICLE_CULL_DISTANCE * PARTICLE_CULL_DISTANCE;
+    const cull2 = this.particleCullDistance * this.particleCullDistance;
     for (let i = 0; i < p.count; i++) {
       const k = i * 3;
       const px = pos[k], py = pos[k + 1], pz = pos[k + 2];
@@ -509,7 +518,7 @@ export class Simulation {
         absorbed.push(i);
         continue;
       }
-      tree.accel(px, py, pz, -1, g, eps2, out, true);
+      tree.accel(px, py, pz, -1, g, eps2, out, this.absorbParticles);
       if (Number.isNaN(out[0])) {
         absorbed.push(i);
         acc[k] = acc[k + 1] = acc[k + 2] = 0;

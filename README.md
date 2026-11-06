@@ -264,6 +264,14 @@ The map shows **5,676 real nebulae** from professional catalogues:
 
 Famous nebulae are labelled: Orion, Lagoon, Eagle, Helix, Ring, Cat's Eye, the Crab, Cassiopeia A, the Veil, the Horsehead, the Pipe, the Iris and others. The names are matched to the catalogues through the SIMBAD astronomy database, not typed in by hand. The California, Crescent and Witch Head nebulae aren't in these catalogues, so they're left unlabelled. Toggle the layer with **Real nebulae** in the Galaxy Map panel, or **Nebulae** in the Sky tab.
 
+### 326 light-years of real stars (Gaia)
+Press **✨ 326 ly (Gaia)** for every star within 100 parsecs (326 light-years) brighter than Gaia magnitude 11: about 44,500 stars from ESA Gaia DR3.
+- **Real positions and motions:** each star sits at its measured position and moves with its real velocity, from Gaia's proper motion plus its radial velocity. About 10% have no radial velocity, so they move only across the sky.
+- **Real structure:** the Hyades show up as a clump 47 parsecs away.
+- **Colours** come from Gaia's temperatures.
+- **Names:** bright stars are named from HYG. The very brightest, like Sirius, Vega and Arcturus, are too bright for Gaia to measure, so they come from HYG too.
+- **Speeding up time** shows the neighbourhood drifting apart over millions of years.
+
 ### Real star clusters
 **7,193 real star clusters** from two catalogues:
 - **Gaia census (Hunt & Reffert 2023):** 6,818 open clusters and 228 moving groups, each with its Gaia distance, size, number of member stars and age.
@@ -521,6 +529,8 @@ push and pull request.
   reflection nebulae (1966), via VizieR (CDS), placed at the distances of their illuminating stars
   (parallaxes from SIMBAD's TAP service, mostly Gaia EDR3). Familiar names resolved with SIMBAD (rebuild
   with `node scripts/build-nebulae.mjs`).
+- Stars within 100 pc: ESA Gaia DR3 via the Gaia archive (rebuild with `node scripts/build-stars-100pc.mjs`),
+  with names and the brightest stars from HYG v4.1.
 - Star clusters: Hunt & Reffert 2023 ("Improving the open cluster census. II.", A&A 673, A114),
   based on ESA Gaia DR3, and the Harris catalogue of Milky Way globular clusters (VII/202), via
   VizieR (CDS); familiar names resolved with SIMBAD (rebuild with `node scripts/build-clusters.mjs`).

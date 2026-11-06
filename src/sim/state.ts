@@ -1,6 +1,6 @@
 import type { UnitSystem } from './units';
 import type { BodyKind } from './body';
-import type { GravityMode, Simulation } from './simulation';
+import { PARTICLE_CULL_DISTANCE, type GravityMode, type Simulation } from './simulation';
 
 export interface BodyState {
   id: number;
@@ -44,6 +44,9 @@ export interface SimSettings {
   trueScale?: boolean;
   /** Unit system (galaxy-scale scenes use kpc and Myr). */
   units?: UnitSystem;
+  /** Distance beyond which test particles are discarded, and whether bodies absorb them. */
+  particleCullDistance?: number;
+  absorbParticles?: boolean;
   /** Only sent to the physics worker; never saved into files or links. */
   customForces?: { name: string; code: string }[];
 }
@@ -102,6 +105,8 @@ export function captureState(sim: Simulation, opts: CaptureOptions = {}): SimSta
       evolutionRate: sim.evolutionRate,
       trueScale: sim.trueScale,
       units: sim.units,
+      particleCullDistance: sim.particleCullDistance,
+      absorbParticles: sim.absorbParticles,
     },
     bodies: sim.bodies.map((b) => ({
       id: b.id,
@@ -152,7 +157,7 @@ export function restoreState(sim: Simulation, state: SimState): void {
   sim.clear();
   sim.time = state.time;
   // Older files have no trueScale: they were saved with game sizes.
-  Object.assign(sim, { trueScale: false, units: 'au-yr' }, state.settings);
+  Object.assign(sim, { trueScale: false, units: 'au-yr', particleCullDistance: PARTICLE_CULL_DISTANCE, absorbParticles: true }, state.settings);
   for (const b of state.bodies) sim.addBody({ ...b });
   if (state.particles) {
     const p = state.particles;

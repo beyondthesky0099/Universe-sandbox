@@ -158,7 +158,9 @@ Plan, in priority order:
   `src/sim/clusters.ts`), on the galaxy map and the Sky tab. Westerlund 1 isn't labelled: the Gaia
   census doesn't seem to contain it, and the only shared alias was on an unrelated cluster.
 - [x] J4. Reflection-nebula distances from their illuminating stars (SIMBAD TAP parallaxes, 140 of 158)
-- [ ] J5. Stars within 100 pc from Gaia
+- [x] J5. Stars within 100 pc from Gaia (`scripts/build-stars-100pc.mjs`, `src/sim/gaia100.ts`): 44,529
+  stars as particles. Particles now have per-scene `particleCullDistance` and `absorbParticles`
+  settings (saved with the scene), since the old fixed 5,000 AU cull deleted distant stars.
 - [ ] J6. Multi-core physics in the desktop app
 
 ### I. Real nebulae

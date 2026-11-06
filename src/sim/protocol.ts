@@ -6,7 +6,9 @@ import type { SimSettings, SimState } from './state';
 export type ToWorker =
   | { type: 'state'; version: number; state: SimState }
   | { type: 'settings'; patch: Partial<SimSettings> }
-  | { type: 'advance'; version: number; simTime: number; budgetMs: number };
+  | { type: 'advance'; version: number; simTime: number; budgetMs: number }
+  /** Sent once at start: how many helper threads the worker may use for particle forces (-1: automatic). */
+  | { type: 'config'; threads: number };
 
 /** Per-frame update from the physics worker. */
 export interface Frame {
@@ -16,6 +18,8 @@ export interface Frame {
   steps: number;
   lagging: boolean;
   usingTree: boolean;
+  /** CPU threads computing particle forces (1 unless the page is cross-origin isolated). */
+  cores: number;
   /** BODY_STRIDE numbers per body (see encodeFrame). */
   bodies: Float64Array;
   /** Names (and tags) for every body, sent only when the set of bodies changed. */
@@ -66,6 +70,7 @@ export function encodeFrame(sim: Simulation, version: number, result: AdvanceRes
     steps: result.steps,
     lagging: result.lagging,
     usingTree: sim.isUsingTree,
+    cores: sim.parallel?.ready ? sim.parallel.threads + 1 : 1,
     bodies,
     names: includeNames ? sim.bodies.map((b) => [b.id, b.name, b.tag]) : undefined,
     particleCount: p.count,

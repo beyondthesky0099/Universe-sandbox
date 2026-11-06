@@ -215,7 +215,8 @@ export class App {
     this.renderer.xr.enabled = true;
     this.postfx = new PostFX(this.renderer);
     const params = new URLSearchParams(location.hash.slice(1));
-    this.host = new SimHost(params.get('worker') !== '0');
+    // #threads=0 turns multi-core particle forces off (they only run in the desktop app).
+    this.host = new SimHost(params.get('worker') !== '0', params.has('threads') ? Number(params.get('threads')) : -1);
     this.system = new SystemView(this.sim, this.canvas, QUALITY_PRESETS[this.quality]);
     this.galaxy = new GalaxyView(this.canvas);
     this.cosmos = new CosmosView(this.canvas);
@@ -1958,7 +1959,7 @@ export class App {
     $('lag').classList.toggle('hidden', !status.lagging);
     const n = this.sim.bodies.length;
     $('stats').textContent = `${Math.round(this.fps)} fps · ${n.toLocaleString()} bodies · ${this.sim.particles.count.toLocaleString()} particles`;
-    $('engine-info').textContent = `Physics: ${status.threaded ? 'Web Worker' : 'main thread'} · Gravity: ${status.usingTree ? 'Barnes–Hut tree' : 'direct N²'}`;
+    $('engine-info').textContent = `Physics: ${status.threaded ? 'Web Worker' : 'main thread'}${status.cores > 1 ? ` · ${status.cores} CPU cores for particles` : ''} · Gravity: ${status.usingTree ? 'Barnes–Hut tree' : 'direct N²'}`;
     // The selected body may have merged, shattered or been torn apart since last frame.
     if (this.selectedBody()) this.updateBodyPanel();
     else if (!$('body-panel').classList.contains('hidden')) this.hideBodyPanel();

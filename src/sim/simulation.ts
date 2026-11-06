@@ -16,6 +16,8 @@ import {
 import { kelvinToRgb } from './color';
 import { Octree } from './octree';
 import { ParticleSet } from './particles';
+import { BODY_FIELDS, particleAccelSlice } from './particleKernel';
+import type { ParallelForces } from './parallel';
 import { C_AU_PER_YEAR, EARTH_MASS, G, type UnitSystem } from './units';
 
 export type SimEventType = 'merge' | 'ignite' | 'collapse' | 'shatter' | 'disrupt' | 'supernova' | 'gwmerger' | 'redgiant' | 'nebula' | 'script';
@@ -146,8 +148,13 @@ export class Simulation {
   /** Whether bodies swallow test particles that enter them (off for star fields, where both are stars). */
   absorbParticles = true;
 
-  constructor(particleCapacity = PARTICLE_CAPACITY) {
-    this.particles = new ParticleSet(particleCapacity);
+  /** Optional helper threads for the particle forces (set by the physics worker when it can). */
+  parallel?: ParallelForces;
+  /** Bodies packed for the particle kernel: x, y, z, mass, swallow radius. */
+  private bodyPack = new Float64Array(64 * BODY_FIELDS);
+
+  constructor(particleCapacity = PARTICLE_CAPACITY, opts: { sharedParticles?: boolean } = {}) {
+    this.particles = new ParticleSet(particleCapacity, opts.sharedParticles);
   }
 
   get isUsingTree(): boolean {
@@ -389,47 +396,41 @@ export class Simulation {
     }
 
     // Particles: attracted by bodies, absorbed when they enter one.
-    const p = this.particles;
-    const pos = p.pos;
-    const acc = p.acc;
-    const absorbed = this.absorbed;
-    absorbed.length = 0;
-    const cull2 = this.particleCullDistance * this.particleCullDistance;
-    for (let i = 0; i < p.count; i++) {
-      const k = i * 3;
-      const px = pos[k];
-      const py = pos[k + 1];
-      const pz = pos[k + 2];
-      let ax = 0;
-      let ay = 0;
-      let az = 0;
-      let dead = px * px + py * py + pz * pz > cull2;
-      for (let j = 0; j < n && !dead; j++) {
-        const b = bodies[j];
-        const dx = b.x - px;
-        const dy = b.y - py;
-        const dz = b.z - pz;
-        const d2 = dx * dx + dy * dy + dz * dz;
-        // Bodies swallow test particles that hit them, except whole galaxies (stars pass through a galaxy's core).
-        if (this.absorbParticles && d2 < b.radius * b.radius && b.tag !== 'galaxy') {
-          dead = true;
-          break;
-        }
-        const r2 = d2 + eps2;
-        const f = (g * b.mass) / (r2 * Math.sqrt(r2));
-        ax += dx * f;
-        ay += dy * f;
-        az += dz * f;
-      }
-      if (dead) absorbed.push(i);
-      acc[k] = ax;
-      acc[k + 1] = ay;
-      acc[k + 2] = az;
-    }
+    this.particleForces(g, eps2);
 
     // Velocity-dependent relativistic forces need finer steps to stay energy-stable in leapfrog.
     const eta = rel ? this.eta * 0.2 : this.eta;
     this.nextDt = Number.isFinite(minTau2) ? Math.min(this.dtMax, Math.max(this.dtMin, eta * Math.sqrt(minTau2))) : this.dtMax;
+  }
+
+  /**
+   * Accelerations on all test particles from the bodies (direct sum), on helper threads when the
+   * physics worker has them and the work is big enough to be worth splitting.
+   */
+  private particleForces(g: number, eps2: number): void {
+    const p = this.particles;
+    const absorbed = this.absorbed;
+    absorbed.length = 0;
+    if (p.count === 0) return;
+    const bodies = this.bodies;
+    const n = bodies.length;
+    if (this.bodyPack.length < n * BODY_FIELDS) this.bodyPack = new Float64Array(Math.max(n, 64) * 2 * BODY_FIELDS);
+    const pack = this.bodyPack;
+    for (let j = 0; j < n; j++) {
+      const b = bodies[j];
+      const o = j * BODY_FIELDS;
+      pack[o] = b.x;
+      pack[o + 1] = b.y;
+      pack[o + 2] = b.z;
+      pack[o + 3] = b.mass;
+      // Bodies swallow test particles that hit them, except whole galaxies (stars pass through a galaxy's core).
+      pack[o + 4] = this.absorbParticles && b.tag !== 'galaxy' ? b.radius : -1;
+    }
+    const params = { g, eps2, cull2: this.particleCullDistance * this.particleCullDistance };
+    if (!this.parallel?.run(pack, n, params, p.count)) {
+      particleAccelSlice(p.pos, p.acc, p.dead, pack, n, params, 0, p.count);
+    }
+    for (let i = 0; i < p.count; i++) if (p.dead[i]) absorbed.push(i);
   }
 
   /**

@@ -1,9 +1,13 @@
 /// <reference lib="webworker" />
 import { encodeFrame, frameTransferables, type ToWorker } from './protocol';
+import { ParallelForces } from './parallel';
 import { PARTICLE_CAPACITY, Simulation } from './simulation';
 import { restoreState } from './state';
 
-const sim = new Simulation(PARTICLE_CAPACITY);
+// With cross-origin isolation (the desktop app), particles live in shared memory so helper
+// threads can compute their forces.
+const isolated = (self as unknown as { crossOriginIsolated?: boolean }).crossOriginIsolated === true;
+const sim = new Simulation(PARTICLE_CAPACITY, { sharedParticles: isolated });
 let version = 0;
 let lastIds = '';
 
@@ -25,6 +29,10 @@ self.onmessage = (e: MessageEvent<ToWorker>) => {
     case 'settings':
       Object.assign(sim, msg.patch);
       sim.invalidate();
+      break;
+    case 'config':
+      sim.parallel?.dispose();
+      sim.parallel = msg.threads === 0 ? undefined : ParallelForces.create(sim.particles, msg.threads > 0 ? msg.threads + 2 : undefined);
       break;
     case 'advance': {
       const result = msg.version === version ? sim.advance(msg.simTime, 20000, msg.budgetMs) : { steps: 0, lagging: false };

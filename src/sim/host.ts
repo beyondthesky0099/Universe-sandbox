@@ -7,6 +7,8 @@ export interface HostStatus {
   usingTree: boolean;
   /** True when physics runs in a Web Worker. */
   threaded: boolean;
+  /** CPU threads sharing the particle forces (more than 1 only in the desktop app). */
+  cores: number;
 }
 
 /**
@@ -22,9 +24,10 @@ export class SimHost {
   private busy = false;
   private pending = 0;
   private readonly events: SimEvent[] = [];
-  private status: HostStatus = { lagging: false, usingTree: false, threaded: false };
+  private status: HostStatus = { lagging: false, usingTree: false, threaded: false, cores: 1 };
 
-  constructor(useWorker = true) {
+  /** `threads`: helper threads for particle forces (-1 automatic, 0 none). */
+  constructor(useWorker = true, threads = -1) {
     if (!useWorker || typeof Worker === 'undefined') return;
     try {
       this.worker = new Worker(new URL('./worker.ts', import.meta.url), { type: 'module' });
@@ -37,6 +40,7 @@ export class SimHost {
         this.status.threaded = false;
       };
       this.status.threaded = true;
+      this.post({ type: 'config', threads });
     } catch (err) {
       console.warn('Web Workers unavailable; running physics on the main thread.', err);
       this.worker = undefined;
@@ -95,6 +99,7 @@ export class SimHost {
     this.events.push(...this.sim.events.splice(0));
     this.status.lagging = frame.lagging;
     this.status.usingTree = frame.usingTree;
+    this.status.cores = frame.cores;
   }
 
   private post(msg: ToWorker): void {

@@ -161,7 +161,13 @@ Plan, in priority order:
 - [x] J5. Stars within 100 pc from Gaia (`scripts/build-stars-100pc.mjs`, `src/sim/gaia100.ts`): 44,529
   stars as particles. Particles now have per-scene `particleCullDistance` and `absorbParticles`
   settings (saved with the scene), since the old fixed 5,000 AU cull deleted distant stars.
-- [ ] J6. Multi-core physics in the desktop app
+- [x] J6. Multi-core particle forces (`src/sim/particleKernel.ts`, `parallel.ts`, `forceWorker.ts`): the
+  physics worker splits the particle–body loop with helper workers over SharedArrayBuffer +
+  Atomics when the page is cross-origin isolated (desktop app; dev/preview servers; not GitHub
+  Pages). Identical results (tests). Node benchmark of the same kernel: 2.4× on 3 threads of a
+  4-core VM; the in-browser benchmark in this container showed no gain because SwiftShader
+  software rendering saturates its 4 cores, so measure on a real machine. Next: the Barnes–Hut
+  tree path (cluster/spiral presets) is still single-threaded.
 
 ### I. Real nebulae
 - [x] 5,676 nebulae from VizieR catalogues (`scripts/build-nebulae.mjs`, `src/sim/nebulae.ts`):
@@ -174,8 +180,6 @@ Plan, in priority order:
 - [x] Electron shell in `desktop/`, Windows installer and portable .exe built by
   `.github/workflows/desktop.yml` on windows-latest (unsigned). Tags `v*` attach them to a
   release.
-- [ ] Multi-core physics: the desktop shell could send cross-origin isolation headers (COOP/COEP)
-  so the simulation can use SharedArrayBuffer and split forces across several workers.
 - [ ] Run the companion server inside the desktop app (Electron's Node can run `server/`).
 - [ ] Code signing (needs a certificate) to remove the SmartScreen warning.
 

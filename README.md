@@ -59,12 +59,19 @@ with a browser tab, it:
 - is never slowed down in the background
 - starts at high graphics quality
 - works offline, with all the real data bundled
+- spreads the particle physics (asteroids, debris, galaxy stars) over all your CPU cores
 
 Download `Astrarium-Setup-<version>.exe` (installer) or `Astrarium-Portable-<version>.exe` (runs
 without installing) from the [Releases](https://github.com/beyondthesky0099/Universe-sandbox/releases)
 page, or from the latest **Desktop app** run on the Actions tab. The files aren't code-signed,
 so the first time you run one, Windows SmartScreen may say it's from an unknown publisher:
 choose *More info → Run anyway*. Press F11 for full screen.
+
+**How the multi-core physics works:** the pull of the bodies on each test particle is computed in slices, one per CPU core. The cores share memory through SharedArrayBuffer and coordinate with Atomics. This needs cross-origin isolation (the COOP and COEP headers), which the desktop app and the dev and preview servers send. GitHub Pages can't send those headers, so the website keeps the single-threaded path.
+- **Exact results:** the threaded result is identical to the single-threaded one (tested).
+- **Measured speed-up:** in a 4-core test machine, without a renderer competing for cores, the force calculation ran 1.8× faster on 2 threads and 2.4× faster on 3.
+- **Where it matters:** that calculation is about 87% of each step in the asteroid-heavy scenarios (Solar System, Rogue star, the Sun's future).
+- The physics panel shows how many cores are in use. Add `#threads=0` to the address to turn this off.
 
 To build or run it yourself:
 

@@ -4,6 +4,7 @@
  * Why a desktop build runs faster than a browser tab:
  * - It asks for the high-performance GPU, so laptops with two GPUs use the discrete one.
  * - The window is never throttled in the background, and GPU rasterization is on.
+ * - Pages are cross-origin isolated, so the physics spreads particle forces over all CPU cores.
  * - The app detects the desktop shell and starts at high quality.
  *
  * The built web app (../dist, copied into ./web) is served from a private app:// origin, so
@@ -62,13 +63,20 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
-  protocol.handle('app', (request) => {
+  protocol.handle('app', async (request) => {
     const { pathname } = new URL(request.url);
     const rel = decodeURIComponent(pathname === '/' ? '/index.html' : pathname);
     const file = path.normalize(path.join(WEB, rel));
     // Never serve anything outside the bundled web app.
     if (file !== WEB && !file.startsWith(WEB + path.sep)) return new Response('Not found', { status: 404 });
-    return net.fetch(pathToFileURL(file).toString());
+    // Cross-origin isolation (COOP + COEP) unlocks SharedArrayBuffer, so the physics can use
+    // several CPU cores (see src/sim/parallel.ts). "credentialless" still lets the page load
+    // images and data from other sites (without cookies), such as a companion server.
+    const res = await net.fetch(pathToFileURL(file).toString());
+    const headers = new Headers(res.headers);
+    headers.set('Cross-Origin-Opener-Policy', 'same-origin');
+    headers.set('Cross-Origin-Embedder-Policy', 'credentialless');
+    return new Response(res.body, { status: res.status, statusText: res.statusText, headers });
   });
   createWindow();
   app.on('activate', () => {

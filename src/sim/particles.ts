@@ -14,12 +14,21 @@ export class ParticleSet {
   /** RGB in [0, 1]. */
   readonly color: Float32Array;
 
-  constructor(capacity: number) {
+  /** 1 where the last force pass found the particle lost or swallowed. */
+  readonly dead: Uint8Array;
+
+  /**
+   * With `shared`, positions, accelerations and the dead flags live in SharedArrayBuffers so
+   * helper threads can compute forces on them (src/sim/parallel.ts).
+   */
+  constructor(capacity: number, shared = false) {
     this.capacity = capacity;
-    this.pos = new Float64Array(capacity * 3);
+    const mem = (bytes: number) => (shared ? new SharedArrayBuffer(bytes) : new ArrayBuffer(bytes));
+    this.pos = new Float64Array(mem(capacity * 3 * 8));
     this.vel = new Float64Array(capacity * 3);
-    this.acc = new Float64Array(capacity * 3);
+    this.acc = new Float64Array(mem(capacity * 3 * 8));
     this.color = new Float32Array(capacity * 3);
+    this.dead = new Uint8Array(mem(Math.max(1, capacity)));
   }
 
   /** Returns the new particle's index, or -1 if full. */

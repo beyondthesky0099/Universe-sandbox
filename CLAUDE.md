@@ -32,6 +32,10 @@ Before every commit, run the typecheck, the app tests, the build and the server 
 - `src/ui/`, `src/net/`: graphs, replays, the console, share links, and server/multiplayer clients.
 - `src/app.ts`: the big orchestrator (about 2,800 lines) that wires DOM, input, views and sim.
   UI markup is in `index.html` and styles in `src/style.css`.
+- Multi-core particle forces: `src/sim/particleKernel.ts` (the force loop), `parallel.ts` (splits it
+  over helper workers via SharedArrayBuffer + Atomics), `forceWorker.ts`. Only when the page is
+  cross-origin isolated (COOP + COEP `credentialless`, sent by the desktop app and the Vite
+  dev/preview servers); `#threads=0` turns it off.
 - `desktop/`: the Electron shell (`main.cjs`) that serves the built app (copied into
   `desktop/web/`) from an `app://` origin. It requests the high-performance GPU and turns off
   background throttling. The web app detects it (`DESKTOP` in `app.ts`) and starts at high

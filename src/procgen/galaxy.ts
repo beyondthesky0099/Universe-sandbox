@@ -193,7 +193,7 @@ function sampleMilkyWay(rng: Rng, s: ShapeParams, out: Float32Array, k: number):
 }
 
 /** Real clusters with approximate galactic coordinates (l, b in degrees) and distances (kpc). */
-const MW_CLUSTERS: { name: string; kind: 'open' | 'globular'; l: number; b: number; d: number; sigmaPc: number }[] = [
+export const MW_CLUSTERS: { name: string; kind: 'open' | 'globular'; l: number; b: number; d: number; sigmaPc: number }[] = [
   { name: 'Pleiades (M45)', kind: 'open', l: 166.6, b: -23.5, d: 0.136, sigmaPc: 4 },
   { name: 'Hyades', kind: 'open', l: 180.1, b: -22.3, d: 0.047, sigmaPc: 5 },
   { name: 'Beehive (M44)', kind: 'open', l: 205.9, b: 32.5, d: 0.187, sigmaPc: 4 },

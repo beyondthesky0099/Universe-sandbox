@@ -153,6 +153,14 @@ Plan, in priority order:
 - [x] G6. Halley's 2061 return (`scripts/build-halley.mjs`, `src/sim/halley.ts`) and comet tails (`bodyVisual.ts`)
 - [x] G7. Phone pass: lighter defaults on low-power devices (`LOW_POWER` in `app.ts`), pinch zoom in the Sky tab
 
+### J. Next round (clusters, reflection-nebula distances, 100 pc stars, multi-core physics)
+- [x] J1. Star clusters: Hunt & Reffert 2023 (Gaia DR3) and Harris globulars (`scripts/build-clusters.mjs`,
+  `src/sim/clusters.ts`), on the galaxy map and the Sky tab. Westerlund 1 isn't labelled: the Gaia
+  census doesn't seem to contain it, and the only shared alias was on an unrelated cluster.
+- [ ] J4. Reflection-nebula distances from their illuminating stars
+- [ ] J5. Stars within 100 pc from Gaia
+- [ ] J6. Multi-core physics in the desktop app
+
 ### I. Real nebulae
 - [x] 5,676 nebulae from VizieR catalogues (`scripts/build-nebulae.mjs`, `src/sim/nebulae.ts`):
   HII regions, planetary nebulae and supernova remnants (with Ranasinghe & Leahy 2023

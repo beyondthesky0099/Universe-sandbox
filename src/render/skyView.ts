@@ -33,8 +33,8 @@ export class SkyView {
   private readonly stars = new THREE.Group();
   private readonly starMaterials: THREE.PointsMaterial[] = [];
   private readonly starLabels: { sprite: THREE.Sprite; v: THREE.Vector3 }[] = [];
-  private nebulaPoints?: THREE.Points;
-  private readonly nebulaLabels: { sprite: THREE.Sprite; v: THREE.Vector3 }[] = [];
+  /** Outline layers of catalogued objects (nebulae, clusters), each with its labels. */
+  private readonly outlineLayers = new Map<string, { points: THREE.Points; labels: { sprite: THREE.Sprite; v: THREE.Vector3 }[] }>();
   private readonly bodies = new Map<string, { dot: THREE.Sprite; label: THREE.Sprite }>();
   private readonly moonCanvas = document.createElement('canvas');
   private readonly moonTexture: THREE.CanvasTexture;
@@ -147,7 +147,8 @@ export class SkyView {
    * Catalogued nebulae as outlines at their true angular size (never smaller than a few pixels),
    * rotating with the stars; the named ones get labels.
    */
-  setNebulae(items: { v: [number, number, number]; radiusDeg: number; color: [number, number, number]; label?: string }[]): void {
+  setOutlines(key: string, items: { v: [number, number, number]; radiusDeg: number; color: [number, number, number]; label?: string }[], labelColor = '#ffb3c8'): void {
+    const labels: { sprite: THREE.Sprite; v: THREE.Vector3 }[] = [];
     const pos = new Float32Array(items.length * 3);
     const col = new Float32Array(items.length * 3);
     const rad = new Float32Array(items.length);
@@ -156,9 +157,9 @@ export class SkyView {
       col.set(it.color, i * 3);
       rad[i] = it.radiusDeg * DEG;
       if (it.label) {
-        const sprite = this.label(it.label, '#ffb3c8', 0.7);
+        const sprite = this.label(it.label, labelColor, 0.7);
         sprite.center.set(0.5, 1.4);
-        this.nebulaLabels.push({ sprite, v: new THREE.Vector3(...it.v) });
+        labels.push({ sprite, v: new THREE.Vector3(...it.v) });
         this.scene.add(sprite);
       }
     });
@@ -166,7 +167,7 @@ export class SkyView {
     geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
     geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
     geo.setAttribute('aRadius', new THREE.BufferAttribute(rad, 1));
-    this.nebulaPoints = new THREE.Points(
+    const points = new THREE.Points(
       geo,
       new THREE.ShaderMaterial({
         uniforms: { uPxPerRad: { value: 600 }, uOpacity: { value: 1 } },
@@ -195,14 +196,17 @@ export class SkyView {
         blending: THREE.AdditiveBlending,
       }),
     );
-    this.nebulaPoints.frustumCulled = false;
-    this.stars.add(this.nebulaPoints);
+    points.frustumCulled = false;
+    this.stars.add(points);
+    this.outlineLayers.set(key, { points, labels });
     if (this.snapshot) this.place();
   }
 
-  setNebulaeVisible(on: boolean): void {
-    if (this.nebulaPoints) this.nebulaPoints.visible = on;
-    for (const l of this.nebulaLabels) l.sprite.visible = on;
+  setOutlinesVisible(key: string, on: boolean): void {
+    const layer = this.outlineLayers.get(key);
+    if (!layer) return;
+    layer.points.visible = on;
+    for (const l of layer.labels) l.sprite.visible = on;
   }
 
   private addBodies(): void {
@@ -254,7 +258,7 @@ export class SkyView {
     this.stars.matrix.copy(m4);
     this.stars.matrixWorldNeedsUpdate = true;
     for (const l of this.starLabels) l.sprite.position.copy(l.v).applyMatrix4(m4).multiplyScalar(R_STARS * 0.99);
-    for (const l of this.nebulaLabels) l.sprite.position.copy(l.v).applyMatrix4(m4).multiplyScalar(R_STARS * 0.99);
+    for (const layer of this.outlineLayers.values()) for (const l of layer.labels) l.sprite.position.copy(l.v).applyMatrix4(m4).multiplyScalar(R_STARS * 0.99);
     const sun = snap.objects.find((o) => o.name === 'Sun')!;
     const sunDir = new THREE.Vector3(...altAzToScene(sun.alt, sun.az));
     // An eclipse dims the daylight (it stays bright until the Sun is nearly covered).
@@ -267,8 +271,10 @@ export class SkyView {
     this.starMaterials.forEach((mat, i) => (mat.opacity = i === 0 ? Math.max(dark, 0.05) : dark));
     for (const l of this.starLabels) (l.sprite.material as THREE.SpriteMaterial).opacity = dark * 0.85;
     // Nebulae are faint: they show only in a dark sky.
-    for (const l of this.nebulaLabels) (l.sprite.material as THREE.SpriteMaterial).opacity = dark * 0.8;
-    if (this.nebulaPoints) (this.nebulaPoints.material as THREE.ShaderMaterial).uniforms.uOpacity.value = dark;
+    for (const layer of this.outlineLayers.values()) {
+      for (const l of layer.labels) (l.sprite.material as THREE.SpriteMaterial).opacity = dark * 0.8;
+      (layer.points.material as THREE.ShaderMaterial).uniforms.uOpacity.value = dark;
+    }
     for (const o of snap.objects) {
       const b = this.bodies.get(o.name);
       if (!b) continue;
@@ -328,7 +334,7 @@ export class SkyView {
     for (const l of this.labels) l.sprite.scale.copy(l.base).multiplyScalar(k);
     if (!this.snapshot) return;
     const pxPerRad = this.height / (2 * Math.tan((this.camera.fov * DEG) / 2));
-    if (this.nebulaPoints) (this.nebulaPoints.material as THREE.ShaderMaterial).uniforms.uPxPerRad.value = pxPerRad * this.pixelRatio;
+    for (const layer of this.outlineLayers.values()) (layer.points.material as THREE.ShaderMaterial).uniforms.uPxPerRad.value = pxPerRad * this.pixelRatio;
     for (const o of this.snapshot.objects) {
       const b = this.bodies.get(o.name);
       if (!b) continue;

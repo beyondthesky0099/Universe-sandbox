@@ -143,9 +143,8 @@ export class GalaxyView {
   /** Real exoplanet hosts (Milky Way only). */
   exoHosts: ExoMarker[] = [];
   private exoPoints?: THREE.Points;
-  /** Real catalogued nebulae (Milky Way only), and their labels. */
-  private realNebulae?: THREE.Points;
-  private readonly realNebulaLabels = new THREE.Group();
+  /** Layers of real catalogued objects (Milky Way only: nebulae, star clusters), with labels. */
+  private readonly realLayers = new Map<string, { points: THREE.Points; labels: THREE.Group }>();
   /** Names of real objects (Milky Way clusters and nebulae). */
   private readonly labelGroup = new THREE.Group();
   private readonly nebulaTextures: THREE.Texture[] = [];
@@ -232,7 +231,7 @@ export class GalaxyView {
     }
     for (const t of this.nebulaTextures) t.dispose();
     this.nebulaTextures.length = 0;
-    this.setRealNebulae([]);
+    for (const key of [...this.realLayers.keys()]) this.setRealLayer(key, []);
 
     this.data = generateGalaxy(seed, 30000, 60000, 9000, opts);
     // "You are here" only belongs in our own galaxy, not in stand-ins for other real galaxies.
@@ -307,7 +306,7 @@ export class GalaxyView {
   }
 
   private applyPointScale(): void {
-    for (const pts of [this.stars, this.glow, this.dust, this.realNebulae]) {
+    for (const pts of [this.stars, this.glow, this.dust, ...[...this.realLayers.values()].map((l) => l.points)]) {
       if (pts) (pts.material as THREE.ShaderMaterial).uniforms.uScale.value = this.pointScale;
     }
   }
@@ -400,46 +399,48 @@ export class GalaxyView {
   }
 
   /**
-   * Real nebulae with measured distances, as glowing points sized by their physical size (but
-   * never smaller than a few pixels), plus labels for the named ones. Cleared on rebuild.
+   * A layer of real objects with measured distances (nebulae, star clusters), as glowing points
+   * sized by their physical size but never smaller than a few pixels, with labels for the named
+   * ones. An empty list removes the layer. Cleared on rebuild.
    */
-  setRealNebulae(items: { pos: [number, number, number]; color: [number, number, number]; size: number; label?: string }[]): void {
-    if (this.realNebulae) {
-      this.scene.remove(this.realNebulae);
-      this.realNebulae.geometry.dispose();
-      (this.realNebulae.material as THREE.Material).dispose();
-      this.realNebulae = undefined;
-    }
-    for (const child of [...this.realNebulaLabels.children]) {
-      this.realNebulaLabels.remove(child);
-      const sprite = child as THREE.Sprite;
-      sprite.material.map?.dispose();
-      sprite.material.dispose();
+  setRealLayer(key: string, items: { pos: [number, number, number]; color: [number, number, number]; size: number; label?: string; labelColor?: string }[]): void {
+    const old = this.realLayers.get(key);
+    if (old) {
+      this.scene.remove(old.points, old.labels);
+      old.points.geometry.dispose();
+      (old.points.material as THREE.Material).dispose();
+      for (const child of old.labels.children) {
+        const sprite = child as THREE.Sprite;
+        sprite.material.map?.dispose();
+        sprite.material.dispose();
+      }
+      this.realLayers.delete(key);
     }
     if (!items.length) return;
     const pos = new Float32Array(items.length * 3);
     const col = new Float32Array(items.length * 3);
     const size = new Float32Array(items.length);
+    const labels = new THREE.Group();
     items.forEach((it, i) => {
       pos.set(it.pos, i * 3);
       col.set(it.color, i * 3);
       size[i] = it.size;
       if (it.label) {
-        const text = textSprite(it.label, '#ffb3c8', 0.55);
+        const text = textSprite(it.label, it.labelColor ?? '#ffb3c8', 0.55);
         text.position.set(...it.pos);
-        this.realNebulaLabels.add(text);
+        labels.add(text);
       }
     });
-    this.realNebulae = pointCloud(pos, col, size, pointsMaterial(0.95, 26));
-    (this.realNebulae.material as THREE.ShaderMaterial).uniforms.uScale.value = this.pointScale;
-    this.realNebulae.renderOrder = 5;
-    this.scene.add(this.realNebulae);
-    if (!this.realNebulaLabels.parent) this.scene.add(this.realNebulaLabels);
+    const points = pointCloud(pos, col, size, pointsMaterial(0.95, 26));
+    (points.material as THREE.ShaderMaterial).uniforms.uScale.value = this.pointScale;
+    points.renderOrder = 5;
+    this.scene.add(points, labels);
+    this.realLayers.set(key, { points, labels });
   }
 
-  setRealNebulaeVisible(on: boolean): void {
-    if (this.realNebulae) this.realNebulae.visible = on;
-    this.realNebulaLabels.visible = on;
+  setRealLayerVisible(key: string, on: boolean): void {
+    const layer = this.realLayers.get(key);
+    if (layer) layer.points.visible = layer.labels.visible = on;
   }
 
   /** Labelled markers for real black holes and pulsars (Milky Way only). Cleared on rebuild. */

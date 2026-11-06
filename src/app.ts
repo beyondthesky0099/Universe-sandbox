@@ -10,7 +10,8 @@ import { SkyView } from './render/skyView';
 import { moonPhaseName, skyAt } from './sim/sky';
 import { dateToJdTT, eclipsePath, greatestEclipse, jdTTToDate, loadEclipses, localCircumstances, shadowAt, topocentric, type Eclipse } from './sim/eclipse';
 import { displayName, GALAXY_CREDIT, galaxyForm, loadLocalGalaxies, loadNamedGalaxies, loadWebGalaxies, LY_PER_MPC, type LocalGalaxy } from './sim/galaxies';
-import { equatorialToGalactic, galacticToMap, MILKY_WAY_SEED, MW_NEBULAE, UNITS_PER_KPC, type GalaxyOptions } from './procgen/galaxy';
+import { equatorialToGalactic, galacticToMap, MILKY_WAY_SEED, MW_CLUSTERS, MW_NEBULAE, UNITS_PER_KPC, type GalaxyOptions } from './procgen/galaxy';
+import { CLUSTER_COLORS, loadClusters } from './sim/clusters';
 import { diameterPc, galacticToEcliptic, loadNebulae, NEBULA_COLORS } from './sim/nebulae';
 import { QUALITY_PRESETS, SystemView } from './render/systemView';
 import { createRealSky } from './render/starfield';
@@ -281,8 +282,18 @@ export class App {
     void loadBrightStars()
       .then((stars) => {
         this.sky.setStars(stars);
+        void loadClusters().then((list) => {
+          this.sky.setOutlines(
+            'clusters',
+            list.map((c) => ({ v: galacticToEcliptic(c.l, c.b), radiusDeg: c.radiusDeg, color: CLUSTER_COLORS[c.kind], label: c.name })),
+            '#ffe3a3',
+          );
+          this.sky.setOutlinesVisible('clusters', $<HTMLInputElement>('opt-sky-clusters').checked);
+          $('sky-cluster-count').textContent = `${list.length.toLocaleString('en-US')} star clusters (Gaia, Harris)`;
+        });
         void loadNebulae().then((list) => {
-          this.sky.setNebulae(
+          this.sky.setOutlines(
+            'nebulae',
             list.map((n) => ({
               v: galacticToEcliptic(n.l, n.b),
               radiusDeg: n.radiusDeg,
@@ -290,7 +301,7 @@ export class App {
               label: n.name,
             })),
           );
-          this.sky.setNebulaeVisible($<HTMLInputElement>('opt-sky-nebulae').checked);
+          this.sky.setOutlinesVisible('nebulae', $<HTMLInputElement>('opt-sky-nebulae').checked);
           $('sky-nebula-count').textContent = `${list.length.toLocaleString('en-US')} nebulae from real catalogues`;
         });
         return this.system.setSky(createRealSky(stars));
@@ -924,7 +935,8 @@ export class App {
         if (t.sun.alt > -1) this.sky.lookAt(t.sun.alt, t.sun.az);
       }
     });
-    $<HTMLInputElement>('opt-sky-nebulae').addEventListener('change', (e) => this.sky.setNebulaeVisible((e.target as HTMLInputElement).checked));
+    $<HTMLInputElement>('opt-sky-nebulae').addEventListener('change', (e) => this.sky.setOutlinesVisible('nebulae', (e.target as HTMLInputElement).checked));
+    $<HTMLInputElement>('opt-sky-clusters').addEventListener('change', (e) => this.sky.setOutlinesVisible('clusters', (e.target as HTMLInputElement).checked));
     $('sky-speed').addEventListener('change', () => (this.skySpeed = Number($<HTMLSelectElement>('sky-speed').value)));
     $('sky-list').addEventListener('click', (e) => {
       const li = (e.target as HTMLElement).closest<HTMLElement>('li[data-sky]');
@@ -1427,6 +1439,33 @@ export class App {
     );
   }
 
+  /** Real open and globular star clusters at their measured distances (Milky Way only). */
+  private async showClustersOnMap(seed: number): Promise<void> {
+    const all = await loadClusters().catch(() => undefined);
+    if (!all || this.galaxySeed !== seed) return;
+    // The hand-placed showpiece clusters already carry labels; don't name them twice.
+    const shown = MW_CLUSTERS.map((c) => c.name.split(' (')[0].toLowerCase());
+    this.galaxy.setRealLayer(
+      'clusters',
+      all.filter((c) => c.distancePc).map((c) => {
+        const pc = 2 * (c.radiusPc ?? 2);
+        const size = Math.max(c.kind === 'globular' ? 0.3 : 0.1, (pc / 1000) * UNITS_PER_KPC * 6);
+        const named = c.name && !shown.some((s) => c.name!.toLowerCase().startsWith(s));
+        const ly = Math.round((c.distancePc! * 3.2616) / 10) * 10;
+        return {
+          pos: galacticToMap(c.l, c.b, c.distancePc! / 1000),
+          color: CLUSTER_COLORS[c.kind],
+          size,
+          label: named ? `${c.name} · ${ly.toLocaleString('en-US')} ly` : undefined,
+          labelColor: '#ffe3a3',
+        };
+      }),
+    );
+    this.galaxy.setRealLayerVisible('clusters', $<HTMLInputElement>('opt-real-clusters').checked);
+    const count = (k: string) => all.filter((c) => c.kind === k).length.toLocaleString('en-US');
+    $('galaxy-info').textContent += ` ${count('open')} open clusters and ${count('group')} moving groups from Gaia (gold), and ${count('globular')} globular clusters (orange), at their measured distances.`;
+  }
+
   /** Real HII regions and planetary nebulae with measured distances (Milky Way only). */
   private async showNebulaeOnMap(seed: number): Promise<void> {
     const all = await loadNebulae().catch(() => undefined);
@@ -1434,7 +1473,8 @@ export class App {
     // The ten hand-placed showpieces already carry labels; don't name them twice.
     const shown = MW_NEBULAE.map((n) => n.name.split(' (')[0].toLowerCase());
     const placed = all.filter((n) => n.distanceKpc);
-    this.galaxy.setRealNebulae(
+    this.galaxy.setRealLayer(
+      'nebulae',
       placed.map((n) => {
         const pc = diameterPc(n) ?? (n.kind === 'pn' ? 0.5 : n.kind === 'snr' ? 20 : 5);
         // Exaggerated so they read on a 100,000-light-year map, but never below a visible dot.
@@ -1444,7 +1484,7 @@ export class App {
         return { pos: galacticToMap(n.l, n.b, n.distanceKpc!), color: NEBULA_COLORS[n.kind], size, label: named ? `${n.name} · ${ly.toLocaleString('en-US')} ly` : undefined };
       }),
     );
-    this.galaxy.setRealNebulaeVisible($<HTMLInputElement>('opt-real-nebulae').checked);
+    this.galaxy.setRealLayerVisible('nebulae', $<HTMLInputElement>('opt-real-nebulae').checked);
     const count = (k: string) => placed.filter((n) => n.kind === k).length.toLocaleString('en-US');
     $('galaxy-info').textContent += ` ${count('hii')} real HII regions (pink), ${count('pn')} planetary nebulae (teal) and ${count('snr')} supernova remnants (blue) sit at their measured distances; star-forming regions trace the spiral arms.`;
   }
@@ -1483,6 +1523,7 @@ export class App {
       void this.showExoHostsOnMap(seed);
       void this.showCompactObjectsOnMap(seed);
       void this.showNebulaeOnMap(seed);
+      void this.showClustersOnMap(seed);
     }
     $<HTMLInputElement>('galaxy-seed').value = String(seed);
     $('star-panel').classList.add('hidden');
@@ -2870,7 +2911,8 @@ export class App {
       this.cosmos.resetCamera();
     });
     $<HTMLInputElement>('opt-cosmic-web').addEventListener('change', (e) => this.cosmos.setWebVisible((e.target as HTMLInputElement).checked));
-    $<HTMLInputElement>('opt-real-nebulae').addEventListener('change', (e) => this.galaxy.setRealNebulaeVisible((e.target as HTMLInputElement).checked));
+    $<HTMLInputElement>('opt-real-nebulae').addEventListener('change', (e) => this.galaxy.setRealLayerVisible('nebulae', (e.target as HTMLInputElement).checked));
+    $<HTMLInputElement>('opt-real-clusters').addEventListener('change', (e) => this.galaxy.setRealLayerVisible('clusters', (e.target as HTMLInputElement).checked));
     $<HTMLInputElement>('opt-cmb').addEventListener('change', (e) => this.cosmos.setCmbVisible((e.target as HTMLInputElement).checked));
     $('cosmos-search').addEventListener('input', () => this.renderCosmosSearch());
     $('cosmos-results').addEventListener('click', (e) => {

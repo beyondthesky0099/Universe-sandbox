@@ -263,6 +263,17 @@ The map shows **5,676 real nebulae** from professional catalogues:
 
 Famous nebulae are labelled: Orion, Lagoon, Eagle, Helix, Ring, Cat's Eye, the Crab, Cassiopeia A, the Veil, the Horsehead, the Pipe, the Iris and others. The names are matched to the catalogues through the SIMBAD astronomy database, not typed in by hand. The California, Crescent and Witch Head nebulae aren't in these catalogues, so they're left unlabelled. Toggle the layer with **Real nebulae** in the Galaxy Map panel, or **Nebulae** in the Sky tab.
 
+### Real star clusters
+**7,193 real star clusters** from two catalogues:
+- **Gaia census (Hunt & Reffert 2023):** 6,818 open clusters and 228 moving groups, each with its Gaia distance, size, number of member stars and age.
+- **Harris catalogue:** 147 globular clusters, with distances, sizes and metal content.
+
+**Galaxy Map:** they sit at their measured distances. Open clusters are gold and crowd around the Sun, where Gaia's census is most complete. Globular clusters are orange and scattered through the halo.
+
+**Sky tab:** every cluster is outlined at its real size.
+
+32 famous clusters are labelled, matched through SIMBAD by catalogue designation and position: the Pleiades, the Hyades, the Beehive, the Double Cluster, the Jewel Box, Omega Centauri, 47 Tucanae, M13 and others. Toggle them with **Real star clusters** in the Galaxy Map panel, or **Star clusters** in the Sky tab.
+
 ### Voyager Grand Tour
 Pick a flyby and press **Fly with Voyager** to ride along on one of the six real planetary
 encounters: Voyager 1 at Jupiter and Saturn, and Voyager 2 at Jupiter, Saturn, Uranus and
@@ -508,6 +519,9 @@ push and pull request.
   Lynds' Catalogue of Dark Nebulae (1962), Barnard's dark objects (1927) and van den Bergh's
   reflection nebulae (1966), via VizieR (CDS). Familiar names resolved with SIMBAD (rebuild
   with `node scripts/build-nebulae.mjs`).
+- Star clusters: Hunt & Reffert 2023 ("Improving the open cluster census. II.", A&A 673, A114),
+  based on ESA Gaia DR3, and the Harris catalogue of Milky Way globular clusters (VII/202), via
+  VizieR (CDS); familiar names resolved with SIMBAD (rebuild with `node scripts/build-clusters.mjs`).
 - Voyager encounters: NASA/JPL Horizons planetocentric states of Voyager 1 and 2, the moons and
   the Sun (rebuild with `node scripts/build-voyager.mjs`).
 - Solar eclipses: the list and reference values from NASA's Five Millennium Canon of Solar

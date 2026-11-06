@@ -184,6 +184,13 @@ Plan, in priority order:
   nebulae on the Sky tab. The Harvard VizieR mirror drops connections often: the script retries
   and caches in `node_modules/.cache/nebulae/`.
 
+- [x] Real-colour 3D clouds (`src/render/nebulaClouds.ts`, instanced camera-facing quads at true
+  size with a minimum pixel size): emission-line colours per kind, and the 55 named nebulae as
+  DSS photographs (`scripts/build-nebula-images.mjs` → `public/data/nebula-images.{jpg,json}`,
+  `src/sim/nebulaImages.ts`). The images are in galactic orientation; the Sky tab pins them to
+  the sphere (`SkyView.setImages`). DSS2 Blue has gaps: the script falls back to DSS1 Blue, then
+  the SERC-J plates (first-generation DSS south of −17.5°), then the Mellinger mosaic.
+
 ### H. Desktop app (Windows)
 - [x] Electron shell in `desktop/`, Windows installer and portable .exe built by
   `.github/workflows/desktop.yml` on windows-latest (unsigned). Tags `v*` attach them to a

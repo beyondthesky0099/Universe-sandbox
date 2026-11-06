@@ -3,6 +3,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { generateGalaxy, type GalaxyData, type GalaxyOptions } from '../procgen/galaxy';
 import { mulberry32 } from '../procgen/rng';
 import { Noise3D } from './noise';
+import { NebulaClouds, type Cloud } from './nebulaClouds';
 import { createStarfield } from './starfield';
 import { accretionTexture, glowTexture, ringTexture } from './textures';
 
@@ -145,6 +146,12 @@ export class GalaxyView {
   private exoPoints?: THREE.Points;
   /** Layers of real catalogued objects (Milky Way only: nebulae, star clusters), with labels. */
   private readonly realLayers = new Map<string, { points: THREE.Points; labels: THREE.Group }>();
+  /** Real nebulae drawn as clouds at their true size (Milky Way only), with labels. */
+  private readonly cloudLayers = new Map<string, { clouds: NebulaClouds; labels: THREE.Group; on: boolean }>();
+  private highlighting = false;
+  /** Labels of the hand-placed showpiece nebulae, hidden once the real clouds replace them. */
+  private readonly showpieceLabels: THREE.Sprite[] = [];
+  private viewHeight = 800;
   /** Names of real objects (Milky Way clusters and nebulae). */
   private readonly labelGroup = new THREE.Group();
   private readonly nebulaTextures: THREE.Texture[] = [];
@@ -232,6 +239,8 @@ export class GalaxyView {
     for (const t of this.nebulaTextures) t.dispose();
     this.nebulaTextures.length = 0;
     for (const key of [...this.realLayers.keys()]) this.setRealLayer(key, []);
+    for (const key of [...this.cloudLayers.keys()]) this.setCloudLayer(key, [], []);
+    this.showpieceLabels.length = 0;
 
     this.data = generateGalaxy(seed, 30000, 60000, 9000, opts);
     // "You are here" only belongs in our own galaxy, not in stand-ins for other real galaxies.
@@ -281,11 +290,13 @@ export class GalaxyView {
         ...this.data.clusters.map((c) => ({ name: c.name, x: c.x, y: c.y, z: c.z, color: c.kind === 'globular' ? '#ffe2a0' : '#a8d4ff' })),
         { name: 'Sagittarius A*', x: 0, y: 0, z: 0, color: '#ff9b6b' },
       ];
+      const nebulaNames = new Set(this.data.nebulae.map((n) => n.name));
       for (const n of named) {
         const label = textSprite(n.name, n.color, 0.7);
         label.position.set(n.x, n.y, n.z);
         label.material.opacity = 0.8;
         this.labelGroup.add(label);
+        if (nebulaNames.has(n.name)) this.showpieceLabels.push(label);
       }
     }
     this.solMarker.position.set(...this.data.sol);
@@ -302,6 +313,8 @@ export class GalaxyView {
     this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();
     this.pointScale = 0.45 * height * pixelRatio;
+    this.viewHeight = height * pixelRatio;
+    for (const layer of this.cloudLayers.values()) layer.clouds.setViewHeight(this.viewHeight);
     this.applyPointScale();
   }
 
@@ -371,7 +384,9 @@ export class GalaxyView {
     }
     attr.needsUpdate = true;
     for (const pts of [this.glow, this.dust]) if (pts) pts.visible = !match;
-    this.nebulaGroup.visible = !match;
+    this.nebulaGroup.visible = !match && !this.cloudLayers.size;
+    this.highlighting = !!match;
+    for (const layer of this.cloudLayers.values()) layer.clouds.mesh.visible = layer.on && !match;
   }
 
   /** Show real exoplanet hosts: cyan rings, green for systems with a temperate planet. */
@@ -441,6 +456,45 @@ export class GalaxyView {
   setRealLayerVisible(key: string, on: boolean): void {
     const layer = this.realLayers.get(key);
     if (layer) layer.points.visible = layer.labels.visible = on;
+    const clouds = this.cloudLayers.get(key);
+    if (clouds) {
+      clouds.on = on;
+      clouds.clouds.mesh.visible = on && !this.highlighting;
+      clouds.labels.visible = on;
+    }
+  }
+
+  /**
+   * Real nebulae as clouds at their true size (see nebulaClouds.ts). They replace the hand-placed
+   * showpiece nebulae of the procedural Milky Way. An empty list removes the layer.
+   */
+  setCloudLayer(key: string, clouds: Cloud[], labels: { pos: [number, number, number]; label: string; color: string }[], atlas?: THREE.Texture): void {
+    const old = this.cloudLayers.get(key);
+    if (old) {
+      this.scene.remove(old.clouds.mesh, old.labels);
+      old.clouds.dispose();
+      for (const child of old.labels.children) {
+        const sprite = child as THREE.Sprite;
+        sprite.material.map?.dispose();
+        sprite.material.dispose();
+      }
+      this.cloudLayers.delete(key);
+    }
+    const replaced = clouds.length > 0;
+    this.nebulaGroup.visible = !replaced;
+    for (const l of this.showpieceLabels) l.visible = !replaced;
+    if (!replaced) return;
+    const layer = new NebulaClouds(clouds, atlas);
+    layer.setViewHeight(this.viewHeight);
+    layer.mesh.renderOrder = 3;
+    const group = new THREE.Group();
+    for (const l of labels) {
+      const text = textSprite(l.label, l.color, 0.55);
+      text.position.set(...l.pos);
+      group.add(text);
+    }
+    this.scene.add(layer.mesh, group);
+    this.cloudLayers.set(key, { clouds: layer, labels: group, on: true });
   }
 
   /** Labelled markers for real black holes and pulsars (Milky Way only). Cleared on rebuild. */

@@ -268,14 +268,16 @@ The map shows **5,676 real nebulae** from professional catalogues:
 | Dark nebulae | 1,907 | Barnard's 349 dark objects, plus the Lynds clouds Barnard didn't list |
 | Reflection nebulae | 158 | van den Bergh's catalogue |
 
-**Galaxy Map:** the nebulae with measured distances sit at their true 3D positions: 945 HII regions, 790 planetary nebulae, 187 supernova remnants and 140 reflection nebulae. The HII regions trace the spiral arms.
+**Galaxy Map:** the nebulae with measured distances sit at their true 3D positions, as glowing clouds at their true physical size: 945 HII regions, 790 planetary nebulae, 187 supernova remnants and 140 reflection nebulae. The HII regions trace the spiral arms.
+- Colours are the light each kind really emits: HII regions glow pink-red in hydrogen-alpha, planetary nebulae teal in doubly ionised oxygen, and reflection nebulae blue from scattered starlight. Each cloud is a few overlapping puffs spread through its volume, so it has depth as you orbit it. Clouds too small to see from far away are drawn at a minimum size and dimmed to match.
+- The 55 named nebulae (Orion, Carina, Lagoon, Eagle, the Crab, the Helix, the Horsehead, ...) show their **real photographs** from the Digitized Sky Survey: the red plate in red, the blue plate in blue and the fainter of the two in green, so stars stay white and hydrogen glow stays red. `node scripts/build-nebula-images.mjs` downloads them from NASA SkyView and packs them into one 1 MB atlas.
 - Planetary-nebula distances come from Gaia parallaxes of their central stars where those are good, and otherwise from statistical estimates.
 - Some HII distances are kinematic estimates, which can be off in the outer Galaxy.
 - The remnant catalogue puts the Crab Nebula at 3.4 kpc (−1.0/+4.0), from the Crab pulsar's Gaia DR2 parallax. The long-standing estimate is about 2 kpc.
 - Reflection nebulae are placed at the distance of the star that lights them. That's 140 of the 158, mostly from Gaia parallaxes via SIMBAD.
 - Dark nebulae have no catalogued distances, so they appear on the sky only.
 
-**Sky tab:** every nebula is outlined at its real position and angular size, and fades out in daylight.
+**Sky tab:** every nebula is outlined at its real position and angular size, and fades out in daylight. The 55 named ones show their Digitized Sky Survey photographs on the sky, at their true size and orientation.
 
 Famous nebulae are labelled: Orion, Lagoon, Eagle, Helix, Ring, Cat's Eye, the Crab, Cassiopeia A, the Veil, the Horsehead, the Pipe, the Iris and others. The names are matched to the catalogues through the SIMBAD astronomy database, not typed in by hand. The California, Crescent and Witch Head nebulae aren't in these catalogues, so they're left unlabelled. Toggle the layer with **Real nebulae** in the Galaxy Map panel, or **Nebulae** in the Sky tab.
 
@@ -544,6 +546,10 @@ push and pull request.
   reflection nebulae (1966), via VizieR (CDS), placed at the distances of their illuminating stars
   (parallaxes from SIMBAD's TAP service, mostly Gaia EDR3). Familiar names resolved with SIMBAD (rebuild
   with `node scripts/build-nebulae.mjs`).
+- Nebula photographs: the Digitized Sky Survey, produced at the Space Telescope Science Institute
+  under U.S. Government grant NAG W-2166, from photographic data of the Oschin Schmidt Telescope
+  (Palomar) and the UK Schmidt Telescope (POSS-I, POSS-II, SERC surveys), retrieved through NASA's
+  SkyView (rebuild with `node scripts/build-nebula-images.mjs`).
 - Stars within 100 pc: ESA Gaia DR3 via the Gaia archive (rebuild with `node scripts/build-stars-100pc.mjs`),
   with names and the brightest stars from HYG v4.1.
 - Star clusters: Hunt & Reffert 2023 ("Improving the open cluster census. II.", A&A 673, A114),

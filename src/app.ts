@@ -10,9 +10,11 @@ import { SkyView } from './render/skyView';
 import { moonPhaseName, skyAt } from './sim/sky';
 import { dateToJdTT, eclipsePath, greatestEclipse, jdTTToDate, loadEclipses, localCircumstances, shadowAt, topocentric, type Eclipse } from './sim/eclipse';
 import { displayName, GALAXY_CREDIT, galaxyForm, loadLocalGalaxies, loadNamedGalaxies, loadWebGalaxies, LY_PER_MPC, type LocalGalaxy } from './sim/galaxies';
-import { equatorialToGalactic, galacticToMap, MILKY_WAY_SEED, MW_CLUSTERS, MW_NEBULAE, UNITS_PER_KPC, type GalaxyOptions } from './procgen/galaxy';
+import { equatorialToGalactic, galacticToMap, MILKY_WAY_SEED, MW_CLUSTERS, UNITS_PER_KPC, type GalaxyOptions } from './procgen/galaxy';
 import { CLUSTER_COLORS, loadClusters } from './sim/clusters';
 import { diameterPc, galacticToEcliptic, loadNebulae, NEBULA_COLORS } from './sim/nebulae';
+import { loadNebulaImages, NEBULA_IMAGE_CREDIT, nebulaAtlasUrl, tileRect } from './sim/nebulaImages';
+import type { Cloud } from './render/nebulaClouds';
 import { QUALITY_PRESETS, SystemView } from './render/systemView';
 import { createRealSky } from './render/starfield';
 import { setTrueScale } from './sim/trueScale';
@@ -305,6 +307,17 @@ export class App {
           );
           this.sky.setOutlinesVisible('nebulae', $<HTMLInputElement>('opt-sky-nebulae').checked);
           $('sky-nebula-count').textContent = `${list.length.toLocaleString('en-US')} nebulae from real catalogues`;
+          // The famous ones as their real survey images (galactic north up: the images were made
+          // in galactic coordinates).
+          void Promise.all([loadNebulaImages(), this.nebulaAtlas()])
+            .then(([images, atlas]) => {
+              this.sky.setImages(
+                images.images.map((im) => ({ v: galacticToEcliptic(im.l, im.b), up: galacticToEcliptic(0, 90), fieldDeg: im.fieldDeg, rect: tileRect(images, im.tile) })),
+                atlas,
+              );
+              this.sky.setOutlinesVisible('nebulae', $<HTMLInputElement>('opt-sky-nebulae').checked);
+            })
+            .catch(() => undefined);
         });
         return this.system.setSky(createRealSky(stars));
       })
@@ -1470,27 +1483,72 @@ export class App {
     $('galaxy-info').textContent += ` ${count('open')} open clusters and ${count('group')} moving groups from Gaia (gold), and ${count('globular')} globular clusters (orange), at their measured distances.`;
   }
 
-  /** Real HII regions and planetary nebulae with measured distances (Milky Way only). */
+  /**
+   * Real nebulae with measured distances (Milky Way only), as clouds at their true size: the 55
+   * named ones show their real survey images, the rest glow in their emission-line colours.
+   */
   private async showNebulaeOnMap(seed: number): Promise<void> {
-    const all = await loadNebulae().catch(() => undefined);
+    const [all, images, atlas] = await Promise.all([
+      loadNebulae().catch(() => undefined),
+      loadNebulaImages().catch(() => undefined),
+      this.nebulaAtlas().catch(() => undefined),
+    ]);
     if (!all || this.galaxySeed !== seed) return;
-    // The ten hand-placed showpieces already carry labels; don't name them twice.
-    const shown = MW_NEBULAE.map((n) => n.name.split(' (')[0].toLowerCase());
     const placed = all.filter((n) => n.distanceKpc);
-    this.galaxy.setRealLayer(
-      'nebulae',
-      placed.map((n) => {
-        const pc = diameterPc(n) ?? (n.kind === 'pn' ? 0.5 : n.kind === 'snr' ? 20 : n.kind === 'refl' ? 1 : 5);
-        // Exaggerated so they read on a 100,000-light-year map, but never below a visible dot.
-        const size = Math.max(n.kind === 'pn' ? 0.12 : 0.22, (pc / 1000) * UNITS_PER_KPC * 8);
-        const named = n.name && !shown.some((s) => n.name!.toLowerCase().startsWith(s));
+    const byName = new Map((images?.images ?? []).map((im) => [im.name, im]));
+    const clouds: Cloud[] = [];
+    const labels: { pos: [number, number, number]; label: string; color: string }[] = [];
+    let k = 0;
+    for (const n of placed) {
+      const pc = diameterPc(n) ?? (n.kind === 'pn' ? 0.5 : n.kind === 'snr' ? 20 : n.kind === 'refl' ? 1 : 5);
+      const size = (pc / 1000) * UNITS_PER_KPC;
+      const pos = galacticToMap(n.l, n.b, n.distanceKpc!);
+      const color = NEBULA_COLORS[n.kind];
+      const image = n.name ? byName.get(n.name) : undefined;
+      k++;
+      if (image && images && atlas) {
+        // The image spans 2.6 catalogue radii; a soft glow in the nebula's colour gives it depth.
+        clouds.push({ pos, size: size * 1.3, color, tile: tileRect(images, image.tile), minPx: 40, brightness: 1.1, rotation: 0, puff: 0 });
+        clouds.push({ pos, size: size * 1.6, color, minPx: 50, brightness: 0.3, rotation: k, puff: k });
+      } else {
+        // A few overlapping puffs spread through the nebula's volume.
+        const puffs = n.kind === 'pn' ? 1 : 3;
+        for (let p = 0; p < puffs; p++) {
+          const h = Math.sin(k * 12.9898 + p * 78.233) * 43758.5453;
+          const r = (h - Math.floor(h)) * 0.3 * size;
+          const a = k * 2.399 + p * 2.1, e = (p - 1) * 0.7;
+          const off: [number, number, number] = puffs > 1 ? [r * Math.cos(a) * Math.cos(e), r * Math.sin(e), r * Math.sin(a) * Math.cos(e)] : [0, 0, 0];
+          clouds.push({
+            pos: [pos[0] + off[0], pos[1] + off[1], pos[2] + off[2]],
+            size: size * (puffs > 1 ? 0.75 : 1),
+            color,
+            minPx: n.kind === 'pn' ? 3 : 4,
+            brightness: n.kind === 'hii' ? 0.8 : 0.9,
+            rotation: k * 1.7 + p,
+            puff: k + p,
+          });
+        }
+      }
+      if (n.name) {
         const ly = Math.round((n.distanceKpc! * 3261.6) / 10) * 10;
-        return { pos: galacticToMap(n.l, n.b, n.distanceKpc!), color: NEBULA_COLORS[n.kind], size, label: named ? `${n.name} · ${ly.toLocaleString('en-US')} ly` : undefined };
-      }),
-    );
+        labels.push({ pos, label: `${n.name} · ${ly.toLocaleString('en-US')} ly`, color: '#ffb3c8' });
+      }
+    }
+    this.galaxy.setCloudLayer('nebulae', clouds, labels, atlas);
     this.galaxy.setRealLayerVisible('nebulae', $<HTMLInputElement>('opt-real-nebulae').checked);
-    const count = (k: string) => placed.filter((n) => n.kind === k).length.toLocaleString('en-US');
-    $('galaxy-info').textContent += ` ${count('hii')} real HII regions (pink), ${count('pn')} planetary nebulae (teal), ${count('snr')} supernova remnants (pale blue) and ${count('refl')} reflection nebulae (blue, at their lighting star's distance) sit at their measured distances; star-forming regions trace the spiral arms.`;
+    const count = (kind: string) => placed.filter((n) => n.kind === kind).length.toLocaleString('en-US');
+    const imaged = placed.filter((n) => n.name && byName.has(n.name)).length;
+    $('galaxy-info').textContent += ` ${count('hii')} real HII regions (pink: hydrogen-alpha), ${count('pn')} planetary nebulae (teal: oxygen III), ${count('snr')} supernova remnants and ${count('refl')} reflection nebulae (blue: scattered starlight) sit at their measured distances and true sizes; ${imaged} famous ones show their real Digitized Sky Survey images. Star-forming regions trace the spiral arms. ${imaged ? NEBULA_IMAGE_CREDIT : ''}`;
+  }
+
+  private atlasPromise?: Promise<THREE.Texture>;
+  /** The nebula-image atlas as a texture (loaded once, shared by the galaxy map and the Sky tab). */
+  private nebulaAtlas(): Promise<THREE.Texture> {
+    this.atlasPromise ??= new THREE.TextureLoader().loadAsync(nebulaAtlasUrl()).then((tex) => {
+      tex.anisotropy = 4;
+      return tex;
+    });
+    return this.atlasPromise;
   }
 
   private async showExoHostsOnMap(seed: number): Promise<void> {
@@ -1518,7 +1576,7 @@ export class App {
     $('galaxy-name').textContent = data.name;
     $('galaxy-info').textContent =
       data.name === 'Milky Way'
-        ? `Our galaxy: real structure (4 spiral arms, the Local Spur, the central bar, Sgr A*) with ${data.clusters.length} real clusters and ${data.nebulae.length} real nebulae at their true positions. The ${data.stars.count.toLocaleString()} explorable systems are procedural stand-ins for the ~100 billion real stars.`
+        ? `Our galaxy: real structure (4 spiral arms, the Local Spur, the central bar, Sgr A*) and the real clusters and nebulae listed below at their true positions. The ${data.stars.count.toLocaleString()} explorable systems are procedural stand-ins for the ~100 billion real stars.`
         : opts.origin
           ? `A procedural stand-in for the real ${data.form} galaxy ${data.name}: its overall shape follows the real galaxy's type, but its ${data.stars.count.toLocaleString()} stars are invented. Zoom out to return to the Universe map.`
           : `${data.arms}-armed spiral · ${data.stars.count.toLocaleString()} explorable systems · ${data.clusters.length} star clusters (a procedural galaxy)`;

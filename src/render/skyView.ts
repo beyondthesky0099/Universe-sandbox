@@ -207,6 +207,52 @@ export class SkyView {
     if (!layer) return;
     layer.points.visible = on;
     for (const l of layer.labels) l.sprite.visible = on;
+    if (key === 'nebulae' && this.images) this.images.visible = on;
+  }
+
+  private images?: THREE.Mesh;
+  /**
+   * Real survey images pinned to the sky at their true angular size: each is centred on `v`
+   * (a unit vector in the stars' frame), `fieldDeg` across, with `up` pointing to the top of the
+   * image and its left edge to the east, as on a sky photograph.
+   */
+  setImages(items: { v: [number, number, number]; up: [number, number, number]; fieldDeg: number; rect: [number, number, number, number] }[], atlas: THREE.Texture): void {
+    const pos = new Float32Array(items.length * 12);
+    const uv = new Float32Array(items.length * 8);
+    const index: number[] = [];
+    const c = new THREE.Vector3(), up = new THREE.Vector3(), right = new THREE.Vector3(), p = new THREE.Vector3();
+    items.forEach((it, i) => {
+      c.set(...it.v).normalize();
+      // Tangent frame: up projected onto the sky there, and right = west (we look out from inside).
+      up.set(...it.up);
+      up.addScaledVector(c, -c.dot(up)).normalize();
+      right.crossVectors(c, up).normalize();
+      const half = Math.tan((it.fieldDeg * DEG) / 2);
+      const [u0, v0, du, dv] = it.rect;
+      [[-1, -1], [1, -1], [1, 1], [-1, 1]].forEach(([sx, sy], k) => {
+        p.copy(c).addScaledVector(right, sx * half).addScaledVector(up, sy * half).normalize().multiplyScalar(R_STARS * 0.993);
+        pos.set([p.x, p.y, p.z], i * 12 + k * 3);
+        uv.set([u0 + ((sx + 1) / 2) * du, v0 + ((sy + 1) / 2) * dv], i * 8 + k * 2);
+      });
+      const o = i * 4;
+      index.push(o, o + 1, o + 2, o, o + 2, o + 3);
+    });
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+    geo.setIndex(index);
+    if (this.images) {
+      this.stars.remove(this.images);
+      this.images.geometry.dispose();
+      (this.images.material as THREE.Material).dispose();
+    }
+    this.images = new THREE.Mesh(
+      geo,
+      new THREE.MeshBasicMaterial({ map: atlas, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }),
+    );
+    this.images.frustumCulled = false;
+    this.stars.add(this.images);
+    if (this.snapshot) this.place();
   }
 
   private addBodies(): void {
@@ -271,6 +317,7 @@ export class SkyView {
     this.starMaterials.forEach((mat, i) => (mat.opacity = i === 0 ? Math.max(dark, 0.05) : dark));
     for (const l of this.starLabels) (l.sprite.material as THREE.SpriteMaterial).opacity = dark * 0.85;
     // Nebulae are faint: they show only in a dark sky.
+    if (this.images) (this.images.material as THREE.MeshBasicMaterial).opacity = dark * 0.9;
     for (const layer of this.outlineLayers.values()) {
       for (const l of layer.labels) (l.sprite.material as THREE.SpriteMaterial).opacity = dark * 0.8;
       (layer.points.material as THREE.ShaderMaterial).uniforms.uOpacity.value = dark;

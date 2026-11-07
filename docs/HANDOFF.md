@@ -214,6 +214,11 @@ Plan, in priority order:
 - Fragment names: Simulation.fragmentName numbers pieces of pieces from the root name ("Theia
   fragment 7"). Tested in tests/physics-features.test.ts.
 - Phone: in the Sandbox the inspector sheet sits above the dock.
+- Notifications: SimEvent gets an optional `title` (one-line headline; supernova events set it,
+  e.g. "💥 Rich: Type Ib supernova → a 1.8 M☉ neutron star").
+  - toast(message, kind, title) shows the title, or the first two lines of a long message.
+    Tapping toggles the full text; an opened toast stays until tapped again.
+  - Phones: toasts sit at the top, at most 2 at a time.
 
 ### AD. Animated wordmark and label declutter
 - [x] `src/ui/wordmark.ts`: the brand site's BrandWordmark.jsx ported to plain DOM.

@@ -37,6 +37,8 @@ export interface CustomForce {
 export interface SimEvent {
   type: SimEventType;
   message: string;
+  /** A one-line headline for notifications (the message holds the full story). */
+  title?: string;
   x: number;
   y: number;
   z: number;
@@ -1192,6 +1194,7 @@ export class Simulation {
     this.events.push({
       type: 'supernova',
       message: `${wd.name} passed the Chandrasekhar limit and exploded as a Type Ia supernova: ${describeExplosion(e)}`,
+      title: `💥 ${wd.name}: Type Ia supernova, nothing left`,
       x: wd.x,
       y: wd.y,
       z: wd.z,
@@ -1294,6 +1297,7 @@ export class Simulation {
     const z = star.metallicity ?? 1;
     const who = `${name} (${star.mass.toFixed(star.mass < 10 ? 1 : 0)} M☉, ${z === 1 ? 'solar' : `${z.toFixed(2)}× solar`} metallicity, a ${Math.round(p.temperatureK).toLocaleString('en-US')} K ${p.stage.split(' (')[0]})`;
     let message: string;
+    let title: string;
     if (fate.remnant) {
       const kind = fate.remnant.kind;
       star.kind = kind;
@@ -1311,13 +1315,15 @@ export class Simulation {
       message = failed
         ? `${who} collapsed straight into ${left}: a failed supernova, just a faint red glow as it sheds ${e.ejectaMass.toFixed(1)} M☉ of its envelope.`
         : `${who} exploded as a ${fate.label}, leaving ${left}: ${describeExplosion(e)}`;
+      title = failed ? `🕳 ${name} collapsed into ${left} (failed supernova)` : `💥 ${name}: ${fate.label} → ${left}`;
     } else {
       // Pair instability: the whole star is blown apart.
       star.radius = 0;
       this.doomed.add(star);
       message = `${who} was blown apart by a ${fate.label}, leaving nothing behind: ${describeExplosion(e)}`;
+      title = `💥 ${name}: ${fate.label}, nothing left`;
     }
-    this.events.push({ type: 'supernova', message, x: star.x, y: star.y, z: star.z, size: R * (failed ? 4 : 25) });
+    this.events.push({ type: 'supernova', message, title, x: star.x, y: star.y, z: star.z, size: R * (failed ? 4 : 25) });
     this.forcesDirty = true;
     return true;
   }

@@ -188,6 +188,23 @@ Plan, in priority order:
   faces from outside, back faces from inside), aimSun (per frame from the heaviest star). Wired in
   BodyVisual.applyDetail/update. Tests: tests/atmosphere.test.ts.
 
+### R. Auroras
+- [x] `src/render/aurora.ts`. AURORAS holds the data:
+  - Earth, Jupiter, Saturn, Uranus and Neptune;
+  - magnetic tilt, oval colatitude, night-side shift and width;
+  - emission altitudes, as fractions of the radius;
+  - up to three emission layers (colour, height, width, weight).
+- auroraFor: named bodies use the table; real bodies missing from it get none; procedural giants
+  and rocky worlds with air of ≥ 0.3 M⊕ get one.
+- auroraActivity: (d₀/d)² wind times a substorm flicker. ovalColatitude widens with activity.
+- auroraMesh: 7 curtains plus a flat diffuse ribbon per hemisphere, positioned in the vertex
+  shader.
+  - Optically thin, so the light is brightened by path length (up to 6×) when seen edge-on.
+  - The fragment shader needs `#include <logdepthbuf_fragment>`, or it fails the planet's depth
+    test.
+- BodyVisual adds it in applyDetail and updates it only when the planet is more than 14 px across
+  and a star is present. Tests: tests/aurora.test.ts.
+
 ### P. Spaceships
 - [x] `src/sim/spaceship.ts` (ENGINES, autopilotAccel: brachistochrone approach, then steer to
   the local circular orbit; settles when near-circular within 20% of the radius; orbitAround).

@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { aimSun, atmosphereFor, insideAware, scatteringMaterial, shellScale } from './atmosphere';
+import { auroraActivity, auroraFor, auroraMesh, updateAurora } from './aurora';
 import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import type { Body, BodyKind } from '../sim/body';
 import type { Climate } from '../sim/climate';
@@ -115,6 +116,9 @@ export class BodyVisual {
   private disk?: THREE.Mesh;
   private clouds?: THREE.Mesh;
   private atmosphere?: THREE.Mesh;
+  private aurora?: THREE.Mesh;
+  /** Distance from the star when the aurora was first lit (its stellar-wind reference). */
+  private auroraD0 = 0;
   private rings?: THREE.Mesh;
   private beams?: THREE.Group;
   private readonly trailPos: Float32Array;
@@ -373,6 +377,13 @@ export class BodyVisual {
       insideAware(this.atmosphere);
       this.mesh.add(this.atmosphere);
     }
+    const isReal = !!getSolarData()?.byName.get(this.name);
+    const aurora = auroraFor(this.name, isReal, body.kind, !!air, body.mass / EARTH_MASS, seedFromName(this.name));
+    if (aurora) {
+      this.aurora = auroraMesh(aurora);
+      this.aurora.visible = false;
+      this.mesh.add(this.aurora);
+    }
     if (tex.rings) {
       this.textures.push(tex.rings);
       this.rings = new THREE.Mesh(
@@ -441,6 +452,19 @@ export class BodyVisual {
     }
     if (this.clouds) this.clouds.rotation.y += dt * 0.05;
     if (this.atmosphere && sun) aimSun(this.atmosphere.material as THREE.ShaderMaterial, this.mesh, new THREE.Vector3(sun.x, sun.y, sun.z));
+    if (this.aurora) {
+      // Only worth drawing when the planet is big on screen and a star blows a wind at it.
+      const show = !!sun && r / worldPerPixel > 14;
+      this.aurora.visible = show;
+      if (show && sun) {
+        const d = Math.hypot(body.x - sun.x, body.y - sun.y, body.z - sun.z);
+        if (!this.auroraD0) this.auroraD0 = d;
+        this.mesh.updateMatrixWorld();
+        const local = this.mesh.worldToLocal(new THREE.Vector3(sun.x, sun.y, sun.z)).normalize();
+        const seconds = performance.now() / 1000;
+        updateAurora(this.aurora, local, auroraActivity(this.auroraD0, d, seconds), seconds);
+      }
+    }
     if (this.glow) {
       const big = this.isProbe
         ? worldPerPixel * 14
@@ -535,12 +559,12 @@ export class BodyVisual {
   private disposeDetail(): void {
     for (const t of this.textures) t.dispose();
     this.textures = [];
-    for (const m of [this.clouds, this.atmosphere, this.rings]) {
+    for (const m of [this.clouds, this.atmosphere, this.aurora, this.rings]) {
       if (!m) continue;
       m.parent?.remove(m);
       (m.material as THREE.Material).dispose();
     }
-    this.clouds = this.atmosphere = this.rings = undefined;
+    this.clouds = this.atmosphere = this.aurora = this.rings = undefined;
   }
 
   private disposeParts(): void {

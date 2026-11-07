@@ -429,6 +429,28 @@ scale heights are the real ones:
 Each atmosphere is drawn in its real proportion to the planet's radius (Earth's 100 km is 1.6%),
 at least 2% so it stays visible.
 
+## Auroras
+
+Planets with a magnetic field and air glow around their magnetic poles (`src/render/aurora.ts`):
+- **Shape:** curtains of light ride the auroral oval, with drifting rays and folds, and a diffuse
+  glow beneath them. Each oval sits around the magnetic axis, which is tilted from the spin axis
+  and turns with the planet.
+- **Earth:** dipole tilt 9.4° (IGRF-14). The oval is at ~67° magnetic latitude on the night side
+  and ~77° on the day side. The light is green oxygen at 557.7 nm (100–150 km, the brightest), red
+  oxygen at 630.0 nm above 200 km, and a violet N₂⁺ lower edge.
+- **Jupiter:** tilt 10.3° (Juno). Its main oval is held in place by the planet's rotation, not the
+  solar wind.
+- **Saturn:** aligned within 0.01°. **Uranus:** tilt 59°. **Neptune:** tilt 47°.
+- The giants' auroras shine in ultraviolet and infrared. They are drawn in false colour, as in the
+  Hubble and JWST images.
+- Visible auroras fade on the day side, where sunlight swamps them.
+- **Strength:** set by the stellar wind, which scales with (starting distance ÷ distance)². Push a
+  planet towards its star and its auroras brighten and spread towards the equator, as in a
+  geomagnetic storm.
+- **No aurora:** Venus, Mars and the Moon have no global magnetic field.
+- **Procedural worlds:** gas giants, and rocky worlds with air from 0.3 Earth masses up, get a
+  modelled aurora.
+
 ## Fly a spaceship
 
 In the Sandbox, **🚀 Fly a spaceship** puts a ship in orbit around the selected body (or

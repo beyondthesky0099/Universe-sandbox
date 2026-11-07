@@ -28,6 +28,7 @@ import { loadHalley2061, loadHalleyReturn } from './sim/halley';
 import { loadNeighbourhood100, loadStars100 } from './sim/gaia100';
 import { getSolarData, loadSolarData, poleScene } from './sim/solarSystemData';
 import { esiLabel, exoplanetArchiveUrl, planetFacts, wikipediaUrl } from './sim/planetFacts';
+import { horizonRadius, iscoRadius, radiativeEfficiency } from './sim/kerr';
 import { stellarFlux } from './sim/climate';
 import { isCompact, kindForMass, mainSequenceLifetime, mergedKind, NEUTRON_MAX_MASS, type Body, type BodyKind } from './sim/body';
 import { isTidallyLocked, nearResonance, orbitalPeriod } from './sim/analysis';
@@ -51,7 +52,8 @@ import { GalaxyStore, prefs } from './ui/galaxyStore';
 import { History } from './ui/history';
 import { decodeScene, downloadJson, encodeScene, readSceneFile, type SceneFile } from './ui/share';
 import { Tutorial } from './ui/tutorial';
-import { PostFX } from './render/postfx';
+import { PostFX, type LensInfo } from './render/postfx';
+import { blackHoleView } from './render/accretionDisk';
 import { MegaSim, webgpuAvailable, type MegaScenario } from './gpu/megaSim';
 import { buildFromSpec } from './game/sceneSpec';
 import { defaultServerUrl, ServerClient } from './net/server';
@@ -808,11 +810,14 @@ export class App {
     });
   }
 
-  private renderView(scene: THREE.Scene, camera: THREE.Camera, lenses: THREE.Vector3[]): void {
+  private renderView(scene: THREE.Scene, camera: THREE.Camera, lenses: LensInfo[]): void {
     if (camera instanceof THREE.PerspectiveCamera) this.photo.beforeRender(scene, camera);
     // Post-processing isn't supported inside WebXR sessions; low quality skips it too.
     // The galaxy map is already a sea of additive glow; bloom there only adds haze.
-    if (this.postfxOn && this.quality !== 'low' && !this.renderer.xr.isPresenting && this.view === 'system') {
+    const fx = this.postfxOn && this.quality !== 'low' && !this.renderer.xr.isPresenting && this.view === 'system';
+    // With lensing on, black holes show their spin-shaped shadow and the sphere is only the horizon.
+    blackHoleView.lensed = fx;
+    if (fx) {
       this.postfx.setLenses(lenses);
       this.postfx.setBloom(this.quality === 'high' ? 0.55 : 0.4);
       this.postfx.render(scene, camera);
@@ -2747,6 +2752,23 @@ export class App {
     const slider = $<HTMLInputElement>('metallicity');
     if (document.activeElement !== slider) slider.value = String(Math.log10(Math.max(z, 0.01)));
     $('metallicity-out').textContent = z.toFixed(z < 0.1 ? 3 : 2);
+    // Spinning black holes (kerr.ts).
+    const hole = body.kind === 'blackhole' && body.tag !== 'galaxy';
+    $('spin-row').classList.toggle('hidden', !hole);
+    if (hole) {
+      const a = body.spin ?? 0;
+      const gm = body.mass * 1.4766; // GM/c² in km
+      const km = (x: number) => (x * gm >= 1e7 ? `${fmt((x * gm) / 1.496e8)} AU` : `${Math.round(x * gm).toLocaleString('en-US')} km`);
+      facts.push(
+        ['Spin a*', a ? a.toFixed(3) : '0 (not spinning)'],
+        ['Event horizon', km(horizonRadius(a))],
+        ['Innermost stable orbit', km(iscoRadius(a))],
+        ['Disc efficiency', `${(radiativeEfficiency(a) * 100).toFixed(1)}% of mass → light`],
+      );
+      const spinSlider = $<HTMLInputElement>('bh-spin');
+      if (document.activeElement !== spinSlider) spinSlider.value = String(a);
+      $('bh-spin-out').textContent = a.toFixed(2);
+    }
     if (isStar && this.sim.canSupernova(body)) {
       alerts.push(`<div class="alert info">⭐ ${escapeHtml(describeFate(stellarFate(body.mass, z)))}</div>`);
     }
@@ -4622,6 +4644,16 @@ export class App {
     });
     $<HTMLInputElement>('metallicity').addEventListener('input', (e) => {
       $('metallicity-out').textContent = (10 ** Number((e.target as HTMLInputElement).value)).toFixed(2);
+    });
+    $<HTMLInputElement>('bh-spin').addEventListener('change', (e) => {
+      const body = this.selectedBody();
+      if (!body) return;
+      const a = Number((e.target as HTMLInputElement).value);
+      this.mutate(`spinning ${body.name} to a* = ${a.toFixed(2)}`, () => (body.spin = a || undefined));
+      this.updateBodyPanel();
+    });
+    $<HTMLInputElement>('bh-spin').addEventListener('input', (e) => {
+      $('bh-spin-out').textContent = Number((e.target as HTMLInputElement).value).toFixed(2);
     });
     $('btn-mass-down').addEventListener('click', () => this.scaleSelectedMass(0.5));
     $('btn-supernova').addEventListener('click', () => this.detonateSelected());

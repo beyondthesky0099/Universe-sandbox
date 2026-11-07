@@ -451,6 +451,28 @@ Planets with a magnetic field and air glow around their magnetic poles (`src/ren
 - **Procedural worlds:** gas giants, and rocky worlds with air from 0.3 Earth masses up, get a
   modelled aurora.
 
+## Spinning black holes
+
+Black holes have a spin, a* from 0 to 0.998, the most that gas can spin one up to (Thorne 1974).
+It is set with a slider in the black hole's panel (`src/sim/kerr.ts`).
+- **The horizon shrinks:** from 2 to about 1 GM/c².
+- **The disc gets closer:** its inner edge, the innermost stable orbit, moves in from 6 to 1.24
+  GM/c² (Bardeen, Press & Teukolsky 1972).
+- **More energy comes out:** the disc turns 5.7% of the infalling mass into light without spin,
+  and 32% at a* = 0.998.
+- **The shadow changes shape:** seen from the side, it is flattened and pushed sideways, exactly
+  as Bardeen (1973) calculated.
+- **The accretion disc is shaded per pixel:**
+  - Thin-disc temperatures.
+  - The gas orbits at up to ~40% of light speed, so the side coming towards you is
+    Doppler-boosted, bluer and brighter, and the other side is dimmed and reddened.
+  - Gravitational redshift dims the inner edge.
+  - The disc is drawn after the lensing, so its near side passes in front of the shadow.
+- **Mergers leave spinning holes:** spin is worked out from the masses and spins (Rezzolla et al.
+  2008). Two equal holes give 0.69; LIGO measured GW150914's remnant at 0.67.
+- **Real values:** the galactic-core scene's hole spins at 0.94, as the Event Horizon Telescope's
+  favoured Sgr A* models do.
+
 ## More about a planet
 
 Select a planet or moon and open **📖 More about** in its panel:

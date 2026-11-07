@@ -16,6 +16,9 @@ import { ejectaLayers, luminosity as snLuminosity, maxEjectaSpeed, peakLuminosit
 import { NebulaClouds, type Cloud } from './nebulaClouds';
 import { mulberry32 } from '../procgen/rng';
 import { AU_PER_YEAR_IN_KMS } from '../sim/units';
+import { shadowProfile } from '../sim/kerr';
+import { SHADOW_BINS, type LensInfo } from './postfx';
+import { DISK_LAYER } from './accretionDisk';
 
 const MAX_LIGHTS = 4;
 const MAX_HZ = 4;
@@ -106,6 +109,8 @@ export class SystemView {
     // The logarithmic depth buffer copes with a tiny near plane, so real-sized planets (Earth is
     // 4e-5 AU across) can be seen up close.
     this.camera = new THREE.PerspectiveCamera(55, 1, 1e-8, 1e9);
+    // Black-hole discs live on their own layer (drawn after lensing when post-processing is on).
+    this.camera.layers.enable(DISK_LAYER);
     this.camera.position.set(0, 5, 8);
     this.controls = new OrbitControls(this.camera, domElement);
     this.controls.enableDamping = true;
@@ -283,21 +288,58 @@ export class SystemView {
   }
 
   /** Black holes on screen as lenses: uv position and shadow radius in screen-height units. */
-  lensesOnScreen(viewportHeight: number): THREE.Vector3[] {
-    const out: THREE.Vector3[] = [];
+  lensesOnScreen(viewportHeight: number): LensInfo[] {
+    const out: LensInfo[] = [];
     const holes = this.sim.bodies.filter((b) => b.kind === 'blackhole').sort((a, b) => b.mass - a.mass);
     const v = new THREE.Vector3();
+    const pos = new THREE.Vector3();
+    const aspect = this.camera.aspect;
     for (const b of holes) {
-      v.set(b.x, b.y, b.z);
+      pos.set(b.x, b.y, b.z);
+      v.copy(pos);
       const wpp = this.worldPerPixel(v, viewportHeight);
       v.project(this.camera);
       if (v.z > 1 || Math.abs(v.x) > 1.5 || Math.abs(v.y) > 1.5) continue;
       const rs = b.radius / wpp / viewportHeight;
       if (rs < 0.002) continue;
-      out.push(new THREE.Vector3((v.x + 1) / 2, (v.y + 1) / 2, rs));
+      const lens: LensInfo = { x: (v.x + 1) / 2, y: (v.y + 1) / 2, rs };
+      // Spinning: the shadow's shape depends on the spin and on how its axis is tilted to us.
+      const axis = this.visuals.get(b.id)?.spinAxis();
+      const spin = Math.abs(b.spin ?? 0);
+      if (axis) {
+        const toCam = this.camera.position.clone().sub(pos).normalize();
+        // The side of the disc turning towards us: points p with (axis × p) · toCam > 0.
+        const approach = toCam.clone().cross(axis);
+        if ((b.spin ?? 0) < 0) approach.negate();
+        if (approach.lengthSq() > 1e-8) {
+          approach.normalize();
+          const tip = pos.clone().addScaledVector(approach, b.radius).project(this.camera);
+          const dx = (tip.x - v.x) * aspect, dy = tip.y - v.y;
+          const l = Math.hypot(dx, dy) || 1;
+          lens.axis = [dx / l, dy / l];
+          const incl = Math.acos(Math.min(1, Math.abs(axis.dot(toCam))));
+          lens.beam = 0.8 * Math.sin(incl);
+          if (spin > 1e-3) lens.shadow = this.shadowProfile(spin, incl);
+        }
+      }
+      out.push(lens);
       if (out.length >= 4) break;
     }
     return out;
+  }
+
+  private shadowCache = new Map<string, Float32Array>();
+
+  /** kerr.ts shadowProfile, cached by spin and inclination (to 0.01 and ~0.6°). */
+  private shadowProfile(spin: number, incl: number): Float32Array {
+    const key = `${spin.toFixed(2)}:${Math.round(incl * 100)}`;
+    let p = this.shadowCache.get(key);
+    if (!p) {
+      if (this.shadowCache.size > 500) this.shadowCache.clear();
+      p = shadowProfile(spin, incl, SHADOW_BINS);
+      this.shadowCache.set(key, p);
+    }
+    return p;
   }
 
   /** Rough radius (AU) containing the scene's bodies, for VR "tabletop" scaling. */

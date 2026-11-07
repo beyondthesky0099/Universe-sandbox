@@ -1,18 +1,19 @@
 import * as THREE from 'three';
 import { aimSun, atmosphereFor, insideAware, scatteringMaterial, shellScale } from './atmosphere';
 import { auroraActivity, auroraFor, auroraMesh, updateAurora } from './aurora';
+import { accretionDiskMesh, blackHoleView, diskAxis, updateAccretionDisk } from './accretionDisk';
+import { horizonRadius, SHADOW_RADIUS_SCHWARZSCHILD } from '../sim/kerr';
 import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import type { Body, BodyKind } from '../sim/body';
 import type { Climate } from '../sim/climate';
 import { EARTH_MASS } from '../sim/units';
 import { makePlanetTextures, seedFromName } from './planetTextures';
 import { mulberry32 } from '../procgen/rng';
-import { accretionTexture, glowTexture } from './textures';
+import { glowTexture } from './textures';
 import { getSolarData, poleScene, REAL_COLORS } from '../sim/solarSystemData';
 
 const SPHERE = new THREE.SphereGeometry(1, 64, 32);
 const SPHERE_LOW = new THREE.SphereGeometry(1, 24, 12);
-const DISK = new THREE.RingGeometry(1.6, 5, 96, 1);
 const RINGS = new THREE.RingGeometry(1.35, 2.5, 128, 1);
 const PROBE = new THREE.OctahedronGeometry(1, 0);
 const BEAM = new THREE.ConeGeometry(0.05, 1, 24, 1, true).translate(0, 0.5, 0);
@@ -241,6 +242,11 @@ export class BodyVisual {
     pos.needsUpdate = true;
   }
 
+  /** A black hole's spin axis (its disc's normal) in world space. */
+  spinAxis(): THREE.Vector3 | undefined {
+    return this.disk ? diskAxis(this.disk) : undefined;
+  }
+
   get isPlanet(): boolean {
     return (this.kind === 'rocky' || this.kind === 'gas') && !this.isProbe;
   }
@@ -284,10 +290,8 @@ export class BodyVisual {
       }
       case 'blackhole':
         material = new THREE.MeshBasicMaterial({ color: 0x000000 });
-        this.disk = new THREE.Mesh(
-          DISK,
-          new THREE.MeshBasicMaterial({ map: accretionTexture(), side: THREE.DoubleSide, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }),
-        );
+        // The disc lies in the hole's equator: its normal is the spin axis (accretionDisk.ts).
+        this.disk = accretionDiskMesh();
         this.disk.rotation.x = -Math.PI / 2 + 0.25;
         this.glow = this.makeGlow(0xff9a4a, 0.5);
         break;
@@ -479,7 +483,12 @@ export class BodyVisual {
     }
     if (this.disk) {
       this.disk.scale.setScalar(r);
-      this.disk.rotation.z += dt * 0.8;
+      updateAccretionDisk(this.disk, body.spin ?? 0, performance.now() / 1000);
+      // With the lensing pass drawing the (spin-shaped) shadow, the black sphere is just the
+      // event horizon; without it, the sphere stands in for the shadow.
+      if (blackHoleView.lensed) this.mesh.scale.setScalar(r * (horizonRadius(body.spin ?? 0) / SHADOW_RADIUS_SCHWARZSCHILD));
+      // The shaded disc gives the light; the soft glow would only be smeared into rings by the lens.
+      if (this.glow) this.glow.visible = !blackHoleView.lensed;
     }
     if (this.beams) {
       this.beams.scale.setScalar(Math.max(body.radius * 40, worldPerPixel * 90));

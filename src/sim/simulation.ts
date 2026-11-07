@@ -9,6 +9,7 @@ import {
   mainSequenceLifetime,
   kindForMass,
   mergedKind,
+  NEUTRON_MAX_MASS,
   NOMINAL_DENSITY,
   physicalRadius,
   radiusFor,
@@ -19,6 +20,7 @@ import { ParticleSet } from './particles';
 import { autopilotAccel, type Autopilot } from './spaceship';
 import { blastOnBody, ejectaLayers, L_SUN, peakLuminosity, maxEjectaSpeed, neutronStarKick, remnantInAu, thermonuclear, type Explosion } from './supernovaPhysics';
 import { stellarFate, typeIaNickel } from './stellarFate';
+import { mergerSpin } from './kerr';
 import { BODY_FIELDS, particleAccelSlice } from './particleKernel';
 import type { ParallelForces } from './parallel';
 import { AU_PER_YEAR_IN_KMS, C_AU_PER_YEAR, KPC_PER_MYR_IN_KMS, EARTH_MASS, G, type UnitSystem } from './units';
@@ -745,6 +747,8 @@ export class Simulation {
     big.z = cz;
 
     if (isCompact(big.kind) && isCompact(small.kind) && big.kind !== 'whitedwarf' && small.kind !== 'whitedwarf') {
+      // The remnant spins: the orbit's angular momentum ends up in it (kerr.ts, aligned spins).
+      if (big.kind === 'blackhole' || small.kind === 'blackhole' || m >= NEUTRON_MAX_MASS) big.spin = mergerSpin(big.mass, small.mass, big.spin ?? 0, small.spin ?? 0);
       this.events.push({
         type: 'gwmerger',
         message: `${small.name} and ${big.name} merged in a burst of gravitational waves!`,

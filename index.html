@@ -471,6 +471,11 @@
           <input id="metallicity" type="range" min="-2" max="0.5" step="0.05" value="0" />
           <output id="metallicity-out"></output>
         </label>
+        <label id="spin-row" class="row slider hidden" title="How fast the black hole spins: a* = cJ/GM², from 0 (not spinning) to 0.998 (as fast as gas can spin one up). Spin shrinks the horizon, lets the disc reach closer in and squashes the shadow.">
+          <span>Spin a*</span>
+          <input id="bh-spin" type="range" min="0" max="0.998" step="0.002" value="0" />
+          <output id="bh-spin-out"></output>
+        </label>
         <div class="row buttons">
           <button id="btn-mass-down" title="Halve mass">Mass ÷2</button>
           <button id="btn-mass-up" title="Double mass">Mass ×2</button>

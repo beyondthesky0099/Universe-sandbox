@@ -205,6 +205,24 @@ Plan, in priority order:
 - BodyVisual adds it in applyDetail and updates it only when the planet is more than 14 px across
   and a star is present. Tests: tests/aurora.test.ts.
 
+### V. Spinning (Kerr) black holes
+- [x] `src/sim/kerr.ts`:
+  - horizonRadius, iscoRadius (BPT 1972), photonOrbits, radiativeEfficiency.
+  - shadowOutline / shadowProfile: Bardeen 1973, 32 bins relative to √27 M, +x = approaching
+    side.
+  - mergerSpin: Rezzolla+ 2008, aligned spins.
+- Body field `spin` added to body.ts, protocol (BODY_STRIDE 15) and state.ts.
+  Simulation.merge sets the remnant's spin.
+- Rendering:
+  - `render/accretionDisk.ts`: ShaderMaterial disc on DISK_LAYER (2). Unit = √27 M. It has the
+    ISCO inner edge, a thin-disc T profile, Doppler D³ beaming and gravitational redshift, and
+    hides far-side light directly behind the hole.
+  - postfx: LensInfo, with the D-shaped shadow from the uShadow table, a beamed photon ring, and
+    an Einstein ring that takes light from just outside the hole. A LayerPass draws the discs
+    after the lens; it must null scene.background.
+  - BodyVisual: with the lens on, the sphere shrinks to the horizon and the glow is hidden.
+- UI: spin slider and facts (horizon, ISCO, efficiency). Tests: tests/kerr.test.ts.
+
 ### U. Planet "More about" section
 - [x] `src/sim/planetFacts.ts`:
   - planetFacts: gravity, escape velocity, density, insolation, equilibrium T and Hill radius.

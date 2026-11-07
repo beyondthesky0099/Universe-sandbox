@@ -295,12 +295,15 @@ The map shows **5,676 real nebulae** from professional catalogues:
   - `node scripts/build-nebula-images.mjs` photographs every nebula with a distance that is at least 1.2′ in radius, then keeps only the fields where the plates show diffuse light.
   - Most HII regions were found by WISE in the infrared and are hidden behind dust in visible light; their photographs show only stars, so they keep their emission-colour clouds.
   - Phones load only the named nebulae's page (1 MB); desktops load all four pages (5 MB).
-- **Photographed nebulae become 3D clouds up close.** The photograph only shows a nebula as seen from Earth, so its depth is a model:
-  - thousands of glowing particles are placed where the picture is bright, in its colours;
-  - they spread through a roughly spheroidal volume about as deep as the nebula is wide, around a mid-surface warped by smooth noise, so filaments sit at different depths;
-  - stars in the photograph are clipped out first, so they don't become streaks.
-  - Seen from Earth's direction you get the sharp photograph; orbit more than about 30° away and it becomes the 3D cloud, which is as bright overall as the photograph.
-  - Two clouds at a time on desktops, one on phones. The depth is an illustration, not a measurement.
+- **Nebulae become true volumes up close**, ray-marched on the GPU (`src/render/nebulaRaymarch.ts`). For every pixel, a ray steps through the gas, adding the light the gas emits and losing light to what it absorbs. Dust lanes darken what lies behind them, and the cloud has depth and parallax from every side.
+  - **Photographed nebulae:** their photograph (with its stars removed) sets how much gas lies along each line of sight from Earth and what colour it is. The gas is spread in depth around a noise-warped mid-surface and broken into filaments by 3D noise, and dark lanes inside the nebula become absorbing dust. Their look from Earth is the real one; their depth is a model.
+  - **The others, by type:**
+    - HII regions: clumpy gas around a cavity blown by their stars, teal oxygen inside and red hydrogen-alpha outside, with dust lanes.
+    - Planetary nebulae: ellipsoidal shells.
+    - Supernova remnants: thin, filamentary shells.
+    - Dark nebulae: absorbing dust, faintly lit.
+    - Reflection nebulae: blue scattered light.
+  - Only the nebulae near where you're looking become volumes: two at a time on desktops, one on phones, with fewer ray steps on phones.
 - Dark nebulae dim the light behind them. 442 of them are placed at the distance of their molecular cloud, measured with Gaia by Zucker et al. 2020: for example the Horsehead in Orion B at 411 pc, the Pipe at 180 pc and Rho Ophiuchi at 139 pc.
 - Planetary-nebula distances come from Gaia parallaxes of their central stars where those are good, and otherwise from statistical estimates.
 - Some HII distances are kinematic estimates, which can be off in the outer Galaxy.
@@ -410,6 +413,41 @@ chosen your own settings, and runs the orbit forecast every 2 s instead of every
 a phone emulation (390×844 screen, 4× slower CPU) this took the default Solar System from
 about 2.5 to 17 frames per second. In the Sky tab, pinch to zoom.
 
+## Fly a spaceship
+
+In the Sandbox, **🚀 Fly a spaceship** puts a ship in orbit around the selected body (or
+Earth), three of its real radii up, and switches the scene to real sizes so the orbit is visible
+outside the planet.
+- **Engines:** a chemical rocket (1 g, 10 km/s of Δv), an ion drive like NASA's Dawn
+  (0.08 mm/s², 11 km/s), or a hypothetical fusion torch (1 g, no fuel limit).
+- **Flying:** hold Prograde, Retrograde, Out, In, Normal or Anti (or W/S, A/D, Q/E) to thrust; a
+  throttle sets the power. Gravity from everything in the scene acts on the ship, and the panel
+  shows its altitude, speed, orbit, period and fuel.
+- **Autopilot:** flies into orbit around any body in the scene. It accelerates, turns, brakes,
+  then circularises and lets go. It runs inside the physics step, so it can hold an orbit that lasts
+  hours even when time runs at days per second. A 1 g torch flies from Earth to Mars in about two
+  days; a chemical rocket runs out of fuel long before.
+- Ships collide with a body's real surface, not its enlarged drawing.
+
+## Travel at any speed
+
+On the Galaxy Map and in the Universe tab, the 🚀 bar at the bottom sets a travel speed:
+- Real speeds: walking, a car, an airliner, the Space Station, Voyager 1 (17 km/s), the Parker Solar Probe (192 km/s), the fastest known star (1,700 km/s).
+- Fractions of light speed, up to 99.99%, and light speed itself.
+- Faster than light, up to a billion light-years per second, labelled as not physically possible (shown as a camera speed).
+
+Tick **Travel at this speed** and clicking a name, double-clicking a star or galaxy, or picking a
+search result travels there at that speed instead of flying in a moment. **Cruise** travels
+straight ahead. The trip plays in about 25 seconds, or in real time, or ×1,000 up to
+×1 trillion. Two clocks show the trip: Earth time (the galaxy's frame) and your own time on
+board, slower by the Lorentz factor γ. For example, Alpha Centauri at 99% of light takes 4.41
+years of Earth time and 0.62 years on board.
+
+**Near light speed you see what special relativity predicts** (`src/render/relativity.ts`):
+- Aberration crowds the stars towards the direction of travel (cos θ′ = (cos θ + β)/(1 + β cos θ)).
+- The Doppler shift turns the sky ahead blue and behind red, as a blackbody D = γ(1 + β cos θ) times hotter or cooler.
+- Beaming brightens the light ahead. It is softened on screen so the colours stay visible.
+
 ## Search everything
 
 The 🔍 button (or `/`, or Ctrl+K) searches about 28,000 things at once, and picking a result
@@ -433,6 +471,7 @@ Matching ignores case, spaces, punctuation and accents, and knows catalogue name
 | 🔍, `/` or Ctrl+K | Search everything, then Enter or click to go there |
 | Click a name label | Go there: follow the body or the Lagrange point (Sandbox), fly to it (Galaxy Map, Universe), turn and zoom to it (Sky) |
 | `Space` | Pause / resume |
+| Hold ⏩ (or `.`) / tap ⏩ | Fast-forward at 10× while held / double the speed |
 | Hold `R` (or ⏪) | Rewind |
 | `Ctrl+Z` / `Ctrl+Shift+Z` | Undo / redo |
 | `V` / `B` / `N` | Select / Spawn / Nudge tool (in the Galaxy view, `B` bookmarks) |

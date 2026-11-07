@@ -14,6 +14,7 @@ import {
 } from '../sim/galaxies';
 import { labelHitDepth, textSprite } from './galaxyView';
 import { ringTexture } from './textures';
+import { relativity, RELATIVITY_PARS } from './relativity';
 
 /**
  * The Universe map: real galaxies around the Milky Way, in megaparsecs. The Local Volume
@@ -28,9 +29,12 @@ const VERTEX = /* glsl */ `
   uniform float uMinSize;
   uniform float uMaxSize;
   varying vec3 vColor;
+  ${RELATIVITY_PARS}
   void main() {
-    vColor = color;
     vec4 mv = modelViewMatrix * vec4(position, 1.0);
+    // Near light speed: aberration, Doppler colour and beaming (relativity.ts).
+    float relD = relAberrate(mv);
+    vColor = relShift(color, relD);
     gl_PointSize = clamp(size * uScale / -mv.z, uMinSize, uMaxSize);
     gl_Position = projectionMatrix * mv;
   }
@@ -52,7 +56,7 @@ function material(opacity: number, minSize: number, maxSize: number): THREE.Shad
   return new THREE.ShaderMaterial({
     vertexShader: VERTEX,
     fragmentShader: FRAGMENT,
-    uniforms: { uScale: { value: 300 }, uOpacity: { value: opacity }, uMinSize: { value: minSize }, uMaxSize: { value: maxSize } },
+    uniforms: { uScale: { value: 300 }, uOpacity: { value: opacity }, uMinSize: { value: minSize }, uMaxSize: { value: maxSize }, uBeta: relativity.uBeta },
     transparent: true,
     depthWrite: false,
     depthTest: false,
@@ -272,6 +276,11 @@ export class CosmosView {
 
   get cameraDistance(): number {
     return this.camera.position.distanceTo(this.controls.target);
+  }
+
+  /** Stop a flight in progress (a trip at speed takes over the camera). */
+  cancelFlight(): void {
+    this.anim = undefined;
   }
 
   get animating(): boolean {

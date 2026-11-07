@@ -1,4 +1,5 @@
 import { applyFrame, type Frame, type ToWorker } from './protocol';
+import type { Autopilot } from './spaceship';
 import { PARTICLE_CAPACITY, Simulation, type SimEvent } from './simulation';
 import { captureState, type SimSettings } from './state';
 
@@ -57,6 +58,17 @@ export class SimHost {
     if (!this.worker) return;
     this.version++;
     this.post({ type: 'state', version: this.version, state: captureState(this.sim) });
+  }
+
+  /** Fire a ship's engine (AU/yr²), or stop it, without resending the whole state. */
+  setThrust(id: number, accel: [number, number, number] | undefined): void {
+    this.sim.setThrust(id, accel);
+    if (this.worker) this.post({ type: 'thrust', id, accel: accel ?? null });
+  }
+
+  setAutopilot(id: number, ap: Autopilot | undefined): void {
+    this.sim.setAutopilot(id, ap);
+    if (this.worker) this.post({ type: 'autopilot', id, autopilot: ap ?? null });
   }
 
   /** Change simulation settings without resending the whole state. */

@@ -4,7 +4,7 @@ import { AudioEngine, playSamples } from './audio';
 import { FEATURE, systemFeatures, type FeatureName } from './procgen/galaxy';
 import { mulberry32, pick, seedFromString } from './procgen/rng';
 import { generateStarSystem, starSummary, type StarSystemSpec } from './procgen/starSystem';
-import { GalaxyView, type GalaxyTarget } from './render/galaxyView';
+import { GalaxyView, type GalaxyTarget, type VolumeItem } from './render/galaxyView';
 import { CosmosView } from './render/cosmosView';
 import { SkyView } from './render/skyView';
 import { moonPhaseName, skyAt } from './sim/sky';
@@ -35,7 +35,10 @@ import { forecast, type Forecast } from './sim/forecast';
 import { SimHost } from './sim/host';
 import { circularOrbitVelocity } from './sim/orbits';
 import { predictPath } from './sim/predict';
-import { galacticCore, loadSolarSystemOnDate, loadStarSystem, PRESETS, type SceneSetup } from './sim/presets';
+import { addOrbiting, galacticCore, loadSolarSystemOnDate, loadStarSystem, PRESETS, type SceneSetup } from './sim/presets';
+import { ENGINES, KMS_TO_AU_YR, MS2_TO_AU_YR2, orbitAround, type Engine } from './sim/spaceship';
+import { SPACECRAFT_COLOR } from './sim/spacecraft';
+import { physicalRadius } from './sim/body';
 import { PARTICLE_CULL_DISTANCE, type SimEvent } from './sim/simulation';
 import { captureState, restoreState } from './sim/state';
 import { EXOPLANET_ACKNOWLEDGEMENT, loadCatalog, loadExoSystem, type ExoCatalog, type ExoHost } from './sim/exoplanets';
@@ -58,6 +61,8 @@ import { applyNudge, CHALLENGES, dailyChallenge, KMS, newChallengeState, shareTe
 import { burnDirections, planHohmann } from './game/transfer';
 import { LESSONS, type Lesson } from './game/lessons';
 import { SearchIndex, type SearchEntry } from './ui/search';
+import { autoWarp, formatDuration, formatSpeed as formatTravelSpeed, lorentz, SPEEDS, Trip, tripTimes } from './sim/travel';
+import { setObserverVelocity } from './render/relativity';
 import { activityEntries, clusterEntries, compactEntries, exoplanetEntries, galaxyEntries, nebulaEntries, skyBodyEntries, starEntries, structureEntries } from './ui/searchSources';
 import { LineChart, measure, METRICS, type MetricId, type Series } from './ui/graph';
 
@@ -226,7 +231,7 @@ export class App {
     this.system = new SystemView(this.sim, this.canvas, QUALITY_PRESETS[this.quality]);
     this.galaxy = new GalaxyView(this.canvas);
     // Phones: one 3D nebula at a time, with fewer particles.
-    if (LOW_POWER) this.galaxy.volumeBudget = { max: 1, named: 12000, other: 5000 };
+    if (LOW_POWER) this.galaxy.volumeBudget = { max: 1, steps: 32 };
     this.cosmos = new CosmosView(this.canvas);
     this.sky = new SkyView(this.canvas);
     this.tutorial = new Tutorial(this.tutorialSteps());
@@ -395,7 +400,7 @@ export class App {
           this.mp.sendState(this.syncState());
         }
       }
-      const events = this.host.advance(active ? this.timeScale * dt : 0, 12);
+      const events = this.host.advance(active ? this.timeScale * this.fastForward * dt : 0, 12);
       this.handleEvents(events);
       if (this.spawnDrag) this.updateSpawnPreview(performance.now());
       if (this.nudgeDrag) this.updateNudgePreview(performance.now());
@@ -423,16 +428,20 @@ export class App {
         this.updateForecast();
       }
       if (this.frames % 6 === 0) this.updateSystemHud();
+      if (this.shipThrustDir) this.tickShip();
+      if (this.frames % 6 === 0 && this.system.selectedId !== undefined) this.updateShipPanel();
       if (!this.transitioning && this.system.cameraDistance > this.exitDistance) void this.exitToGalaxy();
     } else if (this.view === 'sky') {
       this.tickSky(dt);
     } else if (this.view === 'cosmos') {
+      this.tickTrip(dt);
       this.cosmos.update(dt);
       this.renderView(this.cosmos.scene, this.cosmos.camera, []);
       if (this.frames % 15 === 0) $('stats').textContent = `${Math.round(this.fps)} fps`;
       const sel = this.cosmos.selected;
       if (
         !this.transitioning &&
+        !this.trip &&
         sel !== -1 &&
         !this.cosmos.animating &&
         this.cosmos.cameraDistance < this.cosmos.viewDistance(sel) * 0.12 &&
@@ -441,13 +450,15 @@ export class App {
         void this.visitCosmosGalaxy(sel);
       }
     } else {
+      this.tickTrip(dt);
       this.galaxy.update(dt);
       this.renderView(this.galaxy.scene, this.galaxy.camera, []);
-      if (!this.transitioning && !this.galaxy.animating && this.galaxy.cameraDistance > GALAXY_EXIT_DISTANCE) void this.openCosmos(true);
+      if (!this.transitioning && !this.trip && !this.galaxy.animating && this.galaxy.cameraDistance > GALAXY_EXIT_DISTANCE) void this.openCosmos(true);
       if (this.frames % 15 === 0) $('stats').textContent = `${Math.round(this.fps)} fps`;
       const sel = this.galaxy.selected;
       if (
         !this.transitioning &&
+        !this.trip &&
         sel !== -1 &&
         !this.galaxy.animating &&
         this.galaxy.cameraDistance < AUTO_ENTER_DISTANCE &&
@@ -473,6 +484,24 @@ export class App {
           this.lastMergeToast = now;
         }
       } else {
+        if (e.type === 'ship') {
+          // The worker switched an engine or autopilot off: do the same in this copy.
+          for (const b of this.sim.bodies) {
+            if (b.tag !== 'ship' || !e.message.startsWith(b.name)) continue;
+            this.sim.setAutopilot(b.id, undefined);
+            // Arrived: slow down to watch the new orbit go round.
+            const parent = /in orbit around/.test(e.message) ? this.sim.parentOf(b) : undefined;
+            if (parent) {
+              const r = Math.hypot(b.x - parent.x, b.y - parent.y, b.z - parent.z);
+              this.setTimeScale(Math.min(this.timeScale, (2 * Math.PI * Math.sqrt(r ** 3 / (this.sim.effectiveG * parent.mass))) / 20));
+              if (this.selectedShip() === b) this.system.follow(b.id, r * 4);
+            }
+            if (/out of fuel/.test(e.message)) {
+              this.sim.setThrust(b.id, undefined);
+              if (this.selectedShip() === b) this.stopShipThrust();
+            }
+          }
+        }
         toast(e.message, e.type === 'collapse' || e.type === 'supernova' ? 'collapse' : e.type === 'ignite' ? 'ignite' : '');
       }
     }
@@ -630,6 +659,13 @@ export class App {
     $('tab-system').classList.toggle('active', view === 'system');
     $('tab-sky').classList.toggle('active', view === 'sky');
     $('labels').classList.toggle('hidden', view !== 'system');
+    $('travel-bar').classList.toggle('hidden', view !== 'galaxy' && view !== 'cosmos');
+    if (view !== 'system') {
+      $('ship-panel').classList.add('hidden');
+      document.body.classList.remove('ship-flying');
+      this.stopShipThrust();
+    }
+    if (this.trip && this.trip.view !== view) this.stopTrip();
     document.querySelectorAll<HTMLElement>('[data-view]').forEach((el) => {
       const match = el.dataset.view === view;
       if (el.id === 'star-panel') el.classList.toggle('hidden', !match || this.galaxy.selected === -1);
@@ -1520,6 +1556,8 @@ export class App {
     const glow: Cloud[] = [];
     const dust: Cloud[] = [];
     const labels: { pos: [number, number, number]; label: string; color: string; size: number }[] = [];
+    // Each nebula also becomes a ray-marched volume up close; the sets are [dust, glow, ...pages].
+    const volumes: VolumeItem[] = [];
     let k = 0;
     for (const n of placed) {
       const pc = diameterPc(n) ?? (n.kind === 'pn' ? 0.5 : n.kind === 'snr' ? 20 : n.kind === 'refl' ? 1 : 5);
@@ -1532,22 +1570,25 @@ export class App {
         // The image spans 2.6 catalogue radii; a soft glow in the nebula's colour gives it depth.
         const named = image.page === 0;
         const page = images!.pages[image.page];
-        perPage[image.page].push({
-          pos,
-          size: size * 1.3,
-          color,
-          tile: tileRect(page, image.tile),
-          minPx: named ? 40 : 14,
-          brightness: 1.1,
-          rotation: 0,
-          puff: 0,
-          // Up close it becomes a 3D cloud, oriented as the photograph was taken from Earth.
-          volume: { rect: [(image.tile % page.cols) * page.tile, Math.floor(image.tile / page.cols) * page.tile, page.tile], ...pictureAxes(n.l, n.b, n.distanceKpc!) },
+        const rect = tileRect(page, image.tile);
+        // Up close it becomes a volume that looks like the photograph from Earth's direction.
+        volumes.push({
+          center: pos,
+          radius: (size * 1.3) / 2,
+          shape: 'photo',
+          seed: k,
+          photo: { set: 2 + image.page, rect },
+          axes: pictureAxes(n.l, n.b, n.distanceKpc!),
+          fade: [[2 + image.page, perPage[image.page].length], [1, glow.length]],
         });
+        perPage[image.page].push({ pos, size: size * 1.3, color, tile: rect, minPx: named ? 40 : 14, brightness: 1.1, rotation: 0, puff: 0 });
         glow.push({ pos, size: size * 1.6, color, minPx: named ? 50 : 18, brightness: 0.3, rotation: k, puff: k });
       } else {
         // A few overlapping puffs spread through the nebula's volume.
         const puffs = n.kind === 'pn' ? 1 : 3;
+        const set = n.kind === 'dark' ? 0 : 1;
+        const first = (n.kind === 'dark' ? dust : glow).length;
+        volumes.push({ center: pos, radius: size * 0.6, shape: n.kind, seed: k, fade: Array.from({ length: puffs }, (_, p): [number, number] => [set, first + p]) });
         for (let p = 0; p < puffs; p++) {
           const h = Math.sin(k * 12.9898 + p * 78.233) * 43758.5453;
           const r = (h - Math.floor(h)) * 0.3 * size;
@@ -1574,6 +1615,7 @@ export class App {
       'nebulae',
       [{ clouds: dust, absorb: true }, { clouds: glow }, ...perPage.map((clouds, p) => ({ clouds, atlas: atlases[p] }))],
       labels,
+      volumes,
     );
     this.galaxy.setRealLayerVisible('nebulae', $<HTMLInputElement>('opt-real-nebulae').checked);
     const count = (kind: string) => placed.filter((n) => n.kind === kind).length.toLocaleString('en-US');
@@ -1847,7 +1889,7 @@ export class App {
     else if (this.view === 'galaxy') text = 'Click a name to fly there · Click a star to inspect · Double-click to fly there · Zoom right in (or Enter) to visit · Zoom far out for other galaxies';
     else if (this.tool === 'spawn') text = 'Click to place · Drag to set velocity · Right-drag to orbit camera · Esc to cancel';
     else if (this.tool === 'nudge') text = 'Press on a body and drag to push it · Dashed line previews the new path · Right-drag to orbit camera';
-    else text = 'Click to select · Click a name or double-click to follow · Space pause · Hold R rewind · Ctrl+Z undo · B spawn · M galaxy map';
+    else text = 'Click to select · Click a name or double-click to follow · Space pause · Hold R rewind · Hold . fast-forward · Ctrl+Z undo · B spawn · M galaxy map';
     $('hint').textContent = text;
   }
 
@@ -1931,6 +1973,42 @@ export class App {
     this.rewindTimer = window.setInterval(step, 90);
     $('btn-rewind').classList.add('active');
     step();
+  }
+
+  /** Holding ⏩ (or the . key) runs time 10× faster; a tap doubles the speed instead. */
+  private fastForward = 1;
+  private forwardHold?: { timer: number; wasRunning: boolean; holding: boolean };
+
+  private forwardDown(): void {
+    if (this.forwardHold || this.view !== 'system') return;
+    const hold = { timer: 0, wasRunning: this.running, holding: false };
+    hold.timer = window.setTimeout(() => {
+      hold.holding = true;
+      this.fastForward = 10;
+      this.setRunning(true);
+      $('btn-forward').classList.add('active');
+      $('btn-forward').textContent = '×10';
+    }, 220);
+    this.forwardHold = hold;
+  }
+
+  private forwardUp(): void {
+    const hold = this.forwardHold;
+    if (!hold) return;
+    this.forwardHold = undefined;
+    clearTimeout(hold.timer);
+    if (hold.holding) {
+      this.fastForward = 1;
+      this.setRunning(hold.wasRunning);
+      $('btn-forward').classList.remove('active');
+      $('btn-forward').textContent = '⏩';
+    } else {
+      // A tap: twice as fast (up to the scene's limit), and make sure time is running.
+      const before = this.timeScale;
+      this.setTimeScale(this.timeScale * 2);
+      this.setRunning(true);
+      toast(this.timeScale > before ? `Time: ${formatRate(this.timeScale)}` : `Already at this scene's top speed (${formatRate(this.timeScale)})`);
+    }
   }
 
   private stopRewind(): void {
@@ -2018,6 +2096,184 @@ export class App {
     this.system.selectedId = undefined;
     this.system.showApproach(undefined);
     $('body-panel').classList.add('hidden');
+    this.stopShipThrust();
+    $('ship-panel').classList.add('hidden');
+    document.body.classList.remove('ship-flying');
+  }
+
+  // --- Spaceship ---------------------------------------------------------------------------------
+
+  private shipThrustDir?: string;
+
+  private selectedShip(): Body | undefined {
+    const b = this.selectedBody();
+    return b?.tag === 'ship' ? b : undefined;
+  }
+
+  private shipEngine(): Engine {
+    return ENGINES.find((e) => e.id === $<HTMLSelectElement>('ship-engine').value) ?? ENGINES[0];
+  }
+
+  /** The engine's acceleration at the current throttle (AU/yr²). */
+  private shipAccel(): number {
+    return this.shipEngine().accel * MS2_TO_AU_YR2 * 10 ** Number($<HTMLInputElement>('ship-throttle').value);
+  }
+
+  /** A comfortable orbit around a body: three times its real radius (ships hit the real surface). */
+  private orbitRadiusAround(target: Body): number {
+    return 3 * physicalRadius(target.kind, target.mass);
+  }
+
+  private spawnShip(): void {
+    if (this.sim.units !== 'au-yr') return void toast('Spaceships fly in planetary systems: load one first.');
+    const sel = this.selectedBody();
+    const parent =
+      sel && sel.tag !== 'ship' && sel.tag !== 'probe' ? sel : (this.sim.bodies.find((b) => b.name === 'Earth') ?? [...this.sim.bodies].filter((b) => b.tag !== 'ship').sort((a, b) => b.mass - a.mass)[0]);
+    if (!parent) return void toast('Add a planet or a star first.');
+    const engine = this.shipEngine();
+    const n = this.sim.bodies.filter((b) => b.tag === 'ship').length;
+    const r = this.orbitRadiusAround(parent);
+    let ship: Body | undefined;
+    // Real sizes, so the ship's orbit is visible outside the planet (an enlarged Earth would be
+    // wider than the whole region where Earth holds satellites).
+    if (!this.sim.trueScale) {
+      $<HTMLInputElement>('opt-truescale').checked = true;
+      this.mutate('switching to real sizes', () => setTrueScale(this.sim, true));
+    }
+    this.mutate('launching a spaceship', () => {
+      ship = addOrbiting(
+        this.sim,
+        parent,
+        { name: n ? `Ship ${n + 1}` : 'Ship', mass: 1e-20, kind: 'rocky', color: SPACECRAFT_COLOR, tag: 'ship', ...(Number.isFinite(engine.deltaV) ? { fuel: engine.deltaV * KMS_TO_AU_YR } : {}) },
+        { a: r, nu: Math.random() * Math.PI * 2 },
+      );
+    });
+    if (!ship) return;
+    this.selectBody(ship);
+    this.system.follow(ship.id, r * 4);
+    // Slow enough to see an orbit go round.
+    const period = 2 * Math.PI * Math.sqrt(r ** 3 / (this.sim.effectiveG * parent.mass));
+    this.setTimeScale(Math.min(this.timeScale, period / 20));
+    this.setRunning(true);
+    toast(`${ship.name} is in orbit around ${parent.name}. Hold the thrust buttons (or W/S, A/D, Q/E) to fly, or pick a target for the autopilot.`);
+  }
+
+  /** Thrust direction (unit vector, scene axes) relative to the body the ship orbits. */
+  private thrustVector(ship: Body, dir: string): [number, number, number] | undefined {
+    const ref = this.sim.parentOf(ship);
+    const rx = ship.x - (ref?.x ?? 0), ry = ship.y - (ref?.y ?? 0), rz = ship.z - (ref?.z ?? 0);
+    const vx = ship.vx - (ref?.vx ?? 0), vy = ship.vy - (ref?.vy ?? 0), vz = ship.vz - (ref?.vz ?? 0);
+    const unit = (x: number, y: number, z: number): [number, number, number] | undefined => {
+      const l = Math.hypot(x, y, z);
+      return l > 0 ? [x / l, y / l, z / l] : undefined;
+    };
+    switch (dir) {
+      case 'prograde': return unit(vx, vy, vz);
+      case 'retrograde': return unit(-vx, -vy, -vz);
+      case 'out': return unit(rx, ry, rz);
+      case 'in': return unit(-rx, -ry, -rz);
+      case 'normal': return unit(ry * vz - rz * vy, rz * vx - rx * vz, rx * vy - ry * vx);
+      case 'anti': return unit(-(ry * vz - rz * vy), -(rz * vx - rx * vz), -(rx * vy - ry * vx));
+    }
+    return undefined;
+  }
+
+  private startShipThrust(dir: string): void {
+    const ship = this.selectedShip();
+    if (!ship) return;
+    if (ship.fuel !== undefined && ship.fuel <= 0) return void toast('Out of fuel. Pick another engine to refuel.');
+    if (this.sim.autopilot.has(ship.id)) this.host.setAutopilot(ship.id, undefined);
+    this.shipThrustDir = dir;
+    document.querySelectorAll<HTMLElement>('[data-thrust]').forEach((b) => b.classList.toggle('active', b.dataset.thrust === dir));
+    if (!this.running) this.setRunning(true);
+    this.tickShip();
+  }
+
+  private stopShipThrust(): void {
+    if (!this.shipThrustDir) return;
+    this.shipThrustDir = undefined;
+    document.querySelectorAll<HTMLElement>('[data-thrust]').forEach((b) => b.classList.remove('active'));
+    for (const id of [...this.sim.thrust.keys()]) this.host.setThrust(id, undefined);
+  }
+
+  /** Each frame: keep the engine pointed (prograde turns as the ship moves) and update the readout. */
+  private tickShip(): void {
+    const ship = this.selectedShip();
+    if (this.shipThrustDir) {
+      const d = ship && this.thrustVector(ship, this.shipThrustDir);
+      if (!ship || !d) return this.stopShipThrust();
+      const a = this.shipAccel();
+      this.host.setThrust(ship.id, [d[0] * a, d[1] * a, d[2] * a]);
+    }
+  }
+
+  private updateShipPanel(): void {
+    const ship = this.selectedShip();
+    const flying = !!ship && this.view === 'system';
+    $('ship-panel').classList.toggle('hidden', !flying);
+    document.body.classList.toggle('ship-flying', flying);
+    if (!ship) return;
+    // Autopilot targets: everything else in the scene, the body it orbits first.
+    const parent = this.sim.parentOf(ship);
+    const options = this.sim.bodies.filter((b) => b !== ship && b.tag !== 'ship').sort((a, b) => (a === parent ? -1 : b === parent ? 1 : b.mass - a.mass));
+    const select = $<HTMLSelectElement>('ship-target');
+    const sig = options.map((o) => o.id).join(',');
+    if (select.dataset.sig !== sig) {
+      const prev = select.value;
+      select.innerHTML = options.map((o) => `<option value="${o.id}">Orbit ${escapeHtml(o.name)}</option>`).join('');
+      select.value = options.some((o) => String(o.id) === prev) ? prev : String(options[0]?.id ?? '');
+      select.dataset.sig = sig;
+    }
+    const engine = this.shipEngine();
+    $('ship-throttle-out').textContent = `${Math.round(10 ** Number($<HTMLInputElement>('ship-throttle').value) * 100)}%`;
+    const on = this.sim.autopilot.get(ship.id);
+    $('ship-autopilot').textContent = on ? 'Stop autopilot' : 'Autopilot: orbit';
+    const km = (au: number) => (au < 0.01 ? `${Math.round(au * 1.495978707e8).toLocaleString('en-US')} km` : `${au.toFixed(au < 1 ? 3 : 2)} AU`);
+    const lines: string[] = [];
+    if (parent) {
+      const o = orbitAround(ship, parent, this.sim.effectiveG);
+      const R = physicalRadius(parent.kind, parent.mass);
+      lines.push(`Around <b>${escapeHtml(parent.name)}</b>: ${km(Math.max(0, o.distance - R))} up · ${(o.speed / KMS_TO_AU_YR).toFixed(2)} km/s`);
+      lines.push(
+        o.apoapsis === Infinity
+          ? `Escaping ${escapeHtml(parent.name)} (closest ${km(Math.max(0, o.periapsis - R))} up)`
+          : o.periapsis < R
+            ? `⚠ On a path into ${escapeHtml(parent.name)}: lowest point below the surface`
+            : `Orbit ${km(o.periapsis - R)} × ${km(o.apoapsis - R)} up · one orbit takes ${formatTime(o.period ?? 0)}`,
+      );
+    }
+    const fuel = ship.fuel === undefined ? 'unlimited Δv (hypothetical engine)' : `${(ship.fuel / KMS_TO_AU_YR).toFixed(2)} km/s of Δv left`;
+    const thrust = this.sim.appliedThrust.get(ship.id) ?? this.sim.thrust.get(ship.id);
+    const g = thrust ? Math.hypot(...thrust) / MS2_TO_AU_YR2 / 9.80665 : 0;
+    const engineState = on ? `autopilot steering (up to ${(on.maxAccel / MS2_TO_AU_YR2 / 9.80665).toPrecision(2)} g)` : thrust ? `engine on: ${g >= 0.01 ? `${g.toFixed(2)} g` : `${(g * 9.80665 * 1000).toPrecision(2)} mm/s²`}` : 'engine off';
+    lines.push(`${fuel} · ${engineState}${engine.hypothetical ? ' · <span class="fiction">hypothetical engine</span>' : ''}`);
+    if (on) {
+      const target = this.sim.getBody(on.target);
+      if (target) lines.push(`Autopilot: into orbit around ${escapeHtml(target.name)}, ${km(Math.max(0, Math.hypot(ship.x - target.x, ship.y - target.y, ship.z - target.z) - physicalRadius(target.kind, target.mass)))} away`);
+    }
+    $('ship-readout').innerHTML = lines.join('<br>');
+  }
+
+  private toggleAutopilot(): void {
+    const ship = this.selectedShip();
+    if (!ship) return;
+    if (this.sim.autopilot.has(ship.id)) {
+      this.host.setAutopilot(ship.id, undefined);
+      toast('Autopilot off');
+    } else {
+      const target = this.sim.getBody(Number($<HTMLSelectElement>('ship-target').value));
+      if (!target) return;
+      if (ship.fuel !== undefined && ship.fuel <= 0) return void toast('Out of fuel. Pick another engine to refuel.');
+      this.stopShipThrust();
+      const maxAccel = this.shipAccel();
+      this.host.setAutopilot(ship.id, { target: target.id, radius: this.orbitRadiusAround(target), maxAccel });
+      if (!this.running) this.setRunning(true);
+      // Speed time up so the flight (accelerate half way, brake the other half: 2√(d/a)) plays in ~25 s.
+      const d = Math.hypot(ship.x - target.x, ship.y - target.y, ship.z - target.z);
+      this.setTimeScale(Math.max(this.timeScale, (2 * Math.sqrt(d / maxAccel)) / 25));
+      toast(`Autopilot: flying ${ship.name} into orbit around ${target.name}`);
+    }
+    this.updateShipPanel();
   }
 
   private updateForecast(): void {
@@ -2072,14 +2328,22 @@ export class App {
   private updateBodyPanel(): void {
     const body = this.selectedBody();
     if (!body) return;
+    this.updateShipPanel();
     $('body-name').textContent = body.name;
-    const facts: [string, string][] = [
-      ['Type', kindLabel(body)],
-      ['Mass', formatMass(body.mass)],
-      [this.sim.trueScale ? 'Radius' : 'Radius (enlarged)', this.sim.trueScale ? formatKm(body.radius) : formatDistance(body.radius)],
-    ];
+    // Spacecraft (probes and ships) are test particles: no meaningful mass, size, climate or tides.
+    const craft = body.tag === 'ship' || body.tag === 'probe';
+    $('btn-mass-down').parentElement!.classList.toggle('hidden', craft);
+    const facts: [string, string][] = craft
+      ? [['Type', kindLabel(body)]]
+      : [
+          ['Type', kindLabel(body)],
+          ['Mass', formatMass(body.mass)],
+          [this.sim.trueScale ? 'Radius' : 'Radius (enlarged)', this.sim.trueScale ? formatKm(body.radius) : formatDistance(body.radius)],
+        ];
     const alerts: string[] = [];
-    if (body.kind === 'rocky' || body.kind === 'gas') {
+    if (craft) {
+      // Nothing about its own physics to show: the orbit below says it all.
+    } else if (body.kind === 'rocky' || body.kind === 'gas') {
       const t = bodyTemperature(this.sim.bodies, body);
       facts.push(['Temperature', formatTemperature(t)], ['Climate', capitalize(climateFor(body.kind, t))]);
       if (isHabitable(body.kind, body.mass, t)) alerts.push(`<div class="alert good">🌍 Habitable: liquid water could exist on the surface.</div>`);
@@ -2111,7 +2375,7 @@ export class App {
       } else {
         facts.push(['Orbit', 'Unbound (escaping)']);
       }
-      if (isTidallyLocked(body, parent, r)) facts.push(['Rotation', 'Tidally locked']);
+      if (!craft && isTidallyLocked(body, parent, r)) facts.push(['Rotation', 'Tidally locked']);
       const myPeriod = orbitalPeriod(body, parent, this.sim.gravityScale);
       if (myPeriod) {
         for (const other of this.sim.bodies) {
@@ -2126,7 +2390,7 @@ export class App {
         }
       }
       const roche = this.sim.rocheLimit(parent, body);
-      if (r < roche * 1.5 && parent.mass > body.mass * 5 && !isCompact(body.kind)) {
+      if (!craft && r < roche * 1.5 && parent.mass > body.mass * 5 && !isCompact(body.kind)) {
         alerts.push(`<div class="alert warn">Close to ${escapeHtml(parent.name)}'s Roche limit (${fmt(roche)} AU): tides may tear it apart.</div>`);
       }
     } else {
@@ -2523,6 +2787,140 @@ export class App {
   // ---------------------------------------------------------------------------
   // Real data: exoplanets, the solar neighbourhood, dated Solar System
 
+  // --- Travel at any speed ---------------------------------------------------------------------
+
+  /** A trip in progress on the Galaxy Map or in the Universe tab (src/sim/travel.ts). */
+  private trip?: { trip: Trip; view: 'galaxy' | 'cosmos'; dir: THREE.Vector3; dest?: THREE.Vector3; stop: number; name: string; hudTimer: number };
+
+  private travelling(): boolean {
+    return $<HTMLInputElement>('travel-on').checked;
+  }
+
+  /** Camera, controls and scale (map units per light-year) of the Galaxy Map or the Universe tab. */
+  private navOf(view: 'galaxy' | 'cosmos') {
+    return view === 'galaxy'
+      ? { camera: this.galaxy.camera, controls: this.galaxy.controls, unitsPerLy: UNITS_PER_KPC / 3261.56, cancel: () => this.galaxy.cancelFlight() }
+      : { camera: this.cosmos.camera, controls: this.cosmos.controls, unitsPerLy: 1 / 3.26156e6, cancel: () => this.cosmos.cancelFlight() };
+  }
+
+  private targetName(t: GalaxyTarget): string {
+    if (t === 'core') return 'the Galactic Centre';
+    if (t === 'sol') return 'the Sun';
+    if (typeof t === 'object') return this.exoMapHosts[t.exo]?.name ?? 'the star';
+    return this.galaxy.data.names[t];
+  }
+
+  /** To a point on the Galaxy Map: a quick flight, or a trip at the chosen speed. */
+  private goGalaxyPoint(pos: THREE.Vector3, distance: number, name: string): void {
+    if (this.travelling()) this.startTrip('galaxy', pos, distance, name);
+    else {
+      this.galaxy.flyToPoint(pos, distance);
+      toast(`Flying to ${name}`);
+    }
+  }
+
+  private goGalaxyTarget(t: GalaxyTarget): void {
+    // Stop just outside the distance that enters a star's system, so arriving doesn't jump in.
+    if (this.travelling()) this.startTrip('galaxy', this.galaxy.targetPosition(t), AUTO_ENTER_DISTANCE * 1.6, this.targetName(t));
+    else this.galaxy.flyTo(t);
+  }
+
+  private goCosmosPoint(pos: THREE.Vector3, distance: number, name: string): void {
+    if (this.travelling()) this.startTrip('cosmos', pos, distance, name);
+    else {
+      this.cosmos.flyToPoint(pos, distance);
+      toast(`Flying to ${name}`);
+    }
+  }
+
+  private goCosmosGalaxy(index: number): void {
+    // Arriving at a quarter of the viewing distance would enter the galaxy; stop at the viewing distance.
+    if (this.travelling()) this.startTrip('cosmos', this.cosmos.position(index), this.cosmos.viewDistance(index), displayName(this.cosmos.local[index]));
+    else this.cosmos.flyTo(index);
+  }
+
+  /** Start a trip to `dest` (stopping `stop` map units short), or cruise straight ahead with no destination. */
+  private startTrip(view: 'galaxy' | 'cosmos', dest: THREE.Vector3 | undefined, stop: number, name: string): void {
+    const nav = this.navOf(view);
+    nav.cancel();
+    let dir: THREE.Vector3;
+    let remainingLy = Infinity;
+    if (dest) {
+      nav.controls.target.copy(dest);
+      dir = dest.clone().sub(nav.camera.position);
+      remainingLy = Math.max(0, dir.length() - stop) / nav.unitsPerLy;
+      dir.normalize();
+      if (remainingLy <= 0) {
+        toast(`Already at ${name}`);
+        return;
+      }
+    } else {
+      dir = nav.controls.target.clone().sub(nav.camera.position).normalize();
+    }
+    const speed = SPEEDS[Number($<HTMLSelectElement>('travel-speed').value)] ?? SPEEDS[0];
+    const warpChoice = $<HTMLSelectElement>('travel-warp').value;
+    // Auto: arrive in about 25 s; cruising, cover 300 light-years (galaxy) or 3 million (universe) per second.
+    const warp = warpChoice !== 'auto' ? Number(warpChoice) : Number.isFinite(remainingLy) ? autoWarp(remainingLy, speed.c) : autoWarp(view === 'galaxy' ? 300 : 3e6, speed.c, 1);
+    this.trip = { trip: new Trip(speed.c, warp, remainingLy), view, dir, dest: dest?.clone(), stop, name, hudTimer: 0 };
+    $('travel-hud').classList.remove('hidden');
+    $('travel-cruise').textContent = 'Stop ■';
+    this.renderTripHud();
+  }
+
+  private stopTrip(message?: string): void {
+    const t = this.trip;
+    this.trip = undefined;
+    setObserverVelocity(this.galaxy.camera, undefined, 0);
+    $('travel-hud').classList.add('hidden');
+    $('travel-cruise').textContent = 'Cruise ▶';
+    if (t && message) toast(message);
+  }
+
+  /** Each frame of a trip: move the camera, update the relativistic view and the clocks. */
+  private tickTrip(dt: number): void {
+    const t = this.trip;
+    if (!t) return;
+    if (this.view !== t.view) {
+      this.stopTrip();
+      return;
+    }
+    const nav = this.navOf(t.view);
+    if (t.dest) {
+      // Head for the destination even if the view was turned on the way.
+      t.dir.copy(t.dest).sub(nav.camera.position);
+      t.trip.remainingLy = Math.max(0, t.dir.length() - t.stop) / nav.unitsPerLy;
+      t.dir.normalize();
+    }
+    const { ly, arrived } = t.trip.step(Math.min(dt, 0.5));
+    const delta = t.dir.clone().multiplyScalar(ly * nav.unitsPerLy);
+    nav.camera.position.add(delta);
+    if (!t.dest) nav.controls.target.add(delta);
+    setObserverVelocity(nav.camera, t.dir, t.trip.speed <= 1 ? t.trip.speed : 0);
+    t.hudTimer -= dt;
+    if (t.hudTimer <= 0) {
+      t.hudTimer = 0.2;
+      this.renderTripHud();
+    }
+    if (arrived) {
+      const ship = t.trip.speed <= 1 ? `, ${formatDuration(t.trip.shipYears)} on board` : '';
+      this.stopTrip(`Arrived at ${t.name}: ${formatLy(t.trip.coveredLy)} in ${formatDuration(t.trip.earthYears)} of Earth time${ship}.`);
+    }
+  }
+
+  private renderTripHud(): void {
+    const t = this.trip;
+    if (!t) return;
+    const c = t.trip.speed;
+    const g = lorentz(c);
+    const speed = `<b>${formatTravelSpeed(c)}</b>${g !== undefined && Number.isFinite(g) && g > 1.0001 ? ` · γ = ${g < 10 ? g.toFixed(3) : g.toFixed(1)}` : ''}`;
+    const fiction = c > 1 ? ' · <span class="fiction">faster than light is not possible: shown as a camera speed</span>' : c === 1 ? ' · <span class="fiction">only light moves this fast</span>' : '';
+    const left = Number.isFinite(t.trip.remainingLy)
+      ? `To ${escapeHtml(t.name)}: ${formatLy(t.trip.remainingLy)} left, ${formatDuration(t.trip.remainingLy / c)} more${c <= 1 ? ` (${formatDuration(tripTimes(t.trip.remainingLy, c).shipYears ?? 0)} on board)` : ''}`
+      : `Cruising · ${formatLy(t.trip.coveredLy)} so far`;
+    const clocks = `Earth time ${formatDuration(t.trip.earthYears)}${c <= 1 ? ` · your time ${formatDuration(t.trip.shipYears)}` : ''} · time warp ×${t.trip.warp.toLocaleString('en-US', { maximumSignificantDigits: 3 })}`;
+    $('travel-hud').innerHTML = `${speed}${fiction}<br>${left}<br>${clocks}`;
+  }
+
   // --- Search everything ---------------------------------------------------------------------
 
   private searchIndex?: Promise<SearchIndex>;
@@ -2618,8 +3016,7 @@ export class App {
         if (!this.galaxyBuilt || this.galaxySeed !== MILKY_WAY_SEED || this.galaxyOrigin !== 'Milky Way') this.buildGalaxy(MILKY_WAY_SEED);
         if (this.view !== 'galaxy') await this.switchView('galaxy');
         const size = ((a.sizePc ?? 0) / 1000) * UNITS_PER_KPC;
-        this.galaxy.flyToPoint(new THREE.Vector3(...galacticToMap(a.l, a.b, a.dKpc)), Math.max(0.3, size * 4));
-        toast(`Flying to ${r.name}`);
+        this.goGalaxyPoint(new THREE.Vector3(...galacticToMap(a.l, a.b, a.dKpc)), Math.max(0.3, size * 4), r.name);
         break;
       }
       case 'sky': {
@@ -2637,12 +3034,11 @@ export class App {
           const i = this.cosmos.indexOf(a.name);
           if (i >= 0) {
             this.selectCosmos(i);
-            this.cosmos.flyTo(i);
+            this.goCosmosGalaxy(i);
           }
         } else {
-          this.cosmos.flyToPoint(new THREE.Vector3(...galacticToCosmos(a.l, a.b, a.dMpc)), a.dMpc < 1 ? 3 : 8);
+          this.goCosmosPoint(new THREE.Vector3(...galacticToCosmos(a.l, a.b, a.dMpc)), a.dMpc < 1 ? 3 : 8, r.name);
         }
-        toast(`Flying to ${r.name}`);
         break;
       }
       case 'body': {
@@ -3008,8 +3404,7 @@ export class App {
       const label = this.galaxy.pickLabel(x, y);
       if (label) {
         if (label.target !== undefined) this.selectTarget(label.target);
-        this.galaxy.flyToPoint(label.pos, label.distance);
-        toast(`Flying to ${label.name}`);
+        this.goGalaxyPoint(label.pos, label.distance, label.name);
         return;
       }
       this.selectTarget(this.galaxy.pick(x, y, this.width, this.height));
@@ -3018,11 +3413,10 @@ export class App {
       if (label) {
         if (label.index !== undefined) {
           this.selectCosmos(label.index);
-          this.cosmos.flyTo(label.index);
+          this.goCosmosGalaxy(label.index);
         } else {
-          this.cosmos.flyToPoint(label.pos, label.distance);
+          this.goCosmosPoint(label.pos, label.distance, label.name);
         }
-        toast(`Flying to ${label.name}`);
         return;
       }
       this.selectCosmos(this.cosmos.pick(x, y, this.width, this.height));
@@ -3040,7 +3434,7 @@ export class App {
       const index = this.cosmos.pick(x, y, this.width, this.height);
       if (index !== -1) {
         this.selectCosmos(index);
-        this.cosmos.flyTo(index);
+        this.goCosmosGalaxy(index);
       }
       return;
     }
@@ -3048,7 +3442,7 @@ export class App {
       const target = this.galaxy.pick(x, y, this.width, this.height);
       if (target !== -1) {
         this.selectTarget(target);
-        this.galaxy.flyTo(target);
+        this.goGalaxyTarget(target);
       }
     } else if (this.tool === 'select') {
       const body = this.system.pick(x, y, this.width, this.height);
@@ -3204,6 +3598,17 @@ export class App {
         case 'r':
           if (!e.repeat) this.startRewind();
           break;
+        case '.':
+          if (!e.repeat) this.forwardDown();
+          break;
+        case 'w':
+        case 's':
+        case 'a':
+        case 'd':
+        case 'q':
+        case 'e':
+          if (!e.repeat && this.selectedShip()) this.startShipThrust({ w: 'prograde', s: 'retrograde', a: 'out', d: 'in', q: 'normal', e: 'anti' }[key]!);
+          break;
         case 'v':
           this.setTool('select');
           break;
@@ -3249,6 +3654,8 @@ export class App {
     });
     window.addEventListener('keyup', (e) => {
       if (e.key.toLowerCase() === 'r') this.stopRewind();
+      if (e.key === '.') this.forwardUp();
+      if (this.shipThrustDir && 'wsadqe'.includes(e.key.toLowerCase())) this.stopShipThrust();
     });
   }
 
@@ -3265,7 +3672,7 @@ export class App {
       else if (this.view === 'cosmos') void this.visitCosmosGalaxy(this.cosmos.indexOf(this.galaxyOrigin || 'Milky Way'));
     });
     $('tab-cosmos').addEventListener('click', () => this.view !== 'cosmos' && void this.openCosmos(this.view === 'galaxy'));
-    $('btn-cosmos-fly').addEventListener('click', () => this.cosmos.selected !== -1 && this.cosmos.flyTo(this.cosmos.selected));
+    $('btn-cosmos-fly').addEventListener('click', () => this.cosmos.selected !== -1 && this.goCosmosGalaxy(this.cosmos.selected));
     $('btn-cosmos-visit').addEventListener('click', () => this.cosmos.selected !== -1 && void this.visitCosmosGalaxy(this.cosmos.selected));
     $('btn-cosmos-home').addEventListener('click', () => {
       const mw = this.cosmos.indexOf('Milky Way');
@@ -3282,7 +3689,7 @@ export class App {
       if (!li) return;
       const index = Number(li.dataset.galaxy);
       this.selectCosmos(index);
-      this.cosmos.flyTo(index);
+      this.goCosmosGalaxy(index);
     });
     $('tab-system').addEventListener('click', () => void this.switchToSandbox());
     $('tab-sky').addEventListener('click', () => void this.openSky());
@@ -3297,6 +3704,14 @@ export class App {
       this.startRewind();
     });
     for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) rewind.addEventListener(ev, () => this.stopRewind());
+    const forward = $('btn-forward');
+    forward.addEventListener('pointerdown', (e) => {
+      forward.setPointerCapture(e.pointerId);
+      this.forwardDown();
+    });
+    forward.addEventListener('pointerup', () => this.forwardUp());
+    forward.addEventListener('pointercancel', () => this.forwardHold?.holding && this.forwardUp());
+    forward.addEventListener('contextmenu', (e) => e.preventDefault());
     $('btn-sound').addEventListener('click', () => this.setSound(!this.audio.isEnabled));
     const postfxBox = $<HTMLInputElement>('opt-postfx');
     postfxBox.checked = this.postfxOn;
@@ -3323,7 +3738,7 @@ export class App {
     $('btn-galaxy-go').addEventListener('click', goSeed);
     $<HTMLInputElement>('galaxy-seed').addEventListener('keydown', (e) => e.key === 'Enter' && goSeed());
     $('btn-galaxy-random').addEventListener('click', () => this.buildGalaxy(Math.floor(Math.random() * 1e9)));
-    $('btn-star-fly').addEventListener('click', () => this.galaxy.selected !== -1 && this.galaxy.flyTo(this.galaxy.selected));
+    $('btn-star-fly').addEventListener('click', () => this.galaxy.selected !== -1 && this.goGalaxyTarget(this.galaxy.selected));
     $('btn-star-enter').addEventListener('click', () => this.galaxy.selected !== -1 && void this.enterTarget(this.galaxy.selected));
     $('btn-star-bookmark').addEventListener('click', () => this.toggleBookmark());
     $('btn-back').addEventListener('click', () => void this.exitToGalaxy());
@@ -3334,7 +3749,7 @@ export class App {
       if (!li) return;
       const i = Number(li.dataset.index);
       this.selectTarget(i);
-      this.galaxy.flyTo(i);
+      this.goGalaxyTarget(i);
     };
     for (const id of ['search-results', 'bookmark-list']) {
       $(id).addEventListener('click', pickFromList);
@@ -3655,6 +4070,51 @@ export class App {
     });
     $('btn-learn').addEventListener('click', () => this.openLessonMenu());
     $('btn-search').addEventListener('click', () => this.openSearch());
+    $('btn-ship').addEventListener('click', () => this.spawnShip());
+    $('ship-engine').innerHTML = ENGINES.map((e) => `<option value="${e.id}">${escapeHtml(e.label)}</option>`).join('');
+    $('ship-engine').addEventListener('change', () => {
+      const ship = this.selectedShip();
+      if (!ship) return;
+      // A new engine comes with a full tank.
+      const engine = this.shipEngine();
+      this.mutate(`fitting ${ship.name} with a new engine`, () => (ship.fuel = Number.isFinite(engine.deltaV) ? engine.deltaV * KMS_TO_AU_YR : undefined));
+      const ap = this.sim.autopilot.get(ship.id);
+      if (ap) this.host.setAutopilot(ship.id, { ...ap, maxAccel: this.shipAccel() });
+      this.updateShipPanel();
+    });
+    $('ship-throttle').addEventListener('input', () => {
+      const ship = this.selectedShip();
+      const ap = ship && this.sim.autopilot.get(ship.id);
+      if (ship && ap) this.host.setAutopilot(ship.id, { ...ap, maxAccel: this.shipAccel() });
+      this.updateShipPanel();
+    });
+    $('ship-autopilot').addEventListener('click', () => this.toggleAutopilot());
+    document.querySelectorAll<HTMLElement>('[data-thrust]').forEach((b) => {
+      b.addEventListener('pointerdown', (e) => {
+        b.setPointerCapture(e.pointerId);
+        this.startShipThrust(b.dataset.thrust!);
+      });
+      for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) b.addEventListener(ev, () => this.stopShipThrust());
+      b.addEventListener('contextmenu', (e) => e.preventDefault());
+    });
+    $('travel-speed').innerHTML = SPEEDS.map((s, i) => `<option value="${i}"${s.about ? ` title="${escapeHtml(s.about)}"` : ''}>${escapeHtml(s.label)}</option>`).join('');
+    $<HTMLSelectElement>('travel-speed').value = String(SPEEDS.findIndex((s) => s.c === 0.99));
+    $('travel-cruise').addEventListener('click', () => {
+      if (this.trip) this.stopTrip();
+      else if (this.view === 'galaxy' || this.view === 'cosmos') this.startTrip(this.view, undefined, 0, 'ahead');
+    });
+    // A new speed or warp applies to the trip in progress.
+    for (const id of ['travel-speed', 'travel-warp']) {
+      $(id).addEventListener('change', () => {
+        const t = this.trip;
+        if (!t) return;
+        const speed = SPEEDS[Number($<HTMLSelectElement>('travel-speed').value)];
+        const choice = $<HTMLSelectElement>('travel-warp').value;
+        t.trip.speed = speed.c;
+        t.trip.warp = choice !== 'auto' ? Number(choice) : Number.isFinite(t.trip.remainingLy) ? autoWarp(t.trip.remainingLy, speed.c) : autoWarp(t.view === 'galaxy' ? 300 : 3e6, speed.c, 1);
+        this.renderTripHud();
+      });
+    }
     $('global-search').addEventListener('input', () => void this.renderSearch());
     $('global-search').addEventListener('keydown', (e) => {
       const k = (e as KeyboardEvent).key;
@@ -3875,7 +4335,7 @@ export class App {
 // -----------------------------------------------------------------------------
 
 function kindLabel(b: Body): string {
-  if (b.tag === 'probe') return 'Spacecraft';
+  if (b.tag === 'probe' || b.tag === 'ship') return 'Spacecraft';
   if (b.tag === 'comet') return 'Comet';
   if (b.tag === 'galaxy') return 'Galaxy (all its mass as one point)';
   switch (b.kind) {
@@ -3956,3 +4416,13 @@ function cosmosFacts(g: LocalGalaxy): [string, string][] {
   return facts;
 }
 
+
+/** A distance in light-years, in AU when under a tenth of a light-year. */
+function formatLy(ly: number): string {
+  if (ly * 63241 < 1) return `${(ly * 9.4607e12).toLocaleString('en-US', { maximumSignificantDigits: 3 })} km`;
+  if (ly < 0.1) return `${Math.round(ly * 63241).toLocaleString('en-US')} AU`;
+  if (ly < 100) return `${ly.toFixed(ly < 10 ? 2 : 1)} light-years`;
+  if (ly < 1e6) return `${Math.round(ly).toLocaleString('en-US')} light-years`;
+  if (ly < 1e9) return `${(ly / 1e6).toPrecision(3)} million light-years`;
+  return `${(ly / 1e9).toPrecision(3)} billion light-years`;
+}

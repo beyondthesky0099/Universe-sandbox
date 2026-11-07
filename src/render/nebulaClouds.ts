@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { mulberry32 } from '../procgen/rng';
 import { Noise3D } from './noise';
+import { relativity, RELATIVITY_PARS } from './relativity';
 
 /**
  * Nebulae as glowing clouds at their true physical size, drawn as camera-facing quads (one GPU
@@ -21,12 +22,6 @@ export interface Cloud {
   rotation: number;
   /** Which of the four procedural puff shapes. */
   puff: number;
-  /**
-   * For a photograph: where its pixels are in the atlas image ([x, y, width], top-down) and its
-   * axes in the map (right and up as seen from Earth, forward away from Earth), so it can be turned
-   * into a 3D cloud up close (nebulaVolume.ts).
-   */
-  volume?: { rect: [number, number, number]; right: [number, number, number]; up: [number, number, number]; forward: [number, number, number] };
 }
 
 /** Four 128-pixel puffs of fractal noise in a 2×2 atlas (white; tinted per cloud). */
@@ -71,8 +66,10 @@ const VERTEX = /* glsl */ `
   varying vec4 vTile;
   varying float vBright;
   varying float vPuff;
+  ${RELATIVITY_PARS}
   void main() {
     vec4 mv = modelViewMatrix * vec4(iCenter, 1.0);
+    float relD = relAberrate(mv);
     float dist = max(-mv.z, 1e-6);
     float pxPerUnit = projectionMatrix[1][1] * uViewHeight * 0.5 / dist;
     float trueSize = iSize * uSizeScale;
@@ -84,7 +81,8 @@ const VERTEX = /* glsl */ `
     mv.xy += corner * size;
     gl_Position = projectionMatrix * mv;
     vUv = position.xy + 0.5;
-    vColor = iColor;
+    vColor = relShift(iColor, relD);
+    vBright *= clamp(pow(relD, 1.5), 0.03, 3.0);
     vTile = iTile;
     vPuff = iPuff;
   }
@@ -158,7 +156,7 @@ export class NebulaClouds {
     this.material = new THREE.ShaderMaterial({
       vertexShader: VERTEX,
       fragmentShader: FRAGMENT,
-      uniforms: { uAtlas: { value: atlas ?? this.puffs }, uPuffs: { value: this.puffs }, uOpacity: { value: 1 }, uViewHeight: { value: 800 }, uSizeScale: { value: 1 }, uAbsorb: { value: absorb ? 1 : 0 } },
+      uniforms: { uAtlas: { value: atlas ?? this.puffs }, uPuffs: { value: this.puffs }, uOpacity: { value: 1 }, uViewHeight: { value: 800 }, uSizeScale: { value: 1 }, uBeta: relativity.uBeta, uAbsorb: { value: absorb ? 1 : 0 } },
       transparent: true,
       depthWrite: false,
       depthTest: false,

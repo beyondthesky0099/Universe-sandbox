@@ -27,6 +27,7 @@
         <div class="clock" data-view="system">
           <button id="btn-rewind" class="icon" title="Hold to rewind (R)" aria-label="Rewind">⏪</button>
           <button id="btn-play" class="icon" title="Play / pause (Space)" aria-label="Play or pause">⏸</button>
+          <button id="btn-forward" class="icon" title="Hold to fast-forward ×10 (hold .) · tap to double the speed" aria-label="Fast forward">⏩</button>
           <span id="sim-time">0 days</span>
           <span id="lag" class="warn hidden" title="The simulation can't keep up at this speed. Time is being dropped.">lagging</span>
           <button id="btn-record" class="icon" title="Record a replay (then play, scrub, save or export it)" aria-label="Record replay">⏺</button>
@@ -237,6 +238,9 @@
             <button id="btn-voyager-load" title="Ride along with Voyager past this planet">Fly with Voyager</button>
           </div>
           <div class="row buttons">
+            <button id="btn-ship" class="primary" title="Put a spacecraft in orbit around the selected body (or Earth) and fly it">🚀 Fly a spaceship</button>
+          </div>
+          <div class="row buttons">
             <button id="btn-save" title="Download this scene as a file">Save</button>
             <button id="btn-open" title="Open a saved scene file">Open</button>
             <button id="btn-share" title="Copy a link to this scene">Share link</button>
@@ -366,6 +370,43 @@
         <ul id="exo-list" class="list tall"></ul>
         <p class="muted tiny" id="exo-credit"></p>
       </aside>
+
+      <div id="travel-bar" class="hidden">
+        <div class="travel-controls">
+          <label title="How fast you travel: real speeds, fractions of light speed, and (not physically possible) faster than light">🚀 <select id="travel-speed"></select></label>
+          <label title="How much faster than real time the trip plays"><select id="travel-warp">
+            <option value="auto">Arrive in ~25 s</option>
+            <option value="1">Real time</option>
+            <option value="1e3">×1,000</option>
+            <option value="1e6">×1 million</option>
+            <option value="1e9">×1 billion</option>
+            <option value="1e12">×1 trillion</option>
+          </select></label>
+          <label class="check" title="Clicking a name, double-clicking, or picking a search result travels there at this speed instead of flying in a moment"><input type="checkbox" id="travel-on" /> Travel at this speed</label>
+          <button id="travel-cruise" title="Travel straight ahead at this speed">Cruise ▶</button>
+        </div>
+        <div id="travel-hud" class="hidden"></div>
+      </div>
+
+      <div id="ship-panel" class="hidden">
+        <div class="ship-row">
+          <select id="ship-engine" title="The engine: real ones have a fixed Δv (fuel); the fusion torch is hypothetical"></select>
+          <label class="slider" title="Throttle">🔥 <input id="ship-throttle" type="range" min="-3" max="0" step="0.05" value="0" /> <output id="ship-throttle-out"></output></label>
+        </div>
+        <div class="ship-burns">
+          <button data-thrust="prograde" title="Speed up along your path (hold, or W)">▲ Prograde</button>
+          <button data-thrust="retrograde" title="Slow down (hold, or S)">▼ Retrograde</button>
+          <button data-thrust="out" title="Push away from the body you orbit (hold, or A)">◀ Out</button>
+          <button data-thrust="in" title="Push towards it (hold, or D)">▶ In</button>
+          <button data-thrust="normal" title="Tilt the orbit up (hold, or Q)">⊙ Normal</button>
+          <button data-thrust="anti" title="Tilt the orbit down (hold, or E)">⊗ Anti</button>
+        </div>
+        <div class="ship-row">
+          <select id="ship-target" title="Where the autopilot takes you"></select>
+          <button id="ship-autopilot" class="primary">Autopilot: orbit</button>
+        </div>
+        <div id="ship-readout"></div>
+      </div>
 
       <div id="search-overlay" class="hidden" role="dialog" aria-label="Search everything">
         <div class="search-box">

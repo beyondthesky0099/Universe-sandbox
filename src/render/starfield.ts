@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { kelvinToRgb } from '../sim/color';
 import { mulberry32 } from '../procgen/rng';
 import { dotTexture } from './textures';
+import { relativisticPoints } from './relativity';
 import { skyPoints, type BrightStar } from '../sim/stars';
 
 /**
@@ -38,6 +39,7 @@ export function createStarfield(count = 6000, seed = 11): THREE.Points {
     depthTest: true, // planets in front hide the sky (it sits at half the far plane)
     blending: THREE.AdditiveBlending,
   });
+  relativisticPoints(mat);
   const points = new THREE.Points(geo, mat);
   points.renderOrder = -10;
   points.frustumCulled = false;

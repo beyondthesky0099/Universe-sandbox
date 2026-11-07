@@ -30,6 +30,12 @@ self.onmessage = (e: MessageEvent<ToWorker>) => {
       Object.assign(sim, msg.patch);
       sim.invalidate();
       break;
+    case 'thrust':
+      sim.setThrust(msg.id, msg.accel ?? undefined);
+      break;
+    case 'autopilot':
+      sim.setAutopilot(msg.id, msg.autopilot ?? undefined);
+      break;
     case 'config':
       sim.parallel?.dispose();
       sim.parallel = msg.threads === 0 ? undefined : ParallelForces.create(sim.particles, msg.threads > 0 ? msg.threads + 2 : undefined);

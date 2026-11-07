@@ -180,6 +180,24 @@ Plan, in priority order:
   (`remnantClouds` in systemView, scaled to the ejecta edge each frame) coloured by element;
   ejecta are capped at the decelerating shock's speed (reverse shock).
 
+### P. Spaceships
+- [x] `src/sim/spaceship.ts` (ENGINES, autopilotAccel: brachistochrone approach, then steer to
+  the local circular orbit; settles when near-circular within 20% of the radius; orbitAround).
+  `Simulation.thrust/autopilot/appliedThrust`, applied in computeForces, fuel burned per step,
+  `thrustStepLimit` caps the step by fuel and by 2% of the manoeuvre's speed scale. Protocol
+  messages `thrust` and `autopilot` (SimHost.setThrust/setAutopilot); events of type 'ship'.
+  Ships (tag 'ship') collide with real radii (overlaps()). App: spawnShip, hold-to-thrust
+  buttons and WASDQE, ship panel readout; autopilot raises the time scale so the flight takes
+  about 25 s and lowers it on arrival. Tests: tests/spaceship.test.ts (incl. Earth → Mars).
+
+### O. Travel at any speed
+- [x] `src/sim/travel.ts` (SPEEDS, Trip with Earth/ship clocks, autoWarp, formatting),
+  `src/render/relativity.ts` (shared `uBeta` uniform, GLSL aberration + Doppler + beaming in
+  every galaxy/cosmos point, cloud, volume, starfield and label material),
+  `App.startTrip/tickTrip` (go* helpers route label clicks, double-clicks, star/galaxy lists and
+  search through travel when "Travel at this speed" is ticked). Auto-enter/exit transitions
+  pause during a trip. Tests: tests/travel.test.ts.
+
 ### N. Search everything
 - [x] `src/ui/search.ts` (SearchIndex, normalize, ranking: exact 650 / prefix / word starts /
   substring, + 1.5 × rank), `src/ui/searchSources.ts` (entries per catalogue, each with an
@@ -195,15 +213,14 @@ Plan, in priority order:
   the hydrogen envelope only; Arnett otherwise. Tests: tests/stellar-fate.test.ts. Body panel:
   metallicity slider and fate line. Preset `supernova-zoo`.
 
-### L. 3D nebulae from photographs
-- [x] `src/render/nebulaVolume.ts`: `gasBrightness` (sky subtraction, star clipping against a 9×9
-  box blur), `volumeParticles` (sampling ∝ brightness, spheroidal depth around a noise-warped
-  mid-surface, colour per unit brightness, `opacity` so the blobs add up to the picture),
-  `NebulaVolume` (premultiplied additive points: colours above 1 would be clamped otherwise).
-- [x] `GalaxyView.updateVolumes`: within 8 picture-widths the nearest photographed nebulae
-  (`volumeBudget`: 2 desktop, 1 phone) fade from the photo billboard (`NebulaClouds.setFade`) to
-  the cloud by 4 widths, except within ~10–30° of the view from Earth. Axes from
-  `pictureAxes` (procgen/galaxy.ts), tested in tests/nebula-volume.test.ts.
+### L. Ray-marched nebulae
+- [x] `src/render/nebulaRaymarch.ts`: `makeNoiseVolume` (tileable 64³ RG noise: fBm + ridged,
+  a Data3DTexture), `starlessGas` (star clipping + blur of a photo tile), `NebulaRaymarch`
+  (BackSide sphere, front-to-back emission/absorption, premultiplied blending, per-type fields:
+  photo / HII / PN / SNR / dark / refl). `GalaxyView.setCloudLayer(..., volumes)` takes
+  `VolumeItem`s (centre, radius, shape, photo set + rect, axes, the billboard clouds to fade);
+  `updateVolumes` picks those nearest the camera's aim within 10 radii (`volumeBudget`:
+  2 × 72 steps desktop, 1 × 32 phone). Tests: tests/nebula-raymarch.test.ts.
 
 ### K. Click a label to go there
 - [x] `labelHitDepth` (galaxyView.ts) hit-tests textSprite labels; `userData.goto` on a label

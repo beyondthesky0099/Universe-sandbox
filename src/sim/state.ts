@@ -1,6 +1,7 @@
 import type { UnitSystem } from './units';
 import type { BodyKind } from './body';
 import type { Explosion } from './supernovaPhysics';
+import type { FormationSettings } from './planetFormation';
 import { PARTICLE_CULL_DISTANCE, type GravityMode, type Simulation } from './simulation';
 
 export interface BodyState {
@@ -52,6 +53,8 @@ export interface SimSettings {
   /** Distance beyond which test particles are discarded, and whether bodies absorb them. */
   particleCullDistance?: number;
   absorbParticles?: boolean;
+  /** Planet formation in a gas disc (planetFormation.ts). */
+  formation?: FormationSettings;
   /** Only sent to the physics worker; never saved into files or links. */
   customForces?: { name: string; code: string }[];
 }
@@ -114,6 +117,7 @@ export function captureState(sim: Simulation, opts: CaptureOptions = {}): SimSta
       units: sim.units,
       particleCullDistance: sim.particleCullDistance,
       absorbParticles: sim.absorbParticles,
+      ...(sim.formation ? { formation: { ...sim.formation } } : {}),
     },
     bodies: sim.bodies.map((b) => ({
       id: b.id,
@@ -166,7 +170,8 @@ export function restoreState(sim: Simulation, state: SimState): void {
   sim.clear();
   sim.time = state.time;
   // Older files have no trueScale: they were saved with game sizes.
-  Object.assign(sim, { trueScale: false, units: 'au-yr', particleCullDistance: PARTICLE_CULL_DISTANCE, absorbParticles: true }, state.settings);
+  Object.assign(sim, { trueScale: false, units: 'au-yr', particleCullDistance: PARTICLE_CULL_DISTANCE, absorbParticles: true, formation: undefined }, state.settings);
+  if (sim.formation) sim.formation = { ...sim.formation };
   for (const b of state.bodies) sim.addBody({ ...b });
   if (state.particles) {
     const p = state.particles;

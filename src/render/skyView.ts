@@ -3,7 +3,7 @@ import { kelvinToRgb } from '../sim/color';
 import { dateToJdTT, discOverlap, span, topocentric, type Eclipse } from '../sim/eclipse';
 import { altAzToScene, skyAt, skyMatrix, type Observer, type SkySnapshot } from '../sim/sky';
 import { temperatureFromBV, type BrightStar } from '../sim/stars';
-import { textSprite } from './galaxyView';
+import { labelHitDepth, textSprite } from './galaxyView';
 import { dotTexture } from './textures';
 
 const DEG = Math.PI / 180;
@@ -33,6 +33,8 @@ export class SkyView {
   private readonly stars = new THREE.Group();
   private readonly starMaterials: THREE.PointsMaterial[] = [];
   private readonly starLabels: { sprite: THREE.Sprite; v: THREE.Vector3 }[] = [];
+  /** Outline layers of catalogued objects (nebulae, clusters), each with its labels. */
+  private readonly outlineLayers = new Map<string, { points: THREE.Points; labels: { sprite: THREE.Sprite; v: THREE.Vector3 }[] }>();
   private readonly bodies = new Map<string, { dot: THREE.Sprite; label: THREE.Sprite }>();
   private readonly moonCanvas = document.createElement('canvas');
   private readonly moonTexture: THREE.CanvasTexture;
@@ -89,7 +91,7 @@ export class SkyView {
     );
     this.scene.add(horizon);
     for (const [name, az] of [['N', 0], ['NE', 45], ['E', 90], ['SE', 135], ['S', 180], ['SW', 225], ['W', 270], ['NW', 315]] as [string, number][]) {
-      const s = textSprite(name, name.length === 1 ? '#ffd27a' : '#b9a77d', name.length === 1 ? 1.3 : 0.9);
+      const s = this.label(name, name.length === 1 ? '#ffd27a' : '#b9a77d', name.length === 1 ? 1.3 : 0.9);
       s.position.set(...altAzToScene(1.5, az)).multiplyScalar(R_GROUND * 0.98);
       s.center.set(0.5, 0);
       this.scene.add(s);
@@ -133,7 +135,7 @@ export class SkyView {
     }
     // Name the brightest stars.
     for (const s of stars.filter((x) => x[5] && x[3] < 1.6)) {
-      const sprite = textSprite(s[5]!, '#9fb4d8', 0.75);
+      const sprite = this.label(s[5]!, '#9fb4d8', 0.75);
       sprite.center.set(-0.08, 0.5);
       this.starLabels.push({ sprite, v: new THREE.Vector3(s[0], s[1], s[2]) });
       this.scene.add(sprite);
@@ -141,11 +143,128 @@ export class SkyView {
     if (this.snapshot) this.place();
   }
 
+  /**
+   * Catalogued nebulae as outlines at their true angular size (never smaller than a few pixels),
+   * rotating with the stars; the named ones get labels.
+   */
+  setOutlines(key: string, items: { v: [number, number, number]; radiusDeg: number; color: [number, number, number]; label?: string }[], labelColor = '#ffb3c8'): void {
+    const labels: { sprite: THREE.Sprite; v: THREE.Vector3 }[] = [];
+    const pos = new Float32Array(items.length * 3);
+    const col = new Float32Array(items.length * 3);
+    const rad = new Float32Array(items.length);
+    items.forEach((it, i) => {
+      pos.set(it.v.map((c) => c * R_STARS * 0.995), i * 3);
+      col.set(it.color, i * 3);
+      rad[i] = it.radiusDeg * DEG;
+      if (it.label) {
+        const sprite = this.label(it.label, labelColor, 0.7);
+        sprite.center.set(0.5, 1.4);
+        sprite.userData.radiusDeg = it.radiusDeg;
+        labels.push({ sprite, v: new THREE.Vector3(...it.v) });
+        this.scene.add(sprite);
+      }
+    });
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    geo.setAttribute('aRadius', new THREE.BufferAttribute(rad, 1));
+    const points = new THREE.Points(
+      geo,
+      new THREE.ShaderMaterial({
+        uniforms: { uPxPerRad: { value: 600 }, uOpacity: { value: 1 } },
+        vertexShader: `
+          attribute float aRadius; uniform float uPxPerRad; varying vec3 vColor; varying float vPx;
+          void main() {
+            vColor = color;
+            vPx = clamp(2.0 * aRadius * uPxPerRad, 6.0, 400.0);
+            gl_PointSize = vPx + 2.0;
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+          }`,
+        fragmentShader: `
+          uniform float uOpacity; varying vec3 vColor; varying float vPx;
+          void main() {
+            float r = length(gl_PointCoord - 0.5) * (vPx + 2.0);
+            float edge = 1.0 - smoothstep(0.0, 1.5, abs(r - vPx * 0.5 + 0.75));
+            // Small objects get a faint fill; big ones (several degrees across) only their outline.
+            float fill = 0.12 * (1.0 - smoothstep(30.0, 90.0, vPx)) * (1.0 - smoothstep(vPx * 0.5 - 1.0, vPx * 0.5, r));
+            float a = max(edge * 0.8, fill) * uOpacity;
+            if (a < 0.01) discard;
+            gl_FragColor = vec4(vColor, a);
+          }`,
+        vertexColors: true,
+        transparent: true,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+      }),
+    );
+    points.frustumCulled = false;
+    this.stars.add(points);
+    this.outlineLayers.set(key, { points, labels });
+    if (this.snapshot) this.place();
+  }
+
+  setOutlinesVisible(key: string, on: boolean): void {
+    const layer = this.outlineLayers.get(key);
+    if (!layer) return;
+    layer.points.visible = on;
+    for (const l of layer.labels) l.sprite.visible = on;
+    if (key === 'nebulae') for (const m of this.images.values()) m.visible = on;
+  }
+
+  /** Nebula photographs, one mesh per atlas page. */
+  private readonly images = new Map<number, THREE.Mesh>();
+  /**
+   * Real survey images pinned to the sky at their true angular size: each is centred on `v`
+   * (a unit vector in the stars' frame), `fieldDeg` across, with `up` pointing to the top of the
+   * image and its left edge to the east, as on a sky photograph.
+   */
+  setImages(page: number, items: { v: [number, number, number]; up: [number, number, number]; fieldDeg: number; rect: [number, number, number, number] }[], atlas: THREE.Texture): void {
+    const pos = new Float32Array(items.length * 12);
+    const uv = new Float32Array(items.length * 8);
+    const index: number[] = [];
+    const c = new THREE.Vector3(), up = new THREE.Vector3(), right = new THREE.Vector3(), p = new THREE.Vector3();
+    items.forEach((it, i) => {
+      c.set(...it.v).normalize();
+      // Tangent frame: up projected onto the sky there, and right = west (we look out from inside).
+      up.set(...it.up);
+      up.addScaledVector(c, -c.dot(up)).normalize();
+      right.crossVectors(c, up).normalize();
+      const half = Math.tan((it.fieldDeg * DEG) / 2);
+      const [u0, v0, du, dv] = it.rect;
+      [[-1, -1], [1, -1], [1, 1], [-1, 1]].forEach(([sx, sy], k) => {
+        p.copy(c).addScaledVector(right, sx * half).addScaledVector(up, sy * half).normalize().multiplyScalar(R_STARS * 0.993);
+        pos.set([p.x, p.y, p.z], i * 12 + k * 3);
+        uv.set([u0 + ((sx + 1) / 2) * du, v0 + ((sy + 1) / 2) * dv], i * 8 + k * 2);
+      });
+      const o = i * 4;
+      index.push(o, o + 1, o + 2, o, o + 2, o + 3);
+    });
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+    geo.setIndex(index);
+    const old = this.images.get(page);
+    if (old) {
+      this.stars.remove(old);
+      old.geometry.dispose();
+      (old.material as THREE.Material).dispose();
+    }
+    const mesh = new THREE.Mesh(
+      geo,
+      new THREE.MeshBasicMaterial({ map: atlas, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }),
+    );
+    mesh.frustumCulled = false;
+    this.images.set(page, mesh);
+    this.stars.add(mesh);
+    if (this.snapshot) this.place();
+  }
+
   private addBodies(): void {
     const add = (name: string, color: string, map: THREE.Texture) => {
       const dot = new THREE.Sprite(new THREE.SpriteMaterial({ map, color, transparent: true, depthWrite: false, blending: name === 'Moon' ? THREE.NormalBlending : THREE.AdditiveBlending }));
-      const label = textSprite(name, color, 0.85);
+      const label = this.label(name, color, 0.85);
       label.center.set(0.5, -0.9);
+      label.userData.body = name;
       this.scene.add(dot, label);
       this.bodies.set(name, { dot, label });
     };
@@ -190,6 +309,7 @@ export class SkyView {
     this.stars.matrix.copy(m4);
     this.stars.matrixWorldNeedsUpdate = true;
     for (const l of this.starLabels) l.sprite.position.copy(l.v).applyMatrix4(m4).multiplyScalar(R_STARS * 0.99);
+    for (const layer of this.outlineLayers.values()) for (const l of layer.labels) l.sprite.position.copy(l.v).applyMatrix4(m4).multiplyScalar(R_STARS * 0.99);
     const sun = snap.objects.find((o) => o.name === 'Sun')!;
     const sunDir = new THREE.Vector3(...altAzToScene(sun.alt, sun.az));
     // An eclipse dims the daylight (it stays bright until the Sun is nearly covered).
@@ -201,6 +321,12 @@ export class SkyView {
     const dark = Math.max(1 - THREE.MathUtils.smoothstep(sun.alt, -16, -2), (1 - light) * 0.9);
     this.starMaterials.forEach((mat, i) => (mat.opacity = i === 0 ? Math.max(dark, 0.05) : dark));
     for (const l of this.starLabels) (l.sprite.material as THREE.SpriteMaterial).opacity = dark * 0.85;
+    // Nebulae are faint: they show only in a dark sky.
+    for (const m of this.images.values()) (m.material as THREE.MeshBasicMaterial).opacity = dark * 0.9;
+    for (const layer of this.outlineLayers.values()) {
+      for (const l of layer.labels) (l.sprite.material as THREE.SpriteMaterial).opacity = dark * 0.8;
+      (layer.points.material as THREE.ShaderMaterial).uniforms.uOpacity.value = dark;
+    }
     for (const o of snap.objects) {
       const b = this.bodies.get(o.name);
       if (!b) continue;
@@ -244,10 +370,23 @@ export class SkyView {
     this.moonTexture.needsUpdate = true;
   }
 
+  /** Every text label, with its scale at the default field of view. */
+  private readonly labels: { sprite: THREE.Sprite; base: THREE.Vector3 }[] = [];
+
+  private label(text: string, color: string, scale: number): THREE.Sprite {
+    const sprite = textSprite(text, color, scale);
+    this.labels.push({ sprite, base: sprite.scale.clone() });
+    return sprite;
+  }
+
   /** Real angular sizes, but never smaller than a few pixels. */
   private sizeBodies(): void {
+    // Labels keep the same size on screen whatever the zoom.
+    const k = Math.tan((this.camera.fov * DEG) / 2) / Math.tan((70 * DEG) / 2);
+    for (const l of this.labels) l.sprite.scale.copy(l.base).multiplyScalar(k);
     if (!this.snapshot) return;
     const pxPerRad = this.height / (2 * Math.tan((this.camera.fov * DEG) / 2));
+    for (const layer of this.outlineLayers.values()) (layer.points.material as THREE.ShaderMaterial).uniforms.uPxPerRad.value = pxPerRad * this.pixelRatio;
     for (const o of this.snapshot.objects) {
       const b = this.bodies.get(o.name);
       if (!b) continue;
@@ -265,8 +404,12 @@ export class SkyView {
     }
   }
 
-  setViewport(width: number, height: number): void {
+  /** Device pixels per CSS pixel, for point sizes in shaders. */
+  pixelRatio = 1;
+
+  setViewport(width: number, height: number, pixelRatio = 1): void {
     this.height = height;
+    this.pixelRatio = pixelRatio;
     this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();
     this.sizeBodies();
@@ -280,11 +423,54 @@ export class SkyView {
 
   /** Point the camera at an altitude/azimuth (degrees). */
   lookAt(alt: number, az: number): void {
+    this.anim = undefined;
     this.yaw = -az * DEG;
     this.pitch = alt * DEG;
   }
 
+  private anim?: { yaw0: number; yaw1: number; pitch0: number; pitch1: number; fov0: number; fov1: number; start: number };
+
+  /** The label under a screen point (normalised device coordinates), if any. */
+  pickLabel(x: number, y: number): THREE.Sprite | undefined {
+    this.camera.updateMatrixWorld();
+    let best: THREE.Sprite | undefined;
+    let bestDepth = Infinity;
+    for (const { sprite } of this.labels) {
+      if (!sprite.visible || !sprite.parent || (sprite.material as THREE.SpriteMaterial).opacity < 0.05) continue;
+      const depth = labelHitDepth(sprite, this.camera, x, y);
+      if (depth < bestDepth) {
+        bestDepth = depth;
+        best = sprite;
+      }
+    }
+    return best;
+  }
+
+  /**
+   * Turn smoothly to centre what a label names, and zoom so it fills a good part of the view:
+   * a nebula or cluster to a few times its size, a star or planet to a 20° field.
+   */
+  goToLabel(sprite: THREE.Sprite): void {
+    const target = this.bodies.get(sprite.userData.body)?.dot ?? sprite;
+    const d = target.getWorldPosition(new THREE.Vector3()).normalize();
+    const yaw1 = Math.atan2(-d.x, -d.z);
+    const radius: number | undefined = sprite.userData.radiusDeg;
+    const fov1 = radius ? THREE.MathUtils.clamp(radius * 5, 2, 60) : Math.min(this.camera.fov, 20);
+    // Turn the short way round.
+    const dyaw = Math.atan2(Math.sin(yaw1 - this.yaw), Math.cos(yaw1 - this.yaw));
+    this.anim = { yaw0: this.yaw, yaw1: this.yaw + dyaw, pitch0: this.pitch, pitch1: Math.asin(THREE.MathUtils.clamp(d.y, -1, 1)), fov0: this.camera.fov, fov1, start: performance.now() };
+  }
+
   update(): void {
+    if (this.anim) {
+      const a = this.anim;
+      const t = Math.min(1, (performance.now() - a.start) / 1200);
+      const e = t < 0.5 ? 4 * t ** 3 : 1 - (-2 * t + 2) ** 3 / 2;
+      this.yaw = a.yaw0 + (a.yaw1 - a.yaw0) * e;
+      this.pitch = a.pitch0 + (a.pitch1 - a.pitch0) * e;
+      this.setFov(a.fov0 * Math.pow(a.fov1 / a.fov0, e));
+      if (t >= 1) this.anim = undefined;
+    }
     this.pitch = THREE.MathUtils.clamp(this.pitch, -10 * DEG, 89.9 * DEG);
     this.camera.rotation.set(this.pitch, this.yaw, 0);
     // Keep the Moon's bright limb pointing at the Sun.
@@ -321,26 +507,48 @@ export class SkyView {
   }
 
   private attachInput(): void {
-    let drag: { x: number; y: number } | undefined;
+    // One pointer drags the view; two (a pinch on touch screens) zoom.
+    const pointers = new Map<number, { x: number; y: number }>();
+    let pinch = 0;
+    const spread = () => {
+      const [a, b] = [...pointers.values()];
+      return Math.hypot(a.x - b.x, a.y - b.y);
+    };
     this.canvas.addEventListener('pointerdown', (e) => {
-      if (this.enabled) drag = { x: e.clientX, y: e.clientY };
+      if (!this.enabled) return;
+      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (pointers.size === 2) pinch = spread();
     });
-    window.addEventListener('pointerup', () => (drag = undefined));
+    const up = (e: PointerEvent) => {
+      pointers.delete(e.pointerId);
+      pinch = 0;
+    };
+    window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', up);
     window.addEventListener('pointermove', (e) => {
-      if (!drag || !this.enabled) return;
-      const k = (this.camera.fov * DEG) / this.height;
-      this.yaw += (e.clientX - drag.x) * k;
-      this.pitch += (e.clientY - drag.y) * k;
-      drag = { x: e.clientX, y: e.clientY };
+      const p = pointers.get(e.pointerId);
+      if (!p || !this.enabled) return;
+      if (pointers.size === 1 && (e.clientX !== p.x || e.clientY !== p.y)) {
+        this.anim = undefined;
+        const k = (this.camera.fov * DEG) / this.height;
+        this.yaw += (e.clientX - p.x) * k;
+        this.pitch += (e.clientY - p.y) * k;
+      }
+      p.x = e.clientX;
+      p.y = e.clientY;
+      if (pointers.size === 2 && pinch > 0) {
+        const now = spread();
+        if (now > 0) this.setFov(this.camera.fov * (pinch / now));
+        pinch = now;
+      }
     });
     this.canvas.addEventListener(
       'wheel',
       (e) => {
         if (!this.enabled) return;
         e.preventDefault();
-        this.camera.fov = THREE.MathUtils.clamp(this.camera.fov * Math.exp(e.deltaY * 0.001), 2, 100);
-        this.camera.updateProjectionMatrix();
-        this.sizeBodies();
+        this.anim = undefined;
+        this.setFov(this.camera.fov * Math.exp(e.deltaY * 0.001));
       },
       { passive: false },
     );

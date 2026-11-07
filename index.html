@@ -100,6 +100,10 @@
           </div>
         </section>
         <section>
+          <label class="check" title="Every catalogued HII region (pink), planetary nebula (teal), supernova remnant (pale blue), dark nebula (brown) and reflection nebula (blue), outlined at its real size"><input id="opt-sky-nebulae" type="checkbox" checked /> <span id="sky-nebula-count">Nebulae from real catalogues</span></label>
+          <label class="check" title="Open clusters and moving groups from Gaia (gold) and globular clusters (orange), outlined at their half-member radius"><input id="opt-sky-clusters" type="checkbox" checked /> <span id="sky-cluster-count">Star clusters</span></label>
+        </section>
+        <section>
           <h3>Solar eclipses</h3>
           <div class="row buttons">
             <select id="eclipse-select" title="Total, annular and hybrid eclipses, 2024–2035 (NASA catalogue, JPL positions)"><option value="">Loading eclipses…</option></select>
@@ -128,6 +132,8 @@
         <section>
           <h2 id="galaxy-name">Galaxy</h2>
           <p class="muted" id="galaxy-info"></p>
+          <label class="check" title="HII regions (pink) and planetary nebulae (teal) with measured distances, from professional catalogues"><input id="opt-real-nebulae" type="checkbox" checked /> Real nebulae</label>
+          <label class="check" title="Open clusters and moving groups from Gaia (Hunt & Reffert 2023, gold) and globular clusters (Harris, orange) at their measured distances"><input id="opt-real-clusters" type="checkbox" checked /> Real star clusters</label>
           <label class="row">
             <span>Seed</span>
             <input id="galaxy-seed" type="text" spellcheck="false" />
@@ -161,7 +167,7 @@
         <section>
           <h3>Bookmarks</h3>
           <ul id="bookmark-list" class="list"></ul>
-          <p class="muted small">Click a star to inspect it, double-click to fly there, and click the bright core for the central black hole. Zoom right into a star to enter its system.</p>
+          <p class="muted small">Click a name to fly there. Click a star to inspect it, double-click to fly there, and click the bright core for the central black hole. Zoom right into a star to enter its system.</p>
         </section>
       </aside>
 
@@ -210,10 +216,16 @@
           <div class="row buttons">
             <button id="btn-exoplanets" title="Browse 4,800+ real planetary systems">🪐 Real exoplanets</button>
             <button id="btn-neighbourhood" title="Every catalogued star within 10 parsecs of the Sun (HYG database)">Nearby stars</button>
+            <button id="btn-halley" title="Comet Halley's real 2061 return (JPL Horizons)">☄️ Halley 2061</button>
+            <button id="btn-gaia100" title="Every star within 326 light-years brighter than magnitude 11 (44,500 stars from ESA Gaia DR3), moving with its real velocity">✨ 326 ly (Gaia)</button>
           </div>
           <div class="row buttons">
             <select id="gw-select" title="Real gravitational-wave detections (LIGO/Virgo/KAGRA)"><option value="">Loading GW events…</option></select>
             <button id="btn-gw-load" title="Replay this merger with its real masses">Replay merger</button>
+          </div>
+          <div class="row buttons">
+            <button id="btn-gw-hear" title="Hear this event's chirp, synthesized from its real masses as the detectors heard it">🔊 Hear the chirp</button>
+            <label class="check small" title="Raise every frequency 4× so low chirps are audible on small speakers"><input id="gw-pitch" type="checkbox" /> 4× higher</label>
           </div>
           <div class="row buttons">
             <select id="flyby-select" title="Upcoming asteroid close approaches to Earth (JPL)"><option value="">Loading flybys…</option></select>

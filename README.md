@@ -50,6 +50,40 @@ npm run build      # static site in dist/
 The web app works fully on its own. The gallery, multiplayer and "Create with Claude" buttons
 need the [companion server](#companion-server). Without one, they explain how to connect.
 
+### Desktop app (Windows)
+
+Astrarium also comes as a Windows program, built with Electron from the same code. Compared
+with a browser tab, it:
+- asks Windows for the **high-performance GPU**, so laptops with two graphics chips use the
+  dedicated one
+- is never slowed down in the background
+- starts at high graphics quality
+- works offline, with all the real data bundled
+- spreads the particle physics (asteroids, debris, galaxy stars) over all your CPU cores
+
+Download `Astrarium-Setup-<version>.exe` (installer) or `Astrarium-Portable-<version>.exe` (runs
+without installing) from the [Releases](https://github.com/beyondthesky0099/Universe-sandbox/releases)
+page, or from the latest **Desktop app** run on the Actions tab. The files aren't code-signed,
+so the first time you run one, Windows SmartScreen may say it's from an unknown publisher:
+choose *More info → Run anyway*. Press F11 for full screen.
+
+**How the multi-core physics works:** the pull of the bodies on each test particle is computed in slices, one per CPU core. The cores share memory through SharedArrayBuffer and coordinate with Atomics. This needs cross-origin isolation (the COOP and COEP headers), which the desktop app and the dev and preview servers send. GitHub Pages can't send those headers, so the website keeps the single-threaded path.
+- **Exact results:** the threaded result is identical to the single-threaded one (tested).
+- **Measured speed-up:** in a 4-core test machine, without a renderer competing for cores, the force calculation ran 1.8× faster on 2 threads and 2.4× faster on 3.
+- **Where it matters:** that calculation is about 87% of each step in the asteroid-heavy scenarios (Solar System, Rogue star, the Sun's future).
+- The physics panel shows how many cores are in use. Add `#threads=0` to the address to turn this off.
+
+To build or run it yourself:
+
+```
+npm run desktop       # build the web app and open it in the desktop shell
+npm run desktop:win   # build the Windows installer and portable .exe into desktop/release/
+```
+
+To publish a release, push a tag such as `v0.2.0`. GitHub Actions builds both .exe files on
+Windows and attaches them to a release for that tag. "Use my location" in the Sky tab doesn't
+work in the desktop app, so type your latitude and longitude instead.
+
 ## Features
 
 ### Play
@@ -98,12 +132,13 @@ need the [companion server](#companion-server). Without one, they explain how to
   light-years) at their true 3D positions, including red dwarfs, white dwarfs and binaries.
   Colours come from B−V, masses are estimated from spectral type, and the 29 stars with known
   exoplanets can be visited.
-- **Moving stars:** the nearby stars move with their real space velocities (proper motion plus
-  radial velocity, from HYG). Speed time up to millions of years per second to watch the
-  neighbourhood rearrange. The scene lists upcoming close passes: Ross 248 becoming our nearest
-  star in about 36,000 years, and Gliese 710 passing about 1.2 light-years away in 1.4 million
-  years. Those are HYG's Hipparcos-era velocities; newer Gaia measurements bring Gliese 710
-  much closer, through the Oort cloud.
+- **Moving stars:** the nearby stars move with their real space velocities: for three quarters
+  of them, distances and motions come from ESA's **Gaia DR3**; the brightest (such as Alpha
+  Centauri A and B, too bright for Gaia) keep HYG's Hipparcos-era values. Speed time up to
+  millions of years per second to watch the neighbourhood rearrange. The scene lists upcoming
+  close passes: Ross 248 becoming our nearest star in about 36,000 years, and Gliese 710 passing
+  just 0.05 parsecs (about 10,500 AU) from the Sun in 1.29 million years, through the Oort cloud,
+  as Gaia studies predict.
 - **The real night sky:** the sandbox background shows the 8,920 naked-eye stars
   (magnitude ≤ 6.5) in their true directions, so the constellations are where they should be.
 
@@ -125,7 +160,20 @@ need the [companion server](#companion-server). Without one, they explain how to
   happens inside the Roche limit.
 - **Stellar evolution:** stars age along their main-sequence lifetime and become giants, then
   a planetary nebula, then a white dwarf. Massive stars go **supernova** and leave neutron
-  stars or black holes. White dwarfs pushed past 1.4 M☉ explode as Type Ia supernovae.
+  stars (with a natal kick, Hobbs et al. 2005) or black holes. White dwarfs pushed past 1.4 M☉
+  explode as Type Ia supernovae.
+- **Supernova physics** (`src/sim/supernovaPhysics.ts`): 10⁵¹ erg of ejecta expanding
+  homologously at up to √(10E/3M) (about 3,500 km/s for a Type II, 11,000 km/s for a Type Ia);
+  a light curve from ⁵⁶Ni → ⁵⁶Co decay (Nadyozhin 1994) diffused out as in Arnett's model, plus
+  the Type II-P hydrogen plateau (Kasen & Woosley 2009); a blast wave in free expansion, then
+  Sedov–Taylor, then the radiative snowplow (Cioffi et al. 1988). A body is blown apart when the
+  energy it intercepts exceeds its gravitational binding energy; otherwise it survives, but loses
+  its orbit if the star lost more than half its mass.
+  The ejecta are layered as in the explosion models (Woosley & Weaver 1995; Sukhbold et al. 2016;
+  the W7 Type Ia model): iron and silicon in the slow core, then oxygen and helium, then the
+  hydrogen envelope outside. Each glows in its strongest emission line: gold iron, orange-red
+  sulphur, teal oxygen, red hydrogen-alpha. Most of the gas is in knots, as in Cassiopeia A,
+  and it piles up behind the blast wave once that slows down, instead of outrunning it.
 - **Analysis:** Lagrange-point markers, near-resonance detection (for example "2:1 with
   Jupiter"), tidal locking, climate and habitable zones, and forecasts of collisions and close
   approaches.
@@ -214,6 +262,55 @@ closest approach, using the asteroid's, Moon's and Sun's real positions from JPL
 true scale. The simulation then reproduces the encounter: the tests confirm Apophis's closest
 distance to within 2% and its time to within an hour.
 
+### Real nebulae
+The map shows **5,676 real nebulae** from professional catalogues:
+
+| Type | How many | Catalogue |
+|---|---|---|
+| HII regions (where stars are being born) | 2,174 | every confirmed one in the WISE catalogue |
+| Planetary nebulae (shells from dying stars) | 1,143 | the Strasbourg-ESO catalogue |
+| Supernova remnants | 294 | Green's catalogue, with distances for 187 from Ranasinghe & Leahy (2023) |
+| Dark nebulae | 1,907 | Barnard's 349 dark objects, plus the Lynds clouds Barnard didn't list; 442 at Gaia distances of their molecular clouds (Zucker et al. 2020) |
+| Reflection nebulae | 158 | van den Bergh's catalogue |
+
+**Galaxy Map:** the nebulae with measured distances sit at their true 3D positions, as glowing clouds at their true physical size: 945 HII regions, 790 planetary nebulae, 187 supernova remnants and 140 reflection nebulae. The HII regions trace the spiral arms.
+- Colours are the light each kind really emits: HII regions glow pink-red in hydrogen-alpha, planetary nebulae teal in doubly ionised oxygen, and reflection nebulae blue from scattered starlight. Each cloud is a few overlapping puffs spread through its volume, so it has depth as you orbit it. Clouds too small to see from far away are drawn at a minimum size and dimmed to match.
+- Nebulae show their **real photographs** from the Digitized Sky Survey where the plates capture them: the 55 named ones (Orion, Carina, Lagoon, Eagle, the Crab, the Helix, the Horsehead, ...) and about 200 more glowing nebulae, plus 419 dark clouds on the Sky tab. The red plate is shown in red, the blue plate in blue and the fainter of the two in green, so stars stay white and hydrogen glow stays red.
+  - `node scripts/build-nebula-images.mjs` photographs every nebula with a distance that is at least 1.2′ in radius, then keeps only the fields where the plates show diffuse light.
+  - Most HII regions were found by WISE in the infrared and are hidden behind dust in visible light; their photographs show only stars, so they keep their emission-colour clouds.
+  - Phones load only the named nebulae's page (1 MB); desktops load all four pages (5 MB).
+- Dark nebulae dim the light behind them. 442 of them are placed at the distance of their molecular cloud, measured with Gaia by Zucker et al. 2020: for example the Horsehead in Orion B at 411 pc, the Pipe at 180 pc and Rho Ophiuchi at 139 pc.
+- Planetary-nebula distances come from Gaia parallaxes of their central stars where those are good, and otherwise from statistical estimates.
+- Some HII distances are kinematic estimates, which can be off in the outer Galaxy.
+- The remnant catalogue puts the Crab Nebula at 3.4 kpc (−1.0/+4.0), from the Crab pulsar's Gaia DR2 parallax. The long-standing estimate is about 2 kpc.
+- Reflection nebulae are placed at the distance of the star that lights them. That's 140 of the 158, mostly from Gaia parallaxes via SIMBAD.
+- Dark nebulae have no distances in their own catalogues. A cloud takes the distance of the nearest Zucker et al. 2020 sightline within 1° of its edge; the rest (1,465) appear on the sky only.
+
+**Sky tab:** every nebula is outlined at its real position and angular size, and fades out in daylight. The 55 named ones show their Digitized Sky Survey photographs on the sky, at their true size and orientation.
+
+Famous nebulae are labelled: Orion, Lagoon, Eagle, Helix, Ring, Cat's Eye, the Crab, Cassiopeia A, the Veil, the Horsehead, the Pipe, the Iris and others. The names are matched to the catalogues through the SIMBAD astronomy database, not typed in by hand. The California, Crescent and Witch Head nebulae aren't in these catalogues, so they're left unlabelled. Toggle the layer with **Real nebulae** in the Galaxy Map panel, or **Nebulae** in the Sky tab.
+
+### 326 light-years of real stars (Gaia)
+Press **✨ 326 ly (Gaia)** for every star within 100 parsecs (326 light-years) brighter than Gaia magnitude 11: about 44,500 stars from ESA Gaia DR3.
+- **Real positions and motions:** each star sits at its measured position and moves with its real velocity, from Gaia's proper motion plus its radial velocity. About 10% have no radial velocity, so they move only across the sky.
+- **Real structure:** the Hyades show up as a clump 47 parsecs away.
+- **Colours** come from Gaia's temperatures.
+- **Names:** bright stars are named from HYG. The very brightest, like Sirius, Vega and Arcturus, are too bright for Gaia to measure, so they come from HYG too.
+- **Speeding up time** shows the neighbourhood drifting apart over millions of years.
+
+### Real star clusters
+**7,193 real star clusters** from two catalogues:
+- **Gaia census (Hunt & Reffert 2023):** 6,818 open clusters and 228 moving groups, each with its Gaia distance, size, number of member stars and age.
+- **Harris catalogue:** 147 globular clusters, with distances, sizes and metal content.
+
+**Galaxy Map:** they sit at their measured distances. Open clusters are gold and crowd around the Sun, where Gaia's census is most complete. Globular clusters are orange and scattered through the halo.
+
+**Sky tab:** every cluster is outlined at its real size.
+
+32 famous clusters are labelled, matched through SIMBAD by catalogue designation and position: the Pleiades, the Hyades, the Beehive, the Double Cluster, the Jewel Box, Omega Centauri, 47 Tucanae, M13 and others. Toggle them with **Real star clusters** in the Galaxy Map panel, or **Star clusters** in the Sky tab.
+
+The 145 globular clusters with distances, and the open clusters with at least 300 Gaia members or a name, are also drawn as balls of stars at their measured sizes. Each is a Plummer sphere whose half-light radius is the catalogue's (Harris for globulars, Hunt & Reffert for open clusters), so flying to M13 or the Pleiades shows a cluster of stars rather than a dot. The stars are a representative sample: their number follows the cluster's brightness or membership, and their colours its age. They are not the cluster's real individual stars.
+
 ### Voyager Grand Tour
 Pick a flyby and press **Fly with Voyager** to ride along on one of the six real planetary
 encounters: Voyager 1 at Jupiter and Saturn, and Voyager 2 at Jupiter, Saturn, Uranus and
@@ -239,6 +336,16 @@ traced from JPL Horizons Sun and Moon positions and agrees with NASA's catalogue
 greatest eclipse within 1 s, central duration within 1 s, and path width within 1% (about 7%
 for grazing eclipses). The corona's streamers are decorative.
 
+### Halley's return (2061)
+Press **☄️ Halley 2061** for the real Solar System in April 2061 with Comet Halley on its JPL
+Horizons path (an orbit solution that includes the comet's jets). The simulation reproduces
+JPL's perihelion on 28 July 2061 at 0.593 AU (within half a day and 0.5%), the pass 0.477 AU
+from Earth the next day, and a close pass just 0.054 AU (8 million km) from Venus on 20 August.
+All comets now grow tails as they near the Sun: a straight blue ion tail pointing directly
+away from the Sun and a curved dust tail trailing behind. The tail lengths are illustrative.
+The selected body's forecast also became more precise: it now finds the closest point between
+its samples, so fast encounters like this one are no longer missed.
+
 ### Real gravitational-wave events
 Pick one of 11 famous LIGO/Virgo/KAGRA detections and press **Replay merger**. The list
 includes GW150914 (the first ever), the neutron-star collision GW170817, GW190521 (the most
@@ -246,6 +353,13 @@ massive), GW190814 (a lopsided pair) and the neutron star–black hole mergers. 
 uses the event's published masses, and the panel shows its real distance and how much mass
 became gravitational-wave energy. The orbit and speed of light are scaled so the final orbits
 play out in seconds, and the pair merges at the innermost stable orbit (6GM/c²).
+
+Press **🔊 Hear the chirp** to hear the event as the detectors heard it: the leading-order
+inspiral chirp of the real masses, redshifted by the source's distance (flat ΛCDM), ending in
+the final black hole's ringdown at its fundamental frequency. GW150914 sweeps up through about
+0.2 s to ring near 250 Hz, as observed; GW170817 is a 12-second excerpt of a chirp that lasted
+about 100 s. Tick "4× higher" to make low chirps audible on small speakers. It is a
+sonification from the published parameters, not the detector recording.
 
 ### Milky Way meets Andromeda
 The **Milky Way meets Andromeda (real)** scenario simulates the coming collision in
@@ -267,12 +381,20 @@ Figure-8 Three-Body · Rogue Star Flyby · Black Hole Feast · Supernova · The 
 Relativistic Precession · Black Hole Inspiral · Galactic Core · Star Cluster Collapse ·
 Self-Gravitating Disk · Galaxy Collision · Empty Space
 
+### Phones and tablets
+On a touch-screen phone or tablet, or a device with 4 or fewer CPU cores or 4 GB of memory or
+less, the app starts with lighter graphics (low quality, bloom and lensing off) unless you've
+chosen your own settings, and runs the orbit forecast every 2 s instead of every second. In
+a phone emulation (390×844 screen, 4× slower CPU) this took the default Solar System from
+about 2.5 to 17 frames per second. In the Sky tab, pinch to zoom.
+
 ## Controls
 
 | Input | Action |
 | --- | --- |
 | Drag / right-drag / scroll | Orbit / pan / zoom (in Spawn and Nudge modes, right-drag orbits) |
 | Click / double-click | Select / select and follow (Sandbox); select / fly to (Galaxy) |
+| Click a name label | Go there: follow the body (Sandbox), fly to it (Galaxy Map), turn and zoom to it (Sky) |
 | `Space` | Pause / resume |
 | Hold `R` (or ⏪) | Rewind |
 | `Ctrl+Z` / `Ctrl+Shift+Z` | Undo / redo |
@@ -422,6 +544,30 @@ push and pull request.
   reprojected from HEALPix by `python3 -I scripts/build-cmb.py` (needs numpy and ImageMagick).
 - Spacecraft trajectories: NASA/JPL Horizons, state vectors every 10 days (rebuild with
   `node scripts/build-spacecraft.mjs`).
+- Nearby-star distances and motions: ESA **Gaia DR3** (Gaia Collaboration, Vallenari et al.
+  2023), from the Gaia archive TAP service, cross-matched to HYG by `node scripts/build-stars.mjs`.
+  This work has made use of data from the European Space Agency (ESA) mission Gaia, processed
+  by the Gaia Data Processing and Analysis Consortium (DPAC).
+- Halley's 2061 return: NASA/JPL Horizons (rebuild with `node scripts/build-halley.mjs`).
+- Nebulae: the WISE Catalog of Galactic HII Regions (Anderson et al. 2014, ApJS 212, 1), the
+  Strasbourg-ESO Catalogue of Galactic Planetary Nebulae (Acker et al. 1992), Gaia EDR3 distances
+  of planetary-nebula central stars (Gonzalez-Santamaria et al. 2021, A&A 656, A51), statistical
+  distances (Stanghellini & Haywood 2010, ApJ 714, 1096), Green's catalogue of Galactic
+  supernova remnants (Green 2019) with distances from Ranasinghe & Leahy (2023, ApJS 265, 53),
+  Lynds' Catalogue of Dark Nebulae (1962), Barnard's dark objects (1927) with molecular-cloud
+  distances from Zucker et al. (2020, A&A 633, A51), and van den Bergh's
+  reflection nebulae (1966), via VizieR (CDS), placed at the distances of their illuminating stars
+  (parallaxes from SIMBAD's TAP service, mostly Gaia EDR3). Familiar names resolved with SIMBAD (rebuild
+  with `node scripts/build-nebulae.mjs`).
+- Nebula photographs: the Digitized Sky Survey, produced at the Space Telescope Science Institute
+  under U.S. Government grant NAG W-2166, from photographic data of the Oschin Schmidt Telescope
+  (Palomar) and the UK Schmidt Telescope (POSS-I, POSS-II, SERC surveys), retrieved through NASA's
+  SkyView (rebuild with `node scripts/build-nebula-images.mjs`).
+- Stars within 100 pc: ESA Gaia DR3 via the Gaia archive (rebuild with `node scripts/build-stars-100pc.mjs`),
+  with names and the brightest stars from HYG v4.1.
+- Star clusters: Hunt & Reffert 2023 ("Improving the open cluster census. II.", A&A 673, A114),
+  based on ESA Gaia DR3, and the Harris catalogue of Milky Way globular clusters (VII/202), via
+  VizieR (CDS); familiar names resolved with SIMBAD (rebuild with `node scripts/build-clusters.mjs`).
 - Voyager encounters: NASA/JPL Horizons planetocentric states of Voyager 1 and 2, the moons and
   the Sun (rebuild with `node scripts/build-voyager.mjs`).
 - Solar eclipses: the list and reference values from NASA's Five Millennium Canon of Solar

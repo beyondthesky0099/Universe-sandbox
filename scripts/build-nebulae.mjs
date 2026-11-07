@@ -1,0 +1,315 @@
+#!/usr/bin/env node
+/**
+ * Build public/data/nebulae.json: real Milky Way nebulae from professional catalogues, via
+ * VizieR (CDS, Harvard mirror):
+ *
+ * - HII regions: the WISE Catalog of Galactic HII Regions (Anderson et al. 2014, ApJS 212, 1;
+ *   J/ApJS/212/1). Every known HII region (class K) with its position and radius; those with
+ *   measured distances (parallax, kinematic or spectrophotometric) are placed in 3D.
+ * - Planetary nebulae: names and positions from the Strasbourg-ESO Catalogue of Galactic PNe
+ *   (Acker et al. 1992; V/84). Distances from Gaia EDR3 parallaxes of their central stars
+ *   (Gonzalez-Santamaria et al. 2021, A&A 656, A51; J/A+A/656/A51) where good, otherwise the
+ *   statistical distances of Stanghellini & Haywood 2010 (ApJ 714, 1096; J/ApJ/714/1096).
+ * - Supernova remnants: Green's catalogue (Green 2019, J. Astrophys. Astr. 40, 36; VII/284),
+ *   with heliocentric distances from Ranasinghe & Leahy 2023 (ApJS 265, 53; J/ApJS/265/53)
+ *   where measured (limits are left out).
+ * - Dark nebulae: Lynds' Catalogue of Dark Nebulae (Lynds 1962; VII/7A) and Barnard's 349 dark
+ *   objects (Barnard 1927; VII/220A). Neither catalogue gives distances; a cloud gets the distance
+ *   of the nearest sightline (within 1° of its edge) of Zucker et al. 2020 (A&A 633, A51;
+ *   J/A+A/633/A51), who measured the distances to the local molecular clouds from Gaia DR2
+ *   parallaxes and stellar photometry of the stars in front of and behind them.
+ * - Reflection nebulae: van den Bergh 1966 (VII/21). Each is lit by a catalogued star, so its
+ *   distance is that star's: the parallax from SIMBAD (TAP), which for these stars is almost
+ *   always Gaia's, kept when it is measured to better than 20%.
+ *
+ *   node scripts/build-nebulae.mjs
+ */
+import { createHash } from 'node:crypto';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+const VIZIER = 'https://vizier.cfa.harvard.edu/viz-bin/asu-tsv';
+const cache = new URL('../node_modules/.cache/nebulae/', import.meta.url).pathname;
+mkdirSync(cache, { recursive: true });
+
+async function vizier(name, params) {
+  const file = join(cache, `${name}.tsv`);
+  if (existsSync(file)) return readFileSync(file, 'utf8');
+  const url = new URL(VIZIER);
+  for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
+  for (let attempt = 0; ; attempt++) {
+    let problem;
+    try {
+      const res = await fetch(url, { signal: AbortSignal.timeout(180000) });
+      const text = res.ok ? await res.text() : '';
+      const rows = text.split('\n').filter((l) => l && !l.startsWith('#')).length;
+      if (res.ok && !text.includes('#INFO\tError=') && rows > 3) {
+        writeFileSync(file, text);
+        return text;
+      }
+      problem = `HTTP ${res.status}, ${rows} lines ${text.match(/Error=.*/)?.[0] ?? ''}`;
+    } catch (err) {
+      problem = String(err?.cause?.code ?? err?.name ?? err);
+    }
+    if (attempt >= 7) throw new Error(`VizieR ${name}: ${problem}`);
+    console.warn(`VizieR ${name}: ${problem}, retrying…`);
+    await new Promise((r) => setTimeout(r, 4000 * 2 ** Math.min(attempt, 4)));
+  }
+}
+
+/** Parse VizieR TSV: header line, units line, dashes line, then rows. */
+function parseTsv(text) {
+  const lines = text.split('\n').filter((l) => l && !l.startsWith('#'));
+  const header = lines[0].split('\t').map((h) => h.trim());
+  return lines.slice(3).map((line) => {
+    const cells = line.split('\t');
+    return Object.fromEntries(header.map((h, i) => [h, (cells[i] ?? '').trim()]));
+  });
+}
+
+const num = (s) => (s === '' || s === undefined ? undefined : Number(s));
+const round = (v, d) => (v === undefined || !Number.isFinite(v) ? undefined : Number(v.toFixed(d)));
+
+const wise = parseTsv(await vizier('wise-hii', {
+  '-source': 'J/ApJS/212/1/wisecat', '-out': 'WISE,Cl,GLON,GLAT,Rad,HIIName,Name,Dist,e_Dist,r_Dist,Meth', '-out.max': 'unlimited',
+}));
+const acker = parseTsv(await vizier('pn-acker', {
+  '-source': 'V/84/main', '-out': 'PNG,Name', '-out.add': '_Glon,_Glat', '-out.max': 'unlimited',
+}));
+const gaiaPn = parseTsv(await vizier('pn-gaia', {
+  '-source': 'J/A+A/656/A51/tablea2', '-out': 'PNG,Plx,e_Plx,Dist,b_Dist,B_Dist,Radang,Radphys,Morph', '-out.max': 'unlimited',
+}));
+const stang = parseTsv(await vizier('pn-stanghellini', {
+  '-source': 'J/ApJ/714/1096/table1', '-out': 'PNG,d,e_d,theta,Morph', '-out.add': '_Glon,_Glat', '-out.max': 'unlimited',
+}));
+const green = parseTsv(await vizier('snr-green', {
+  '-source': 'VII/284/snrs', '-out': 'SNR,MajDiam,MinDiam,type,Names', '-out.add': '_Glon,_Glat', '-out.max': 'unlimited',
+}));
+
+const snrDist = parseTsv(await vizier('snr-distances', {
+  '-source': 'J/ApJS/265/53/table1', '-out': 'SNR,l_X,X', '-out.max': 'unlimited',
+}));
+const lynds = parseTsv(await vizier('dark-lynds', {
+  '-source': 'VII/7A/ldn', '-out': 'LDN,GLON,GLAT,Area,Opacity,Barn', '-out.max': 'unlimited',
+}));
+const barnard = parseTsv(await vizier('dark-barnard', {
+  '-source': 'VII/220A/barnard', '-out': 'Barn,Diam', '-out.add': '_Glon,_Glat', '-out.max': 'unlimited',
+}));
+const zucker = parseTsv(await vizier('dark-zucker2020', {
+  '-source': 'J/A+A/633/A51', '-out': 'Name,GLON,GLAT,d50,d16,d84', '-out.max': 'unlimited',
+}));
+const vdb = parseTsv(await vizier('refl-vdb', {
+  '-source': 'VII/21/catalog', '-out': 'VdB,HD,DM,BRadMax,RRadMax,oGLON,oGLAT', '-out.add': '_Glon,_Glat', '-out.max': 'unlimited',
+}));
+
+// --- Familiar names, resolved by SIMBAD (position + identifiers), never typed in by hand. ---
+const FAMOUS = [
+  // [SIMBAD identifier, display name, kind]
+  ['M 42', 'Orion Nebula (M42)', 'hii'], ['M 8', 'Lagoon Nebula (M8)', 'hii'], ['M 16', 'Eagle Nebula (M16)', 'hii'],
+  ['M 17', 'Omega Nebula (M17)', 'hii'], ['M 20', 'Trifid Nebula (M20)', 'hii'], ['NGC 2237', 'Rosette Nebula', 'hii'],
+  ['NGC 7000', 'North America Nebula', 'hii'], ['IC 1805', 'Heart Nebula', 'hii'], ['IC 1848', 'Soul Nebula', 'hii'],
+  ['NGC 1499', 'California Nebula', 'hii'], ['NGC 7635', 'Bubble Nebula', 'hii'], ['NGC 6888', 'Crescent Nebula', 'hii'],
+  ['IC 405', 'Flaming Star Nebula', 'hii'], ['NGC 2264', 'Cone Nebula', 'hii'], ['NGC 281', 'Pacman Nebula', 'hii'],
+  ['IC 1396', "Elephant's Trunk Nebula", 'hii'], ['NGC 3372', 'Carina Nebula', 'hii'], ['W 51', 'W51', 'hii'],
+  ['Sgr B2', 'Sagittarius B2', 'hii'], ['NGC 6334', "Cat's Paw Nebula", 'hii'], ['NGC 6357', 'Lobster Nebula', 'hii'],
+  ['IC 2944', 'Running Chicken Nebula', 'hii'], ['NGC 3603', 'NGC 3603', 'hii'], ['W 49', 'W49', 'hii'],
+  ['M 57', 'Ring Nebula (M57)', 'pn'], ['NGC 7293', 'Helix Nebula', 'pn'], ['M 27', 'Dumbbell Nebula (M27)', 'pn'],
+  ['NGC 6543', "Cat's Eye Nebula", 'pn'], ['NGC 2392', 'Eskimo Nebula', 'pn'], ['M 97', 'Owl Nebula (M97)', 'pn'],
+  ['NGC 7009', 'Saturn Nebula', 'pn'], ['NGC 3132', 'Southern Ring Nebula', 'pn'], ['NGC 6302', 'Butterfly Nebula', 'pn'],
+  ['NGC 7662', 'Blue Snowball Nebula', 'pn'], ['IC 418', 'Spirograph Nebula', 'pn'], ['M 76', 'Little Dumbbell (M76)', 'pn'],
+  ['NGC 3242', 'Ghost of Jupiter', 'pn'], ['NGC 6826', 'Blinking Planetary', 'pn'], ['NGC 6720', 'Ring Nebula (M57)', 'pn'],
+  ['M 1', 'Crab Nebula (M1)', 'snr'], ['Cassiopeia A', 'Cassiopeia A', 'snr'], ['NAME Vela SNR', 'Vela Supernova Remnant', 'snr'],
+  ['NAME Cygnus Loop', 'Cygnus Loop (Veil Nebula)', 'snr'], ['SN 1572', "Tycho's Supernova Remnant", 'snr'],
+  ['SN 1604', "Kepler's Supernova Remnant", 'snr'], ['IC 443', 'Jellyfish Nebula (IC 443)', 'snr'], ['W 50', 'W50 (around SS 433)', 'snr'],
+  ['Barnard 33', 'Horsehead Nebula (B33)', 'dark'], ['Barnard 68', 'Barnard 68', 'dark'], ['Barnard 72', 'Snake Nebula (B72)', 'dark'],
+  ['Barnard 59', 'Pipe Nebula (B59)', 'dark'], ['Barnard 142', "Barnard's E (B142)", 'dark'], ['LDN 1689', 'LDN 1689 (Rho Ophiuchi)', 'dark'],
+  ['NGC 7023', 'Iris Nebula', 'refl'], ['M 78', 'M78', 'refl'], ['IC 2118', 'Witch Head Nebula', 'refl'],
+  ['NGC 1999', 'NGC 1999', 'refl'], ['IC 4592', 'Blue Horsehead Nebula', 'refl'], ['NGC 2023', 'NGC 2023', 'refl'],
+];
+
+const DEG = Math.PI / 180;
+/** Equatorial J2000 → galactic (deg). */
+function toGalactic(ra, dec) {
+  const ap = 192.85948 * DEG, dp = 27.12825 * DEG, lncp = 122.93192 * DEG;
+  const a = ra * DEG, d = dec * DEG;
+  const sb = Math.sin(dp) * Math.sin(d) + Math.cos(dp) * Math.cos(d) * Math.cos(a - ap);
+  const y = Math.cos(d) * Math.sin(a - ap);
+  const x = Math.cos(dp) * Math.sin(d) - Math.sin(dp) * Math.cos(d) * Math.cos(a - ap);
+  return { l: ((lncp - Math.atan2(y, x)) / DEG + 360) % 360, b: Math.asin(sb) / DEG };
+}
+/** Angular separation (deg) between two galactic positions. */
+function sep(l1, b1, l2, b2) {
+  const c = Math.sin(b1 * DEG) * Math.sin(b2 * DEG) + Math.cos(b1 * DEG) * Math.cos(b2 * DEG) * Math.cos((l1 - l2) * DEG);
+  return Math.acos(Math.min(1, c)) / DEG;
+}
+
+const simbadFile = join(cache, `simbad-famous-${createHash('sha1').update(JSON.stringify(FAMOUS)).digest('hex').slice(0, 10)}.txt`);
+let simbad;
+if (existsSync(simbadFile)) simbad = readFileSync(simbadFile, 'utf8');
+else {
+  const script = ['output console=off script=off', 'format object "%IDLIST(1)|%COO(d;A D)|%IDLIST[%*;]"', ...FAMOUS.map((f) => f[0])].join('\n');
+  for (let attempt = 0; ; attempt++) {
+    try {
+      const res = await fetch(`https://simbad.cfa.harvard.edu/simbad/sim-script?script=${encodeURIComponent(script)}`, { signal: AbortSignal.timeout(120000) });
+      simbad = await res.text();
+      if (res.ok && !simbad.includes('::error')) break;
+      throw new Error(simbad.slice(0, 300));
+    } catch (err) {
+      if (attempt >= 5) throw err;
+      await new Promise((r) => setTimeout(r, 4000 * 2 ** attempt));
+    }
+  }
+  writeFileSync(simbadFile, simbad);
+}
+const resolved = simbad.split('\n').filter((l) => l.includes('|')).map((l) => {
+  const [, coo, ids] = l.split('|');
+  const [ra, dec] = coo.trim().split(/\s+/).map(Number);
+  return { ...toGalactic(ra, dec), ids: ids.split(';').map((s) => s.replace(/\s+/g, ' ').trim()) };
+});
+if (resolved.length !== FAMOUS.length) throw new Error(`SIMBAD resolved ${resolved.length} of ${FAMOUS.length} names`);
+const norm = (s) => s.replace(/\s+/g, ' ').trim().toUpperCase();
+
+// --- HII regions: confirmed ones (classes K and G) ------------------------------------------
+const hii = wise
+  .filter((r) => r.Cl === 'K' || r.Cl === 'G')
+  .map((r) => ({ l: num(r.GLON), b: num(r.GLAT), d: num(r.Dist), rad: num(r.Rad), id: r.HIIName || `WISE ${r.WISE}`, meth: r.Meth || undefined }));
+
+// --- Planetary nebulae ------------------------------------------------------------------------
+const pngKey = (s) => s.replace(/^PN\s*G/, '').trim();
+const gaiaBy = new Map(gaiaPn.map((r) => [pngKey(r.PNG), r]));
+const stangBy = new Map(stang.map((r) => [pngKey(r.PNG), r]));
+const pn = acker.map((r) => {
+  const key = pngKey(r.PNG);
+  const g = gaiaBy.get(key);
+  const s = stangBy.get(key);
+  // Gaia parallax distance when the parallax is at least 3σ; else the statistical distance.
+  const gaiaOk = g && num(g.Dist) && num(g.Plx) / num(g.e_Plx) >= 3;
+  const d = gaiaOk ? num(g.Dist) / 1000 : s ? num(s.d) : undefined;
+  const radArcsec = g && num(g.Radang) ? num(g.Radang) : s && num(s.theta) ? num(s.theta) : undefined;
+  return { l: num(r._Glon), b: num(r._Glat), d, rad: radArcsec, id: r.Name.replace(/\s+/g, ' '), png: key, src: gaiaOk ? 'gaia' : d ? 'stat' : undefined };
+});
+
+// --- Supernova remnants -----------------------------------------------------------------------
+// Distances only where measured: limits (< or >) are left out.
+const snrDistBy = new Map(snrDist.filter((r) => num(r.X) && !r.l_X).map((r) => [r.SNR.trim(), num(r.X)]));
+const snr = green.map((r) => ({
+  l: num(r._Glon), b: num(r._Glat), maj: num(r.MajDiam), min: num(r.MinDiam) ?? num(r.MajDiam), type: r.type.trim(),
+  id: r.Names ? r.Names.split(',')[0].replace(/[()]/g, '').trim() : r.SNR, snr: r.SNR, d: snrDistBy.get(r.SNR.trim()),
+}));
+
+// --- Dark nebulae: Barnard's objects, and Lynds clouds not already in Barnard -----------------
+const dark = [
+  ...barnard.map((r) => ({ l: num(r._Glon), b: num(r._Glat), rad: (num(r.Diam) ?? 5) / 2, id: `B ${r.Barn.trim()}`, opacity: undefined })),
+  ...lynds
+    .filter((r) => !r.Barn)
+    .map((r) => ({ l: num(r.GLON), b: num(r.GLAT), rad: Math.sqrt((num(r.Area) ?? 0.01) / Math.PI) * 60, id: `LDN ${r.LDN.trim()}`, opacity: num(r.Opacity) })),
+];
+// Distances from the nearest Zucker et al. 2020 sightline (pc → kpc).
+const sightlines = zucker.map((r) => ({ l: num(r.GLON), b: num(r.GLAT), d: num(r.d50) / 1000, cloud: r.Name.replace(/_/g, ' ').trim() }));
+for (const o of dark) {
+  let best, bestSep = Infinity;
+  for (const z of sightlines) {
+    const d = sep(o.l, o.b, z.l, z.b);
+    if (d < bestSep) {
+      bestSep = d;
+      best = z;
+    }
+  }
+  if (best && bestSep <= o.rad / 60 + 1) {
+    o.d = best.d;
+    o.cloud = best.cloud;
+  }
+}
+
+// --- Reflection nebulae: van den Bergh (radius on the blue plates, arcmin) ----------------------
+const refl = vdb.map((r) => ({
+  l: num(r._Glon) ?? num(r.oGLON), b: num(r._Glat) ?? num(r.oGLAT), rad: num(r.BRadMax) ?? num(r.RRadMax) ?? 2,
+  id: `vdB ${r.VdB.trim()}`, star: r.HD ? `HD ${r.HD.trim()}` : r.DM.trim(),
+}));
+// Their stars' parallaxes, by SIMBAD identifier. SIMBAD pads numbers: "HD    627", "BD+57    22".
+const simbadId = (star) => {
+  const hd = star.match(/^HD\s*(\d+)/);
+  if (hd) return `HD ${hd[1].padStart(6, ' ')}`;
+  const dm = star.match(/^([BC]D|CPD)\s*([+-]\d+)\s+(\d+)/);
+  return dm ? `${dm[1]}${dm[2]} ${dm[3].padStart(5, ' ')}` : star;
+};
+const squash = (s) => s.replace(/\s+/g, '');
+const tapQuery = `SELECT i.id, b.plx_value, b.plx_err, b.plx_bibcode FROM ident AS i JOIN basic AS b ON i.oidref = b.oid WHERE i.id IN (${refl.map((r) => `'${simbadId(r.star).replace(/'/g, "''")}'`).join(',')})`;
+const tapCsv = await (async () => {
+  const file = join(cache, `simbad-vdb-stars-${createHash('sha1').update(tapQuery).digest('hex').slice(0, 10)}.csv`);
+  if (existsSync(file)) return readFileSync(file, 'utf8');
+  for (let attempt = 0; ; attempt++) {
+    try {
+      const res = await fetch('https://simbad.cfa.harvard.edu/simbad/sim-tap/sync', {
+        method: 'POST',
+        body: new URLSearchParams({ request: 'doQuery', lang: 'adql', format: 'csv', query: tapQuery }),
+        signal: AbortSignal.timeout(120000),
+      });
+      const text = await res.text();
+      if (res.ok && text.startsWith('id,')) {
+        writeFileSync(file, text);
+        return text;
+      }
+      throw new Error(`HTTP ${res.status} ${text.slice(0, 200)}`);
+    } catch (err) {
+      if (attempt >= 5) throw err;
+      await new Promise((r) => setTimeout(r, 4000 * 2 ** attempt));
+    }
+  }
+})();
+const plxBy = new Map(
+  tapCsv.trim().split('\n').slice(1).map((line) => {
+    const [id, plx, err, bib] = line.split(',').map((c) => c.replace(/^"|"$/g, ''));
+    return [squash(id), { plx: Number(plx), err: Number(err), gaia: /yCat\.135/.test(bib ?? '') }];
+  }),
+);
+let reflWithDistance = 0;
+for (const r of refl) {
+  const p = plxBy.get(squash(simbadId(r.star)));
+  if (p && p.plx > 0 && p.err > 0 && p.plx / p.err >= 5) {
+    r.d = 1 / p.plx; // kpc, from a parallax in milliarcseconds
+    r.src = p.gaia ? 'gaia' : 'other';
+    reflWithDistance++;
+  }
+}
+
+// --- Attach familiar names ----------------------------------------------------------------------
+FAMOUS.forEach(([, display, kind], i) => {
+  const s = resolved[i];
+  const ids = new Set(s.ids.map(norm));
+  const list = { hii, pn, snr, dark, refl }[kind];
+  // Prefer an identifier match (NGC/IC/M names in the catalogue), else the nearest by position.
+  let best = list.find((o) => ids.has(norm(o.id)));
+  if (!best) {
+    let bestSep = kind === 'pn' ? 0.05 : kind === 'hii' ? 0.35 : 0.5;
+    for (const o of list) {
+      const d = sep(s.l, s.b, o.l, o.b);
+      if (d < bestSep) {
+        bestSep = d;
+        best = o;
+      }
+    }
+  }
+  if (!best) console.warn(`No catalogue match for ${display}`);
+  else if (!best.name) best.name = display;
+});
+
+const out = {
+  source:
+    'HII: WISE Catalog of Galactic HII Regions (Anderson et al. 2014); PNe: Strasbourg-ESO catalogue (Acker et al. 1992), Gaia EDR3 distances (Gonzalez-Santamaria et al. 2021) and statistical distances (Stanghellini & Haywood 2010); SNRs: Green (2019) with distances from Ranasinghe & Leahy (2023); dark nebulae: Lynds (1962) and Barnard (1927), at the distances of their molecular clouds (Zucker et al. 2020); reflection nebulae: van den Bergh (1966), at the distances of their illuminating stars (SIMBAD parallaxes, mostly Gaia). Via VizieR (CDS). Familiar names resolved with SIMBAD.',
+  fields: {
+    hii: ['l', 'b', 'distanceKpc|null', 'radiusArcsec', 'id', 'name?'],
+    pn: ['l', 'b', 'distanceKpc|null', 'radiusArcsec|null', 'id', 'distanceSource (g=Gaia, s=statistical, null)', 'name?'],
+    snr: ['l', 'b', 'majorArcmin', 'minorArcmin', 'type (S shell, F filled, C composite)', 'id', 'distanceKpc|null', 'name?'],
+    dark: ['l', 'b', 'radiusArcmin', 'id', 'opacity 1-6 (Lynds)|null', 'distanceKpc (Zucker et al. 2020 cloud)|null', 'cloud|null', 'name?'],
+    refl: ['l', 'b', 'radiusArcmin', 'id', 'illuminating star', "distanceKpc (the star's parallax)|null", 'name?'],
+  },
+  hii: hii.map((o) => [round(o.l, 3), round(o.b, 3), o.d ? round(o.d, 2) : null, o.rad ?? 0, o.id, ...(o.name ? [o.name] : [])]),
+  pn: pn.map((o) => [round(o.l, 3), round(o.b, 3), o.d ? round(o.d, 3) : null, o.rad ? round(o.rad, 1) : null, o.id, o.src === 'gaia' ? 'g' : o.src === 'stat' ? 's' : null, ...(o.name ? [o.name] : [])]),
+  snr: snr.map((o) => [round(o.l, 3), round(o.b, 3), o.maj ?? 1, o.min ?? 1, o.type, o.id, o.d ? round(o.d, 2) : null, ...(o.name ? [o.name] : [])]),
+  dark: dark.map((o) => [round(o.l, 3), round(o.b, 3), round(o.rad, 2), o.id, o.opacity ?? null, o.d ? round(o.d, 3) : null, o.cloud ?? null, ...(o.name ? [o.name] : [])]),
+  refl: refl.map((o) => [round(o.l, 3), round(o.b, 3), round(o.rad, 2), o.id, o.star, o.d ? round(o.d, 3) : null, ...(o.name ? [o.name] : [])]),
+};
+writeFileSync(new URL('../public/data/nebulae.json', import.meta.url), JSON.stringify(out) + '\n');
+const named = [...hii, ...pn, ...snr, ...dark, ...refl].filter((o) => o.name).length;
+console.log(`HII regions: ${hii.length} (${hii.filter((o) => o.d).length} with distances); planetary nebulae: ${pn.length} (${pn.filter((o) => o.src === 'gaia').length} Gaia, ${pn.filter((o) => o.src === 'stat').length} statistical distances); supernova remnants: ${snr.length} (${snr.filter((o) => o.d).length} with distances); dark nebulae: ${dark.length} (${dark.filter((o) => o.d).length} with cloud distances); reflection nebulae: ${refl.length} (${reflWithDistance} with their star's distance, ${refl.filter((r) => r.src === 'gaia').length} from Gaia); ${named} with familiar names`);

@@ -202,3 +202,28 @@ export class AudioEngine {
     this.tone(1800, 1200, 0.05, 0.03, 'sine', 0.002);
   }
 }
+
+let oneShot: AudioContext | undefined;
+let playing: AudioBufferSourceNode | undefined;
+
+/**
+ * Play a mono waveform once, whether or not ambient sound is on (it is always started by a
+ * button press). A new call stops the previous sound.
+ */
+export function playSamples(samples: Float32Array, sampleRate: number): number {
+  const Ctor = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+  if (!Ctor) return 0;
+  oneShot ??= new Ctor();
+  void oneShot.resume();
+  playing?.stop();
+  const buffer = oneShot.createBuffer(1, samples.length, sampleRate);
+  buffer.copyToChannel(samples as Float32Array<ArrayBuffer>, 0);
+  const src = oneShot.createBufferSource();
+  src.buffer = buffer;
+  const gain = oneShot.createGain();
+  gain.gain.value = 0.6;
+  src.connect(gain).connect(oneShot.destination);
+  src.start();
+  playing = src;
+  return samples.length / sampleRate;
+}

@@ -14,13 +14,18 @@ describe('worker protocol', () => {
 
     let first = true;
     for (let i = 0; i < 30; i++) {
-      const r = worker.advance(0.2, 1e6, 1e9);
+      const r = worker.advance(0.01, 1e6, 1e9);
       applyFrame(mirror, encodeFrame(worker, 1, r, first));
       first = false;
     }
     expect(mirror.bodies.length).toBe(worker.bodies.length);
     expect(mirror.bodies[0]).toBe(star); // same object, updated in place
-    expect(star.kind).toBe('blackhole'); // the supernova happened in the "worker"
+    expect(star.kind).toBe('neutron'); // the supernova happened in the "worker"
+    // The blast wave and its explosion physics crossed the boundary.
+    expect(mirror.shockwaves.length).toBe(1);
+    expect(mirror.shockwaves[0].explosion).toEqual(worker.shockwaves[0].explosion);
+    expect(mirror.shockwaves[0].t0).toBeCloseTo(worker.shockwaves[0].t0!, 12);
+    expect(mirror.shockwaves[0].radius).toBe(worker.shockwaves[0].radius);
     expect(mirror.time).toBeCloseTo(worker.time, 12);
     expect(mirror.particles.count).toBe(worker.particles.count);
     for (let i = 0; i < worker.bodies.length; i++) {
@@ -36,9 +41,11 @@ describe('worker protocol', () => {
     const copy = new Simulation();
     restoreState(copy, captureState(sim));
     expect([...copy.fuses]).toEqual([...sim.fuses]);
-    sim.advance(4.2, 1e6, 1e9);
+    sim.advance(0.05, 1e6, 1e9);
     expect(sim.shockwaves.length).toBe(1);
     restoreState(copy, captureState(sim));
     expect(copy.shockwaves[0].radius).toBe(sim.shockwaves[0].radius);
+    expect(copy.shockwaves[0].explosion).toEqual(sim.shockwaves[0].explosion);
+    expect(copy.shockwaves[0].t0).toBe(sim.shockwaves[0].t0);
   });
 });

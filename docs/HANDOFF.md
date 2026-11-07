@@ -144,17 +144,77 @@ Plan, in priority order:
 - [x] F7. Black holes and pulsars on the Milky Way map (SIMBAD + arXiv)
 - [x] F8. The CMB (WMAP 9-year ILC, `scripts/build-cmb.py`)
 
-### G. Next round (3 of 7 done)
+### G. Next round
 - [x] G1. Voyager Grand Tour (`scripts/build-voyager.mjs`, `src/sim/voyager.ts`)
 - [x] G2. Planetarium: Sky tab (`src/sim/sky.ts`, `src/render/skyView.ts`)
 - [x] G3. Solar eclipses (`scripts/build-eclipses.mjs`, `src/sim/eclipse.ts`)
-- [ ] G4. Gaia star velocities (check the Gaia archive is reachable first)
-- [ ] G5. Play gravitational-wave chirps as sound
-- [ ] G6. Halley's return in 2061, with comet tails pointing away from the Sun
-- [ ] G7. Phone performance pass
+- [x] G4. Gaia DR3 distances and velocities for nearby stars (in `scripts/build-stars.mjs`)
+- [x] G5. Gravitational-wave chirps as sound (`src/sim/gwChirp.ts`, button in the GW row)
+- [x] G6. Halley's 2061 return (`scripts/build-halley.mjs`, `src/sim/halley.ts`) and comet tails (`bodyVisual.ts`)
+- [x] G7. Phone pass: lighter defaults on low-power devices (`LOW_POWER` in `app.ts`), pinch zoom in the Sky tab
 
-Ideas for later: a Gaia-based star catalogue (better velocities: HYG puts Gliese 710 at
-1.2 ly, while Gaia puts it much closer); pulsars from the ATNF catalogue when reachable;
+### J. Next round (clusters, reflection-nebula distances, 100 pc stars, multi-core physics)
+- [x] J1. Star clusters: Hunt & Reffert 2023 (Gaia DR3) and Harris globulars (`scripts/build-clusters.mjs`,
+  `src/sim/clusters.ts`), on the galaxy map and the Sky tab. Westerlund 1 isn't labelled: the Gaia
+  census doesn't seem to contain it, and the only shared alias was on an unrelated cluster.
+- [x] J4. Reflection-nebula distances from their illuminating stars (SIMBAD TAP parallaxes, 140 of 158)
+- [x] J5. Stars within 100 pc from Gaia (`scripts/build-stars-100pc.mjs`, `src/sim/gaia100.ts`): 44,529
+  stars as particles. Particles now have per-scene `particleCullDistance` and `absorbParticles`
+  settings (saved with the scene), since the old fixed 5,000 AU cull deleted distant stars.
+- [x] J6. Multi-core particle forces (`src/sim/particleKernel.ts`, `parallel.ts`, `forceWorker.ts`): the
+  physics worker splits the particle–body loop with helper workers over SharedArrayBuffer +
+  Atomics when the page is cross-origin isolated (desktop app; dev/preview servers; not GitHub
+  Pages). Identical results (tests). Node benchmark of the same kernel: 2.4× on 3 threads of a
+  4-core VM; the in-browser benchmark in this container showed no gain because SwiftShader
+  software rendering saturates its 4 cores, so measure on a real machine. Next: the Barnes–Hut
+  tree path (cluster/spiral presets) is still single-threaded.
+
+### J. Real supernovae
+- [x] `src/sim/supernovaPhysics.ts` (tests in `tests/supernova-physics.test.ts`): ejecta speeds,
+  ⁵⁶Ni/⁵⁶Co light curves (Arnett; Type II-P plateau from Kasen & Woosley 2009), blast-wave radius
+  (free expansion → Sedov–Taylor → snowplow), body destruction by energy vs binding energy,
+  neutron-star kicks. Shockwaves carry `t0` and `explosion` (protocol SHOCK_STRIDE = 15, saved in
+  state); `systemView` draws the light from the light curve with the photosphere's colour. The
+  Supernova scenario is a 15 M☉ red supergiant at about two days per second.
+- [x] Layered, clumpy ejecta (`ejectaLayers`): particles and a seeded puff cloud
+  (`remnantClouds` in systemView, scaled to the ejecta edge each frame) coloured by element;
+  ejecta are capped at the decelerating shock's speed (reverse shock).
+
+### K. Click a label to go there
+- [x] `labelHitDepth` (galaxyView.ts) hit-tests textSprite labels; `userData.goto` on a label
+  makes it a destination (GalaxyView.pickLabel / flyToPoint, SkyView.pickLabel / goToLabel,
+  SystemView.pickLabel for the CSS2D body labels).
+- [x] Clusters as Plummer-sphere star swarms at their catalogue radii
+  (`src/procgen/clusterStars.ts`): all 145 globulars with distances, open clusters with ≥ 300
+  Gaia members or a name. MW_CLUSTERS now uses the catalogue positions so labels sit on them.
+
+### I. Real nebulae
+- [x] 5,676 nebulae from VizieR catalogues (`scripts/build-nebulae.mjs`, `src/sim/nebulae.ts`):
+  HII regions, planetary nebulae and supernova remnants (with Ranasinghe & Leahy 2023
+  distances) in 3D where distances exist; dark (Lynds, Barnard) and reflection (van den Bergh)
+  nebulae on the Sky tab. The Harvard VizieR mirror drops connections often: the script retries
+  and caches in `node_modules/.cache/nebulae/`.
+
+- [x] Real-colour 3D clouds (`src/render/nebulaClouds.ts`, instanced camera-facing quads at true
+  size with a minimum pixel size): emission-line colours per kind, and the 55 named nebulae as
+  DSS photographs (`scripts/build-nebula-images.mjs` → `public/data/nebula-images.{jpg,json}`,
+  `src/sim/nebulaImages.ts`). The images are in galactic orientation; the Sky tab pins them to
+  the sphere (`SkyView.setImages`). DSS2 Blue has gaps: the script falls back to DSS1 Blue, then
+  the SERC-J plates (first-generation DSS south of −17.5°), then the Mellinger mosaic.
+- [x] Photographs for 3D nebulae ≥ 1.2′ in radius whose plates show diffuse light
+  (`nebulosity()`: 20th-percentile brightness of 8×8 blocks; plate-edge fields dropped; dark
+  clouds always kept), 128-px tiles on atlas pages 1–3; phones load page 0 only. Images match
+  catalogue rows by `nebulaKey` (kind, id and position: WISE reuses ids within complexes). Dark nebulae at Zucker et al. 2020 cloud distances, drawn as absorbing
+  puffs (`NebulaClouds` with `absorb`).
+
+### H. Desktop app (Windows)
+- [x] Electron shell in `desktop/`, Windows installer and portable .exe built by
+  `.github/workflows/desktop.yml` on windows-latest (unsigned). Tags `v*` attach them to a
+  release.
+- [ ] Run the companion server inside the desktop app (Electron's Node can run `server/`).
+- [ ] Code signing (needs a certificate) to remove the SmartScreen warning.
+
+Ideas for later: pulsars from the ATNF catalogue when reachable;
 dynamical friction for galaxy mergers; Virgo-cluster distances from redshift-independent
 measurements.
 

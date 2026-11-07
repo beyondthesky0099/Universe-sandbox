@@ -3,6 +3,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { generateGalaxy, type GalaxyData, type GalaxyOptions } from '../procgen/galaxy';
 import { mulberry32 } from '../procgen/rng';
 import { Noise3D } from './noise';
+import { NebulaClouds, type Cloud } from './nebulaClouds';
 import { createStarfield } from './starfield';
 import { accretionTexture, glowTexture, ringTexture } from './textures';
 
@@ -108,7 +109,8 @@ export function textSprite(text: string, color: string, scale = 1): THREE.Sprite
   const font = '600 26px Inter, system-ui, sans-serif';
   const measure = canvas.getContext('2d')!;
   measure.font = font;
-  canvas.width = Math.max(256, Math.ceil(measure.measureText(text).width + 24));
+  const textWidth = measure.measureText(text).width + 24;
+  canvas.width = Math.max(256, Math.ceil(textWidth));
   canvas.height = 64;
   const ctx = canvas.getContext('2d')!;
   ctx.font = font;
@@ -124,7 +126,50 @@ export function textSprite(text: string, color: string, scale = 1): THREE.Sprite
   sprite.scale.set(0.16 * (canvas.width / 256) * scale, 0.04 * scale, 1);
   sprite.center.set(0.5, -0.6);
   sprite.renderOrder = 11;
+  // For clicking on the label: its text, and the share of the canvas width the text covers.
+  sprite.userData.labelText = text;
+  sprite.userData.textFrac = Math.min(1, textWidth / canvas.width);
   return sprite;
+}
+
+/**
+ * Whether a screen point (normalised device coordinates) falls on a text label's lettering, and
+ * if so how far away the label is (its clip-space w; smaller is nearer), else Infinity. Works for
+ * labels made by textSprite (constant screen size: `sizeAttenuation: false`).
+ */
+export function labelHitDepth(sprite: THREE.Sprite, camera: THREE.PerspectiveCamera, ndcX: number, ndcY: number): number {
+  const p = sprite.getWorldPosition(new THREE.Vector3()).applyMatrix4(camera.matrixWorldInverse);
+  if (p.z >= 0) return Infinity;
+  const P = camera.projectionMatrix.elements;
+  const w = -p.z;
+  const ax = (P[0] * p.x + P[8] * p.z) / w;
+  const ay = (P[5] * p.y + P[9] * p.z) / w;
+  // The sprite's quad spans [-0.5, 0.5] around its centre point, scaled; without size attenuation
+  // the scale is in units of the projection's focal length (see three's sprite vertex shader).
+  const f = sprite.userData.textFrac ?? 1;
+  const cx = sprite.center.x - 0.5, cy = sprite.center.y - 0.5;
+  const sx = sprite.scale.x * P[0], sy = sprite.scale.y * P[5];
+  const x0 = ax + (-f / 2 - cx) * sx, x1 = ax + (f / 2 - cx) * sx;
+  // The letters fill the middle of the canvas's height; allow its full height for fat fingers.
+  const y0 = ay + (-0.5 - cy) * sy, y1 = ay + (0.5 - cy) * sy;
+  return ndcX >= x0 && ndcX <= x1 && ndcY >= y0 && ndcY <= y1 ? w : Infinity;
+}
+
+/** Whether an object and all its parents are visible. */
+function shown(o: THREE.Object3D | null): boolean {
+  for (; o; o = o.parent) if (!o.visible) return false;
+  return true;
+}
+
+/** Where a clicked label leads on the galaxy map. */
+export interface LabelTarget {
+  /** The object's name (the label without its distance and other details). */
+  name: string;
+  pos: THREE.Vector3;
+  /** How far from it the camera should stop (map units). */
+  distance: number;
+  /** The map's own target for it, when it has one (the Sun). */
+  target?: GalaxyTarget;
 }
 
 /** Procedurally generated spiral galaxy where every bright point is a selectable star system. */
@@ -143,6 +188,14 @@ export class GalaxyView {
   /** Real exoplanet hosts (Milky Way only). */
   exoHosts: ExoMarker[] = [];
   private exoPoints?: THREE.Points;
+  /** Layers of real catalogued objects (Milky Way only: nebulae, star clusters), with labels. */
+  private readonly realLayers = new Map<string, { points: THREE.Points; labels: THREE.Group }>();
+  /** Real nebulae drawn as clouds at their true size (Milky Way only), with labels. */
+  private readonly cloudLayers = new Map<string, { clouds: NebulaClouds[]; labels: THREE.Group; on: boolean }>();
+  private highlighting = false;
+  /** Labels of the hand-placed showpiece nebulae, hidden once the real clouds replace them. */
+  private readonly showpieceLabels: THREE.Sprite[] = [];
+  private viewHeight = 800;
   /** Names of real objects (Milky Way clusters and nebulae). */
   private readonly labelGroup = new THREE.Group();
   private readonly nebulaTextures: THREE.Texture[] = [];
@@ -209,7 +262,9 @@ export class GalaxyView {
     const solRing = new THREE.Sprite(new THREE.SpriteMaterial({ map: ringTexture(), color: 0xffd36b, sizeAttenuation: false, depthTest: false, transparent: true }));
     solRing.scale.setScalar(0.03);
     solRing.renderOrder = 11;
-    this.solMarker.add(solRing, textSprite('You are here', '#ffd36b'));
+    const solLabel = textSprite('You are here', '#ffd36b');
+    solLabel.userData.goto = { distance: 10, target: 'sol' };
+    this.solMarker.add(solRing, solLabel);
     this.scene.add(this.solMarker);
 
     this.bookmarkPoints = markerPoints(0xffd36b, 16);
@@ -229,6 +284,10 @@ export class GalaxyView {
     }
     for (const t of this.nebulaTextures) t.dispose();
     this.nebulaTextures.length = 0;
+    for (const key of [...this.realLayers.keys()]) this.setRealLayer(key, []);
+    this.setClusterSwarms(undefined);
+    for (const key of [...this.cloudLayers.keys()]) this.setCloudLayer(key, [], []);
+    this.showpieceLabels.length = 0;
 
     this.data = generateGalaxy(seed, 30000, 60000, 9000, opts);
     // "You are here" only belongs in our own galaxy, not in stand-ins for other real galaxies.
@@ -278,11 +337,15 @@ export class GalaxyView {
         ...this.data.clusters.map((c) => ({ name: c.name, x: c.x, y: c.y, z: c.z, color: c.kind === 'globular' ? '#ffe2a0' : '#a8d4ff' })),
         { name: 'Sagittarius A*', x: 0, y: 0, z: 0, color: '#ff9b6b' },
       ];
+      const nebulaNames = new Set(this.data.nebulae.map((n) => n.name));
       for (const n of named) {
         const label = textSprite(n.name, n.color, 0.7);
         label.position.set(n.x, n.y, n.z);
+        // Clusters close up (their stars fill the view, see clusterStars.ts); nebulae a little further out.
+        label.userData.goto = { distance: n.name === 'Sagittarius A*' ? 4 : nebulaNames.has(n.name) ? 1.2 : 0.3 };
         label.material.opacity = 0.8;
         this.labelGroup.add(label);
+        if (nebulaNames.has(n.name)) this.showpieceLabels.push(label);
       }
     }
     this.solMarker.position.set(...this.data.sol);
@@ -299,11 +362,13 @@ export class GalaxyView {
     this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();
     this.pointScale = 0.45 * height * pixelRatio;
+    this.viewHeight = height * pixelRatio;
+    for (const layer of this.cloudLayers.values()) for (const c of layer.clouds) c.setViewHeight(this.viewHeight);
     this.applyPointScale();
   }
 
   private applyPointScale(): void {
-    for (const pts of [this.stars, this.glow, this.dust]) {
+    for (const pts of [this.stars, this.glow, this.dust, this.swarms, ...[...this.realLayers.values()].map((l) => l.points)]) {
       if (pts) (pts.material as THREE.ShaderMaterial).uniforms.uScale.value = this.pointScale;
     }
   }
@@ -328,7 +393,12 @@ export class GalaxyView {
 
   /** Animate the camera to close in on a star or the core. */
   flyTo(target: GalaxyTarget, distance = 10, speed = 0.9): void {
-    const to = this.targetPosition(target);
+    this.flyToPoint(this.targetPosition(target), distance, speed);
+  }
+
+  /** Animate the camera to a point, stopping `distance` from it on the side it's looking from. */
+  flyToPoint(to: THREE.Vector3, distance: number, speed = 0.9): void {
+    distance = Math.max(distance, this.controls.minDistance * 1.05);
     const dir = this.camera.position.clone().sub(this.controls.target).normalize();
     this.anim = {
       fromTarget: this.controls.target.clone(),
@@ -368,7 +438,9 @@ export class GalaxyView {
     }
     attr.needsUpdate = true;
     for (const pts of [this.glow, this.dust]) if (pts) pts.visible = !match;
-    this.nebulaGroup.visible = !match;
+    this.nebulaGroup.visible = !match && !this.cloudLayers.size;
+    this.highlighting = !!match;
+    for (const layer of this.cloudLayers.values()) for (const c of layer.clouds) c.mesh.visible = layer.on && !match;
   }
 
   /** Show real exoplanet hosts: cyan rings, green for systems with a temperate planet. */
@@ -395,6 +467,123 @@ export class GalaxyView {
     this.exoPoints.geometry.setAttribute('color', new THREE.BufferAttribute(col, 3));
   }
 
+  /**
+   * A layer of real objects with measured distances (nebulae, star clusters), as glowing points
+   * sized by their physical size but never smaller than a few pixels, with labels for the named
+   * ones. An empty list removes the layer. Cleared on rebuild.
+   */
+  setRealLayer(key: string, items: { pos: [number, number, number]; color: [number, number, number]; size: number; label?: string; labelColor?: string; distance?: number }[]): void {
+    const old = this.realLayers.get(key);
+    if (old) {
+      this.scene.remove(old.points, old.labels);
+      old.points.geometry.dispose();
+      (old.points.material as THREE.Material).dispose();
+      for (const child of old.labels.children) {
+        const sprite = child as THREE.Sprite;
+        sprite.material.map?.dispose();
+        sprite.material.dispose();
+      }
+      this.realLayers.delete(key);
+    }
+    if (!items.length) return;
+    const pos = new Float32Array(items.length * 3);
+    const col = new Float32Array(items.length * 3);
+    const size = new Float32Array(items.length);
+    const labels = new THREE.Group();
+    items.forEach((it, i) => {
+      pos.set(it.pos, i * 3);
+      col.set(it.color, i * 3);
+      size[i] = it.size;
+      if (it.label) {
+        const text = textSprite(it.label, it.labelColor ?? '#ffb3c8', 0.55);
+        text.position.set(...it.pos);
+        text.userData.goto = { distance: it.distance ?? Math.max(0.3, it.size * 3) };
+        labels.add(text);
+      }
+    });
+    const points = pointCloud(pos, col, size, pointsMaterial(0.95, 26));
+    (points.material as THREE.ShaderMaterial).uniforms.uScale.value = this.pointScale;
+    points.renderOrder = 5;
+    this.scene.add(points, labels);
+    this.realLayers.set(key, { points, labels });
+  }
+
+  private swarms?: THREE.Points;
+
+  /** Star clusters as balls of stars at their real sizes (see procgen/clusterStars.ts). Cleared on rebuild. */
+  setClusterSwarms(swarms: { positions: Float32Array; colors: Float32Array; count: number } | undefined): void {
+    if (this.swarms) {
+      this.scene.remove(this.swarms);
+      this.swarms.geometry.dispose();
+      (this.swarms.material as THREE.Material).dispose();
+      this.swarms = undefined;
+    }
+    if (!swarms?.count) return;
+    // Each star a couple of pixels across from a cluster's doorstep; from afar they merge into a glow.
+    this.swarms = pointCloud(swarms.positions, swarms.colors, new Float32Array(swarms.count).fill(0.0016), pointsMaterial(1, 6));
+    (this.swarms.material as THREE.ShaderMaterial).uniforms.uScale.value = this.pointScale;
+    this.swarms.renderOrder = 4;
+    this.scene.add(this.swarms);
+  }
+
+  setRealLayerVisible(key: string, on: boolean): void {
+    const layer = this.realLayers.get(key);
+    if (layer) layer.points.visible = layer.labels.visible = on;
+    const clouds = this.cloudLayers.get(key);
+    if (clouds) {
+      clouds.on = on;
+      for (const c of clouds.clouds) c.mesh.visible = on && !this.highlighting;
+      clouds.labels.visible = on;
+    }
+  }
+
+  /**
+   * Real nebulae as clouds at their true size (see nebulaClouds.ts). They replace the hand-placed
+   * showpiece nebulae of the procedural Milky Way. An empty list removes the layer.
+   */
+  setCloudLayer(
+    key: string,
+    sets: { clouds: Cloud[]; atlas?: THREE.Texture; absorb?: boolean }[],
+    labels: { pos: [number, number, number]; label: string; color: string; size?: number }[],
+  ): void {
+    const old = this.cloudLayers.get(key);
+    if (old) {
+      this.scene.remove(old.labels);
+      for (const c of old.clouds) {
+        this.scene.remove(c.mesh);
+        c.dispose();
+      }
+      for (const child of old.labels.children) {
+        const sprite = child as THREE.Sprite;
+        sprite.material.map?.dispose();
+        sprite.material.dispose();
+      }
+      this.cloudLayers.delete(key);
+    }
+    const replaced = sets.some((set) => set.clouds.length > 0);
+    this.nebulaGroup.visible = !replaced;
+    for (const l of this.showpieceLabels) l.visible = !replaced;
+    if (!replaced) return;
+    // Dark dust first, so glowing gas in front of it still shows; stars draw over both.
+    const layers = sets
+      .filter((set) => set.clouds.length)
+      .map((set) => {
+        const layer = new NebulaClouds(set.clouds, set.atlas, set.absorb);
+        layer.setViewHeight(this.viewHeight);
+        layer.mesh.renderOrder = set.absorb ? 2.5 : 3;
+        return layer;
+      });
+    const group = new THREE.Group();
+    for (const l of labels) {
+      const text = textSprite(l.label, l.color, 0.55);
+      text.position.set(...l.pos);
+      text.userData.goto = { distance: Math.max(0.3, (l.size ?? 0.1) * 3) };
+      group.add(text);
+    }
+    this.scene.add(...layers.map((l) => l.mesh), group);
+    this.cloudLayers.set(key, { clouds: layers, labels: group, on: true });
+  }
+
   /** Labelled markers for real black holes and pulsars (Milky Way only). Cleared on rebuild. */
   addCompactObjects(items: { label: string; pos: [number, number, number]; kind: 'blackhole' | 'pulsar' }[]): void {
     for (const it of items) {
@@ -405,6 +594,7 @@ export class GalaxyView {
       ring.renderOrder = 11;
       const text = textSprite(it.label, it.kind === 'blackhole' ? '#ff9de3' : '#b8f4ff', 0.6);
       text.position.set(...it.pos);
+      text.userData.goto = { distance: 0.6 };
       this.labelGroup.add(ring, text);
     }
   }
@@ -419,6 +609,23 @@ export class GalaxyView {
     };
     fill(this.bookmarkPoints, bookmarks);
     fill(this.visitedPoints, visited.filter((v) => !bookmarks.includes(v)));
+  }
+
+  /** The label under a screen point (normalised device coordinates), nearest first, if any. */
+  pickLabel(ndcX: number, ndcY: number): LabelTarget | undefined {
+    this.camera.updateMatrixWorld();
+    let best: LabelTarget | undefined;
+    let bestDepth = Infinity;
+    this.scene.traverseVisible((o) => {
+      const goto = o.userData.goto as { distance: number; target?: GalaxyTarget } | undefined;
+      if (!goto || !(o instanceof THREE.Sprite) || o.material.opacity < 0.05 || !shown(o)) return;
+      const depth = labelHitDepth(o, this.camera, ndcX, ndcY);
+      if (depth < bestDepth) {
+        bestDepth = depth;
+        best = { name: String(o.userData.labelText).split(' · ')[0], pos: o.getWorldPosition(new THREE.Vector3()), distance: goto.distance, target: goto.target };
+      }
+    });
+    return best;
   }
 
   /** Index of the star nearest the cursor within a few pixels (or 'core'), preferring closer stars. */

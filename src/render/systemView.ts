@@ -11,6 +11,11 @@ import type { SimEvent, Simulation } from '../sim/simulation';
 import { atmosphereMaterial, BodyVisual, DETAIL_PIXEL_RADIUS } from './bodyVisual';
 import { createStarfield } from './starfield';
 import { dotTexture, glowTexture, ringTexture } from './textures';
+import { kelvinToRgb } from '../sim/color';
+import { ejectaLayers, luminosity as snLuminosity, maxEjectaSpeed, peakLuminosity, photosphereTemperature, type Explosion } from '../sim/supernovaPhysics';
+import { NebulaClouds, type Cloud } from './nebulaClouds';
+import { mulberry32 } from '../procgen/rng';
+import { AU_PER_YEAR_IN_KMS } from '../sim/units';
 
 const MAX_LIGHTS = 4;
 const MAX_HZ = 4;
@@ -73,6 +78,11 @@ export class SystemView {
   private readonly approachMarkers: THREE.Sprite[];
   private readonly hzRings: THREE.Mesh[] = [];
   private readonly shockShells: THREE.Mesh[] = [];
+  /** The light of each supernova, following its real light curve, and the light it casts. */
+  private readonly snGlows: THREE.Sprite[] = [];
+  private readonly snLight = new THREE.PointLight(0xffffff, 0, 0, 0);
+  /** The glowing ejecta of each supernova, keyed by explosion (source and time). */
+  private readonly remnants = new Map<string, NebulaClouds>();
   private readonly trailGroup = new THREE.Group();
   private fullIds = new Set<number>();
   private frame = 0;
@@ -115,6 +125,7 @@ export class SystemView {
       this.scene.add(light);
     }
     this.scene.add(this.trailGroup);
+    this.scene.add(this.snLight);
 
     // Particles share one buffer sized to the simulation's capacity.
     const cap = sim.particles.capacity;
@@ -215,7 +226,9 @@ export class SystemView {
   setViewport(width: number, height: number): void {
     this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();
+    this.viewHeightPx = height * (globalThis.devicePixelRatio || 1);
   }
+  private viewHeightPx = 800;
 
   setQuality(q: RenderQuality): void {
     const trailChanged = q.trailLength !== this.quality.trailLength;
@@ -237,6 +250,13 @@ export class SystemView {
   /** Remove all visuals (e.g. before loading a new scene) and frame the camera. */
   reset(setup: SceneSetup, zoomFrom = 1): void {
     this.rebuildAll();
+    for (const g of this.snGlows) g.visible = false;
+    for (const remnant of this.remnants.values()) {
+      this.scene.remove(remnant.mesh);
+      remnant.dispose();
+    }
+    this.remnants.clear();
+    this.snLight.intensity = 0;
     for (const f of this.flashes) this.scene.remove(f.sprite);
     this.flashes.length = 0;
     this.selectedId = undefined;
@@ -425,13 +445,16 @@ export class SystemView {
     const tmp = new THREE.Vector3();
     const spacing = camDist * 0.004;
     let detailCandidate: { v: BodyVisual; b: Body; px: number } | undefined;
+    // The Sun (the heaviest star) sets comet tail directions; only in AU-scale scenes.
+    let sun: Body | undefined;
+    if (this.sim.units === 'au-yr') for (const b of this.sim.bodies) if (b.kind === 'star' && (!sun || b.mass > sun.mass)) sun = b;
     for (const b of this.sim.bodies) {
       const v = this.visuals.get(b.id);
       if (!v) continue;
       tmp.set(b.x, b.y, b.z);
       const wpp = this.worldPerPixel(tmp, viewportHeight);
       const lockId = this.locks.get(b.id);
-      v.update(b, wpp, dt, lockId !== undefined ? this.sim.getBody(lockId) : undefined);
+      v.update(b, wpp, dt, lockId !== undefined ? this.sim.getBody(lockId) : undefined, sun);
       if (updateClimate && v.isPlanet) {
         v.setClimate(climateFor(b.kind, bodyTemperature(this.sim.bodies, b)));
         const parent = this.sim.parentOf(b);
@@ -669,14 +692,71 @@ export class SystemView {
       this.shockShells.push(shell);
       this.scene.add(shell);
     }
+    while (this.snGlows.length < waves.length) {
+      const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+      this.snGlows.push(glow);
+      this.scene.add(glow);
+    }
+    let brightest = 0;
+    const live = new Set<string>();
     this.shockShells.forEach((shell, i) => {
       const w = waves[i];
+      const glow = this.snGlows[i];
       shell.visible = !!w;
+      glow.visible = false;
       if (!w) return;
       shell.position.set(w.x, w.y, w.z);
       shell.scale.setScalar(w.radius);
-      (shell.material as THREE.ShaderMaterial).uniforms.uIntensity.value = 0.9 * (1 - w.radius / w.maxRadius);
+      const uniforms = (shell.material as THREE.ShaderMaterial).uniforms;
+      if (!w.explosion || w.t0 === undefined) {
+        uniforms.uIntensity.value = 0.9 * (1 - w.radius / w.maxRadius);
+        return;
+      }
+      // Its real light curve: brightness relative to peak on a log scale (the eye's response),
+      // coloured by the photosphere's temperature.
+      const days = (this.sim.time - w.t0) * (this.sim.units === 'au-yr' ? 365.25 : 365.25e6);
+      const e = w.explosion;
+      const L = snLuminosity(e, days);
+      const level = THREE.MathUtils.clamp((Math.log10(L + 1) - 39) / (Math.log10(peakLuminosity(e)) - 39), 0, 1);
+      const [r, g, b] = kelvinToRgb(photosphereTemperature(e, days));
+      glow.visible = level > 0;
+      glow.position.set(w.x, w.y, w.z);
+      glow.scale.setScalar((60 + 3 * Math.min(w.radius, 400)) * level * level);
+      glow.material.color.setRGB(r, g, b);
+      glow.material.opacity = level;
+      // The expanding ejecta glow faintly while the remnant is young.
+      uniforms.uIntensity.value = 0.25 + 0.65 * level;
+      // The ejecta gas: a fixed, seeded shape that scales with the ejecta's outer edge (free
+      // expansion at v_max until the blast wave slows; then held behind it by the reverse shock).
+      const key = `${w.sourceId}:${w.t0}`;
+      live.add(key);
+      let remnant = this.remnants.get(key);
+      if (!remnant) {
+        remnant = new NebulaClouds(remnantClouds(e, w.sourceId));
+        remnant.mesh.renderOrder = 2;
+        this.remnants.set(key, remnant);
+        this.scene.add(remnant.mesh);
+      }
+      remnant.setViewHeight(this.viewHeightPx);
+      const years = (this.sim.time - w.t0) * (this.sim.units === 'au-yr' ? 1 : 1e6);
+      const auPerUnit = this.sim.units === 'au-yr' ? 1 : 2.0626e8;
+      const edge = Math.min((maxEjectaSpeed(e) / AU_PER_YEAR_IN_KMS) * years / auPerUnit, w.radius);
+      // The gas shines by radioactive heating and shock heating; it stays visible as the remnant ages.
+      remnant.place(w, Math.max(edge, 1e-9), 0.55 + 0.45 * level);
+      if (level > brightest) {
+        brightest = level;
+        this.snLight.position.set(w.x, w.y, w.z);
+        this.snLight.color.setRGB(r, g, b);
+      }
     });
+    // A supernova outshines its star by up to ten billion times.
+    this.snLight.intensity = brightest * 6;
+    for (const [key, remnant] of this.remnants) {
+      if (live.has(key)) continue;
+      this.scene.remove(remnant.mesh);
+      remnant.dispose();
+      this.remnants.delete(key);
+    }
   }
 
   private addFlash(e: SimEvent): void {
@@ -710,7 +790,7 @@ export class SystemView {
     );
     sprite.position.set(e.x, e.y, e.z);
     this.scene.add(sprite);
-    const life = e.type === 'supernova' ? 4 : e.type === 'merge' || e.type === 'shatter' ? 0.9 : 2.2;
+    const life = e.type === 'supernova' ? 1.5 : e.type === 'merge' || e.type === 'shatter' ? 0.9 : 2.2;
     this.flashes.push({ sprite, age: 0, life, size: Math.max(e.size * 10, 0.05) });
   }
 
@@ -728,6 +808,19 @@ export class SystemView {
       f.sprite.scale.setScalar(f.size * (0.3 + t * 1.4));
       f.sprite.material.opacity = (1 - t) * (1 - t);
     }
+  }
+
+  /** The body whose name label is under a point on the page (client pixels), if any. */
+  pickLabel(clientX: number, clientY: number): number | undefined {
+    if (!this.labelsEnabled) return undefined;
+    for (const [id, v] of this.visuals) {
+      const el = v.label.element;
+      if (!v.label.visible || el.style.display === 'none') continue;
+      const r = el.getBoundingClientRect();
+      // A few pixels of slack around short labels.
+      if (r.width > 0 && clientX >= r.left - 3 && clientX <= r.right + 3 && clientY >= r.top - 3 && clientY <= r.bottom + 3) return id;
+    }
+    return undefined;
   }
 
   /** Nearest body to a screen point, using projected positions (forgiving for tiny bodies). */
@@ -789,4 +882,54 @@ export class SystemView {
     this.arrow.visible = false;
     this.predictLine.visible = false;
   }
+}
+
+/**
+ * The ejecta of an explosion as glowing gas puffs, in units of the ejecta's outer radius. Like
+ * the particles (Simulation.launchEjecta), each sits at the radius of its mass coordinate
+ * (r ∝ m^(1/3) in a homologous sphere) and glows in its composition shell's colour; most are
+ * small knots gathered into clumps (Rayleigh–Taylor fingers), the rest larger, fainter haze.
+ */
+function remnantClouds(e: Explosion, seed: number): Cloud[] {
+  const rand = mulberry32(seed * 7919 + 17);
+  const unit = (): [number, number, number] => {
+    const u = 2 * rand() - 1, th = rand() * Math.PI * 2, s = Math.sqrt(1 - u * u);
+    return [s * Math.cos(th), u, s * Math.sin(th)];
+  };
+  const layers = ejectaLayers(e);
+  const total = layers.reduce((sum, l) => sum + l.mass, 0) || 1;
+  const clumps = Array.from({ length: 70 }, unit);
+  const out: Cloud[] = [];
+  for (let i = 0; i < 900; i++) {
+    const knot = rand() < 0.7;
+    let d = unit();
+    if (knot) {
+      const c = clumps[Math.floor(rand() * clumps.length)];
+      const n = [c[0] + d[0] * 0.07, c[1] + d[1] * 0.07, c[2] + d[2] * 0.07];
+      const len = Math.hypot(n[0], n[1], n[2]);
+      d = [n[0] / len, n[1] / len, n[2] / len];
+    }
+    // Most of the light comes from the denser outer half; keep a few inner puffs for the core.
+    const m = 0.02 + 0.98 * rand();
+    const r = Math.cbrt(m);
+    let acc = 0;
+    let color = layers[layers.length - 1].color;
+    for (const l of layers) {
+      acc += l.mass / total;
+      if (m <= acc) {
+        color = l.color;
+        break;
+      }
+    }
+    out.push({
+      pos: [d[0] * r, d[1] * r, d[2] * r],
+      size: knot ? 0.05 + 0.05 * rand() : 0.18 + 0.14 * rand(),
+      color,
+      minPx: 2,
+      brightness: knot ? 0.55 : 0.12,
+      rotation: rand() * 6.28,
+      puff: Math.floor(rand() * 4),
+    });
+  }
+  return out;
 }

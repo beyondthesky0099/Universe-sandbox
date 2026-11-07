@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { CSS2DRenderer } from 'three/addons/renderers/CSS2DRenderer.js';
-import { AudioEngine } from './audio';
+import { AudioEngine, playSamples } from './audio';
 import { FEATURE, systemFeatures, type FeatureName } from './procgen/galaxy';
 import { mulberry32, pick, seedFromString } from './procgen/rng';
 import { generateStarSystem, starSummary, type StarSystemSpec } from './procgen/starSystem';
@@ -10,13 +10,21 @@ import { SkyView } from './render/skyView';
 import { moonPhaseName, skyAt } from './sim/sky';
 import { dateToJdTT, eclipsePath, greatestEclipse, jdTTToDate, loadEclipses, localCircumstances, shadowAt, topocentric, type Eclipse } from './sim/eclipse';
 import { displayName, GALAXY_CREDIT, galaxyForm, loadLocalGalaxies, loadNamedGalaxies, loadWebGalaxies, LY_PER_MPC, type LocalGalaxy } from './sim/galaxies';
-import { equatorialToGalactic, galacticToMap, MILKY_WAY_SEED, type GalaxyOptions } from './procgen/galaxy';
+import { equatorialToGalactic, galacticToMap, MILKY_WAY_SEED, MW_CLUSTERS, UNITS_PER_KPC, type GalaxyOptions } from './procgen/galaxy';
+import { CLUSTER_COLORS, loadClusters } from './sim/clusters';
+import { clusterSwarms } from './procgen/clusterStars';
+import { diameterPc, galacticToEcliptic, loadNebulae, NEBULA_COLORS } from './sim/nebulae';
+import { loadNebulaImages, NEBULA_IMAGE_CREDIT, nebulaAtlasUrl, nebulaKey, tileRect, type NebulaImageAtlas } from './sim/nebulaImages';
+import type { Cloud } from './render/nebulaClouds';
 import { QUALITY_PRESETS, SystemView } from './render/systemView';
 import { createRealSky } from './render/starfield';
 import { setTrueScale } from './sim/trueScale';
 import { loadGwEvent, loadGwEvents } from './sim/gwEvents';
 import { loadFlyby, loadFlybys } from './sim/flybys';
 import { loadVoyagerEncounter, loadVoyagerEncounters } from './sim/voyager';
+import { synthesizeChirp } from './sim/gwChirp';
+import { loadHalley2061, loadHalleyReturn } from './sim/halley';
+import { loadNeighbourhood100, loadStars100 } from './sim/gaia100';
 import { getSolarData, loadSolarData } from './sim/solarSystemData';
 import { isCompact, kindForMass, mainSequenceLifetime, mergedKind, NEUTRON_MAX_MASS, type Body, type BodyKind } from './sim/body';
 import { isTidallyLocked, nearResonance, orbitalPeriod } from './sim/analysis';
@@ -27,7 +35,7 @@ import { SimHost } from './sim/host';
 import { circularOrbitVelocity } from './sim/orbits';
 import { predictPath } from './sim/predict';
 import { galacticCore, loadSolarSystemOnDate, loadStarSystem, PRESETS, type SceneSetup } from './sim/presets';
-import { type SimEvent } from './sim/simulation';
+import { PARTICLE_CULL_DISTANCE, type SimEvent } from './sim/simulation';
 import { captureState, restoreState } from './sim/state';
 import { EXOPLANET_ACKNOWLEDGEMENT, loadCatalog, loadExoSystem, type ExoCatalog, type ExoHost } from './sim/exoplanets';
 import { loadBrightStars, loadNearStars, loadStarNeighbourhood } from './sim/stars';
@@ -53,6 +61,20 @@ import { LineChart, measure, METRICS, type MetricId, type Series } from './ui/gr
 type ViewName = 'cosmos' | 'galaxy' | 'system' | 'sky';
 type Tool = 'select' | 'spawn' | 'nudge';
 type QualityName = keyof typeof QUALITY_PRESETS;
+
+/**
+ * Phones, tablets and small laptops: start with lighter graphics (low quality, no bloom or
+ * lensing) unless the user has chosen otherwise. In a phone emulation (4× slower CPU) this took
+ * the default Solar System from about 2.5 to 17 frames per second.
+ */
+const LOW_POWER = (() => {
+  const nav = navigator as Navigator & { deviceMemory?: number };
+  const touchPhone = window.matchMedia?.('(pointer: coarse)').matches && Math.min(screen.width, screen.height) < 900;
+  return touchPhone || (nav.hardwareConcurrency ?? 8) <= 4 || (nav.deviceMemory ?? 8) <= 4;
+})();
+
+/** Running in the desktop app (desktop/, Electron): start with higher quality. */
+const DESKTOP = /\bElectron\//.test(navigator.userAgent);
 
 interface SpawnType {
   id: string;
@@ -159,7 +181,7 @@ export class App {
   private wasRunningBeforeRewind = false;
   private features?: Uint8Array;
   private scanToken = 0;
-  private quality: QualityName = prefs.get<QualityName>('quality', 'medium');
+  private quality: QualityName = prefs.get<QualityName>('quality', DESKTOP ? (LOW_POWER ? 'medium' : 'high') : LOW_POWER ? 'low' : 'medium');
   private catalog?: ExoCatalog;
   private challenge?: { def: Challenge; st: ChallengeState; result?: ChallengeResult };
   private graphOpen = false;
@@ -181,7 +203,7 @@ export class App {
   private readonly scripts: ScriptRunner;
   private embed = false;
   private postfx!: PostFX;
-  private postfxOn = prefs.get('postfx', true);
+  private postfxOn = prefs.get('postfx', DESKTOP || !LOW_POWER);
   private mega?: MegaSim;
   private lesson?: { def: Lesson; step: number; events: SimEvent[]; done: Set<number> };
   private nudgeDrag?: { bodyId: number; start: THREE.Vector3; current: THREE.Vector3; lastPredict: number; path?: Float32Array };
@@ -190,12 +212,14 @@ export class App {
   private exoOpen = false;
 
   constructor() {
-    this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas, antialias: true, logarithmicDepthBuffer: true });
+    // Ask for the discrete GPU on laptops that have two.
+    this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas, antialias: true, logarithmicDepthBuffer: true, powerPreference: 'high-performance' });
     this.renderer.setClearColor(0x02030a);
     this.renderer.xr.enabled = true;
     this.postfx = new PostFX(this.renderer);
     const params = new URLSearchParams(location.hash.slice(1));
-    this.host = new SimHost(params.get('worker') !== '0');
+    // #threads=0 turns multi-core particle forces off (they only run in the desktop app).
+    this.host = new SimHost(params.get('worker') !== '0', params.has('threads') ? Number(params.get('threads')) : -1);
     this.system = new SystemView(this.sim, this.canvas, QUALITY_PRESETS[this.quality]);
     this.galaxy = new GalaxyView(this.canvas);
     this.cosmos = new CosmosView(this.canvas);
@@ -263,6 +287,47 @@ export class App {
     void loadBrightStars()
       .then((stars) => {
         this.sky.setStars(stars);
+        void loadClusters().then((list) => {
+          this.sky.setOutlines(
+            'clusters',
+            list.map((c) => ({ v: galacticToEcliptic(c.l, c.b), radiusDeg: c.radiusDeg, color: CLUSTER_COLORS[c.kind], label: c.name })),
+            '#ffe3a3',
+          );
+          this.sky.setOutlinesVisible('clusters', $<HTMLInputElement>('opt-sky-clusters').checked);
+          $('sky-cluster-count').textContent = `${list.length.toLocaleString('en-US')} star clusters (Gaia, Harris)`;
+        });
+        void loadNebulae().then((list) => {
+          this.sky.setOutlines(
+            'nebulae',
+            list.map((n) => ({
+              v: galacticToEcliptic(n.l, n.b),
+              radiusDeg: n.radiusDeg,
+              color: NEBULA_COLORS[n.kind],
+              label: n.name,
+            })),
+          );
+          this.sky.setOutlinesVisible('nebulae', $<HTMLInputElement>('opt-sky-nebulae').checked);
+          $('sky-nebula-count').textContent = `${list.length.toLocaleString('en-US')} nebulae from real catalogues`;
+          // The famous ones as their real survey images (galactic north up: the images were made
+          // in galactic coordinates).
+          void loadNebulaImages()
+            .then((images) => {
+              const pages = LOW_POWER ? 1 : images.pages.length;
+              for (let p = 0; p < pages; p++) {
+                void this.nebulaAtlas(images, p).then((atlas) => {
+                  this.sky.setImages(
+                    p,
+                    images.images
+                      .filter((im) => im.page === p)
+                      .map((im) => ({ v: galacticToEcliptic(im.l, im.b), up: galacticToEcliptic(0, 90), fieldDeg: im.fieldDeg, rect: tileRect(images.pages[p], im.tile) })),
+                    atlas,
+                  );
+                  this.sky.setOutlinesVisible('nebulae', $<HTMLInputElement>('opt-sky-nebulae').checked);
+                });
+              }
+            })
+            .catch(() => undefined);
+        });
         return this.system.setSky(createRealSky(stars));
       })
       .catch(() => undefined);
@@ -349,7 +414,7 @@ export class App {
       }
       this.forecastTimer -= dt;
       if (this.forecastTimer <= 0) {
-        this.forecastTimer = 1;
+        this.forecastTimer = LOW_POWER && !DESKTOP ? 2 : 1;
         this.updateForecast();
       }
       if (this.frames % 6 === 0) this.updateSystemHud();
@@ -530,7 +595,7 @@ export class App {
     this.system.setViewport(this.width, this.height);
     this.galaxy.setViewport(this.width, this.height, this.renderer.getPixelRatio());
     this.cosmos.setViewport(this.width, this.height, this.renderer.getPixelRatio());
-    this.sky.setViewport(this.width, this.height);
+    this.sky.setViewport(this.width, this.height, this.renderer.getPixelRatio());
     this.postfx?.setSize(this.width, this.height);
   }
 
@@ -894,6 +959,8 @@ export class App {
         if (t.sun.alt > -1) this.sky.lookAt(t.sun.alt, t.sun.az);
       }
     });
+    $<HTMLInputElement>('opt-sky-nebulae').addEventListener('change', (e) => this.sky.setOutlinesVisible('nebulae', (e.target as HTMLInputElement).checked));
+    $<HTMLInputElement>('opt-sky-clusters').addEventListener('change', (e) => this.sky.setOutlinesVisible('clusters', (e.target as HTMLInputElement).checked));
     $('sky-speed').addEventListener('change', () => (this.skySpeed = Number($<HTMLSelectElement>('sky-speed').value)));
     $('sky-list').addEventListener('click', (e) => {
       const li = (e.target as HTMLElement).closest<HTMLElement>('li[data-sky]');
@@ -964,6 +1031,8 @@ export class App {
       evolutionRate: 1,
       trueScale: false,
       units: 'au-yr',
+      particleCullDistance: PARTICLE_CULL_DISTANCE,
+      absorbParticles: true,
     });
   }
 
@@ -1396,6 +1465,119 @@ export class App {
     );
   }
 
+  /** Real open and globular star clusters at their measured distances (Milky Way only). */
+  private async showClustersOnMap(seed: number): Promise<void> {
+    const all = await loadClusters().catch(() => undefined);
+    if (!all || this.galaxySeed !== seed) return;
+    // The hand-placed showpiece clusters already carry labels; don't name them twice.
+    const shown = MW_CLUSTERS.map((c) => c.name.split(' (')[0].toLowerCase());
+    this.galaxy.setRealLayer(
+      'clusters',
+      all.filter((c) => c.distancePc).map((c) => {
+        const pc = 2 * (c.radiusPc ?? 2);
+        const size = Math.max(c.kind === 'globular' ? 0.3 : 0.1, (pc / 1000) * UNITS_PER_KPC * 6);
+        const named = c.name && !shown.some((s) => c.name!.toLowerCase().startsWith(s));
+        const ly = Math.round((c.distancePc! * 3.2616) / 10) * 10;
+        return {
+          pos: galacticToMap(c.l, c.b, c.distancePc! / 1000),
+          color: CLUSTER_COLORS[c.kind],
+          size,
+          label: named ? `${c.name} · ${ly.toLocaleString('en-US')} ly` : undefined,
+          labelColor: '#ffe3a3',
+          // Close enough for the cluster's stars to fill a good part of the view.
+          distance: Math.max(0.22, ((c.radiusPc ?? 3) / 1000) * UNITS_PER_KPC * 15),
+        };
+      }),
+    );
+    this.galaxy.setRealLayerVisible('clusters', $<HTMLInputElement>('opt-real-clusters').checked);
+    // The globulars and the larger open clusters as balls of stars at their real sizes (always shown).
+    this.galaxy.setClusterSwarms(clusterSwarms(all, LOW_POWER ? 0.5 : 1));
+    const count = (k: string) => all.filter((c) => c.kind === k).length.toLocaleString('en-US');
+    $('galaxy-info').textContent += ` ${count('open')} open clusters and ${count('group')} moving groups from Gaia (gold), and ${count('globular')} globular clusters (orange), at their measured distances.`;
+  }
+
+  /**
+   * Real nebulae with measured distances (Milky Way only), as clouds at their true size. Those the
+   * survey plates capture show their real photographs (the named ones, and about 200 more on
+   * desktops); the rest glow in their emission-line colours; dark nebulae dim the light
+   * behind them.
+   */
+  private async showNebulaeOnMap(seed: number): Promise<void> {
+    const [all, images] = await Promise.all([loadNebulae().catch(() => undefined), loadNebulaImages().catch(() => undefined)]);
+    if (!all || this.galaxySeed !== seed) return;
+    // Phones load only the named nebulae's page (1 MB); desktops all of them.
+    const pageCount = images ? (LOW_POWER ? 1 : images.pages.length) : 0;
+    const atlases = await Promise.all(Array.from({ length: pageCount }, (_, p) => this.nebulaAtlas(images!, p).catch(() => undefined)));
+    if (this.galaxySeed !== seed) return;
+    const placed = all.filter((n) => n.distanceKpc);
+    const imageOf = new Map((images?.images ?? []).filter((im) => atlases[im.page]).map((im) => [nebulaKey(im), im]));
+    const perPage: Cloud[][] = atlases.map(() => []);
+    const glow: Cloud[] = [];
+    const dust: Cloud[] = [];
+    const labels: { pos: [number, number, number]; label: string; color: string; size: number }[] = [];
+    let k = 0;
+    for (const n of placed) {
+      const pc = diameterPc(n) ?? (n.kind === 'pn' ? 0.5 : n.kind === 'snr' ? 20 : n.kind === 'refl' ? 1 : 5);
+      const size = (pc / 1000) * UNITS_PER_KPC;
+      const pos = galacticToMap(n.l, n.b, n.distanceKpc!);
+      const color = NEBULA_COLORS[n.kind];
+      const image = n.kind === 'dark' ? undefined : imageOf.get(nebulaKey(n));
+      k++;
+      if (image) {
+        // The image spans 2.6 catalogue radii; a soft glow in the nebula's colour gives it depth.
+        const named = image.page === 0;
+        perPage[image.page].push({ pos, size: size * 1.3, color, tile: tileRect(images!.pages[image.page], image.tile), minPx: named ? 40 : 14, brightness: 1.1, rotation: 0, puff: 0 });
+        glow.push({ pos, size: size * 1.6, color, minPx: named ? 50 : 18, brightness: 0.3, rotation: k, puff: k });
+      } else {
+        // A few overlapping puffs spread through the nebula's volume.
+        const puffs = n.kind === 'pn' ? 1 : 3;
+        for (let p = 0; p < puffs; p++) {
+          const h = Math.sin(k * 12.9898 + p * 78.233) * 43758.5453;
+          const r = (h - Math.floor(h)) * 0.3 * size;
+          const a = k * 2.399 + p * 2.1, e = (p - 1) * 0.7;
+          const off: [number, number, number] = puffs > 1 ? [r * Math.cos(a) * Math.cos(e), r * Math.sin(e), r * Math.sin(a) * Math.cos(e)] : [0, 0, 0];
+          (n.kind === 'dark' ? dust : glow).push({
+            pos: [pos[0] + off[0], pos[1] + off[1], pos[2] + off[2]],
+            size: size * (puffs > 1 ? 0.75 : 1),
+            color,
+            minPx: n.kind === 'pn' ? 3 : 4,
+            // Lynds opacity class 6 is the darkest.
+            brightness: n.kind === 'dark' ? 0.35 + 0.1 * (n.opacity ?? 3) : n.kind === 'hii' ? 0.8 : 0.9,
+            rotation: k * 1.7 + p,
+            puff: k + p,
+          });
+        }
+      }
+      if (n.name) {
+        const ly = Math.round((n.distanceKpc! * 3261.6) / 10) * 10;
+        labels.push({ pos, label: `${n.name} · ${ly.toLocaleString('en-US')} ly`, color: n.kind === 'dark' ? '#d9b99a' : '#ffb3c8', size });
+      }
+    }
+    this.galaxy.setCloudLayer(
+      'nebulae',
+      [{ clouds: dust, absorb: true }, { clouds: glow }, ...perPage.map((clouds, p) => ({ clouds, atlas: atlases[p] }))],
+      labels,
+    );
+    this.galaxy.setRealLayerVisible('nebulae', $<HTMLInputElement>('opt-real-nebulae').checked);
+    const count = (kind: string) => placed.filter((n) => n.kind === kind).length.toLocaleString('en-US');
+    const imaged = perPage.reduce((sum, list) => sum + list.length, 0);
+    $('galaxy-info').textContent += ` ${count('hii')} real HII regions (pink: hydrogen-alpha), ${count('pn')} planetary nebulae (teal: oxygen III), ${count('snr')} supernova remnants, ${count('refl')} reflection nebulae (blue: scattered starlight) and ${count('dark')} dark dust clouds (at Gaia distances of their molecular clouds) sit at their measured distances and true sizes; ${imaged.toLocaleString('en-US')} of them show their real Digitized Sky Survey photographs. Star-forming regions trace the spiral arms. ${imaged ? NEBULA_IMAGE_CREDIT : ''}`;
+  }
+
+  private readonly atlasPromises = new Map<number, Promise<THREE.Texture>>();
+  /** A page of the nebula-image atlas as a texture (loaded once, shared by the galaxy map and the Sky tab). */
+  private nebulaAtlas(images: NebulaImageAtlas, page: number): Promise<THREE.Texture> {
+    let p = this.atlasPromises.get(page);
+    if (!p) {
+      p = new THREE.TextureLoader().loadAsync(nebulaAtlasUrl(images.pages[page])).then((tex) => {
+        tex.anisotropy = 4;
+        return tex;
+      });
+      this.atlasPromises.set(page, p);
+    }
+    return p;
+  }
+
   private async showExoHostsOnMap(seed: number): Promise<void> {
     const catalog = await this.getCatalog().catch(() => undefined);
     if (!catalog || this.galaxySeed !== seed) return;
@@ -1421,7 +1603,7 @@ export class App {
     $('galaxy-name').textContent = data.name;
     $('galaxy-info').textContent =
       data.name === 'Milky Way'
-        ? `Our galaxy: real structure (4 spiral arms, the Local Spur, the central bar, Sgr A*) with ${data.clusters.length} real clusters and ${data.nebulae.length} real nebulae at their true positions. The ${data.stars.count.toLocaleString()} explorable systems are procedural stand-ins for the ~100 billion real stars.`
+        ? `Our galaxy: real structure (4 spiral arms, the Local Spur, the central bar, Sgr A*) and the real clusters and nebulae listed below at their true positions. The ${data.stars.count.toLocaleString()} explorable systems are procedural stand-ins for the ~100 billion real stars.`
         : opts.origin
           ? `A procedural stand-in for the real ${data.form} galaxy ${data.name}: its overall shape follows the real galaxy's type, but its ${data.stars.count.toLocaleString()} stars are invented. Zoom out to return to the Universe map.`
           : `${data.arms}-armed spiral · ${data.stars.count.toLocaleString()} explorable systems · ${data.clusters.length} star clusters (a procedural galaxy)`;
@@ -1429,6 +1611,8 @@ export class App {
     if (data.name === 'Milky Way') {
       void this.showExoHostsOnMap(seed);
       void this.showCompactObjectsOnMap(seed);
+      void this.showNebulaeOnMap(seed);
+      void this.showClustersOnMap(seed);
     }
     $<HTMLInputElement>('galaxy-seed').value = String(seed);
     $('star-panel').classList.add('hidden');
@@ -1641,12 +1825,12 @@ export class App {
 
   private updateHint(): void {
     let text: string;
-    if (this.view === 'sky') text = 'Drag to look around · Scroll to zoom · Click the Moon or a planet for details';
+    if (this.view === 'sky') text = 'Drag to look around · Scroll to zoom · Click a name to turn to it · Click the Moon or a planet for details';
     else if (this.view === 'cosmos') text = 'Click a galaxy to inspect · Double-click to fly there · Zoom right in (or Enter) to visit · Scroll out for the cosmic web';
-    else if (this.view === 'galaxy') text = 'Click a star to inspect · Double-click to fly there · Zoom right in (or Enter) to visit · Zoom far out for other galaxies';
+    else if (this.view === 'galaxy') text = 'Click a name to fly there · Click a star to inspect · Double-click to fly there · Zoom right in (or Enter) to visit · Zoom far out for other galaxies';
     else if (this.tool === 'spawn') text = 'Click to place · Drag to set velocity · Right-drag to orbit camera · Esc to cancel';
     else if (this.tool === 'nudge') text = 'Press on a body and drag to push it · Dashed line previews the new path · Right-drag to orbit camera';
-    else text = 'Click to select · Double-click to follow · Space pause · Hold R rewind · Ctrl+Z undo · B spawn · M galaxy map';
+    else text = 'Click to select · Click a name or double-click to follow · Space pause · Hold R rewind · Ctrl+Z undo · B spawn · M galaxy map';
     $('hint').textContent = text;
   }
 
@@ -1860,7 +2044,7 @@ export class App {
     $('lag').classList.toggle('hidden', !status.lagging);
     const n = this.sim.bodies.length;
     $('stats').textContent = `${Math.round(this.fps)} fps · ${n.toLocaleString()} bodies · ${this.sim.particles.count.toLocaleString()} particles`;
-    $('engine-info').textContent = `Physics: ${status.threaded ? 'Web Worker' : 'main thread'} · Gravity: ${status.usingTree ? 'Barnes–Hut tree' : 'direct N²'}`;
+    $('engine-info').textContent = `Physics: ${status.threaded ? 'Web Worker' : 'main thread'}${status.cores > 1 ? ` · ${status.cores} CPU cores for particles` : ''} · Gravity: ${status.usingTree ? 'Barnes–Hut tree' : 'direct N²'}`;
     // The selected body may have merged, shattered or been torn apart since last frame.
     if (this.selectedBody()) this.updateBodyPanel();
     else if (!$('body-panel').classList.contains('hidden')) this.hideBodyPanel();
@@ -2382,6 +2566,17 @@ export class App {
     }
   }
 
+  private async loadGaia100Scene(): Promise<void> {
+    try {
+      toast('Loading 44,500 Gaia stars…');
+      const [data, near] = await Promise.all([loadStars100(), loadNearStars().catch(() => [])]);
+      this.loadScenario({ name: 'stars within 326 light-years (Gaia)', load: () => loadNeighbourhood100(this.sim, data, near), origin: { kind: 'neighbourhood' } });
+      this.setView('system');
+    } catch (err) {
+      toast((err as Error).message);
+    }
+  }
+
   private async visitSelected(): Promise<void> {
     const body = this.selectedBody();
     if (!body?.tag) return;
@@ -2590,13 +2785,30 @@ export class App {
   private handleClick(e: { clientX: number; clientY: number }): void {
     const [x, y] = this.ndc(e);
     if (this.view === 'system' && this.tool === 'select') {
+      // A click on a name label goes there: select the body and follow it.
+      const labelled = this.system.pickLabel(e.clientX, e.clientY);
+      const body = labelled !== undefined ? this.sim.getBody(labelled) : undefined;
+      if (body) {
+        this.selectBody(body);
+        this.system.follow(body.id);
+        return;
+      }
       this.selectBody(this.system.pick(x, y, this.width, this.height));
     } else if (this.view === 'galaxy') {
+      const label = this.galaxy.pickLabel(x, y);
+      if (label) {
+        if (label.target !== undefined) this.selectTarget(label.target);
+        this.galaxy.flyToPoint(label.pos, label.distance);
+        toast(`Flying to ${label.name}`);
+        return;
+      }
       this.selectTarget(this.galaxy.pick(x, y, this.width, this.height));
     } else if (this.view === 'cosmos') {
       this.selectCosmos(this.cosmos.pick(x, y, this.width, this.height));
     } else if (this.view === 'sky') {
-      this.skyPicked = this.sky.pick(x, y);
+      const label = this.sky.pickLabel(x, y);
+      if (label) this.sky.goToLabel(label);
+      this.skyPicked = label?.userData.body ?? this.sky.pick(x, y);
       this.renderSkyList();
     }
   }
@@ -2625,6 +2837,8 @@ export class App {
       }
     }
   }
+
+  private lastHover = 0;
 
   private bindInput(): void {
     const c = this.canvas;
@@ -2660,6 +2874,17 @@ export class App {
     });
 
     c.addEventListener('pointermove', (e) => {
+      // A pointing hand over name labels, which can be clicked to go there (checked ~10 times a second).
+      if (e.pointerType === 'mouse' && e.buttons === 0 && performance.now() - this.lastHover > 100) {
+        this.lastHover = performance.now();
+        const [x, y] = this.ndc(e);
+        const onLabel =
+          this.view === 'galaxy' ? !!this.galaxy.pickLabel(x, y)
+          : this.view === 'sky' ? !!this.sky.pickLabel(x, y)
+          : this.view === 'system' && this.tool === 'select' ? this.system.pickLabel(e.clientX, e.clientY) !== undefined
+          : false;
+        c.style.cursor = onLabel ? 'pointer' : '';
+      }
       if (this.nudgeDrag && e.isPrimary) {
         const [x, y] = this.ndc(e);
         const p = this.system.planePoint(x, y, this.nudgeDrag.start.y);
@@ -2816,6 +3041,8 @@ export class App {
       this.cosmos.resetCamera();
     });
     $<HTMLInputElement>('opt-cosmic-web').addEventListener('change', (e) => this.cosmos.setWebVisible((e.target as HTMLInputElement).checked));
+    $<HTMLInputElement>('opt-real-nebulae').addEventListener('change', (e) => this.galaxy.setRealLayerVisible('nebulae', (e.target as HTMLInputElement).checked));
+    $<HTMLInputElement>('opt-real-clusters').addEventListener('change', (e) => this.galaxy.setRealLayerVisible('clusters', (e.target as HTMLInputElement).checked));
     $<HTMLInputElement>('opt-cmb').addEventListener('change', (e) => this.cosmos.setCmbVisible((e.target as HTMLInputElement).checked));
     $('cosmos-search').addEventListener('input', () => this.renderCosmosSearch());
     $('cosmos-results').addEventListener('click', (e) => {
@@ -2960,6 +3187,20 @@ export class App {
       const next = list.findIndex((x, j) => j > i && x.craft === e.craft);
       if (next >= 0) select.value = String(next);
     });
+    $('btn-gw-hear').addEventListener('click', async () => {
+      const events = await loadGwEvents().catch(() => []);
+      const ev = events[Number($<HTMLSelectElement>('gw-select').value)];
+      if (!ev) return;
+      const pitch = $<HTMLInputElement>('gw-pitch').checked ? 4 : 1;
+      const c = synthesizeChirp(ev, { pitch });
+      const seconds = playSamples(c.samples, c.sampleRate);
+      const hz = (f: number) => `${Math.round(f * pitch).toLocaleString('en-US')} Hz`;
+      toast(
+        `${ev.name}: ${seconds < 1 ? `${seconds.toFixed(2)} s` : `${seconds.toFixed(1)} s`} rising from ${hz(c.fStart)}${
+          c.fRing ? ` to the final black hole's ring at ${hz(c.fRing)}` : ` to ${hz(c.fIsco)}, where the neutron stars touch`
+        }${pitch > 1 ? ' (4× real pitch)' : ''}. Synthesized from the real masses at redshift ${c.redshift.toFixed(2)}, not the detector recording.`,
+      );
+    });
     $('btn-gw-load').addEventListener('click', async () => {
       const events = await loadGwEvents().catch(() => []);
       const ev = events[Number($<HTMLSelectElement>('gw-select').value)];
@@ -2976,6 +3217,15 @@ export class App {
     $('exo-list').addEventListener('click', pickHost);
     $('exo-list').addEventListener('keydown', (e) => (e as KeyboardEvent).key === 'Enter' && pickHost(e));
     $('btn-neighbourhood').addEventListener('click', () => void this.loadNeighbourhoodScene());
+    $('btn-gaia100').addEventListener('click', () => void this.loadGaia100Scene());
+    $('btn-halley').addEventListener('click', async () => {
+      try {
+        const [h] = await Promise.all([loadHalleyReturn(), loadSolarData()]);
+        this.loadScenario({ name: "Halley's return (2061)", description: "Comet Halley's real 2061 return from JPL Horizons, with the planets on that date.", load: () => loadHalley2061(this.sim, h), origin: { kind: 'sol' } });
+      } catch {
+        toast("Couldn't load Halley's data.");
+      }
+    });
     $('btn-visit').addEventListener('click', () => void this.visitSelected());
     $('btn-star-neighbourhood').addEventListener('click', async () => {
       await this.fade(true);
@@ -3360,6 +3610,7 @@ export class App {
 
 function kindLabel(b: Body): string {
   if (b.tag === 'probe') return 'Spacecraft';
+  if (b.tag === 'comet') return 'Comet';
   if (b.tag === 'galaxy') return 'Galaxy (all its mass as one point)';
   switch (b.kind) {
     case 'rocky':

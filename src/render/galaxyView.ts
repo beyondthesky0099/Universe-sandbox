@@ -242,7 +242,10 @@ export class GalaxyView {
     this.controls.enableDamping = true;
     this.controls.dampingFactor = 0.08;
     this.controls.zoomSpeed = 1.3;
-    this.controls.minDistance = 0.2;
+    // Close enough for the smallest real objects on the map: a planetary nebula like the Ghost of
+    // Jupiter is under a light-year across (0.002 units). 0.0004 units is about 0.2 light-years.
+    // The near plane follows the camera in (update), so close objects aren't clipped.
+    this.controls.minDistance = 0.0004;
     this.controls.maxDistance = 600;
 
     this.scene.add(this.starfield);
@@ -530,7 +533,7 @@ export class GalaxyView {
       if (it.label) {
         const text = textSprite(it.label, it.labelColor ?? '#ffb3c8', 0.55);
         text.position.set(...it.pos);
-        text.userData.goto = { distance: it.distance ?? Math.max(0.3, it.size * 3) };
+        text.userData.goto = { distance: it.distance ?? Math.max(0.003, it.size * 3) };
         labels.add(text);
       }
     });
@@ -638,7 +641,8 @@ export class GalaxyView {
     for (const l of labels) {
       const text = textSprite(l.label, l.color, 0.55);
       text.position.set(...l.pos);
-      text.userData.goto = { distance: Math.max(0.3, (l.size ?? 0.1) * 3) };
+      // Close enough that the nebula fills about a third of the view, however small it is.
+      text.userData.goto = { distance: Math.max(0.003, (l.size ?? 0.1) * 3) };
       group.add(text);
     }
     this.scene.add(...layers.map((l) => l.mesh), group);
@@ -667,7 +671,7 @@ export class GalaxyView {
       ring.renderOrder = 11;
       const text = textSprite(it.label, it.kind === 'blackhole' ? '#ff9de3' : '#b8f4ff', 0.6);
       text.position.set(...it.pos);
-      text.userData.goto = { distance: 0.6 };
+      text.userData.goto = { distance: 0.05 };
       this.labelGroup.add(ring, text);
     }
   }
@@ -813,6 +817,13 @@ export class GalaxyView {
       if (a.t >= 1) this.anim = undefined;
     }
     this.controls.update();
+    // The near plane follows the camera in, so a nebula a light-year across isn't clipped
+    // (the logarithmic depth buffer keeps the far side sharp).
+    const near = THREE.MathUtils.clamp(this.cameraDistance * 0.02, 1e-6, 0.001);
+    if (Math.abs(near - this.camera.near) > near * 0.1) {
+      this.camera.near = near;
+      this.camera.updateProjectionMatrix();
+    }
     // Fade the bright core glow when the camera is close to it.
     const dCore = this.camera.position.length();
     this.core.material.opacity = THREE.MathUtils.clamp(dCore / 300, 0.04, 0.35);

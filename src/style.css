@@ -1097,6 +1097,72 @@ body.embed #topbar {
 #travel-hud b {
   color: #cfe0ff;
 }
-#travel-hud .fiction {
+#travel-hud .fiction,
+#ship-readout .fiction {
   color: #ffb36b;
+}
+
+/* Spaceship flight */
+#ship-panel {
+  position: absolute;
+  left: 50%;
+  bottom: 34px;
+  transform: translateX(-50%);
+  z-index: 5;
+  width: min(560px, calc(100vw - 32px));
+  background: rgba(10, 14, 26, 0.97);
+  border: 1px solid rgba(140, 200, 255, 0.3);
+  border-radius: 12px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+}
+#ship-panel .ship-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+#ship-panel select {
+  flex: 1 1 200px;
+  min-width: 0;
+}
+#ship-panel .slider {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+#ship-panel .ship-burns {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 4px;
+}
+@media (max-width: 560px) {
+  #ship-panel .ship-burns {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+#ship-panel .ship-burns button {
+  padding: 6px 2px;
+  font-size: 12px;
+  touch-action: none;
+  user-select: none;
+}
+#ship-panel .ship-burns button.active {
+  background: rgba(255, 150, 60, 0.35);
+}
+#ship-readout {
+  font-size: 12px;
+  line-height: 1.45;
+  color: rgba(220, 232, 255, 0.85);
+  font-variant-numeric: tabular-nums;
+}
+
+/* On phones the flight controls replace the body panel (their readout has the orbit). */
+@media (max-width: 760px) {
+  body.ship-flying #body-panel {
+    display: none !important;
+  }
 }

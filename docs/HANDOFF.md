@@ -180,6 +180,16 @@ Plan, in priority order:
   (`remnantClouds` in systemView, scaled to the ejecta edge each frame) coloured by element;
   ejecta are capped at the decelerating shock's speed (reverse shock).
 
+### P. Spaceships
+- [x] `src/sim/spaceship.ts` (ENGINES, autopilotAccel: brachistochrone approach, then steer to
+  the local circular orbit; settles when near-circular within 20% of the radius; orbitAround).
+  `Simulation.thrust/autopilot/appliedThrust`, applied in computeForces, fuel burned per step,
+  `thrustStepLimit` caps the step by fuel and by 2% of the manoeuvre's speed scale. Protocol
+  messages `thrust` and `autopilot` (SimHost.setThrust/setAutopilot); events of type 'ship'.
+  Ships (tag 'ship') collide with real radii (overlaps()). App: spawnShip, hold-to-thrust
+  buttons and WASDQE, ship panel readout; autopilot raises the time scale so the flight takes
+  about 25 s and lowers it on arrival. Tests: tests/spaceship.test.ts (incl. Earth → Mars).
+
 ### O. Travel at any speed
 - [x] `src/sim/travel.ts` (SPEEDS, Trip with Earth/ship clocks, autoWarp, formatting),
   `src/render/relativity.ts` (shared `uBeta` uniform, GLSL aberration + Doppler + beaming in

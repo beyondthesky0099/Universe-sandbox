@@ -16,13 +16,14 @@ import {
 import { kelvinToRgb } from './color';
 import { Octree } from './octree';
 import { ParticleSet } from './particles';
+import { autopilotAccel, type Autopilot } from './spaceship';
 import { blastOnBody, ejectaLayers, L_SUN, peakLuminosity, maxEjectaSpeed, neutronStarKick, remnantInAu, thermonuclear, type Explosion } from './supernovaPhysics';
 import { stellarFate, typeIaNickel } from './stellarFate';
 import { BODY_FIELDS, particleAccelSlice } from './particleKernel';
 import type { ParallelForces } from './parallel';
 import { AU_PER_YEAR_IN_KMS, C_AU_PER_YEAR, KPC_PER_MYR_IN_KMS, EARTH_MASS, G, type UnitSystem } from './units';
 
-export type SimEventType = 'merge' | 'ignite' | 'collapse' | 'shatter' | 'disrupt' | 'supernova' | 'gwmerger' | 'redgiant' | 'nebula' | 'script';
+export type SimEventType = 'merge' | 'ignite' | 'collapse' | 'shatter' | 'disrupt' | 'supernova' | 'gwmerger' | 'redgiant' | 'nebula' | 'script' | 'ship';
 
 /** A user-defined force law: the body of `function (body, time, sim)` returning [ax, ay, az] in AU/yr². */
 export interface CustomForce {
@@ -199,6 +200,96 @@ export class Simulation {
     this.forcesDirty = true;
   }
 
+  /** Engines firing: body id → acceleration (AU/yr², scene axes), applied every step (spaceship.ts). */
+  readonly thrust = new Map<number, [number, number, number]>();
+  /** Autopilots: ship id → the orbit it is flying into. */
+  readonly autopilot = new Map<number, Autopilot>();
+  /** The thrust actually applied last step (manual or autopilot), for fuel use and the HUD. */
+  readonly appliedThrust = new Map<number, [number, number, number]>();
+
+  setThrust(id: number, accel: [number, number, number] | undefined): void {
+    if (accel && Math.hypot(...accel) > 0) this.thrust.set(id, accel);
+    else this.thrust.delete(id);
+    this.forcesDirty = true;
+  }
+
+  setAutopilot(id: number, ap: Autopilot | undefined): void {
+    if (ap) this.autopilot.set(id, ap);
+    else this.autopilot.delete(id);
+    this.forcesDirty = true;
+  }
+
+  /** Add engine thrust (manual and autopilot) to the ships' accelerations. */
+  private applyThrust(): void {
+    this.appliedThrust.clear();
+    for (const [id, ap] of this.autopilot) {
+      const ship = this.getBody(id);
+      const target = this.getBody(ap.target);
+      if (!ship || !target || (ship.fuel !== undefined && ship.fuel <= 0)) {
+        this.autopilot.delete(id);
+        continue;
+      }
+      const { accel, settled } = autopilotAccel(ship, target, ap, this.effectiveG);
+      if (settled) {
+        this.autopilot.delete(id);
+        this.events.push({ type: 'ship', message: `${ship.name} is in orbit around ${target.name}. Autopilot off.`, x: ship.x, y: ship.y, z: ship.z, size: 0 });
+        continue;
+      }
+      this.appliedThrust.set(id, accel);
+    }
+    for (const [id, a] of this.thrust) {
+      if (this.autopilot.has(id)) continue;
+      const ship = this.getBody(id);
+      if (!ship || (ship.fuel !== undefined && ship.fuel <= 0)) {
+        this.thrust.delete(id);
+        continue;
+      }
+      this.appliedThrust.set(id, a);
+    }
+    for (const [id, a] of this.appliedThrust) {
+      const b = this.getBody(id)!;
+      b.ax += a[0];
+      b.ay += a[1];
+      b.az += a[2];
+    }
+  }
+
+  /**
+   * Longest step a firing engine allows: ends when a tank runs dry, and keeps each step's Δv to
+   * about 2% of the manoeuvre's speed scale (so thrust and the autopilot integrate smoothly).
+   */
+  private thrustStepLimit(): number {
+    let limit = Infinity;
+    for (const [id, a] of this.appliedThrust) {
+      const b = this.getBody(id);
+      const acc = Math.hypot(...a);
+      if (!b || acc <= 0) continue;
+      if (b.fuel !== undefined) limit = Math.min(limit, Math.max(1e-12, b.fuel / acc));
+      // The speed scale of the manoeuvre: the ship's speed, or what this engine can reach over the
+      // distance to the autopilot's target (√(a·r)), whichever is larger.
+      const ap = this.autopilot.get(id);
+      const ref = ap ? this.getBody(ap.target) : undefined;
+      const v = ref ? Math.hypot(b.vx - ref.vx, b.vy - ref.vy, b.vz - ref.vz) : Math.hypot(b.vx, b.vy, b.vz);
+      const reach = ref ? Math.sqrt(acc * Math.hypot(b.x - ref.x, b.y - ref.y, b.z - ref.z)) : 0;
+      limit = Math.min(limit, Math.max(1e-9, (0.02 * Math.max(v, reach, 0.05)) / acc));
+    }
+    return limit;
+  }
+
+  /** Burn the ships' fuel for `dt` of thrust; an empty tank stops the engine. */
+  private burnFuel(dt: number): void {
+    for (const [id, a] of this.appliedThrust) {
+      const b = this.getBody(id);
+      if (!b || b.fuel === undefined) continue;
+      b.fuel = Math.max(0, b.fuel - Math.hypot(...a) * dt);
+      if (b.fuel <= 0) {
+        this.thrust.delete(id);
+        this.autopilot.delete(id);
+        this.events.push({ type: 'ship', message: `${b.name} is out of fuel.`, x: b.x, y: b.y, z: b.z, size: 0 });
+      }
+    }
+  }
+
   /** Detonate a star after `delay` years of simulation time. */
   scheduleSupernova(id: number, delay: number): void {
     this.fuses.set(id, this.time + delay);
@@ -225,7 +316,7 @@ export class Simulation {
     const start = performance.now();
     while (remaining > 1e-12 && steps < maxSteps) {
       if (this.forcesDirty) this.computeForces();
-      const dt = Math.min(this.nextDt, remaining);
+      const dt = Math.min(this.nextDt, remaining, this.thrustStepLimit());
       this.step(dt);
       remaining -= dt;
       steps++;
@@ -267,6 +358,7 @@ export class Simulation {
       b.vz += b.az * h;
     }
     for (let k = 0; k < n3; k++) vel[k] += acc[k] * h;
+    if (this.appliedThrust.size) this.burnFuel(dt);
 
     this.time += dt;
     this.stepCount++;
@@ -309,6 +401,8 @@ export class Simulation {
     if (this.usingTree) this.computeForcesTree();
     else this.computeForcesDirect();
     if (this.customForces.length) this.applyCustomForces();
+    if (this.thrust.size || this.autopilot.size) this.applyThrust();
+    else if (this.appliedThrust.size) this.appliedThrust.clear();
     this.forcesDirty = false;
   }
 
@@ -851,7 +945,7 @@ export class Simulation {
   /** Which primaries can tidally disrupt which victims (keeps rocky-on-rocky accretion intact). */
   private canDisrupt(primary: Body, victim: Body): boolean {
     // Spacecraft are far too small and rigid to be torn apart by tides.
-    if (victim.mass > 0.2 * primary.mass || victim.tag === 'probe') return false;
+    if (victim.mass > 0.2 * primary.mass || victim.tag === 'probe' || victim.tag === 'ship') return false;
     switch (victim.kind) {
       case 'rocky':
         return primary.kind !== 'rocky';
@@ -1375,7 +1469,10 @@ function overlaps(a: Body, b: Body): boolean {
   const dx = b.x - a.x;
   const dy = b.y - a.y;
   const dz = b.z - a.z;
-  const rr = a.radius + b.radius;
+  // Spaceships hit a body's real surface, not its enlarged drawing (which can be wider than the
+  // whole region where the body holds satellites, as for Earth).
+  const ship = a.tag === 'ship' || b.tag === 'ship';
+  const rr = ship ? (a.tag === 'ship' ? 0 : physicalRadius(a.kind, a.mass)) + (b.tag === 'ship' ? 0 : physicalRadius(b.kind, b.mass)) : a.radius + b.radius;
   return dx * dx + dy * dy + dz * dz < rr * rr;
 }
 

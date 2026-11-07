@@ -35,7 +35,10 @@ import { forecast, type Forecast } from './sim/forecast';
 import { SimHost } from './sim/host';
 import { circularOrbitVelocity } from './sim/orbits';
 import { predictPath } from './sim/predict';
-import { galacticCore, loadSolarSystemOnDate, loadStarSystem, PRESETS, type SceneSetup } from './sim/presets';
+import { addOrbiting, galacticCore, loadSolarSystemOnDate, loadStarSystem, PRESETS, type SceneSetup } from './sim/presets';
+import { ENGINES, KMS_TO_AU_YR, MS2_TO_AU_YR2, orbitAround, type Engine } from './sim/spaceship';
+import { SPACECRAFT_COLOR } from './sim/spacecraft';
+import { physicalRadius } from './sim/body';
 import { PARTICLE_CULL_DISTANCE, type SimEvent } from './sim/simulation';
 import { captureState, restoreState } from './sim/state';
 import { EXOPLANET_ACKNOWLEDGEMENT, loadCatalog, loadExoSystem, type ExoCatalog, type ExoHost } from './sim/exoplanets';
@@ -425,6 +428,8 @@ export class App {
         this.updateForecast();
       }
       if (this.frames % 6 === 0) this.updateSystemHud();
+      if (this.shipThrustDir) this.tickShip();
+      if (this.frames % 6 === 0 && this.system.selectedId !== undefined) this.updateShipPanel();
       if (!this.transitioning && this.system.cameraDistance > this.exitDistance) void this.exitToGalaxy();
     } else if (this.view === 'sky') {
       this.tickSky(dt);
@@ -479,6 +484,24 @@ export class App {
           this.lastMergeToast = now;
         }
       } else {
+        if (e.type === 'ship') {
+          // The worker switched an engine or autopilot off: do the same in this copy.
+          for (const b of this.sim.bodies) {
+            if (b.tag !== 'ship' || !e.message.startsWith(b.name)) continue;
+            this.sim.setAutopilot(b.id, undefined);
+            // Arrived: slow down to watch the new orbit go round.
+            const parent = /in orbit around/.test(e.message) ? this.sim.parentOf(b) : undefined;
+            if (parent) {
+              const r = Math.hypot(b.x - parent.x, b.y - parent.y, b.z - parent.z);
+              this.setTimeScale(Math.min(this.timeScale, (2 * Math.PI * Math.sqrt(r ** 3 / (this.sim.effectiveG * parent.mass))) / 20));
+              if (this.selectedShip() === b) this.system.follow(b.id, r * 4);
+            }
+            if (/out of fuel/.test(e.message)) {
+              this.sim.setThrust(b.id, undefined);
+              if (this.selectedShip() === b) this.stopShipThrust();
+            }
+          }
+        }
         toast(e.message, e.type === 'collapse' || e.type === 'supernova' ? 'collapse' : e.type === 'ignite' ? 'ignite' : '');
       }
     }
@@ -637,6 +660,11 @@ export class App {
     $('tab-sky').classList.toggle('active', view === 'sky');
     $('labels').classList.toggle('hidden', view !== 'system');
     $('travel-bar').classList.toggle('hidden', view !== 'galaxy' && view !== 'cosmos');
+    if (view !== 'system') {
+      $('ship-panel').classList.add('hidden');
+      document.body.classList.remove('ship-flying');
+      this.stopShipThrust();
+    }
     if (this.trip && this.trip.view !== view) this.stopTrip();
     document.querySelectorAll<HTMLElement>('[data-view]').forEach((el) => {
       const match = el.dataset.view === view;
@@ -2062,6 +2090,184 @@ export class App {
     this.system.selectedId = undefined;
     this.system.showApproach(undefined);
     $('body-panel').classList.add('hidden');
+    this.stopShipThrust();
+    $('ship-panel').classList.add('hidden');
+    document.body.classList.remove('ship-flying');
+  }
+
+  // --- Spaceship ---------------------------------------------------------------------------------
+
+  private shipThrustDir?: string;
+
+  private selectedShip(): Body | undefined {
+    const b = this.selectedBody();
+    return b?.tag === 'ship' ? b : undefined;
+  }
+
+  private shipEngine(): Engine {
+    return ENGINES.find((e) => e.id === $<HTMLSelectElement>('ship-engine').value) ?? ENGINES[0];
+  }
+
+  /** The engine's acceleration at the current throttle (AU/yr²). */
+  private shipAccel(): number {
+    return this.shipEngine().accel * MS2_TO_AU_YR2 * 10 ** Number($<HTMLInputElement>('ship-throttle').value);
+  }
+
+  /** A comfortable orbit around a body: three times its real radius (ships hit the real surface). */
+  private orbitRadiusAround(target: Body): number {
+    return 3 * physicalRadius(target.kind, target.mass);
+  }
+
+  private spawnShip(): void {
+    if (this.sim.units !== 'au-yr') return void toast('Spaceships fly in planetary systems: load one first.');
+    const sel = this.selectedBody();
+    const parent =
+      sel && sel.tag !== 'ship' && sel.tag !== 'probe' ? sel : (this.sim.bodies.find((b) => b.name === 'Earth') ?? [...this.sim.bodies].filter((b) => b.tag !== 'ship').sort((a, b) => b.mass - a.mass)[0]);
+    if (!parent) return void toast('Add a planet or a star first.');
+    const engine = this.shipEngine();
+    const n = this.sim.bodies.filter((b) => b.tag === 'ship').length;
+    const r = this.orbitRadiusAround(parent);
+    let ship: Body | undefined;
+    // Real sizes, so the ship's orbit is visible outside the planet (an enlarged Earth would be
+    // wider than the whole region where Earth holds satellites).
+    if (!this.sim.trueScale) {
+      $<HTMLInputElement>('opt-truescale').checked = true;
+      this.mutate('switching to real sizes', () => setTrueScale(this.sim, true));
+    }
+    this.mutate('launching a spaceship', () => {
+      ship = addOrbiting(
+        this.sim,
+        parent,
+        { name: n ? `Ship ${n + 1}` : 'Ship', mass: 1e-20, kind: 'rocky', color: SPACECRAFT_COLOR, tag: 'ship', ...(Number.isFinite(engine.deltaV) ? { fuel: engine.deltaV * KMS_TO_AU_YR } : {}) },
+        { a: r, nu: Math.random() * Math.PI * 2 },
+      );
+    });
+    if (!ship) return;
+    this.selectBody(ship);
+    this.system.follow(ship.id, r * 4);
+    // Slow enough to see an orbit go round.
+    const period = 2 * Math.PI * Math.sqrt(r ** 3 / (this.sim.effectiveG * parent.mass));
+    this.setTimeScale(Math.min(this.timeScale, period / 20));
+    this.setRunning(true);
+    toast(`${ship.name} is in orbit around ${parent.name}. Hold the thrust buttons (or W/S, A/D, Q/E) to fly, or pick a target for the autopilot.`);
+  }
+
+  /** Thrust direction (unit vector, scene axes) relative to the body the ship orbits. */
+  private thrustVector(ship: Body, dir: string): [number, number, number] | undefined {
+    const ref = this.sim.parentOf(ship);
+    const rx = ship.x - (ref?.x ?? 0), ry = ship.y - (ref?.y ?? 0), rz = ship.z - (ref?.z ?? 0);
+    const vx = ship.vx - (ref?.vx ?? 0), vy = ship.vy - (ref?.vy ?? 0), vz = ship.vz - (ref?.vz ?? 0);
+    const unit = (x: number, y: number, z: number): [number, number, number] | undefined => {
+      const l = Math.hypot(x, y, z);
+      return l > 0 ? [x / l, y / l, z / l] : undefined;
+    };
+    switch (dir) {
+      case 'prograde': return unit(vx, vy, vz);
+      case 'retrograde': return unit(-vx, -vy, -vz);
+      case 'out': return unit(rx, ry, rz);
+      case 'in': return unit(-rx, -ry, -rz);
+      case 'normal': return unit(ry * vz - rz * vy, rz * vx - rx * vz, rx * vy - ry * vx);
+      case 'anti': return unit(-(ry * vz - rz * vy), -(rz * vx - rx * vz), -(rx * vy - ry * vx));
+    }
+    return undefined;
+  }
+
+  private startShipThrust(dir: string): void {
+    const ship = this.selectedShip();
+    if (!ship) return;
+    if (ship.fuel !== undefined && ship.fuel <= 0) return void toast('Out of fuel. Pick another engine to refuel.');
+    if (this.sim.autopilot.has(ship.id)) this.host.setAutopilot(ship.id, undefined);
+    this.shipThrustDir = dir;
+    document.querySelectorAll<HTMLElement>('[data-thrust]').forEach((b) => b.classList.toggle('active', b.dataset.thrust === dir));
+    if (!this.running) this.setRunning(true);
+    this.tickShip();
+  }
+
+  private stopShipThrust(): void {
+    if (!this.shipThrustDir) return;
+    this.shipThrustDir = undefined;
+    document.querySelectorAll<HTMLElement>('[data-thrust]').forEach((b) => b.classList.remove('active'));
+    for (const id of [...this.sim.thrust.keys()]) this.host.setThrust(id, undefined);
+  }
+
+  /** Each frame: keep the engine pointed (prograde turns as the ship moves) and update the readout. */
+  private tickShip(): void {
+    const ship = this.selectedShip();
+    if (this.shipThrustDir) {
+      const d = ship && this.thrustVector(ship, this.shipThrustDir);
+      if (!ship || !d) return this.stopShipThrust();
+      const a = this.shipAccel();
+      this.host.setThrust(ship.id, [d[0] * a, d[1] * a, d[2] * a]);
+    }
+  }
+
+  private updateShipPanel(): void {
+    const ship = this.selectedShip();
+    const flying = !!ship && this.view === 'system';
+    $('ship-panel').classList.toggle('hidden', !flying);
+    document.body.classList.toggle('ship-flying', flying);
+    if (!ship) return;
+    // Autopilot targets: everything else in the scene, the body it orbits first.
+    const parent = this.sim.parentOf(ship);
+    const options = this.sim.bodies.filter((b) => b !== ship && b.tag !== 'ship').sort((a, b) => (a === parent ? -1 : b === parent ? 1 : b.mass - a.mass));
+    const select = $<HTMLSelectElement>('ship-target');
+    const sig = options.map((o) => o.id).join(',');
+    if (select.dataset.sig !== sig) {
+      const prev = select.value;
+      select.innerHTML = options.map((o) => `<option value="${o.id}">Orbit ${escapeHtml(o.name)}</option>`).join('');
+      select.value = options.some((o) => String(o.id) === prev) ? prev : String(options[0]?.id ?? '');
+      select.dataset.sig = sig;
+    }
+    const engine = this.shipEngine();
+    $('ship-throttle-out').textContent = `${Math.round(10 ** Number($<HTMLInputElement>('ship-throttle').value) * 100)}%`;
+    const on = this.sim.autopilot.get(ship.id);
+    $('ship-autopilot').textContent = on ? 'Stop autopilot' : 'Autopilot: orbit';
+    const km = (au: number) => (au < 0.01 ? `${Math.round(au * 1.495978707e8).toLocaleString('en-US')} km` : `${au.toFixed(au < 1 ? 3 : 2)} AU`);
+    const lines: string[] = [];
+    if (parent) {
+      const o = orbitAround(ship, parent, this.sim.effectiveG);
+      const R = physicalRadius(parent.kind, parent.mass);
+      lines.push(`Around <b>${escapeHtml(parent.name)}</b>: ${km(Math.max(0, o.distance - R))} up · ${(o.speed / KMS_TO_AU_YR).toFixed(2)} km/s`);
+      lines.push(
+        o.apoapsis === Infinity
+          ? `Escaping ${escapeHtml(parent.name)} (closest ${km(Math.max(0, o.periapsis - R))} up)`
+          : o.periapsis < R
+            ? `⚠ On a path into ${escapeHtml(parent.name)}: lowest point below the surface`
+            : `Orbit ${km(o.periapsis - R)} × ${km(o.apoapsis - R)} up · one orbit takes ${formatTime(o.period ?? 0)}`,
+      );
+    }
+    const fuel = ship.fuel === undefined ? 'unlimited Δv (hypothetical engine)' : `${(ship.fuel / KMS_TO_AU_YR).toFixed(2)} km/s of Δv left`;
+    const thrust = this.sim.appliedThrust.get(ship.id) ?? this.sim.thrust.get(ship.id);
+    const g = thrust ? Math.hypot(...thrust) / MS2_TO_AU_YR2 / 9.80665 : 0;
+    const engineState = on ? `autopilot steering (up to ${(on.maxAccel / MS2_TO_AU_YR2 / 9.80665).toPrecision(2)} g)` : thrust ? `engine on: ${g >= 0.01 ? `${g.toFixed(2)} g` : `${(g * 9.80665 * 1000).toPrecision(2)} mm/s²`}` : 'engine off';
+    lines.push(`${fuel} · ${engineState}${engine.hypothetical ? ' · <span class="fiction">hypothetical engine</span>' : ''}`);
+    if (on) {
+      const target = this.sim.getBody(on.target);
+      if (target) lines.push(`Autopilot: into orbit around ${escapeHtml(target.name)}, ${km(Math.max(0, Math.hypot(ship.x - target.x, ship.y - target.y, ship.z - target.z) - physicalRadius(target.kind, target.mass)))} away`);
+    }
+    $('ship-readout').innerHTML = lines.join('<br>');
+  }
+
+  private toggleAutopilot(): void {
+    const ship = this.selectedShip();
+    if (!ship) return;
+    if (this.sim.autopilot.has(ship.id)) {
+      this.host.setAutopilot(ship.id, undefined);
+      toast('Autopilot off');
+    } else {
+      const target = this.sim.getBody(Number($<HTMLSelectElement>('ship-target').value));
+      if (!target) return;
+      if (ship.fuel !== undefined && ship.fuel <= 0) return void toast('Out of fuel. Pick another engine to refuel.');
+      this.stopShipThrust();
+      const maxAccel = this.shipAccel();
+      this.host.setAutopilot(ship.id, { target: target.id, radius: this.orbitRadiusAround(target), maxAccel });
+      if (!this.running) this.setRunning(true);
+      // Speed time up so the flight (accelerate half way, brake the other half: 2√(d/a)) plays in ~25 s.
+      const d = Math.hypot(ship.x - target.x, ship.y - target.y, ship.z - target.z);
+      this.setTimeScale(Math.max(this.timeScale, (2 * Math.sqrt(d / maxAccel)) / 25));
+      toast(`Autopilot: flying ${ship.name} into orbit around ${target.name}`);
+    }
+    this.updateShipPanel();
   }
 
   private updateForecast(): void {
@@ -2116,14 +2322,22 @@ export class App {
   private updateBodyPanel(): void {
     const body = this.selectedBody();
     if (!body) return;
+    this.updateShipPanel();
     $('body-name').textContent = body.name;
-    const facts: [string, string][] = [
-      ['Type', kindLabel(body)],
-      ['Mass', formatMass(body.mass)],
-      [this.sim.trueScale ? 'Radius' : 'Radius (enlarged)', this.sim.trueScale ? formatKm(body.radius) : formatDistance(body.radius)],
-    ];
+    // Spacecraft (probes and ships) are test particles: no meaningful mass, size, climate or tides.
+    const craft = body.tag === 'ship' || body.tag === 'probe';
+    $('btn-mass-down').parentElement!.classList.toggle('hidden', craft);
+    const facts: [string, string][] = craft
+      ? [['Type', kindLabel(body)]]
+      : [
+          ['Type', kindLabel(body)],
+          ['Mass', formatMass(body.mass)],
+          [this.sim.trueScale ? 'Radius' : 'Radius (enlarged)', this.sim.trueScale ? formatKm(body.radius) : formatDistance(body.radius)],
+        ];
     const alerts: string[] = [];
-    if (body.kind === 'rocky' || body.kind === 'gas') {
+    if (craft) {
+      // Nothing about its own physics to show: the orbit below says it all.
+    } else if (body.kind === 'rocky' || body.kind === 'gas') {
       const t = bodyTemperature(this.sim.bodies, body);
       facts.push(['Temperature', formatTemperature(t)], ['Climate', capitalize(climateFor(body.kind, t))]);
       if (isHabitable(body.kind, body.mass, t)) alerts.push(`<div class="alert good">🌍 Habitable: liquid water could exist on the surface.</div>`);
@@ -2155,7 +2369,7 @@ export class App {
       } else {
         facts.push(['Orbit', 'Unbound (escaping)']);
       }
-      if (isTidallyLocked(body, parent, r)) facts.push(['Rotation', 'Tidally locked']);
+      if (!craft && isTidallyLocked(body, parent, r)) facts.push(['Rotation', 'Tidally locked']);
       const myPeriod = orbitalPeriod(body, parent, this.sim.gravityScale);
       if (myPeriod) {
         for (const other of this.sim.bodies) {
@@ -2170,7 +2384,7 @@ export class App {
         }
       }
       const roche = this.sim.rocheLimit(parent, body);
-      if (r < roche * 1.5 && parent.mass > body.mass * 5 && !isCompact(body.kind)) {
+      if (!craft && r < roche * 1.5 && parent.mass > body.mass * 5 && !isCompact(body.kind)) {
         alerts.push(`<div class="alert warn">Close to ${escapeHtml(parent.name)}'s Roche limit (${fmt(roche)} AU): tides may tear it apart.</div>`);
       }
     } else {
@@ -3381,6 +3595,14 @@ export class App {
         case '.':
           if (!e.repeat) this.forwardDown();
           break;
+        case 'w':
+        case 's':
+        case 'a':
+        case 'd':
+        case 'q':
+        case 'e':
+          if (!e.repeat && this.selectedShip()) this.startShipThrust({ w: 'prograde', s: 'retrograde', a: 'out', d: 'in', q: 'normal', e: 'anti' }[key]!);
+          break;
         case 'v':
           this.setTool('select');
           break;
@@ -3427,6 +3649,7 @@ export class App {
     window.addEventListener('keyup', (e) => {
       if (e.key.toLowerCase() === 'r') this.stopRewind();
       if (e.key === '.') this.forwardUp();
+      if (this.shipThrustDir && 'wsadqe'.includes(e.key.toLowerCase())) this.stopShipThrust();
     });
   }
 
@@ -3841,6 +4064,33 @@ export class App {
     });
     $('btn-learn').addEventListener('click', () => this.openLessonMenu());
     $('btn-search').addEventListener('click', () => this.openSearch());
+    $('btn-ship').addEventListener('click', () => this.spawnShip());
+    $('ship-engine').innerHTML = ENGINES.map((e) => `<option value="${e.id}">${escapeHtml(e.label)}</option>`).join('');
+    $('ship-engine').addEventListener('change', () => {
+      const ship = this.selectedShip();
+      if (!ship) return;
+      // A new engine comes with a full tank.
+      const engine = this.shipEngine();
+      this.mutate(`fitting ${ship.name} with a new engine`, () => (ship.fuel = Number.isFinite(engine.deltaV) ? engine.deltaV * KMS_TO_AU_YR : undefined));
+      const ap = this.sim.autopilot.get(ship.id);
+      if (ap) this.host.setAutopilot(ship.id, { ...ap, maxAccel: this.shipAccel() });
+      this.updateShipPanel();
+    });
+    $('ship-throttle').addEventListener('input', () => {
+      const ship = this.selectedShip();
+      const ap = ship && this.sim.autopilot.get(ship.id);
+      if (ship && ap) this.host.setAutopilot(ship.id, { ...ap, maxAccel: this.shipAccel() });
+      this.updateShipPanel();
+    });
+    $('ship-autopilot').addEventListener('click', () => this.toggleAutopilot());
+    document.querySelectorAll<HTMLElement>('[data-thrust]').forEach((b) => {
+      b.addEventListener('pointerdown', (e) => {
+        b.setPointerCapture(e.pointerId);
+        this.startShipThrust(b.dataset.thrust!);
+      });
+      for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) b.addEventListener(ev, () => this.stopShipThrust());
+      b.addEventListener('contextmenu', (e) => e.preventDefault());
+    });
     $('travel-speed').innerHTML = SPEEDS.map((s, i) => `<option value="${i}"${s.about ? ` title="${escapeHtml(s.about)}"` : ''}>${escapeHtml(s.label)}</option>`).join('');
     $<HTMLSelectElement>('travel-speed').value = String(SPEEDS.findIndex((s) => s.c === 0.99));
     $('travel-cruise').addEventListener('click', () => {
@@ -4079,7 +4329,7 @@ export class App {
 // -----------------------------------------------------------------------------
 
 function kindLabel(b: Body): string {
-  if (b.tag === 'probe') return 'Spacecraft';
+  if (b.tag === 'probe' || b.tag === 'ship') return 'Spacecraft';
   if (b.tag === 'comet') return 'Comet';
   if (b.tag === 'galaxy') return 'Galaxy (all its mass as one point)';
   switch (b.kind) {

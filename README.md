@@ -410,6 +410,22 @@ chosen your own settings, and runs the orbit forecast every 2 s instead of every
 a phone emulation (390×844 screen, 4× slower CPU) this took the default Solar System from
 about 2.5 to 17 frames per second. In the Sky tab, pinch to zoom.
 
+## Fly a spaceship
+
+In the Sandbox, **🚀 Fly a spaceship** puts a ship in orbit around the selected body (or
+Earth), three of its real radii up, and switches the scene to real sizes so the orbit is visible
+outside the planet.
+- **Engines:** a chemical rocket (1 g, 10 km/s of Δv), an ion drive like NASA's Dawn
+  (0.08 mm/s², 11 km/s), or a hypothetical fusion torch (1 g, no fuel limit).
+- **Flying:** hold Prograde, Retrograde, Out, In, Normal or Anti (or W/S, A/D, Q/E) to thrust; a
+  throttle sets the power. Gravity from everything in the scene acts on the ship, and the panel
+  shows its altitude, speed, orbit, period and fuel.
+- **Autopilot:** flies into orbit around any body in the scene. It accelerates, turns, brakes,
+  then circularises and lets go. It runs inside the physics step, so it can hold an orbit that lasts
+  hours even when time runs at days per second. A 1 g torch flies from Earth to Mars in about two
+  days; a chemical rocket runs out of fuel long before.
+- Ships collide with a body's real surface, not its enlarged drawing.
+
 ## Travel at any speed
 
 On the Galaxy Map and in the Universe tab, the 🚀 bar at the bottom sets a travel speed:

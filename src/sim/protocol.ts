@@ -1,5 +1,6 @@
 import { BODY_KINDS } from './body';
 import type { Explosion } from './supernovaPhysics';
+import type { Autopilot } from './spaceship';
 import type { AdvanceResult, SimEvent, Simulation } from './simulation';
 import type { SimSettings, SimState } from './state';
 
@@ -8,6 +9,10 @@ export type ToWorker =
   | { type: 'state'; version: number; state: SimState }
   | { type: 'settings'; patch: Partial<SimSettings> }
   | { type: 'advance'; version: number; simTime: number; budgetMs: number }
+  /** A ship's engine: acceleration (AU/yr²) or off. */
+  | { type: 'thrust'; id: number; accel: [number, number, number] | null }
+  /** A ship's autopilot: fly into orbit, or off. */
+  | { type: 'autopilot'; id: number; autopilot: Autopilot | null }
   /** Sent once at start: how many helper threads the worker may use for particle forces (-1: automatic). */
   | { type: 'config'; threads: number };
 

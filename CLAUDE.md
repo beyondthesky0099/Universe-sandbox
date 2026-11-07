@@ -30,8 +30,16 @@ Before every commit, run the typecheck, the app tests, the build and the server 
   `bodyVisual.ts` the per-body meshes, and `postfx.ts` the lensing and bloom passes.
 - `src/game/`: challenges, lessons, the Hohmann planner, and the scene-spec builder.
 - `src/ui/`, `src/net/`: graphs, replays, the console, share links, and server/multiplayer clients.
-- `src/app.ts`: the big orchestrator (about 2,800 lines) that wires DOM, input, views and sim.
-  UI markup is in `index.html` and styles in `src/style.css`.
+- `src/app.ts`: the orchestrator (about 1,200 lines). It owns the simulation, the four views, the
+  frame loop, scenarios, history and selection, plus the state that features share.
+- `src/app/`: one feature controller per area. Examples: `places.ts`, `photo.ts`, `landing.ts`,
+  `vr.ts`, `sky.ts`, `travel.ts`, `ship.ts`, `search.ts`, `bodyPanel.ts`, `galaxyMap.ts`,
+  `learning.ts`, and `input.ts` (all the DOM wiring).
+  - Each is a class built with the App. It reaches shared state through `this.app`, and the App
+    reaches it as `this.<area>UI`, e.g. `this.placesUI.openPlaces()`.
+  - Shared types, constants and helpers live in `src/app/shared.ts`.
+  - A new feature gets its own controller rather than more methods on App.
+- UI markup is in `index.html` and styles in `src/style.css`.
 - Multi-core particle forces: `src/sim/particleKernel.ts` (the force loop), `parallel.ts` (splits it
   over helper workers via SharedArrayBuffer + Atomics), `forceWorker.ts`. Only when the page is
   cross-origin isolated (COOP + COEP `credentialless`, sent by the desktop app and the Vite

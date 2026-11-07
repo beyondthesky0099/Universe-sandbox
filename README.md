@@ -816,7 +816,9 @@ src/
   net/        companion-server and multiplayer clients
   ui/         history, sharing, graphs, replays/video, scripting console, tutorial
   audio.ts    WebAudio drone and effects
-  app.ts      wires everything together
+  app.ts      the orchestrator: simulation, views, frame loop, scenarios, history, selection
+  app/        one controller per feature (places, photo, landing, VR, sky, travel, ship,
+              search, body panel, galaxy map, lessons, input wiring…)
 server/       companion server (gallery, multiplayer, scene builder)
 scripts/      data build scripts
 tests/        vitest suites

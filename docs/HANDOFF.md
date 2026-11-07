@@ -205,6 +205,17 @@ Plan, in priority order:
 - BodyVisual adds it in applyDetail and updates it only when the planet is more than 14 px across
   and a star is present. Tests: tests/aurora.test.ts.
 
+### Z. App split into feature controllers
+- [x] App went from about 4,900 lines to about 1,200 in `src/app.ts`, plus 22 controllers in
+  `src/app/` (classes taking `app: App`) and `src/app/shared.ts` (types, constants, helpers).
+  The App's members became public so the controllers can use them.
+- Done mechanically with the TypeScript compiler API:
+  - Methods were moved by name.
+  - `this.x` became `this.app.x`, or `this.app.<area>UI.x` for a method that moved elsewhere.
+  - Unused imports were pruned.
+- Behaviour is unchanged: tests, typecheck, build, and browser smoke runs of tabs, landing,
+  places, photo, the body wiki, travel, the ship autopilot and search.
+
 ### Y. VR everywhere
 - [x] `src/render/vr.ts`:
   - deadZone, flyStep, scaleStep, SnapTurn, readSticks (xr-standard axes 2/3).

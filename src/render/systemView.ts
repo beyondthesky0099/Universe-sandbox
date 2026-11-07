@@ -913,6 +913,7 @@ export class SystemView {
       supernova: 0xd8ecff,
       gwmerger: 0xb8d4ff,
       redgiant: 0xff7040,
+      formation: 0xffe0a0,
       nebula: 0x60f0d0,
       script: 0x000000,
       ship: 0x000000,

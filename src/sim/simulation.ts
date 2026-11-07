@@ -21,11 +21,12 @@ import { autopilotAccel, type Autopilot } from './spaceship';
 import { blastOnBody, ejectaLayers, L_SUN, peakLuminosity, maxEjectaSpeed, neutronStarKick, remnantInAu, thermonuclear, type Explosion } from './supernovaPhysics';
 import { stellarFate, typeIaNickel } from './stellarFate';
 import { mergerSpin } from './kerr';
+import { accreteGas, type FormationSettings } from './planetFormation';
 import { BODY_FIELDS, particleAccelSlice } from './particleKernel';
 import type { ParallelForces } from './parallel';
 import { AU_PER_YEAR_IN_KMS, C_AU_PER_YEAR, KPC_PER_MYR_IN_KMS, EARTH_MASS, G, type UnitSystem } from './units';
 
-export type SimEventType = 'merge' | 'ignite' | 'collapse' | 'shatter' | 'disrupt' | 'supernova' | 'gwmerger' | 'redgiant' | 'nebula' | 'script' | 'ship';
+export type SimEventType = 'merge' | 'ignite' | 'collapse' | 'shatter' | 'disrupt' | 'supernova' | 'gwmerger' | 'redgiant' | 'nebula' | 'script' | 'ship' | 'formation';
 
 /** A user-defined force law: the body of `function (body, time, sim)` returning [ax, ay, az] in AU/yr². */
 export interface CustomForce {
@@ -199,7 +200,51 @@ export class Simulation {
     this.shatterCooldown.clear();
     this.doomed.clear();
     this.time = 0;
+    this.formation = undefined;
     this.forcesDirty = true;
+  }
+
+  /** Planet formation in a young star's gas disc (planetFormation.ts); undefined when off. */
+  formation?: FormationSettings;
+
+  /**
+   * Core accretion: cores past ~10 Earth masses pull in gas until the nearby gas runs out or the
+   * disc disperses, which also clears the disc's dust and gas (the particles).
+   */
+  private growPlanets(dt: number): boolean {
+    const f = this.formation!;
+    const star = this.getBody(f.starId);
+    if (!star) {
+      this.formation = undefined;
+      return false;
+    }
+    if (this.time >= f.gasUntil) {
+      if (!f.dispersed) {
+        f.dispersed = true;
+        this.particles.clear();
+        const myr = (f.gasUntil * f.speedup) / 1e6;
+        this.events.push({ type: 'formation', message: `After ${myr.toFixed(0)} million years the young star has blown its gas disc away: the giants stop growing.`, x: star.x, y: star.y, z: star.z, size: star.radius * 20 });
+      }
+      return false;
+    }
+    let changed = false;
+    for (const b of this.bodies) {
+      if (b === star || (b.kind !== 'rocky' && b.kind !== 'gas')) continue;
+      const r = Math.hypot(b.x - star.x, b.y - star.y, b.z - star.z);
+      const m = accreteGas(b.mass, r, dt, f, true);
+      if (m <= b.mass) continue;
+      const before = b.mass;
+      b.mass = m;
+      b.kind = 'gas';
+      b.radius = this.bodyRadius('gas', m);
+      // Mention it once, when it passes Saturn's mass (95 Earth masses).
+      const saturn = 95 * EARTH_MASS;
+      if (before < saturn && m >= saturn) {
+        this.events.push({ type: 'formation', message: `${b.name} has pulled in a thick envelope of gas: a gas giant is born ${r.toFixed(1)} AU from the star.`, x: b.x, y: b.y, z: b.z, size: b.radius * 6 });
+      }
+      changed = true;
+    }
+    return changed;
   }
 
   /** Engines firing: body id → acceleration (AU/yr², scene axes), applied every step (spaceship.ts). */
@@ -372,6 +417,7 @@ export class Simulation {
     }
     if (this.collisions && this.resolveCollisions()) changed = true;
     if (this.tidal && this.resolveTides()) changed = true;
+    if (this.formation && this.growPlanets(dt)) changed = true;
     if (this.shockwaves.length) this.updateShockwaves(dt);
     if (this.fuses.size) {
       for (const [id, at] of this.fuses) {

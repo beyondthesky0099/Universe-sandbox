@@ -207,7 +207,13 @@ work in the desktop app, so type your latitude and longitude instead.
   and rings, all generated in more detail as you zoom in.
 - **GPU mega-sim** (WebGPU): 8k–32k mutually attracting bodies, every pair computed directly
   on the GPU. It's only offered when the browser supports WebGPU.
-- **VR:** the 🥽 button appears when a WebXR headset is available.
+- **VR:** the 🥽 button in the top bar appears when a WebXR headset is available (`src/render/vr.ts`).
+  - **Sandbox:** a tabletop. The trigger pauses, the left stick turns the table and the right
+    stick resizes it.
+  - **Galaxy Map and Universe:** you stand where the camera was. The left stick flies where you
+    look; the right stick snap-turns (left/right) and changes speed (up/down).
+  - **Sky:** you stand under the real sky.
+  - The thumbstick logic is unit-tested, but it hasn't been tried on a headset here.
 - Graphics presets: Low, Medium and High.
 
 ### Create and share

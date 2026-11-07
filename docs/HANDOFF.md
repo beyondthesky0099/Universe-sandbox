@@ -205,6 +205,16 @@ Plan, in priority order:
 - BodyVisual adds it in applyDetail and updates it only when the planet is more than 14 px across
   and a star is present. Tests: tests/aurora.test.ts.
 
+### Y. VR everywhere
+- [x] `src/render/vr.ts`:
+  - deadZone, flyStep, scaleStep, SnapTurn, readSticks (xr-standard axes 2/3).
+  - offsetTransform / VrRig: moves the viewer by an offset XR reference space, re-derived from
+    the base space each frame, so the camera stays in world coordinates and views work unchanged.
+  - tabletopStep.
+- App: btn-vr moved to the top bar. enterVR: tabletop for the Sandbox, enterImmersiveVR for the
+  others (controls disabled). tickVR runs before frame() each animation frame.
+- Untested on a real headset (no WebXR device here). Tests: tests/vr.test.ts.
+
 ### X. Land on planets
 - [x] `src/render/lander.ts` Lander:
   - The camera rides the planet mesh's frame at EYE_HEIGHT.

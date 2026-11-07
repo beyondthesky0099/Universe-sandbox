@@ -67,6 +67,7 @@ import { burnDirections, planHohmann } from './game/transfer';
 import { LESSONS, type Lesson } from './game/lessons';
 import { SearchIndex, type SearchEntry } from './ui/search';
 import { PhotoMode } from './ui/photo';
+import { tabletopStep, VrRig } from './render/vr';
 import { BUILT_IN_PLACES, decodePlace, encodePlace, newId, PlaceStore, placeSummary, type Place, type Vec3 } from './ui/places';
 import { autoWarp, formatDuration, formatSpeed as formatTravelSpeed, lorentz, SPEEDS, Trip, tripTimes } from './sim/travel';
 import { setObserverVelocity } from './render/relativity';
@@ -227,6 +228,8 @@ export class App {
   private exoOpen = false;
   private photo!: PhotoMode;
   private timeBeforeLanding?: number;
+  private vrRig?: VrRig;
+  private vrBase?: XRReferenceSpace;
   private readonly places = new PlaceStore();
 
   constructor() {
@@ -384,6 +387,7 @@ export class App {
       const dt = Math.min(0.1, (now - last) / 1000);
       last = now;
       if (this.mega) return; // the GPU mega-sim owns the screen
+      if (this.renderer.xr.isPresenting) this.tickVR(dt);
       this.frame(dt);
     });
     void this.detectVR();
@@ -892,10 +896,13 @@ export class App {
   private async enterVR(): Promise<void> {
     const xr = (navigator as Navigator & { xr?: XRSystem }).xr;
     if (!xr) return;
-    if (this.view !== 'system') this.setView('system');
     const session = await xr.requestSession('immersive-vr', { optionalFeatures: ['local-floor', 'bounded-floor'] });
     this.renderer.xr.setReferenceSpaceType('local-floor');
     await this.renderer.xr.setSession(session);
+    if (this.view !== 'system') {
+      this.enterImmersiveVR(session);
+      return;
+    }
     // Tabletop scale: the whole scene fits in about a metre, at waist height in front of you.
     const scene = this.system.scene;
     scene.scale.setScalar(0.6 / this.system.sceneExtent());
@@ -914,7 +921,39 @@ export class App {
         scene.remove(c);
       }
     });
-    toast('VR: pull the trigger to pause or resume.');
+    toast('VR: pull the trigger to pause or resume; left stick turns the table, right stick resizes it.');
+  }
+
+  /** Galaxy Map, Universe or Sky in VR: stand where the camera was and fly with the thumbsticks (render/vr.ts). */
+  private enterImmersiveVR(session: XRSession): void {
+    const view = this.view === 'galaxy' ? this.galaxy : this.view === 'cosmos' ? this.cosmos : undefined;
+    const camera = view ? view.camera : this.sky.camera;
+    // Flying speed from how far away the camera was looking; the sky is a sphere around you, so no flying there.
+    const scale = view ? Math.max(1e-6, view.camera.position.distanceTo(view.controls.target) * 0.05) : 0;
+    this.vrRig = new VrRig(camera, scale);
+    this.vrBase = this.renderer.xr.getReferenceSpace() ?? undefined;
+    if (view) view.controls.enabled = false;
+    session.addEventListener('end', () => {
+      this.vrRig = undefined;
+      this.vrBase = undefined;
+      if (view) {
+        view.controls.enabled = true;
+        view.controls.update();
+      }
+    });
+    toast(view ? 'VR: left stick flies where you look; right stick turns (left/right) and changes speed (up/down).' : 'VR: look around the sky.');
+  }
+
+  /** Per frame while a headset is on. */
+  private tickVR(dt: number): void {
+    const session = this.renderer.xr.getSession();
+    if (this.view === 'system') {
+      tabletopStep(this.system.scene, session, dt);
+    } else if (this.vrRig && this.vrBase) {
+      const camera = this.view === 'galaxy' ? this.galaxy.camera : this.view === 'cosmos' ? this.cosmos.camera : this.sky.camera;
+      if (this.vrRig.scale > 0) this.vrRig.update(session, camera, dt);
+      this.renderer.xr.setReferenceSpace(this.vrRig.space(this.vrBase));
+    }
   }
 
   // ---------------------------------------------------------------------------

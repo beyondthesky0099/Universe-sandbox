@@ -4,6 +4,7 @@ import { generateGalaxy, type GalaxyData, type GalaxyOptions } from '../procgen/
 import { mulberry32 } from '../procgen/rng';
 import { Noise3D } from './noise';
 import { NebulaClouds, type Cloud } from './nebulaClouds';
+import { NebulaVolume, volumeParticles } from './nebulaVolume';
 import { createStarfield } from './starfield';
 import { accretionTexture, glowTexture, ringTexture } from './textures';
 
@@ -192,6 +193,12 @@ export class GalaxyView {
   private readonly realLayers = new Map<string, { points: THREE.Points; labels: THREE.Group }>();
   /** Real nebulae drawn as clouds at their true size (Milky Way only), with labels. */
   private readonly cloudLayers = new Map<string, { clouds: NebulaClouds[]; labels: THREE.Group; on: boolean }>();
+  /** Photographed nebulae that can turn into 3D clouds up close, and the clouds built so far. */
+  private volumeCandidates: { key: string; layer: NebulaClouds; index: number; cloud: Cloud; atlas: THREE.Texture }[] = [];
+  private readonly volumes = new Map<string, NebulaVolume>();
+  private volumeTimer = 0;
+  /** How many 3D nebulae at once, and particles per named (large) and other photograph. */
+  volumeBudget = { max: 2, named: 24000, other: 9000 };
   private highlighting = false;
   /** Labels of the hand-placed showpiece nebulae, hidden once the real clouds replace them. */
   private readonly showpieceLabels: THREE.Sprite[] = [];
@@ -548,6 +555,12 @@ export class GalaxyView {
   ): void {
     const old = this.cloudLayers.get(key);
     if (old) {
+      this.volumeCandidates = this.volumeCandidates.filter((c) => !old.clouds.includes(c.layer));
+      for (const v of this.volumes.values()) {
+        this.scene.remove(v.points);
+        v.dispose();
+      }
+      this.volumes.clear();
       this.scene.remove(old.labels);
       for (const c of old.clouds) {
         this.scene.remove(c.mesh);
@@ -582,6 +595,13 @@ export class GalaxyView {
     }
     this.scene.add(...layers.map((l) => l.mesh), group);
     this.cloudLayers.set(key, { clouds: layers, labels: group, on: true });
+    const withClouds = sets.filter((set) => set.clouds.length);
+    withClouds.forEach((set, k) => {
+      if (!set.atlas) return;
+      set.clouds.forEach((cloud, index) => {
+        if (cloud.volume) this.volumeCandidates.push({ key: `${key}:${k}:${index}`, layer: layers[k], index, cloud, atlas: set.atlas! });
+      });
+    });
   }
 
   /** Labelled markers for real black holes and pulsars (Milky Way only). Cleared on rebuild. */
@@ -672,7 +692,89 @@ export class GalaxyView {
     return best;
   }
 
+  /**
+   * Photographed nebulae near the camera become 3D clouds (nebulaVolume.ts): the flat photograph
+   * fades out and the cloud fades in between 8 and 4 picture-widths away. Looking from the Sun's
+   * side (within ~10° of the line of sight from Earth, the view the photograph was taken from), the
+   * sharp photograph stays; it hands over to the cloud by 30° off.
+   */
+  private updateVolumes(dt: number): void {
+    this.volumeTimer -= dt;
+    if (this.volumeTimer > 0) return;
+    this.volumeTimer = 0.06;
+    const cam = this.camera.position;
+    const near = this.volumeCandidates
+      .map((c) => ({ c, d: cam.distanceTo(new THREE.Vector3(...c.cloud.pos)) / c.cloud.size }))
+      .filter((x) => x.d < 8 && this.cloudLayers.get(x.c.key.split(':')[0])?.on !== false && x.c.layer.mesh.visible)
+      .sort((a, b) => a.d - b.d)
+      .slice(0, this.volumeBudget.max);
+    const active = new Set(near.map((x) => x.c.key));
+    for (const c of this.volumeCandidates) {
+      if (active.has(c.key)) continue;
+      const v = this.volumes.get(c.key);
+      if (v) v.opacity = 0;
+      c.layer.setFade(c.index, 1);
+    }
+    for (const { c, d } of near) {
+      let v = this.volumes.get(c.key);
+      if (!v) {
+        v = this.buildVolume(c);
+        if (!v) continue;
+        this.volumes.set(c.key, v);
+        this.scene.add(v.points);
+        // Keep a few built clouds for flying back and forth; drop the oldest beyond that.
+        if (this.volumes.size > this.volumeBudget.max + 3) {
+          const [oldKey, oldest] = this.volumes.entries().next().value!;
+          if (!active.has(oldKey)) {
+            this.scene.remove(oldest.points);
+            oldest.dispose();
+            this.volumes.delete(oldKey);
+          }
+        }
+      }
+      const near3d = THREE.MathUtils.smoothstep(8 - d, 0, 4);
+      // How close the view is to Earth's: 1 within 10° of the line of sight, 0 beyond 30°.
+      const [fx, fy, fz] = c.cloud.volume!.forward;
+      const toCam = cam.clone().sub(new THREE.Vector3(...c.cloud.pos)).normalize();
+      const fromEarth = THREE.MathUtils.smoothstep(-(toCam.x * fx + toCam.y * fy + toCam.z * fz), Math.cos(THREE.MathUtils.degToRad(30)), Math.cos(THREE.MathUtils.degToRad(10)));
+      const fade = near3d * (1 - fromEarth);
+      v.setViewHeight(this.viewHeight);
+      // The particles leave out the photograph's dark sky and stars; 1.4× brings the gas back to
+      // the photograph's brightness on screen.
+      v.opacity = 1.4 * v.fullOpacity * fade;
+      c.layer.setFade(c.index, 1 - fade);
+    }
+  }
+
+  private buildVolume(c: { cloud: Cloud; atlas: THREE.Texture }): NebulaVolume | undefined {
+    const vol = c.cloud.volume!;
+    const image = c.atlas.image as CanvasImageSource | undefined;
+    if (!image) return undefined;
+    const [x, y, w] = vol.rect;
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = w;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    if (!ctx) return undefined;
+    ctx.drawImage(image, x, y, w, w, 0, 0, w, w);
+    const pixels = ctx.getImageData(0, 0, w, w).data;
+    const named = w >= 256;
+    const particles = volumeParticles({
+      pixels,
+      width: w,
+      height: w,
+      center: c.cloud.pos,
+      field: c.cloud.size,
+      right: vol.right,
+      up: vol.up,
+      forward: vol.forward,
+      count: named ? this.volumeBudget.named : this.volumeBudget.other,
+      seed: Math.round(x * 7 + y * 13 + 1),
+    });
+    return particles.count ? new NebulaVolume(particles) : undefined;
+  }
+
   update(dt: number): void {
+    this.updateVolumes(dt);
     if (this.anim) {
       const a = this.anim;
       a.t = Math.min(1, a.t + dt * a.speed);

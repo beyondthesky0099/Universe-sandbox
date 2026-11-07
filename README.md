@@ -279,6 +279,12 @@ The map shows **5,676 real nebulae** from professional catalogues:
   - `node scripts/build-nebula-images.mjs` photographs every nebula with a distance that is at least 1.2′ in radius, then keeps only the fields where the plates show diffuse light.
   - Most HII regions were found by WISE in the infrared and are hidden behind dust in visible light; their photographs show only stars, so they keep their emission-colour clouds.
   - Phones load only the named nebulae's page (1 MB); desktops load all four pages (5 MB).
+- **Photographed nebulae become 3D clouds up close.** The photograph only shows a nebula as seen from Earth, so its depth is a model:
+  - thousands of glowing particles are placed where the picture is bright, in its colours;
+  - they spread through a roughly spheroidal volume about as deep as the nebula is wide, around a mid-surface warped by smooth noise, so filaments sit at different depths;
+  - stars in the photograph are clipped out first, so they don't become streaks.
+  - Seen from Earth's direction you get the sharp photograph; orbit more than about 30° away and it becomes the 3D cloud, which is as bright overall as the photograph.
+  - Two clouds at a time on desktops, one on phones. The depth is an illustration, not a measurement.
 - Dark nebulae dim the light behind them. 442 of them are placed at the distance of their molecular cloud, measured with Gaia by Zucker et al. 2020: for example the Horsehead in Orion B at 411 pc, the Pipe at 180 pc and Rho Ophiuchi at 139 pc.
 - Planetary-nebula distances come from Gaia parallaxes of their central stars where those are good, and otherwise from statistical estimates.
 - Some HII distances are kinematic estimates, which can be off in the outer Galaxy.

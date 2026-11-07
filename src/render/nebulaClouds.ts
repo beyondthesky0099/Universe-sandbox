@@ -21,6 +21,12 @@ export interface Cloud {
   rotation: number;
   /** Which of the four procedural puff shapes. */
   puff: number;
+  /**
+   * For a photograph: where its pixels are in the atlas image ([x, y, width], top-down) and its
+   * axes in the map (right and up as seen from Earth, forward away from Earth), so it can be turned
+   * into a 3D cloud up close (nebulaVolume.ts).
+   */
+  volume?: { rect: [number, number, number]; right: [number, number, number]; up: [number, number, number]; forward: [number, number, number] };
 }
 
 /** Four 128-pixel puffs of fractal noise in a 2×2 atlas (white; tinted per cloud). */
@@ -119,6 +125,8 @@ const FRAGMENT = /* glsl */ `
 export class NebulaClouds {
   readonly mesh: THREE.Mesh;
   private readonly material: THREE.ShaderMaterial;
+  private readonly params: THREE.InstancedBufferAttribute;
+  private readonly baseBrightness: Float32Array;
   private readonly puffs = puffAtlas();
 
   /** `absorb`: dark dust clouds that dim the light behind them instead of glowing. */
@@ -141,7 +149,10 @@ export class NebulaClouds {
     geo.setAttribute('iSize', new THREE.InstancedBufferAttribute(size, 1));
     geo.setAttribute('iColor', new THREE.InstancedBufferAttribute(color, 3));
     geo.setAttribute('iTile', new THREE.InstancedBufferAttribute(tile, 4));
-    geo.setAttribute('iParams', new THREE.InstancedBufferAttribute(params, 3));
+    this.params = new THREE.InstancedBufferAttribute(params, 3);
+    this.params.setUsage(THREE.DynamicDrawUsage);
+    this.baseBrightness = Float32Array.from(clouds, (c) => c.brightness);
+    geo.setAttribute('iParams', this.params);
     geo.setAttribute('iPuff', new THREE.InstancedBufferAttribute(puff, 1));
     geo.instanceCount = n;
     this.material = new THREE.ShaderMaterial({
@@ -155,6 +166,14 @@ export class NebulaClouds {
     });
     this.mesh = new THREE.Mesh(geo, this.material);
     this.mesh.frustumCulled = false;
+  }
+
+  /** Dim one cloud to a fraction of its own brightness (0 hides it, 1 restores it). */
+  setFade(index: number, fraction: number): void {
+    const v = this.baseBrightness[index] * fraction;
+    if (this.params.getY(index) === v) return;
+    this.params.setY(index, v);
+    this.params.needsUpdate = true;
   }
 
   /** Viewport height in device pixels (for the minimum on-screen size). */

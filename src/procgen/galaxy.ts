@@ -476,3 +476,29 @@ export function systemFeatures(starSeedValue: number): number {
   if (s.planets.some((p) => p.moons.length > 0)) f |= FEATURE.moons;
   return f;
 }
+
+/**
+ * Directions in the galaxy map for a picture of the sky at (l, b), as the nebula images are
+ * oriented (galactic north up, increasing longitude to the left): right, up, and forward (away
+ * from the Sun along the line of sight).
+ */
+export function pictureAxes(l: number, b: number, dKpc: number): { right: [number, number, number]; up: [number, number, number]; forward: [number, number, number] } {
+  const p = galacticToMap(l, b, dKpc);
+  const unit = (q: [number, number, number]): [number, number, number] => {
+    const v = [q[0] - p[0], q[1] - p[1], q[2] - p[2]];
+    const n = Math.hypot(v[0], v[1], v[2]) || 1;
+    return [v[0] / n, v[1] / n, v[2] / n];
+  };
+  const e = 0.01;
+  const forward = unit(galacticToMap(l, b, dKpc * 1.01));
+  // Up: towards higher latitude, made exactly perpendicular to the line of sight.
+  const up0 = unit(galacticToMap(l, Math.min(90, b + e), dKpc));
+  const k = up0[0] * forward[0] + up0[1] * forward[1] + up0[2] * forward[2];
+  const u = [up0[0] - k * forward[0], up0[1] - k * forward[1], up0[2] - k * forward[2]];
+  const un = Math.hypot(u[0], u[1], u[2]);
+  const up: [number, number, number] = [u[0] / un, u[1] / un, u[2] / un];
+  // Right is the direction of decreasing longitude (forward × up in the map's axes; checked in
+  // tests/nebula-volume.test.ts).
+  const right: [number, number, number] = [forward[1] * up[2] - forward[2] * up[1], forward[2] * up[0] - forward[0] * up[2], forward[0] * up[1] - forward[1] * up[0]];
+  return { right, up, forward };
+}

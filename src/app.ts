@@ -10,7 +10,7 @@ import { SkyView } from './render/skyView';
 import { moonPhaseName, skyAt } from './sim/sky';
 import { dateToJdTT, eclipsePath, greatestEclipse, jdTTToDate, loadEclipses, localCircumstances, shadowAt, topocentric, type Eclipse } from './sim/eclipse';
 import { displayName, GALAXY_CREDIT, galaxyForm, loadLocalGalaxies, loadNamedGalaxies, loadWebGalaxies, LY_PER_MPC, type LocalGalaxy } from './sim/galaxies';
-import { equatorialToGalactic, galacticToMap, MILKY_WAY_SEED, MW_CLUSTERS, UNITS_PER_KPC, type GalaxyOptions } from './procgen/galaxy';
+import { equatorialToGalactic, galacticToMap, MILKY_WAY_SEED, MW_CLUSTERS, pictureAxes, UNITS_PER_KPC, type GalaxyOptions } from './procgen/galaxy';
 import { CLUSTER_COLORS, loadClusters } from './sim/clusters';
 import { clusterSwarms } from './procgen/clusterStars';
 import { diameterPc, galacticToEcliptic, loadNebulae, NEBULA_COLORS } from './sim/nebulae';
@@ -222,6 +222,8 @@ export class App {
     this.host = new SimHost(params.get('worker') !== '0', params.has('threads') ? Number(params.get('threads')) : -1);
     this.system = new SystemView(this.sim, this.canvas, QUALITY_PRESETS[this.quality]);
     this.galaxy = new GalaxyView(this.canvas);
+    // Phones: one 3D nebula at a time, with fewer particles.
+    if (LOW_POWER) this.galaxy.volumeBudget = { max: 1, named: 12000, other: 5000 };
     this.cosmos = new CosmosView(this.canvas);
     this.sky = new SkyView(this.canvas);
     this.tutorial = new Tutorial(this.tutorialSteps());
@@ -1526,7 +1528,19 @@ export class App {
       if (image) {
         // The image spans 2.6 catalogue radii; a soft glow in the nebula's colour gives it depth.
         const named = image.page === 0;
-        perPage[image.page].push({ pos, size: size * 1.3, color, tile: tileRect(images!.pages[image.page], image.tile), minPx: named ? 40 : 14, brightness: 1.1, rotation: 0, puff: 0 });
+        const page = images!.pages[image.page];
+        perPage[image.page].push({
+          pos,
+          size: size * 1.3,
+          color,
+          tile: tileRect(page, image.tile),
+          minPx: named ? 40 : 14,
+          brightness: 1.1,
+          rotation: 0,
+          puff: 0,
+          // Up close it becomes a 3D cloud, oriented as the photograph was taken from Earth.
+          volume: { rect: [(image.tile % page.cols) * page.tile, Math.floor(image.tile / page.cols) * page.tile, page.tile], ...pictureAxes(n.l, n.b, n.distanceKpc!) },
+        });
         glow.push({ pos, size: size * 1.6, color, minPx: named ? 50 : 18, brightness: 0.3, rotation: k, puff: k });
       } else {
         // A few overlapping puffs spread through the nebula's volume.
@@ -3707,3 +3721,4 @@ function cosmosFacts(g: LocalGalaxy): [string, string][] {
   facts.push(['Data', g.zd ? '2MASS Redshift Survey (Huchra et al. 2012)' : 'Karachentsev et al. 2013']);
   return facts;
 }
+

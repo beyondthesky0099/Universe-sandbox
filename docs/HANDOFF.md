@@ -180,6 +180,16 @@ Plan, in priority order:
   (`remnantClouds` in systemView, scaled to the ejecta edge each frame) coloured by element;
   ejecta are capped at the decelerating shock's speed (reverse shock).
 
+### L. 3D nebulae from photographs
+- [x] `src/render/nebulaVolume.ts`: `gasBrightness` (sky subtraction, star clipping against a 9×9
+  box blur), `volumeParticles` (sampling ∝ brightness, spheroidal depth around a noise-warped
+  mid-surface, colour per unit brightness, `opacity` so the blobs add up to the picture),
+  `NebulaVolume` (premultiplied additive points: colours above 1 would be clamped otherwise).
+- [x] `GalaxyView.updateVolumes`: within 8 picture-widths the nearest photographed nebulae
+  (`volumeBudget`: 2 desktop, 1 phone) fade from the photo billboard (`NebulaClouds.setFade`) to
+  the cloud by 4 widths, except within ~10–30° of the view from Earth. Axes from
+  `pictureAxes` (procgen/galaxy.ts), tested in tests/nebula-volume.test.ts.
+
 ### K. Click a label to go there
 - [x] `labelHitDepth` (galaxyView.ts) hit-tests textSprite labels; `userData.goto` on a label
   makes it a destination (GalaxyView.pickLabel / flyToPoint, SkyView.pickLabel / goToLabel,

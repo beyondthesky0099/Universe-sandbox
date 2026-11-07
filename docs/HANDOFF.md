@@ -180,6 +180,14 @@ Plan, in priority order:
   (`remnantClouds` in systemView, scaled to the ejecta edge each frame) coloured by element;
   ejecta are capped at the decelerating shock's speed (reverse shock).
 
+### O. Travel at any speed
+- [x] `src/sim/travel.ts` (SPEEDS, Trip with Earth/ship clocks, autoWarp, formatting),
+  `src/render/relativity.ts` (shared `uBeta` uniform, GLSL aberration + Doppler + beaming in
+  every galaxy/cosmos point, cloud, volume, starfield and label material),
+  `App.startTrip/tickTrip` (go* helpers route label clicks, double-clicks, star/galaxy lists and
+  search through travel when "Travel at this speed" is ticked). Auto-enter/exit transitions
+  pause during a trip. Tests: tests/travel.test.ts.
+
 ### N. Search everything
 - [x] `src/ui/search.ts` (SearchIndex, normalize, ranking: exact 650 / prefix / word starts /
   substring, + 1.5 × rank), `src/ui/searchSources.ts` (entries per catalogue, each with an

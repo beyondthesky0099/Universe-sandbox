@@ -6,6 +6,7 @@ import { Noise3D } from './noise';
 import { NebulaClouds, type Cloud } from './nebulaClouds';
 import { NebulaVolume, volumeParticles } from './nebulaVolume';
 import { createStarfield } from './starfield';
+import { relativisticSprite, relativity, RELATIVITY_PARS } from './relativity';
 import { accretionTexture, glowTexture, ringTexture } from './textures';
 
 const VERTEX = /* glsl */ `
@@ -14,9 +15,12 @@ const VERTEX = /* glsl */ `
   uniform float uScale;
   uniform float uMaxSize;
   varying vec3 vColor;
+  ${RELATIVITY_PARS}
   void main() {
-    vColor = color;
     vec4 mv = modelViewMatrix * vec4(position, 1.0);
+    // Near light speed: aberration, Doppler colour and beaming (relativity.ts).
+    float relD = relAberrate(mv);
+    vColor = relShift(color, relD);
     gl_PointSize = clamp(size * uScale / -mv.z, 1.0, uMaxSize);
     gl_Position = projectionMatrix * mv;
   }
@@ -50,7 +54,7 @@ function pointsMaterial(opacity: number, maxSize: number, fragment = FRAGMENT, a
   return new THREE.ShaderMaterial({
     vertexShader: VERTEX,
     fragmentShader: fragment,
-    uniforms: { uScale: { value: 300 }, uOpacity: { value: opacity }, uMaxSize: { value: maxSize } },
+    uniforms: { uScale: { value: 300 }, uOpacity: { value: opacity }, uMaxSize: { value: maxSize }, uBeta: relativity.uBeta },
     transparent: true,
     depthWrite: false,
     depthTest: false,
@@ -124,6 +128,7 @@ export function textSprite(text: string, color: string, scale = 1): THREE.Sprite
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
   const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, sizeAttenuation: false, depthTest: false, transparent: true }));
+  relativisticSprite(sprite.material);
   sprite.scale.set(0.16 * (canvas.width / 256) * scale, 0.04 * scale, 1);
   sprite.center.set(0.5, -0.6);
   sprite.renderOrder = 11;
@@ -424,6 +429,11 @@ export class GalaxyView {
     this.controls.target.copy(to);
     this.camera.position.copy(to).add(dir.clone().multiplyScalar(near));
     this.anim = { fromTarget: to.clone(), toTarget: to.clone(), fromPos: this.camera.position.clone(), toPos: to.clone().add(dir.multiplyScalar(far)), t: 0, speed: 0.6 };
+  }
+
+  /** Stop a flight in progress (a trip at speed takes over the camera). */
+  cancelFlight(): void {
+    this.anim = undefined;
   }
 
   get animating(): boolean {

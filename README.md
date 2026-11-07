@@ -410,6 +410,25 @@ chosen your own settings, and runs the orbit forecast every 2 s instead of every
 a phone emulation (390×844 screen, 4× slower CPU) this took the default Solar System from
 about 2.5 to 17 frames per second. In the Sky tab, pinch to zoom.
 
+## Travel at any speed
+
+On the Galaxy Map and in the Universe tab, the 🚀 bar at the bottom sets a travel speed:
+- Real speeds: walking, a car, an airliner, the Space Station, Voyager 1 (17 km/s), the Parker Solar Probe (192 km/s), the fastest known star (1,700 km/s).
+- Fractions of light speed, up to 99.99%, and light speed itself.
+- Faster than light, up to a billion light-years per second, labelled as not physically possible (shown as a camera speed).
+
+Tick **Travel at this speed** and clicking a name, double-clicking a star or galaxy, or picking a
+search result travels there at that speed instead of flying in a moment. **Cruise** travels
+straight ahead. The trip plays in about 25 seconds, or in real time, or ×1,000 up to
+×1 trillion. Two clocks show the trip: Earth time (the galaxy's frame) and your own time on
+board, slower by the Lorentz factor γ. For example, Alpha Centauri at 99% of light takes 4.41
+years of Earth time and 0.62 years on board.
+
+**Near light speed you see what special relativity predicts** (`src/render/relativity.ts`):
+- Aberration crowds the stars towards the direction of travel (cos θ′ = (cos θ + β)/(1 + β cos θ)).
+- The Doppler shift turns the sky ahead blue and behind red, as a blackbody D = γ(1 + β cos θ) times hotter or cooler.
+- Beaming brightens the light ahead. It is softened on screen so the colours stay visible.
+
 ## Search everything
 
 The 🔍 button (or `/`, or Ctrl+K) searches about 28,000 things at once, and picking a result

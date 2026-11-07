@@ -58,6 +58,8 @@ import { applyNudge, CHALLENGES, dailyChallenge, KMS, newChallengeState, shareTe
 import { burnDirections, planHohmann } from './game/transfer';
 import { LESSONS, type Lesson } from './game/lessons';
 import { SearchIndex, type SearchEntry } from './ui/search';
+import { autoWarp, formatDuration, formatSpeed as formatTravelSpeed, lorentz, SPEEDS, Trip, tripTimes } from './sim/travel';
+import { setObserverVelocity } from './render/relativity';
 import { activityEntries, clusterEntries, compactEntries, exoplanetEntries, galaxyEntries, nebulaEntries, skyBodyEntries, starEntries, structureEntries } from './ui/searchSources';
 import { LineChart, measure, METRICS, type MetricId, type Series } from './ui/graph';
 
@@ -427,12 +429,14 @@ export class App {
     } else if (this.view === 'sky') {
       this.tickSky(dt);
     } else if (this.view === 'cosmos') {
+      this.tickTrip(dt);
       this.cosmos.update(dt);
       this.renderView(this.cosmos.scene, this.cosmos.camera, []);
       if (this.frames % 15 === 0) $('stats').textContent = `${Math.round(this.fps)} fps`;
       const sel = this.cosmos.selected;
       if (
         !this.transitioning &&
+        !this.trip &&
         sel !== -1 &&
         !this.cosmos.animating &&
         this.cosmos.cameraDistance < this.cosmos.viewDistance(sel) * 0.12 &&
@@ -441,13 +445,15 @@ export class App {
         void this.visitCosmosGalaxy(sel);
       }
     } else {
+      this.tickTrip(dt);
       this.galaxy.update(dt);
       this.renderView(this.galaxy.scene, this.galaxy.camera, []);
-      if (!this.transitioning && !this.galaxy.animating && this.galaxy.cameraDistance > GALAXY_EXIT_DISTANCE) void this.openCosmos(true);
+      if (!this.transitioning && !this.trip && !this.galaxy.animating && this.galaxy.cameraDistance > GALAXY_EXIT_DISTANCE) void this.openCosmos(true);
       if (this.frames % 15 === 0) $('stats').textContent = `${Math.round(this.fps)} fps`;
       const sel = this.galaxy.selected;
       if (
         !this.transitioning &&
+        !this.trip &&
         sel !== -1 &&
         !this.galaxy.animating &&
         this.galaxy.cameraDistance < AUTO_ENTER_DISTANCE &&
@@ -630,6 +636,8 @@ export class App {
     $('tab-system').classList.toggle('active', view === 'system');
     $('tab-sky').classList.toggle('active', view === 'sky');
     $('labels').classList.toggle('hidden', view !== 'system');
+    $('travel-bar').classList.toggle('hidden', view !== 'galaxy' && view !== 'cosmos');
+    if (this.trip && this.trip.view !== view) this.stopTrip();
     document.querySelectorAll<HTMLElement>('[data-view]').forEach((el) => {
       const match = el.dataset.view === view;
       if (el.id === 'star-panel') el.classList.toggle('hidden', !match || this.galaxy.selected === -1);
@@ -2559,6 +2567,140 @@ export class App {
   // ---------------------------------------------------------------------------
   // Real data: exoplanets, the solar neighbourhood, dated Solar System
 
+  // --- Travel at any speed ---------------------------------------------------------------------
+
+  /** A trip in progress on the Galaxy Map or in the Universe tab (src/sim/travel.ts). */
+  private trip?: { trip: Trip; view: 'galaxy' | 'cosmos'; dir: THREE.Vector3; dest?: THREE.Vector3; stop: number; name: string; hudTimer: number };
+
+  private travelling(): boolean {
+    return $<HTMLInputElement>('travel-on').checked;
+  }
+
+  /** Camera, controls and scale (map units per light-year) of the Galaxy Map or the Universe tab. */
+  private navOf(view: 'galaxy' | 'cosmos') {
+    return view === 'galaxy'
+      ? { camera: this.galaxy.camera, controls: this.galaxy.controls, unitsPerLy: UNITS_PER_KPC / 3261.56, cancel: () => this.galaxy.cancelFlight() }
+      : { camera: this.cosmos.camera, controls: this.cosmos.controls, unitsPerLy: 1 / 3.26156e6, cancel: () => this.cosmos.cancelFlight() };
+  }
+
+  private targetName(t: GalaxyTarget): string {
+    if (t === 'core') return 'the Galactic Centre';
+    if (t === 'sol') return 'the Sun';
+    if (typeof t === 'object') return this.exoMapHosts[t.exo]?.name ?? 'the star';
+    return this.galaxy.data.names[t];
+  }
+
+  /** To a point on the Galaxy Map: a quick flight, or a trip at the chosen speed. */
+  private goGalaxyPoint(pos: THREE.Vector3, distance: number, name: string): void {
+    if (this.travelling()) this.startTrip('galaxy', pos, distance, name);
+    else {
+      this.galaxy.flyToPoint(pos, distance);
+      toast(`Flying to ${name}`);
+    }
+  }
+
+  private goGalaxyTarget(t: GalaxyTarget): void {
+    // Stop just outside the distance that enters a star's system, so arriving doesn't jump in.
+    if (this.travelling()) this.startTrip('galaxy', this.galaxy.targetPosition(t), AUTO_ENTER_DISTANCE * 1.6, this.targetName(t));
+    else this.galaxy.flyTo(t);
+  }
+
+  private goCosmosPoint(pos: THREE.Vector3, distance: number, name: string): void {
+    if (this.travelling()) this.startTrip('cosmos', pos, distance, name);
+    else {
+      this.cosmos.flyToPoint(pos, distance);
+      toast(`Flying to ${name}`);
+    }
+  }
+
+  private goCosmosGalaxy(index: number): void {
+    // Arriving at a quarter of the viewing distance would enter the galaxy; stop at the viewing distance.
+    if (this.travelling()) this.startTrip('cosmos', this.cosmos.position(index), this.cosmos.viewDistance(index), displayName(this.cosmos.local[index]));
+    else this.cosmos.flyTo(index);
+  }
+
+  /** Start a trip to `dest` (stopping `stop` map units short), or cruise straight ahead with no destination. */
+  private startTrip(view: 'galaxy' | 'cosmos', dest: THREE.Vector3 | undefined, stop: number, name: string): void {
+    const nav = this.navOf(view);
+    nav.cancel();
+    let dir: THREE.Vector3;
+    let remainingLy = Infinity;
+    if (dest) {
+      nav.controls.target.copy(dest);
+      dir = dest.clone().sub(nav.camera.position);
+      remainingLy = Math.max(0, dir.length() - stop) / nav.unitsPerLy;
+      dir.normalize();
+      if (remainingLy <= 0) {
+        toast(`Already at ${name}`);
+        return;
+      }
+    } else {
+      dir = nav.controls.target.clone().sub(nav.camera.position).normalize();
+    }
+    const speed = SPEEDS[Number($<HTMLSelectElement>('travel-speed').value)] ?? SPEEDS[0];
+    const warpChoice = $<HTMLSelectElement>('travel-warp').value;
+    // Auto: arrive in about 25 s; cruising, cover 300 light-years (galaxy) or 3 million (universe) per second.
+    const warp = warpChoice !== 'auto' ? Number(warpChoice) : Number.isFinite(remainingLy) ? autoWarp(remainingLy, speed.c) : autoWarp(view === 'galaxy' ? 300 : 3e6, speed.c, 1);
+    this.trip = { trip: new Trip(speed.c, warp, remainingLy), view, dir, dest: dest?.clone(), stop, name, hudTimer: 0 };
+    $('travel-hud').classList.remove('hidden');
+    $('travel-cruise').textContent = 'Stop ■';
+    this.renderTripHud();
+  }
+
+  private stopTrip(message?: string): void {
+    const t = this.trip;
+    this.trip = undefined;
+    setObserverVelocity(this.galaxy.camera, undefined, 0);
+    $('travel-hud').classList.add('hidden');
+    $('travel-cruise').textContent = 'Cruise ▶';
+    if (t && message) toast(message);
+  }
+
+  /** Each frame of a trip: move the camera, update the relativistic view and the clocks. */
+  private tickTrip(dt: number): void {
+    const t = this.trip;
+    if (!t) return;
+    if (this.view !== t.view) {
+      this.stopTrip();
+      return;
+    }
+    const nav = this.navOf(t.view);
+    if (t.dest) {
+      // Head for the destination even if the view was turned on the way.
+      t.dir.copy(t.dest).sub(nav.camera.position);
+      t.trip.remainingLy = Math.max(0, t.dir.length() - t.stop) / nav.unitsPerLy;
+      t.dir.normalize();
+    }
+    const { ly, arrived } = t.trip.step(Math.min(dt, 0.5));
+    const delta = t.dir.clone().multiplyScalar(ly * nav.unitsPerLy);
+    nav.camera.position.add(delta);
+    if (!t.dest) nav.controls.target.add(delta);
+    setObserverVelocity(nav.camera, t.dir, t.trip.speed <= 1 ? t.trip.speed : 0);
+    t.hudTimer -= dt;
+    if (t.hudTimer <= 0) {
+      t.hudTimer = 0.2;
+      this.renderTripHud();
+    }
+    if (arrived) {
+      const ship = t.trip.speed <= 1 ? `, ${formatDuration(t.trip.shipYears)} on board` : '';
+      this.stopTrip(`Arrived at ${t.name}: ${formatLy(t.trip.coveredLy)} in ${formatDuration(t.trip.earthYears)} of Earth time${ship}.`);
+    }
+  }
+
+  private renderTripHud(): void {
+    const t = this.trip;
+    if (!t) return;
+    const c = t.trip.speed;
+    const g = lorentz(c);
+    const speed = `<b>${formatTravelSpeed(c)}</b>${g !== undefined && Number.isFinite(g) && g > 1.0001 ? ` · γ = ${g < 10 ? g.toFixed(3) : g.toFixed(1)}` : ''}`;
+    const fiction = c > 1 ? ' · <span class="fiction">faster than light is not possible: shown as a camera speed</span>' : c === 1 ? ' · <span class="fiction">only light moves this fast</span>' : '';
+    const left = Number.isFinite(t.trip.remainingLy)
+      ? `To ${escapeHtml(t.name)}: ${formatLy(t.trip.remainingLy)} left, ${formatDuration(t.trip.remainingLy / c)} more${c <= 1 ? ` (${formatDuration(tripTimes(t.trip.remainingLy, c).shipYears ?? 0)} on board)` : ''}`
+      : `Cruising · ${formatLy(t.trip.coveredLy)} so far`;
+    const clocks = `Earth time ${formatDuration(t.trip.earthYears)}${c <= 1 ? ` · your time ${formatDuration(t.trip.shipYears)}` : ''} · time warp ×${t.trip.warp.toLocaleString('en-US', { maximumSignificantDigits: 3 })}`;
+    $('travel-hud').innerHTML = `${speed}${fiction}<br>${left}<br>${clocks}`;
+  }
+
   // --- Search everything ---------------------------------------------------------------------
 
   private searchIndex?: Promise<SearchIndex>;
@@ -2654,8 +2796,7 @@ export class App {
         if (!this.galaxyBuilt || this.galaxySeed !== MILKY_WAY_SEED || this.galaxyOrigin !== 'Milky Way') this.buildGalaxy(MILKY_WAY_SEED);
         if (this.view !== 'galaxy') await this.switchView('galaxy');
         const size = ((a.sizePc ?? 0) / 1000) * UNITS_PER_KPC;
-        this.galaxy.flyToPoint(new THREE.Vector3(...galacticToMap(a.l, a.b, a.dKpc)), Math.max(0.3, size * 4));
-        toast(`Flying to ${r.name}`);
+        this.goGalaxyPoint(new THREE.Vector3(...galacticToMap(a.l, a.b, a.dKpc)), Math.max(0.3, size * 4), r.name);
         break;
       }
       case 'sky': {
@@ -2673,12 +2814,11 @@ export class App {
           const i = this.cosmos.indexOf(a.name);
           if (i >= 0) {
             this.selectCosmos(i);
-            this.cosmos.flyTo(i);
+            this.goCosmosGalaxy(i);
           }
         } else {
-          this.cosmos.flyToPoint(new THREE.Vector3(...galacticToCosmos(a.l, a.b, a.dMpc)), a.dMpc < 1 ? 3 : 8);
+          this.goCosmosPoint(new THREE.Vector3(...galacticToCosmos(a.l, a.b, a.dMpc)), a.dMpc < 1 ? 3 : 8, r.name);
         }
-        toast(`Flying to ${r.name}`);
         break;
       }
       case 'body': {
@@ -3044,8 +3184,7 @@ export class App {
       const label = this.galaxy.pickLabel(x, y);
       if (label) {
         if (label.target !== undefined) this.selectTarget(label.target);
-        this.galaxy.flyToPoint(label.pos, label.distance);
-        toast(`Flying to ${label.name}`);
+        this.goGalaxyPoint(label.pos, label.distance, label.name);
         return;
       }
       this.selectTarget(this.galaxy.pick(x, y, this.width, this.height));
@@ -3054,11 +3193,10 @@ export class App {
       if (label) {
         if (label.index !== undefined) {
           this.selectCosmos(label.index);
-          this.cosmos.flyTo(label.index);
+          this.goCosmosGalaxy(label.index);
         } else {
-          this.cosmos.flyToPoint(label.pos, label.distance);
+          this.goCosmosPoint(label.pos, label.distance, label.name);
         }
-        toast(`Flying to ${label.name}`);
         return;
       }
       this.selectCosmos(this.cosmos.pick(x, y, this.width, this.height));
@@ -3076,7 +3214,7 @@ export class App {
       const index = this.cosmos.pick(x, y, this.width, this.height);
       if (index !== -1) {
         this.selectCosmos(index);
-        this.cosmos.flyTo(index);
+        this.goCosmosGalaxy(index);
       }
       return;
     }
@@ -3084,7 +3222,7 @@ export class App {
       const target = this.galaxy.pick(x, y, this.width, this.height);
       if (target !== -1) {
         this.selectTarget(target);
-        this.galaxy.flyTo(target);
+        this.goGalaxyTarget(target);
       }
     } else if (this.tool === 'select') {
       const body = this.system.pick(x, y, this.width, this.height);
@@ -3305,7 +3443,7 @@ export class App {
       else if (this.view === 'cosmos') void this.visitCosmosGalaxy(this.cosmos.indexOf(this.galaxyOrigin || 'Milky Way'));
     });
     $('tab-cosmos').addEventListener('click', () => this.view !== 'cosmos' && void this.openCosmos(this.view === 'galaxy'));
-    $('btn-cosmos-fly').addEventListener('click', () => this.cosmos.selected !== -1 && this.cosmos.flyTo(this.cosmos.selected));
+    $('btn-cosmos-fly').addEventListener('click', () => this.cosmos.selected !== -1 && this.goCosmosGalaxy(this.cosmos.selected));
     $('btn-cosmos-visit').addEventListener('click', () => this.cosmos.selected !== -1 && void this.visitCosmosGalaxy(this.cosmos.selected));
     $('btn-cosmos-home').addEventListener('click', () => {
       const mw = this.cosmos.indexOf('Milky Way');
@@ -3322,7 +3460,7 @@ export class App {
       if (!li) return;
       const index = Number(li.dataset.galaxy);
       this.selectCosmos(index);
-      this.cosmos.flyTo(index);
+      this.goCosmosGalaxy(index);
     });
     $('tab-system').addEventListener('click', () => void this.switchToSandbox());
     $('tab-sky').addEventListener('click', () => void this.openSky());
@@ -3371,7 +3509,7 @@ export class App {
     $('btn-galaxy-go').addEventListener('click', goSeed);
     $<HTMLInputElement>('galaxy-seed').addEventListener('keydown', (e) => e.key === 'Enter' && goSeed());
     $('btn-galaxy-random').addEventListener('click', () => this.buildGalaxy(Math.floor(Math.random() * 1e9)));
-    $('btn-star-fly').addEventListener('click', () => this.galaxy.selected !== -1 && this.galaxy.flyTo(this.galaxy.selected));
+    $('btn-star-fly').addEventListener('click', () => this.galaxy.selected !== -1 && this.goGalaxyTarget(this.galaxy.selected));
     $('btn-star-enter').addEventListener('click', () => this.galaxy.selected !== -1 && void this.enterTarget(this.galaxy.selected));
     $('btn-star-bookmark').addEventListener('click', () => this.toggleBookmark());
     $('btn-back').addEventListener('click', () => void this.exitToGalaxy());
@@ -3382,7 +3520,7 @@ export class App {
       if (!li) return;
       const i = Number(li.dataset.index);
       this.selectTarget(i);
-      this.galaxy.flyTo(i);
+      this.goGalaxyTarget(i);
     };
     for (const id of ['search-results', 'bookmark-list']) {
       $(id).addEventListener('click', pickFromList);
@@ -3703,6 +3841,24 @@ export class App {
     });
     $('btn-learn').addEventListener('click', () => this.openLessonMenu());
     $('btn-search').addEventListener('click', () => this.openSearch());
+    $('travel-speed').innerHTML = SPEEDS.map((s, i) => `<option value="${i}"${s.about ? ` title="${escapeHtml(s.about)}"` : ''}>${escapeHtml(s.label)}</option>`).join('');
+    $<HTMLSelectElement>('travel-speed').value = String(SPEEDS.findIndex((s) => s.c === 0.99));
+    $('travel-cruise').addEventListener('click', () => {
+      if (this.trip) this.stopTrip();
+      else if (this.view === 'galaxy' || this.view === 'cosmos') this.startTrip(this.view, undefined, 0, 'ahead');
+    });
+    // A new speed or warp applies to the trip in progress.
+    for (const id of ['travel-speed', 'travel-warp']) {
+      $(id).addEventListener('change', () => {
+        const t = this.trip;
+        if (!t) return;
+        const speed = SPEEDS[Number($<HTMLSelectElement>('travel-speed').value)];
+        const choice = $<HTMLSelectElement>('travel-warp').value;
+        t.trip.speed = speed.c;
+        t.trip.warp = choice !== 'auto' ? Number(choice) : Number.isFinite(t.trip.remainingLy) ? autoWarp(t.trip.remainingLy, speed.c) : autoWarp(t.view === 'galaxy' ? 300 : 3e6, speed.c, 1);
+        this.renderTripHud();
+      });
+    }
     $('global-search').addEventListener('input', () => void this.renderSearch());
     $('global-search').addEventListener('keydown', (e) => {
       const k = (e as KeyboardEvent).key;
@@ -4004,3 +4160,13 @@ function cosmosFacts(g: LocalGalaxy): [string, string][] {
   return facts;
 }
 
+
+/** A distance in light-years, in AU when under a tenth of a light-year. */
+function formatLy(ly: number): string {
+  if (ly * 63241 < 1) return `${(ly * 9.4607e12).toLocaleString('en-US', { maximumSignificantDigits: 3 })} km`;
+  if (ly < 0.1) return `${Math.round(ly * 63241).toLocaleString('en-US')} AU`;
+  if (ly < 100) return `${ly.toFixed(ly < 10 ? 2 : 1)} light-years`;
+  if (ly < 1e6) return `${Math.round(ly).toLocaleString('en-US')} light-years`;
+  if (ly < 1e9) return `${(ly / 1e6).toPrecision(3)} million light-years`;
+  return `${(ly / 1e9).toPrecision(3)} billion light-years`;
+}

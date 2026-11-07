@@ -368,6 +368,23 @@
         <p class="muted tiny" id="exo-credit"></p>
       </aside>
 
+      <div id="travel-bar" class="hidden">
+        <div class="travel-controls">
+          <label title="How fast you travel: real speeds, fractions of light speed, and (not physically possible) faster than light">🚀 <select id="travel-speed"></select></label>
+          <label title="How much faster than real time the trip plays"><select id="travel-warp">
+            <option value="auto">Arrive in ~25 s</option>
+            <option value="1">Real time</option>
+            <option value="1e3">×1,000</option>
+            <option value="1e6">×1 million</option>
+            <option value="1e9">×1 billion</option>
+            <option value="1e12">×1 trillion</option>
+          </select></label>
+          <label class="check" title="Clicking a name, double-clicking, or picking a search result travels there at this speed instead of flying in a moment"><input type="checkbox" id="travel-on" /> Travel at this speed</label>
+          <button id="travel-cruise" title="Travel straight ahead at this speed">Cruise ▶</button>
+        </div>
+        <div id="travel-hud" class="hidden"></div>
+      </div>
+
       <div id="search-overlay" class="hidden" role="dialog" aria-label="Search everything">
         <div class="search-box">
           <input id="global-search" type="search" placeholder="Search stars, nebulae, galaxies, planets, scenarios…" spellcheck="false" autocomplete="off" />

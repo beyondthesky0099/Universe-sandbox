@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { mulberry32 } from '../procgen/rng';
 import { Noise3D } from './noise';
+import { relativity, RELATIVITY_PARS } from './relativity';
 
 /**
  * A nebula's survey photograph turned into a 3D cloud of glowing gas.
@@ -134,14 +135,16 @@ const VERTEX = /* glsl */ `
   uniform float uViewHeight;
   varying vec3 vColor;
   varying float vFade;
+  ${RELATIVITY_PARS}
   void main() {
     vec4 mv = modelViewMatrix * vec4(position, 1.0);
+    float relD = relAberrate(mv);
     float dist = max(-mv.z, 1e-6);
     float px = uSize * projectionMatrix[1][1] * uViewHeight * 0.5 / dist;
     gl_PointSize = clamp(px, 1.0, 96.0);
     // Particles bigger than the cap lose light in proportion, and ones the camera is inside fade out.
     vFade = min(1.0, px / gl_PointSize) * smoothstep(0.0, uSize * 3.0, dist);
-    vColor = color;
+    vColor = relShift(color, relD);
     gl_Position = projectionMatrix * mv;
   }
 `;
@@ -176,7 +179,7 @@ export class NebulaVolume {
     this.material = new THREE.ShaderMaterial({
       vertexShader: VERTEX,
       fragmentShader: FRAGMENT,
-      uniforms: { uSize: { value: p.size }, uViewHeight: { value: 800 }, uOpacity: { value: 0 } },
+      uniforms: { uSize: { value: p.size }, uViewHeight: { value: 800 }, uOpacity: { value: 0 }, uBeta: relativity.uBeta },
       transparent: true,
       depthWrite: false,
       depthTest: false,

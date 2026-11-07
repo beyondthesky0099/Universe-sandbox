@@ -12,8 +12,8 @@
  * 3. **Giants.** A core above ~10 Earth masses can no longer hold up the gas around it. The
  *    envelope contracts and the core pulls in gas faster and faster: runaway gas accretion
  *    (Pollack et al. 1996; Ikoma et al. 2000). The Kelvin–Helmholtz time is
- *    τ ≈ 10⁸ yr × (M_core / M⊕)^−2.5. Growth stops when the nearby gas is used up or the disc
- *    is gone.
+ *    τ ≈ 10⁸ yr × (M_core / M⊕)^−2.5. Growth stops when the planet opens a gap in the disc
+ *    (about a Jupiter mass at 5 AU), when the nearby gas runs out, or when the disc is gone.
  * 4. **Clearing.** The gas disc lasts a few million years (median ~3 Myr; Haisch et al. 2001),
  *    then the young star's light and wind blow it away. What has not become a giant by then
  *    stays rocky or icy.
@@ -75,12 +75,19 @@ export function gasAccretionTime(mass: number): number {
   return 1e8 * Math.pow(mass / EARTH_MASS, -2.5);
 }
 
+/** Disc aspect ratio h/r at r AU (a flared disc: 0.05 at 1 AU, ∝ r^¼). */
+export function aspectRatio(r: number): number {
+  return 0.05 * Math.pow(r, 0.25);
+}
+
 /**
- * The most gas a giant at r AU can gather: what the disc holds within ±30% of its orbit. At
- * Jupiter's distance in a 4× nebula this is about 1.7 Jupiter masses.
+ * The most gas a giant at r AU can gather (M☉). It is the lesser of two limits:
+ * - what the disc holds within ±30% of its orbit;
+ * - the mass at which the planet clears a gap in the disc and starves itself, M/M* ≈ 3 (h/r)³
+ *   (Lin & Papaloizou 1993), about 1.3 Jupiter masses at Jupiter's distance.
  */
-export function gasSupply(r: number, enhancement = 1): number {
-  return gasMass(r * 0.7, r * 1.3, enhancement);
+export function gasSupply(r: number, enhancement = 1, starMass = 1): number {
+  return Math.min(gasMass(r * 0.7, r * 1.3, enhancement), 3 * aspectRatio(r) ** 3 * starMass);
 }
 
 export interface FormationSettings {
@@ -100,9 +107,9 @@ export interface FormationSettings {
  * New mass of a body at r AU after `dt` simulated years of gas accretion. A core below the
  * critical mass, or one whose disc has gone, keeps its mass.
  */
-export function accreteGas(mass: number, r: number, dt: number, s: Pick<FormationSettings, 'enhancement' | 'speedup'>, gasLeft: boolean): number {
+export function accreteGas(mass: number, r: number, dt: number, s: Pick<FormationSettings, 'enhancement' | 'speedup'>, gasLeft: boolean, starMass = 1): number {
   if (!gasLeft || mass < CRITICAL_CORE) return mass;
-  const cap = gasSupply(r, s.enhancement);
+  const cap = gasSupply(r, s.enhancement, starMass);
   if (mass >= cap) return mass;
   const tau = gasAccretionTime(mass) / s.speedup;
   return Math.min(cap, mass * Math.exp(dt / tau));

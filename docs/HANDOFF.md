@@ -205,6 +205,28 @@ Plan, in priority order:
 - BodyVisual adds it in applyDetail and updates it only when the planet is more than 14 px across
   and a star is present. Tests: tests/aurora.test.ts.
 
+### AA. Planet formation
+- [x] `src/sim/planetFormation.ts`:
+  - Disc: MMSN densities (solid/ice/gas) and the snow line at 2.7 AU; solidMass, gasMass,
+    isolationMass (Kokubo & Ida, b = 10), planetesimals (equal √r steps, so each body carries its
+    annulus).
+  - Gas: gasAccretionTime (KH, 10⁸ (M/M⊕)^−2.5 yr), gasSupply (min of the gas within ±30% and the
+    gap-opening mass 3(h/r)³ M*), accreteGas.
+- Simulation.formation ({starId, enhancement, speedup, gasUntil, dispersed}) is saved in
+  state.ts.
+  - growPlanets: cores ≥ 10 M⊕ grow in gas while the disc lasts; an event fires at 95 M⊕.
+  - Dispersal: an event, and the particles are cleared.
+- Preset 'proto' (Planet Formation):
+  - Seeded with mulberry32(2026): 80 embryos, 6× MMSN, 0.4–8 AU, e ≤ 0.05.
+  - Speedup 3000, so the gas lasts 1,000 simulated years. Debris and shatter are off (perfect
+    merging).
+  - No dust particles: 2,500 made each step ~18× slower. The view draws the gas disc and the
+    snow line instead.
+- Tuned headlessly. A 4× disc stalled at 9.3 M⊕ cores. With 6×, giants were born at ~4–5 AU
+  after ~350 years, ending near 1.3 MJ (the gap limit); later scattering can push them in or
+  out.
+- Tests: tests/planet-formation.test.ts.
+
 ### Z. App split into feature controllers
 - [x] App went from about 4,900 lines to about 1,200 in `src/app.ts`, plus 22 controllers in
   `src/app/` (classes taking `app: App`) and `src/app/shared.ts` (types, constants, helpers).

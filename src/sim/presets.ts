@@ -4,6 +4,8 @@ import { kelvinToRgb, starColor } from './color';
 import { keplerToState, OrbitalElements } from './orbits';
 import type { Simulation } from './simulation';
 import { EARTH_MASS, G, JUPITER_MASS } from './units';
+import { mulberry32 } from '../procgen/rng';
+import { GAS_DISC_LIFETIME, planetesimals } from './planetFormation';
 import { julianDate, planetStates, type PlanetName } from './ephemeris';
 import { setTrueScale } from './trueScale';
 import { SPACECRAFT_COLOR, spacecraftState } from './spacecraft';
@@ -187,27 +189,46 @@ const galaxyCollision: Preset = {
   },
 };
 
-const protoplanetary: Preset = {
+/** Planet formation: speedup of growth and gas clock, to match the enlarged collision radii. */
+export const FORMATION_SPEEDUP = 3000;
+
+const protoDisk: Preset = {
   id: 'proto',
-  name: 'Protoplanetary Disk',
-  description: 'A young star surrounded by 120 colliding planetesimals. Watch planets accrete.',
+  name: 'Planet Formation',
+  description:
+    'A young Sun-like star in its disc of gas and dust. 80 planetary embryos carry the solids of a disc six times the minimum-mass solar nebula, with ice beyond the snow line at 2.7 AU. They collide and grow; cores past ten Earth masses pull in gas and become giants, until the star blows the gas away after 3 million years. Growth runs 3,000× faster than in nature.',
   load(sim) {
-    const star = sim.addBody({ name: 'Nascent', kind: 'star', mass: 1 });
-    for (let i = 0; i < 120; i++) {
-      const a = 0.6 + Math.pow(Math.random(), 0.8) * 4.4;
-      const m = (0.2 + Math.random() * 1.5) * EARTH_MASS;
-      addOrbiting(sim, star, { name: `Planetesimal ${i + 1}`, mass: m, kind: 'rocky', color: [0x8a8f99, 0xa0785a, 0xb8a58c, 0x7d6e63][i % 4] }, {
-        a,
-        e: Math.random() * 0.12,
-        inc: (Math.random() - 0.5) * 0.03,
-        lan: Math.random() * Math.PI * 2,
-        argp: Math.random() * Math.PI * 2,
-        nu: Math.random() * Math.PI * 2,
+    const rand = mulberry32(2026);
+    const star = sim.addBody({ name: 'Young Sun', kind: 'star', mass: 1 });
+    // Six times the minimum-mass nebula: young discs observed in the millimetre range from well
+    // below to well above this. Less, and the cores here stop short of ten Earth masses.
+    const enhancement = 6;
+    planetesimals(rand, 80, 0.4, 8, enhancement).forEach((p, i) => {
+      // Rocky inside the snow line, icy beyond it.
+      const color = p.icy ? [0xb8c8d8, 0xa8b8c8, 0xc8d0dc][i % 3] : [0x8a8f99, 0xa0785a, 0xb8a58c, 0x7d6e63][i % 4];
+      addOrbiting(sim, star, { name: `${p.icy ? 'Icy' : 'Rocky'} embryo ${i + 1}`, mass: p.mass, kind: 'rocky', color }, {
+        a: p.a,
+        e: rand() * 0.05,
+        inc: (rand() - 0.5) * 0.01,
+        lan: rand() * Math.PI * 2,
+        argp: rand() * Math.PI * 2,
+        nu: rand() * Math.PI * 2,
       });
-    }
-    addParticleDisk(sim, star, { count: 2500, inner: 0.5, outer: 6, thickness: 0.03, color: [0.75, 0.6, 0.45] });
+    });
+    // (The gas disc itself is drawn by the view, not simulated: dust particles would make every
+    // step ~20× slower.)
+    // Bodies that touch merge whole, as in N-body studies of planet formation (no debris).
+    sim.debris = false;
+    sim.shatter = false;
+    sim.formation = { starId: star.id, enhancement, speedup: FORMATION_SPEEDUP, gasUntil: sim.time + GAS_DISC_LIFETIME / FORMATION_SPEEDUP };
     sim.recenter();
-    return { cameraDistance: 10, timeScale: 0.2, elevation: 0.8 };
+    return {
+      cameraDistance: 14,
+      timeScale: 3,
+      elevation: 0.8,
+      maxTimeScale: 40,
+      tip: `Planets grow by collisions; cores past 10 Earth masses swallow gas and become giants until the star clears its gas disc (in ${GAS_DISC_LIFETIME / FORMATION_SPEEDUP} years here, 3 million in nature).`,
+    };
   },
 };
 
@@ -835,7 +856,7 @@ export const PRESETS: Preset[] = [
   uranusMoons,
   neptuneMoons,
   plutoCharon,
-  protoplanetary,
+  protoDisk,
   giantImpact,
   ringmaker,
   binaryStar,

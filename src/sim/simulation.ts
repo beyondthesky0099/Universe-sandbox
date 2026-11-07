@@ -231,7 +231,7 @@ export class Simulation {
     for (const b of this.bodies) {
       if (b === star || (b.kind !== 'rocky' && b.kind !== 'gas')) continue;
       const r = Math.hypot(b.x - star.x, b.y - star.y, b.z - star.z);
-      const m = accreteGas(b.mass, r, dt, f, true);
+      const m = accreteGas(b.mass, r, dt, f, true, star.mass);
       if (m <= b.mass) continue;
       const before = b.mass;
       b.mass = m;

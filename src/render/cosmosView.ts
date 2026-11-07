@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { LabelDeclutter } from './labelDeclutter';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import {
   COSMIC_STRUCTURES,
@@ -110,6 +111,7 @@ interface Label {
 export class CosmosView {
   readonly scene = new THREE.Scene();
   readonly camera: THREE.PerspectiveCamera;
+  private readonly declutter = new LabelDeclutter();
   readonly controls: OrbitControls;
   local: LocalGalaxy[] = [];
   selected = -1;
@@ -327,7 +329,7 @@ export class CosmosView {
     let bestDepth = Infinity;
     for (const { sprite } of this.labels) {
       const goto = sprite.userData.goto as { index?: number; distance?: number; center?: boolean } | undefined;
-      if (!goto || !sprite.visible || !sprite.parent) continue;
+      if (!goto || !sprite.visible || !sprite.parent || sprite.material.opacity < 0.3) continue;
       const depth = labelHitDepth(sprite, this.camera, ndcX, ndcY);
       if (depth >= bestDepth) continue;
       bestDepth = depth;
@@ -375,6 +377,7 @@ export class CosmosView {
   }
 
   update(dt: number): void {
+    this.declutter.update(this.scene, this.camera, dt);
     if (this.anim) {
       const a = this.anim;
       a.t = Math.min(1, a.t + dt * a.speed);

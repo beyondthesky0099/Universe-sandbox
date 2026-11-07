@@ -91,7 +91,16 @@ Astrarium wears the **Beyond The Sky** brand kit:
   accents, and Starlight and Orbit Grey text.
 - **Type:** Space Grotesk for headings, Inter for text, and IBM Plex Mono for labels and numbers.
 - **Shape:** sharp corners.
-- **Logo:** the eclipse-ring mark in the top bar, as the favicon and as the desktop app's icon.
+- **Logo:** the full animated Beyond The Sky wordmark (ported from the brand site) sits in the
+  top bar and on a short opening splash. In it, a helium-4 atom traces an infinity loop through
+  the eclipse "O"; helium was found in the Sun's spectrum during the 1868 eclipse. The
+  eclipse-ring mark is the favicon, the phone logo and the desktop app's icon.
+
+On the Galaxy Map and Universe views, names never pile up. Where labels would overlap, the
+important ones stay and the rest fade out until you zoom in and there's room for them:
+- "You are here" first;
+- then well-known names like the Orion Nebula or M13, ahead of bare catalogue numbers;
+- then nearer objects.
 
 
 - **Top bar:** search, Places and photo mode on the left; the four views (Universe, Galaxy Map,

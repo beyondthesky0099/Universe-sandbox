@@ -1,4 +1,5 @@
 import { $ } from '../ui/dom';
+import { mountWordmark } from '../ui/wordmark';
 import { prefs } from '../ui/galaxyStore';
 import type { App } from '../app';
 import type { ViewName } from './shared';
@@ -22,8 +23,36 @@ export class LayoutUI {
 
   constructor(private readonly app: App) {}
 
+  /**
+   * The Beyond The Sky animated wordmark: in the top bar, and large on a short splash while
+   * the app opens (skipped in embeds). The splash never blocks input and goes on any click or key.
+   */
+  private mountBrand(): void {
+    mountWordmark($('wordmark'), 40);
+    const splash = $('splash');
+    if (new URLSearchParams(location.hash.slice(1)).has('embed')) {
+      splash.remove();
+      return;
+    }
+    const stop = mountWordmark(splash.querySelector<HTMLElement>('.splash-mark')!);
+    let gone = false;
+    const dismiss = () => {
+      if (gone) return;
+      gone = true;
+      splash.classList.add('out');
+      setTimeout(() => {
+        stop();
+        splash.remove();
+      }, 800);
+    };
+    setTimeout(dismiss, 2500);
+    window.addEventListener('pointerdown', dismiss, { once: true });
+    window.addEventListener('keydown', dismiss, { once: true });
+  }
+
   /** Wire the frame (call once, after the DOM is ready). */
   bind(): void {
+    this.mountBrand();
     this.collapsed = window.innerWidth < 760;
     document.body.classList.toggle('rail-collapsed', this.collapsed);
     // More menu.

@@ -205,6 +205,20 @@ Plan, in priority order:
 - BodyVisual adds it in applyDetail and updates it only when the planet is more than 14 px across
   and a star is present. Tests: tests/aurora.test.ts.
 
+### AD. Animated wordmark and label declutter
+- [x] `src/ui/wordmark.ts`: the brand site's BrandWordmark.jsx ported to plain DOM.
+  - DEFS and ARTWORK are copied verbatim (by script) from the JSX; the motion is the same.
+  - mountWordmark(container, segments) returns a stop function. It pauses off screen and when
+    the tab is hidden, and slows for prefers-reduced-motion.
+  - Mounted in the top bar (40 segments) and on #splash, which fades after 2.5 s or on any
+    input and is skipped in embeds.
+- `src/render/labelDeclutter.ts`: every 3 frames, label rects are placed greedily by priority
+  (userData.priority, then size, then non-catalogue names, then depth), on a grid hash. Labels
+  that overlap fade out by opacity (baseOpacity is kept).
+  - Used by GalaxyView.update and CosmosView.update.
+  - pickLabel ignores labels below 0.3 opacity. "You are here" has priority 1000.
+- Tests: tests/label-declutter.test.ts.
+
 ### AC. Beyond The Sky brand kit
 - [x] Brand kit from beyondthesky0099/beyondthesky_new (horizons-export/apps/web:
   tailwind.config.js, src/index.css, public/favicon.svg).

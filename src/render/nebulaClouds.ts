@@ -22,12 +22,6 @@ export interface Cloud {
   rotation: number;
   /** Which of the four procedural puff shapes. */
   puff: number;
-  /**
-   * For a photograph: where its pixels are in the atlas image ([x, y, width], top-down) and its
-   * axes in the map (right and up as seen from Earth, forward away from Earth), so it can be turned
-   * into a 3D cloud up close (nebulaVolume.ts).
-   */
-  volume?: { rect: [number, number, number]; right: [number, number, number]; up: [number, number, number]; forward: [number, number, number] };
 }
 
 /** Four 128-pixel puffs of fractal noise in a 2×2 atlas (white; tinted per cloud). */

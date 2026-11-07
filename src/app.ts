@@ -4,7 +4,7 @@ import { AudioEngine, playSamples } from './audio';
 import { FEATURE, systemFeatures, type FeatureName } from './procgen/galaxy';
 import { mulberry32, pick, seedFromString } from './procgen/rng';
 import { generateStarSystem, starSummary, type StarSystemSpec } from './procgen/starSystem';
-import { GalaxyView, type GalaxyTarget } from './render/galaxyView';
+import { GalaxyView, type GalaxyTarget, type VolumeItem } from './render/galaxyView';
 import { CosmosView } from './render/cosmosView';
 import { SkyView } from './render/skyView';
 import { moonPhaseName, skyAt } from './sim/sky';
@@ -231,7 +231,7 @@ export class App {
     this.system = new SystemView(this.sim, this.canvas, QUALITY_PRESETS[this.quality]);
     this.galaxy = new GalaxyView(this.canvas);
     // Phones: one 3D nebula at a time, with fewer particles.
-    if (LOW_POWER) this.galaxy.volumeBudget = { max: 1, named: 12000, other: 5000 };
+    if (LOW_POWER) this.galaxy.volumeBudget = { max: 1, steps: 32 };
     this.cosmos = new CosmosView(this.canvas);
     this.sky = new SkyView(this.canvas);
     this.tutorial = new Tutorial(this.tutorialSteps());
@@ -1556,6 +1556,8 @@ export class App {
     const glow: Cloud[] = [];
     const dust: Cloud[] = [];
     const labels: { pos: [number, number, number]; label: string; color: string; size: number }[] = [];
+    // Each nebula also becomes a ray-marched volume up close; the sets are [dust, glow, ...pages].
+    const volumes: VolumeItem[] = [];
     let k = 0;
     for (const n of placed) {
       const pc = diameterPc(n) ?? (n.kind === 'pn' ? 0.5 : n.kind === 'snr' ? 20 : n.kind === 'refl' ? 1 : 5);
@@ -1568,22 +1570,25 @@ export class App {
         // The image spans 2.6 catalogue radii; a soft glow in the nebula's colour gives it depth.
         const named = image.page === 0;
         const page = images!.pages[image.page];
-        perPage[image.page].push({
-          pos,
-          size: size * 1.3,
-          color,
-          tile: tileRect(page, image.tile),
-          minPx: named ? 40 : 14,
-          brightness: 1.1,
-          rotation: 0,
-          puff: 0,
-          // Up close it becomes a 3D cloud, oriented as the photograph was taken from Earth.
-          volume: { rect: [(image.tile % page.cols) * page.tile, Math.floor(image.tile / page.cols) * page.tile, page.tile], ...pictureAxes(n.l, n.b, n.distanceKpc!) },
+        const rect = tileRect(page, image.tile);
+        // Up close it becomes a volume that looks like the photograph from Earth's direction.
+        volumes.push({
+          center: pos,
+          radius: (size * 1.3) / 2,
+          shape: 'photo',
+          seed: k,
+          photo: { set: 2 + image.page, rect },
+          axes: pictureAxes(n.l, n.b, n.distanceKpc!),
+          fade: [[2 + image.page, perPage[image.page].length], [1, glow.length]],
         });
+        perPage[image.page].push({ pos, size: size * 1.3, color, tile: rect, minPx: named ? 40 : 14, brightness: 1.1, rotation: 0, puff: 0 });
         glow.push({ pos, size: size * 1.6, color, minPx: named ? 50 : 18, brightness: 0.3, rotation: k, puff: k });
       } else {
         // A few overlapping puffs spread through the nebula's volume.
         const puffs = n.kind === 'pn' ? 1 : 3;
+        const set = n.kind === 'dark' ? 0 : 1;
+        const first = (n.kind === 'dark' ? dust : glow).length;
+        volumes.push({ center: pos, radius: size * 0.6, shape: n.kind, seed: k, fade: Array.from({ length: puffs }, (_, p): [number, number] => [set, first + p]) });
         for (let p = 0; p < puffs; p++) {
           const h = Math.sin(k * 12.9898 + p * 78.233) * 43758.5453;
           const r = (h - Math.floor(h)) * 0.3 * size;
@@ -1610,6 +1615,7 @@ export class App {
       'nebulae',
       [{ clouds: dust, absorb: true }, { clouds: glow }, ...perPage.map((clouds, p) => ({ clouds, atlas: atlases[p] }))],
       labels,
+      volumes,
     );
     this.galaxy.setRealLayerVisible('nebulae', $<HTMLInputElement>('opt-real-nebulae').checked);
     const count = (kind: string) => placed.filter((n) => n.kind === kind).length.toLocaleString('en-US');

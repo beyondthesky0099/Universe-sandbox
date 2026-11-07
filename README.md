@@ -86,6 +86,14 @@ work in the desktop app, so type your latitude and longitude instead.
 
 ## The interface
 
+Astrarium wears the **Beyond The Sky** brand kit:
+- **Colours:** Void Black, Eclipse Red for primary actions and the active view, Cosmic Blue
+  accents, and Starlight and Orbit Grey text.
+- **Type:** Space Grotesk for headings, Inter for text, and IBM Plex Mono for labels and numbers.
+- **Shape:** sharp corners.
+- **Logo:** the eclipse-ring mark in the top bar, as the favicon and as the desktop app's icon.
+
+
 - **Top bar:** search, Places and photo mode on the left; the four views (Universe, Galaxy Map,
   Sandbox, Sky) in the middle; the ⋯ menu on the right. The menu holds lessons, challenges, the
   live graph, multiplayer, the gallery, the console, sound and the tutorial.

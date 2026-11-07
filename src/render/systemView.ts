@@ -161,18 +161,18 @@ export class SystemView {
     // Spawn preview: ghost body, velocity arrow and predicted path.
     this.ghost = new THREE.Mesh(
       new THREE.SphereGeometry(1, 24, 12),
-      new THREE.MeshBasicMaterial({ color: 0x7fdcff, wireframe: true, transparent: true, opacity: 0.6 }),
+      new THREE.MeshBasicMaterial({ color: 0x5ea7ff, wireframe: true, transparent: true, opacity: 0.6 }),
     );
     this.ghost.visible = false;
     this.scene.add(this.ghost);
-    this.arrow = new THREE.ArrowHelper(new THREE.Vector3(1, 0, 0), new THREE.Vector3(), 1, 0x7fdcff);
+    this.arrow = new THREE.ArrowHelper(new THREE.Vector3(1, 0, 0), new THREE.Vector3(), 1, 0x5ea7ff);
     this.arrow.visible = false;
     this.scene.add(this.arrow);
-    this.predictLine = this.makeDashedLine(0x7fdcff);
+    this.predictLine = this.makeDashedLine(0x5ea7ff);
     this.scene.add(this.predictLine);
 
     // Selected body's osculating orbit.
-    this.orbitLine = new THREE.Line(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0x7fdcff, transparent: true, opacity: 0.45 }));
+    this.orbitLine = new THREE.Line(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0x5ea7ff, transparent: true, opacity: 0.45 }));
     this.orbitLine.frustumCulled = false;
     this.orbitLine.visible = false;
     this.scene.add(this.orbitLine);

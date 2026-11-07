@@ -205,6 +205,18 @@ Plan, in priority order:
 - BodyVisual adds it in applyDetail and updates it only when the planet is more than 14 px across
   and a star is present. Tests: tests/aurora.test.ts.
 
+### AC. Beyond The Sky brand kit
+- [x] Brand kit from beyondthesky0099/beyondthesky_new (horizons-export/apps/web:
+  tailwind.config.js, src/index.css, public/favicon.svg).
+- `public/brand-mark.svg` (the favicon mark) is used in the top bar and as the favicon;
+  desktop/icon.svg is the same mark at 512 px (icon.png regenerated with make-icon.mjs).
+- Fonts are Space Grotesk, Inter and IBM Plex Mono, loaded from Google Fonts in index.html with
+  system fallbacks.
+- style.css: the old cyan and blue literals are mapped onto the brand palette. A closing
+  "brand kit" block sets the tokens (--accent-strong is Eclipse Red, --accent Cosmic Blue),
+  type, corners and primary states.
+- In the 3D scene, the selection ring, orbit line and predicted path are Cosmic Blue.
+
 ### AB. Interface frame
 - [x] `src/app/layout.ts` (LayoutUI):
   - Builds the icon rail from the current view's `.panel.left section[data-pane]` (data-icon,

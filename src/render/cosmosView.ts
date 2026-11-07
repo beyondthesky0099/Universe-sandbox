@@ -133,7 +133,7 @@ export class CosmosView {
     this.controls.minDistance = 0.004;
     this.controls.maxDistance = 40000; // far enough to see the whole observable universe from outside
     this.controls.enabled = false;
-    this.marker = new THREE.Sprite(new THREE.SpriteMaterial({ map: ringTexture(), color: 0x7fdcff, sizeAttenuation: false, depthTest: false, transparent: true }));
+    this.marker = new THREE.Sprite(new THREE.SpriteMaterial({ map: ringTexture(), color: 0x5ea7ff, sizeAttenuation: false, depthTest: false, transparent: true }));
     this.marker.scale.setScalar(0.05);
     this.marker.visible = false;
     this.marker.renderOrder = 10;

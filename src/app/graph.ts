@@ -48,7 +48,7 @@ export class GraphUI {
         if (this.app.graphSeries.length > 1200) this.app.graphSeries.splice(0, this.app.graphSeries.length - 1200);
       }
     }
-    const series: Series[] = [{ label: 'This run', color: '#7fdcff', points: this.app.graphSeries }];
+    const series: Series[] = [{ label: 'This run', color: '#5ea7ff', points: this.app.graphSeries }];
     if (this.app.graphRef) series.push(this.app.graphRef);
     this.app.chart!.draw(series, 'years', `${info.label}${info.unit ? ` (${info.unit})` : ''}`);
   }

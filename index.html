@@ -3,10 +3,14 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <meta name="theme-color" content="#02030a" />
+    <meta name="theme-color" content="#030405" />
     <meta name="description" content="Astrarium: explore a procedural galaxy and play with real N-body gravity in your browser." />
     <title>Astrarium: Universe Sandbox</title>
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✦</text></svg>" />
+    <link rel="icon" type="image/svg+xml" href="brand-mark.svg" />
+    <!-- Beyond The Sky brand fonts; system fonts stand in when offline. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" />
   </head>
   <body>
     <div id="app">
@@ -17,7 +21,7 @@
 
       <header id="topbar">
         <button id="btn-menu" class="icon only-mobile" title="Show / hide panels" aria-label="Toggle panels">☰</button>
-        <div class="brand">✦ <span>Astrarium</span></div>
+        <div class="brand"><img src="brand-mark.svg" alt="Beyond The Sky" /><span>Astrarium <span class="brand-by">by Beyond The Sky</span></span></div>
         <button id="btn-search" class="icon" title="Search everything (/ or Ctrl+K)" aria-label="Search">🔍</button>
         <button id="btn-places" class="icon" title="Places (L): save this view, go back to it, or share it" aria-label="Places">📍</button>
         <button id="btn-photo" class="icon" title="Photo mode (P): hide the interface, frame and save a picture" aria-label="Photo mode">📷</button>

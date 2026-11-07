@@ -1,11 +1,11 @@
 :root {
-  --bg: #02030a;
-  --panel: rgba(12, 16, 30, 0.78);
-  --panel-border: rgba(140, 180, 255, 0.14);
-  --text: #dfe6f5;
-  --muted: #8b96b0;
-  --accent: #7fdcff;
-  --accent-strong: #3fb8ff;
+  --bg: #030405;
+  --panel: rgba(8, 10, 18, 0.78);
+  --panel-border: rgba(154, 163, 173, 0.14);
+  --text: #f5f7fa;
+  --muted: #9aa3ad;
+  --accent: #5ea7ff;
+  --accent-strong: #ff2a1a;
   --danger: #ff6b6b;
   --radius: 10px;
   font-family: Inter, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
@@ -49,7 +49,7 @@ body {
 }
 
 .body-label {
-  color: rgba(220, 232, 255, 0.85);
+  color: rgba(245, 247, 250, 0.85);
   font-size: 11px;
   text-shadow: 0 0 4px #000, 0 0 2px #000;
   white-space: nowrap;
@@ -73,7 +73,7 @@ body {
   align-items: center;
   gap: 18px;
   padding: 0 16px;
-  background: linear-gradient(to bottom, rgba(2, 3, 10, 0.85), rgba(2, 3, 10, 0));
+  background: linear-gradient(to bottom, rgba(3, 4, 5, 0.85), rgba(3, 4, 5, 0));
   pointer-events: none;
 }
 
@@ -105,7 +105,7 @@ body {
 
 .tabs button.active {
   background: var(--accent-strong);
-  color: #021018;
+  color: #ffffff;
   font-weight: 600;
 }
 
@@ -262,7 +262,7 @@ select {
 }
 
 select option {
-  background: #0c1020;
+  background: #080a12;
 }
 
 button {
@@ -271,8 +271,8 @@ button {
 }
 
 button:hover {
-  background: rgba(127, 220, 255, 0.14);
-  border-color: rgba(127, 220, 255, 0.4);
+  background: rgba(94, 167, 255, 0.14);
+  border-color: rgba(94, 167, 255, 0.4);
 }
 
 button:focus-visible,
@@ -284,7 +284,7 @@ input:focus-visible {
 
 button.primary {
   background: var(--accent-strong);
-  color: #021018;
+  color: #ffffff;
   font-weight: 600;
   border-color: transparent;
 }
@@ -299,7 +299,7 @@ button.danger:hover {
 }
 
 button.icon.active {
-  background: rgba(63, 184, 255, 0.35);
+  background: rgba(255, 42, 26, 0.35);
   border-color: var(--accent);
 }
 
@@ -330,7 +330,7 @@ button.link {
 
 .segmented button.active,
 .palette button.active {
-  background: rgba(63, 184, 255, 0.25);
+  background: rgba(255, 42, 26, 0.25);
   border-color: var(--accent);
 }
 
@@ -364,7 +364,7 @@ button.link {
   align-items: center;
   margin-bottom: 8px;
   padding: 6px 8px;
-  background: rgba(63, 184, 255, 0.1);
+  background: rgba(255, 42, 26, 0.1);
   border-radius: 7px;
 }
 
@@ -454,7 +454,7 @@ button.link {
 }
 
 .list li.active {
-  background: rgba(127, 220, 255, 0.18);
+  background: rgba(94, 167, 255, 0.18);
 }
 
 .list li.muted {
@@ -463,7 +463,7 @@ button.link {
 
 .list li:hover,
 .list li:focus-visible {
-  background: rgba(127, 220, 255, 0.12);
+  background: rgba(94, 167, 255, 0.12);
   outline: none;
 }
 
@@ -525,8 +525,8 @@ input[type='date'] {
 }
 
 .alert.info {
-  background: rgba(120, 170, 255, 0.1);
-  border: 1px solid rgba(120, 170, 255, 0.4);
+  background: rgba(94, 167, 255, 0.1);
+  border: 1px solid rgba(94, 167, 255, 0.4);
 }
 
 .alert.good {
@@ -539,7 +539,7 @@ input[type='date'] {
   position: absolute;
   inset: 0;
   z-index: 5;
-  background: radial-gradient(circle at center, rgba(220, 235, 255, 0.95), rgba(40, 60, 110, 0.98) 55%, #02030a);
+  background: radial-gradient(circle at center, rgba(220, 235, 255, 0.95), rgba(40, 60, 110, 0.98) 55%, #030405);
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.4s ease;
@@ -554,14 +554,14 @@ input[type='date'] {
   position: absolute;
   inset: 0;
   z-index: 50;
-  background: rgba(2, 3, 10, 0.35);
+  background: rgba(3, 4, 5, 0.35);
 }
 
 #tutorial-highlight {
   position: absolute;
   border: 2px solid var(--accent);
   border-radius: 10px;
-  box-shadow: 0 0 0 9999px rgba(2, 3, 10, 0.45), 0 0 18px rgba(127, 220, 255, 0.6);
+  box-shadow: 0 0 0 9999px rgba(3, 4, 5, 0.45), 0 0 18px rgba(94, 167, 255, 0.6);
   transition: all 0.3s ease;
   pointer-events: none;
 }
@@ -573,7 +573,7 @@ input[type='date'] {
   transform: translateX(-50%);
   width: min(440px, calc(100% - 28px));
   padding: 18px;
-  background: rgba(12, 16, 30, 0.95);
+  background: rgba(8, 10, 18, 0.95);
   border: 1px solid var(--accent);
   border-radius: 12px;
   box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
@@ -705,7 +705,7 @@ input[type='date'] {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(2, 3, 10, 0.6);
+  background: rgba(3, 4, 5, 0.6);
   backdrop-filter: blur(3px);
 }
 
@@ -714,7 +714,7 @@ input[type='date'] {
   max-height: calc(100% - 40px);
   overflow-y: auto;
   padding: 18px;
-  background: rgba(12, 16, 30, 0.96);
+  background: rgba(8, 10, 18, 0.96);
   border: 1px solid var(--panel-border);
   border-radius: 14px;
   box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
@@ -815,7 +815,7 @@ input[type='date'] {
   overflow-y: auto;
   padding: 14px 16px;
   background: rgba(10, 18, 34, 0.94);
-  border: 1px solid rgba(127, 220, 255, 0.5);
+  border: 1px solid rgba(94, 167, 255, 0.5);
   border-radius: 12px;
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
 }
@@ -839,7 +839,7 @@ body.lesson-active #graph-panel {
   position: absolute;
   inset: 0;
   z-index: 20;
-  background: #02030a;
+  background: #030405;
 }
 
 #gpu-canvas {
@@ -913,7 +913,7 @@ body.lesson-active #graph-panel {
   flex-direction: column;
   gap: 6px;
   padding: 12px;
-  background: rgba(8, 12, 22, 0.96);
+  background: rgba(8, 10, 18, 0.96);
   border: 1px solid var(--panel-border);
   border-radius: 12px;
 }
@@ -983,7 +983,7 @@ body.embed #topbar {
   margin-top: 8px;
   border-radius: 6px;
   cursor: crosshair;
-  background: #0b1020;
+  background: #080a12;
 }
 
 /* Search everything */
@@ -991,7 +991,7 @@ body.embed #topbar {
   position: fixed;
   inset: 0;
   z-index: 60;
-  background: rgba(2, 4, 12, 0.55);
+  background: rgba(3, 4, 5, 0.55);
   display: flex;
   justify-content: center;
   align-items: flex-start;
@@ -1002,8 +1002,8 @@ body.embed #topbar {
   max-height: calc(100vh - 100px);
   display: flex;
   flex-direction: column;
-  background: rgba(14, 18, 32, 0.97);
-  border: 1px solid rgba(140, 170, 255, 0.25);
+  background: rgba(8, 10, 18, 0.97);
+  border: 1px solid rgba(154, 163, 173, 0.25);
   border-radius: 12px;
   padding: 10px;
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
@@ -1029,14 +1029,14 @@ body.embed #topbar {
 }
 #global-results li.active,
 #global-results li:hover {
-  background: rgba(120, 160, 255, 0.16);
+  background: rgba(94, 167, 255, 0.16);
 }
 #global-results .kind {
   grid-row: span 2;
   font-size: 11px;
   padding: 2px 6px;
   border-radius: 5px;
-  background: rgba(120, 160, 255, 0.18);
+  background: rgba(94, 167, 255, 0.18);
   color: #cfe0ff;
   white-space: nowrap;
 }
@@ -1045,7 +1045,7 @@ body.embed #topbar {
 }
 #global-results .detail {
   font-size: 12px;
-  color: rgba(220, 230, 255, 0.6);
+  color: rgba(245, 247, 250, 0.6);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1070,8 +1070,8 @@ body.embed #topbar {
   justify-content: center;
   gap: 6px 10px;
   align-items: center;
-  background: rgba(10, 14, 26, 0.85);
-  border: 1px solid rgba(140, 170, 255, 0.2);
+  background: rgba(8, 10, 18, 0.85);
+  border: 1px solid rgba(154, 163, 173, 0.2);
   border-radius: 10px;
   padding: 6px 10px;
   font-size: 13px;
@@ -1085,8 +1085,8 @@ body.embed #topbar {
   align-items: center;
 }
 #travel-hud {
-  background: rgba(10, 14, 26, 0.88);
-  border: 1px solid rgba(140, 170, 255, 0.3);
+  background: rgba(8, 10, 18, 0.88);
+  border: 1px solid rgba(154, 163, 173, 0.3);
   border-radius: 10px;
   padding: 6px 12px;
   font-size: 12.5px;
@@ -1110,7 +1110,7 @@ body.embed #topbar {
   transform: translateX(-50%);
   z-index: 5;
   width: min(560px, calc(100vw - 32px));
-  background: rgba(10, 14, 26, 0.97);
+  background: rgba(8, 10, 18, 0.97);
   border: 1px solid rgba(140, 200, 255, 0.3);
   border-radius: 12px;
   padding: 8px 10px;
@@ -1156,7 +1156,7 @@ body.embed #topbar {
 #ship-readout {
   font-size: 12px;
   line-height: 1.45;
-  color: rgba(220, 232, 255, 0.85);
+  color: rgba(245, 247, 250, 0.85);
   font-variant-numeric: tabular-nums;
 }
 
@@ -1191,8 +1191,8 @@ body.photo-mode #photo-bar {
   max-width: calc(100vw - 24px);
   padding: 8px 12px;
   border-radius: 12px;
-  background: rgba(8, 12, 26, 0.82);
-  border: 1px solid rgba(140, 170, 255, 0.18);
+  background: rgba(8, 10, 18, 0.82);
+  border: 1px solid rgba(154, 163, 173, 0.18);
   font-size: 12px;
   opacity: 0.35;
   transition: opacity 0.2s;
@@ -1260,7 +1260,7 @@ body.photo-mode #toasts {
   position: fixed;
   inset: 0;
   z-index: 60;
-  background: rgba(2, 4, 12, 0.55);
+  background: rgba(3, 4, 5, 0.55);
   display: flex;
   justify-content: center;
   align-items: flex-start;
@@ -1273,8 +1273,8 @@ body.photo-mode #toasts {
   width: min(560px, 100%);
   max-height: calc(100vh - 100px);
   overflow-y: auto;
-  background: rgba(14, 18, 32, 0.97);
-  border: 1px solid rgba(140, 170, 255, 0.25);
+  background: rgba(8, 10, 18, 0.97);
+  border: 1px solid rgba(154, 163, 173, 0.25);
   border-radius: 12px;
   padding: 12px 14px;
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
@@ -1301,7 +1301,7 @@ body.photo-mode #toasts {
   font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: rgba(220, 230, 255, 0.6);
+  color: rgba(245, 247, 250, 0.6);
 }
 .places-list li {
   display: grid;
@@ -1314,7 +1314,7 @@ body.photo-mode #toasts {
 }
 .places-list li:hover,
 .places-list li:focus-visible {
-  background: rgba(120, 160, 255, 0.16);
+  background: rgba(94, 167, 255, 0.16);
 }
 .places-list .place-name {
   font-weight: 600;
@@ -1325,7 +1325,7 @@ body.photo-mode #toasts {
 .places-list .place-detail {
   grid-column: 1;
   font-size: 12px;
-  color: rgba(220, 230, 255, 0.6);
+  color: rgba(245, 247, 250, 0.6);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1344,7 +1344,7 @@ body.photo-mode #toasts {
 /* Body "More about" section */
 #body-wiki {
   margin: 8px 0;
-  border-top: 1px solid rgba(140, 170, 255, 0.15);
+  border-top: 1px solid rgba(154, 163, 173, 0.15);
   padding-top: 6px;
 }
 #body-wiki summary {
@@ -1370,7 +1370,7 @@ body.photo-mode #toasts {
   background-size: 100% 100%;
 }
 .esi-parts {
-  color: rgba(220, 230, 255, 0.6);
+  color: rgba(245, 247, 250, 0.6);
 }
 #body-wiki-links a {
   color: #8fc1ff;
@@ -1391,8 +1391,8 @@ body.photo-mode #toasts {
   max-width: calc(100vw - 24px);
   padding: 6px 12px;
   border-radius: 10px;
-  background: rgba(10, 14, 26, 0.78);
-  border: 1px solid rgba(140, 170, 255, 0.2);
+  background: rgba(8, 10, 18, 0.78);
+  border: 1px solid rgba(154, 163, 173, 0.2);
   font-size: 13px;
 }
 body.landed #system-panel,
@@ -1413,9 +1413,9 @@ body.landed #graph-panel {
    ============================================================================= */
 :root {
   --panel: rgba(10, 14, 28, 0.82);
-  --panel-solid: rgba(12, 16, 32, 0.97);
-  --panel-border: rgba(140, 180, 255, 0.16);
-  --accent-soft: rgba(63, 184, 255, 0.16);
+  --panel-solid: rgba(8, 10, 18, 0.97);
+  --panel-border: rgba(154, 163, 173, 0.16);
+  --accent-soft: rgba(255, 42, 26, 0.16);
   --radius: 12px;
   --top-h: 52px;
   --rail-w: 62px;
@@ -1677,7 +1677,7 @@ button.close {
 }
 #dock .toggle.active {
   background: var(--accent-soft);
-  border-color: rgba(127, 220, 255, 0.55);
+  border-color: rgba(94, 167, 255, 0.55);
 }
 
 /* Things that sit above the bottom edge make room for the dock in the Sandbox. */
@@ -1816,4 +1816,176 @@ body[data-screen='system'] #graph-panel {
   .dock-speed input[type='range'] {
     width: 64px;
   }
+}
+
+/* =============================================================================
+   Beyond The Sky brand kit (beyondthesky_new: tailwind.config.js, index.css).
+   Void Black #030405 · Eclipse Red #FF2A1A (primary) · Deep Crimson #C1121F ·
+   Solar Ember #FF6A2A · Cosmic Blue #5EA7FF (accent) · Starlight #F5F7FA ·
+   Orbit Grey #9AA3AD. Space Grotesk headings, Inter body, IBM Plex Mono labels
+   and numbers. Sharp 0.35rem corners.
+   ============================================================================= */
+:root {
+  --bg: #030405;
+  --text: #f5f7fa;
+  --muted: #9aa3ad;
+  --accent: #5ea7ff;
+  --accent-strong: #ff2a1a;
+  --crimson: #c1121f;
+  --ember: #ff6a2a;
+  --danger: #ff2a1a;
+  --panel: rgba(8, 10, 18, 0.86);
+  --panel-solid: rgba(8, 10, 18, 0.97);
+  --panel-border: rgba(154, 163, 173, 0.16);
+  --accent-soft: rgba(255, 42, 26, 0.14);
+  --radius: 6px;
+  --font-display: 'Space Grotesk', Inter, system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, monospace;
+  font-family: Inter, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  accent-color: #ff2a1a;
+}
+::selection {
+  background: #ff2a1a;
+  color: #fff;
+}
+
+/* Type: display font for headings and navigation, mono for labels and numbers. */
+.panel h2,
+.brand,
+.tabs button,
+.rail-label,
+#more-menu .menu-item::after,
+.modal h2,
+.tutorial-card h2 {
+  font-family: var(--font-display);
+}
+.panel h2 {
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.panel h3,
+.panel h4,
+#sim-time,
+#stats,
+#lag,
+.row.slider output,
+.dock-speed output,
+.travel-controls,
+#travel-hud,
+#land-info {
+  font-family: var(--font-mono);
+}
+.panel h3 {
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  color: var(--muted);
+}
+
+/* Corners: the brand's sharp 0.35rem. */
+button,
+select,
+input[type='text'],
+input[type='search'],
+input[type='number'],
+input[type='date'],
+input[type='datetime-local'],
+textarea {
+  border-radius: 5px;
+}
+.panel,
+#rail,
+#more-menu,
+#places-overlay .places-box,
+#search-overlay .search-box,
+#ship-panel,
+#graph-panel,
+#replay-bar,
+#land-hud,
+#photo-bar {
+  border-radius: var(--radius);
+}
+#dock {
+  border-radius: 8px;
+}
+.tabs {
+  border-radius: 8px;
+}
+.tabs button,
+.rail-btn,
+#topbar button.icon,
+#dock button.icon {
+  border-radius: 5px;
+}
+.toast {
+  border-radius: 6px;
+}
+
+/* Primary: Eclipse Red, hover Solar Ember; focus and links: Cosmic Blue. */
+button.primary,
+.tabs button.active {
+  background: #ff2a1a;
+  color: #fff;
+  border-color: transparent;
+}
+button.primary:hover {
+  background: #ff6a2a;
+}
+.tabs button.active {
+  box-shadow: 0 0 18px rgba(255, 42, 26, 0.35);
+}
+button:hover {
+  background: rgba(245, 247, 250, 0.07);
+  border-color: rgba(154, 163, 173, 0.4);
+}
+button.icon.active,
+.segmented button.active,
+.palette button.active,
+#dock .toggle.active {
+  background: rgba(255, 42, 26, 0.16);
+  border-color: rgba(255, 42, 26, 0.6);
+}
+.rail-btn.active {
+  background: rgba(255, 42, 26, 0.12);
+  box-shadow: inset 2px 0 0 #ff2a1a;
+}
+@media (max-width: 760px) {
+  .rail-btn.active {
+    box-shadow: inset 0 2px 0 #ff2a1a;
+  }
+}
+a {
+  color: #5ea7ff;
+}
+
+/* Brand mark: the eclipse-ring infinity logo, with the app name in the display face. */
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+.brand img {
+  width: 26px;
+  height: 26px;
+  display: block;
+}
+.brand .brand-by {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 400;
+  letter-spacing: 0.14em;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+@media (max-width: 1100px) {
+  .brand .brand-by {
+    display: none;
+  }
+}
+
+.facts dd {
+  font-variant-numeric: tabular-nums;
 }

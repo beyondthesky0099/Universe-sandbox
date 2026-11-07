@@ -205,6 +205,17 @@ Plan, in priority order:
 - BodyVisual adds it in applyDetail and updates it only when the planet is more than 14 px across
   and a star is present. Tests: tests/aurora.test.ts.
 
+### T. Places
+- [x] `src/ui/places.ts`:
+  - Place / PlaceView: system, galaxy, cosmos, sky, or a built-in "search" query.
+  - BUILT_IN_PLACES. Two optional fields: `lookAt` (camera behind the followed body, tilted so
+    the other shows above its limb; the sim pauses) and `poleFrame` (offsets in the body's spin
+    frame).
+  - validPlace: places from storage and links are untrusted.
+  - encodePlace / decodePlace: base64url JSON. PlaceStore: localStorage, newest first, max 200.
+- App: capturePlace / goToPlace / renderPlaces / bindPlaces. Key L. `#place=` is read at startup.
+  SkyView.look gives alt, az and fov. Tests: tests/places.test.ts.
+
 ### S. Photo mode
 - [x] `src/ui/photo.ts` PhotoMode:
   - enter/exit toggles `body.photo-mode`, which hides everything but the canvas, labels and

@@ -26,7 +26,7 @@ import { loadVoyagerEncounter, loadVoyagerEncounters } from './sim/voyager';
 import { synthesizeChirp } from './sim/gwChirp';
 import { loadHalley2061, loadHalleyReturn } from './sim/halley';
 import { loadNeighbourhood100, loadStars100 } from './sim/gaia100';
-import { getSolarData, loadSolarData } from './sim/solarSystemData';
+import { getSolarData, loadSolarData, poleScene } from './sim/solarSystemData';
 import { isCompact, kindForMass, mainSequenceLifetime, mergedKind, NEUTRON_MAX_MASS, type Body, type BodyKind } from './sim/body';
 import { isTidallyLocked, nearResonance, orbitalPeriod } from './sim/analysis';
 import { bodyTemperature, climateFor, formatTemperature, isHabitable } from './sim/climate';
@@ -62,6 +62,7 @@ import { burnDirections, planHohmann } from './game/transfer';
 import { LESSONS, type Lesson } from './game/lessons';
 import { SearchIndex, type SearchEntry } from './ui/search';
 import { PhotoMode } from './ui/photo';
+import { BUILT_IN_PLACES, decodePlace, encodePlace, newId, PlaceStore, placeSummary, type Place, type Vec3 } from './ui/places';
 import { autoWarp, formatDuration, formatSpeed as formatTravelSpeed, lorentz, SPEEDS, Trip, tripTimes } from './sim/travel';
 import { setObserverVelocity } from './render/relativity';
 import { activityEntries, clusterEntries, compactEntries, exoplanetEntries, galaxyEntries, nebulaEntries, skyBodyEntries, starEntries, structureEntries } from './ui/searchSources';
@@ -220,6 +221,7 @@ export class App {
   private sceneScale = 10;
   private exoOpen = false;
   private photo!: PhotoMode;
+  private readonly places = new PlaceStore();
 
   constructor() {
     // Ask for the discrete GPU on laptops that have two.
@@ -362,7 +364,13 @@ export class App {
         .then((s) => this.applyScene(s, false))
         .catch((err) => toast(`Couldn't open shared scene: ${(err as Error).message}`));
     }
-    if (!prefs.get('tutorialDone', false) && params.get('tour') !== '0' && !this.embed) setTimeout(() => this.openTutorial(), 1200);
+    const placeCode = params.get('place');
+    if (placeCode) {
+      const place = decodePlace(placeCode);
+      if (place) setTimeout(() => void this.goToPlace(place), 600);
+      else toast("Couldn't read the shared place.");
+    }
+    if (!prefs.get('tutorialDone', false) && params.get('tour') !== '0' && !this.embed && !placeCode) setTimeout(() => this.openTutorial(), 1200);
 
     // setAnimationLoop (rather than requestAnimationFrame) also drives WebXR sessions.
     let last = performance.now();
@@ -539,6 +547,219 @@ export class App {
       toast('Embed code copied: paste it into any web page.');
     } catch {
       window.prompt('Copy this embed code:', html);
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Places: saved viewpoints
+
+  private openPlaces(): void {
+    $('places-overlay').classList.remove('hidden');
+    const input = $<HTMLInputElement>('place-name');
+    input.value = '';
+    input.placeholder = `Name this view (${this.suggestPlaceName()})`;
+    this.renderPlaces();
+  }
+
+  private closePlaces(): void {
+    $('places-overlay').classList.add('hidden');
+    $<HTMLInputElement>('place-name').blur();
+  }
+
+  /** A default name: the followed body, the selected star or galaxy, or the view. */
+  private suggestPlaceName(): string {
+    if (this.view === 'system') {
+      const b = this.system.followId !== undefined ? this.sim.getBody(this.system.followId) : undefined;
+      return b ? `Near ${b.name}` : this.scenario.name;
+    }
+    if (this.view === 'sky') return `Sky from ${$<HTMLInputElement>('sky-lat').value}°, ${$<HTMLInputElement>('sky-lon').value}°`;
+    if (this.view === 'galaxy') {
+      const t = this.galaxy.selected;
+      if (typeof t === 'number' && t >= 0) return this.galaxy.data.names[t];
+      return this.galaxyOrigin;
+    }
+    const i = this.cosmos.selected;
+    return i >= 0 ? `Near ${this.cosmos.local[i]?.name ?? 'a galaxy'}` : 'The Universe';
+  }
+
+  /** The current viewpoint as a place. */
+  private capturePlace(name: string): Place {
+    const v3 = (v: THREE.Vector3): Vec3 => [v.x, v.y, v.z];
+    const base = { id: newId(), name, created: Date.now() };
+    if (this.view === 'sky') {
+      const look = this.sky.look;
+      return { ...base, fov: look.fov, view: { kind: 'sky', date: this.skyDate.toISOString(), lat: Number($<HTMLInputElement>('sky-lat').value), lon: Number($<HTMLInputElement>('sky-lon').value), alt: look.alt, az: look.az } };
+    }
+    if (this.view === 'galaxy') return { ...base, view: { kind: 'galaxy', seed: this.galaxySeed, origin: this.galaxyOrigin, camera: v3(this.galaxy.camera.position), target: v3(this.galaxy.controls.target) } };
+    if (this.view === 'cosmos') return { ...base, view: { kind: 'cosmos', camera: v3(this.cosmos.camera.position), target: v3(this.cosmos.controls.target) } };
+    const cam = this.system.camera.position;
+    const target = this.system.controls.target;
+    const followed = this.system.followId !== undefined ? this.sim.getBody(this.system.followId) : undefined;
+    if (followed) {
+      // Relative to the body, in its radii: still right after it has moved on its orbit.
+      const c = new THREE.Vector3(followed.x, followed.y, followed.z);
+      const rel = (v: THREE.Vector3) => v3(v.clone().sub(c).divideScalar(followed.radius));
+      return { ...base, view: { kind: 'system', scenario: this.scenario.name, presetId: this.scenario.presetId, follow: followed.name, camera: rel(cam), target: rel(target) } };
+    }
+    return { ...base, view: { kind: 'system', scenario: this.scenario.name, presetId: this.scenario.presetId, camera: v3(cam), target: v3(target) } };
+  }
+
+  private async goToPlace(p: Place): Promise<void> {
+    this.closePlaces();
+    const v = p.view;
+    const set = (camera: THREE.PerspectiveCamera, controls: { target: THREE.Vector3; update(): void }, c: Vec3, t: Vec3) => {
+      controls.target.set(...t);
+      camera.position.set(...c);
+      controls.update();
+    };
+    switch (v.kind) {
+      case 'search': {
+        const index = await this.buildSearchIndex();
+        const top = index.search(v.query, 1)[0];
+        if (top) await this.goToSearchResult(top);
+        else toast(`Couldn't find ${v.query}.`);
+        return;
+      }
+      case 'sky': {
+        await this.openSky();
+        this.skyDate = new Date(v.date);
+        this.setSkyTimeInput();
+        this.setSkyPlace(v.lat, v.lon);
+        this.sky.lookAt(v.alt, v.az);
+        if (p.fov) this.sky.setFov(p.fov);
+        this.sky.setTime(this.skyDate);
+        break;
+      }
+      case 'galaxy': {
+        if (!this.galaxyBuilt || this.galaxySeed !== v.seed) this.buildGalaxy(v.seed);
+        if (this.view !== 'galaxy') await this.switchView('galaxy');
+        this.galaxy.cancelFlight();
+        set(this.galaxy.camera, this.galaxy.controls, v.camera, v.target);
+        break;
+      }
+      case 'cosmos': {
+        if (this.view !== 'cosmos') await this.openCosmos(this.view === 'galaxy');
+        this.cosmos.cancelFlight();
+        set(this.cosmos.camera, this.cosmos.controls, v.camera, v.target);
+        break;
+      }
+      case 'system': {
+        if (this.view !== 'system') await this.switchToSandbox();
+        const preset = v.presetId ? PRESETS.find((q) => q.id === v.presetId) : undefined;
+        if (preset && this.scenario.presetId !== preset.id) this.loadScenario({ name: preset.name, load: () => preset.load(this.sim), presetId: preset.id });
+        else if (!preset && this.scenario.name !== v.scenario) toast(`This place was saved in “${v.scenario}”, which isn't loaded: showing the same viewpoint here.`);
+        this.system.stopCameraAnimation();
+        const body = v.follow ? this.sim.bodies.find((b) => b.name === v.follow) : undefined;
+        if (v.follow && !body) {
+          toast(`${v.follow} isn't in this scene any more.`);
+          break;
+        }
+        if (body) {
+          const c = new THREE.Vector3(body.x, body.y, body.z);
+          const offset = new THREE.Vector3(...v.camera);
+          const solar = getSolarData()?.byName.get(body.name);
+          const pole = v.poleFrame && solar ? poleScene(solar) : undefined;
+          if (pole) offset.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(...pole)));
+          let camera = offset.multiplyScalar(body.radius).add(c);
+          const other = v.lookAt ? this.sim.bodies.find((b) => b.name === v.lookAt) : undefined;
+          if (other) {
+            // Behind the body, looking past it at the other one, raised so the other one shows
+            // just above its limb.
+            const dir = c.clone().sub(new THREE.Vector3(other.x, other.y, other.z)).normalize();
+            const up = new THREE.Vector3(0, 1, 0).projectOnPlane(dir).normalize();
+            const distance = v.distance ?? 6;
+            const tilt = Math.asin(1 / distance) * 1.6;
+            camera = c.clone().addScaledVector(dir.multiplyScalar(Math.cos(tilt)).addScaledVector(up, Math.sin(tilt)), body.radius * distance);
+          }
+          const target = new THREE.Vector3(...v.target).multiplyScalar(body.radius).add(c);
+          this.system.controls.target.copy(target);
+          this.system.camera.position.copy(camera);
+          this.system.controls.update();
+          // Hold still: the view lines up with the other body only for a moment.
+          if (other && this.running) {
+            this.setRunning(false);
+            toast('Paused to hold the view: press Space to carry on.');
+          }
+          this.selectBody(body);
+          this.system.follow(body.id, camera.distanceTo(target));
+        } else {
+          this.system.follow(undefined);
+          set(this.system.camera, this.system.controls, v.camera, v.target);
+        }
+        break;
+      }
+    }
+    if (p.fov && this.photo.active && v.kind !== 'sky') {
+      this.photo.setFov(p.fov);
+      $<HTMLInputElement>('photo-fov').value = String(Math.round(p.fov));
+      $('photo-fov-val').textContent = `${Math.round(p.fov)}°`;
+    }
+    toast(`📍 ${p.name}`);
+  }
+
+  private renderPlaces(): void {
+    const item = (p: Place, own: boolean) =>
+      `<li tabindex="0" data-id="${escapeHtml(p.id)}"><span class="place-name">${escapeHtml(p.name)}</span><span class="place-detail">${escapeHtml(placeSummary(p))}</span>` +
+      (own ? `<span class="place-actions"><button data-act="link" title="Copy a link to this place">🔗</button><button data-act="rename" title="Rename">✎</button><button data-act="delete" title="Delete">🗑</button></span>` : '') +
+      '</li>';
+    const mine = this.places.places;
+    $('place-list').innerHTML = mine.map((p) => item(p, true)).join('');
+    $('place-empty').classList.toggle('hidden', mine.length > 0);
+    $('place-builtins').innerHTML = BUILT_IN_PLACES.map((p) => item(p, false)).join('');
+  }
+
+  private async copyPlaceLink(p: Place): Promise<void> {
+    const url = `${location.origin}${location.pathname}#tour=0&place=${encodePlace(p)}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      toast('Link copied: it opens this view.');
+    } catch {
+      window.prompt('Copy this link:', url);
+    }
+  }
+
+  private bindPlaces(): void {
+    $('btn-places').addEventListener('click', () => this.openPlaces());
+    $('places-close').addEventListener('click', () => this.closePlaces());
+    $('places-overlay').addEventListener('click', (e) => {
+      if (e.target === e.currentTarget) this.closePlaces();
+    });
+    $('place-save').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const input = $<HTMLInputElement>('place-name');
+      const place = this.capturePlace(input.value.trim() || this.suggestPlaceName());
+      this.places.add(place);
+      input.value = '';
+      this.renderPlaces();
+      toast(`Saved “${place.name}”.`);
+    });
+    const onList = (e: Event, own: boolean) => {
+      const li = (e.target as HTMLElement).closest('li[data-id]') as HTMLElement | null;
+      if (!li) return;
+      const id = li.dataset.id!;
+      const place = (own ? this.places.places : BUILT_IN_PLACES).find((p) => p.id === id);
+      if (!place) return;
+      const act = (e.target as HTMLElement).closest('button')?.dataset.act;
+      if (act === 'delete') {
+        this.places.remove(id);
+        this.renderPlaces();
+      } else if (act === 'rename') {
+        const name = window.prompt('New name:', place.name);
+        if (name) {
+          this.places.rename(id, name);
+          this.renderPlaces();
+        }
+      } else if (act === 'link') {
+        void this.copyPlaceLink(place);
+      } else {
+        void this.goToPlace(place);
+      }
+    };
+    for (const [id, own] of [['place-list', true], ['place-builtins', false]] as const) {
+      $(id).addEventListener('click', (e) => onList(e, own));
+      $(id).addEventListener('keydown', (e) => {
+        if ((e as KeyboardEvent).key === 'Enter' && (e.target as HTMLElement).tagName === 'LI') onList(e, own);
+      });
     }
   }
 
@@ -3631,6 +3852,15 @@ export class App {
         this.togglePhoto();
         return;
       }
+      if (key === 'l') {
+        if ($('places-overlay').classList.contains('hidden')) this.openPlaces();
+        else this.closePlaces();
+        return;
+      }
+      if (key === 'escape' && !$('places-overlay').classList.contains('hidden')) {
+        this.closePlaces();
+        return;
+      }
       if (this.photo.active && key === 'escape') {
         this.togglePhoto();
         return;
@@ -4137,6 +4367,7 @@ export class App {
     $('btn-learn').addEventListener('click', () => this.openLessonMenu());
     $('btn-search').addEventListener('click', () => this.openSearch());
     this.bindPhoto();
+    this.bindPlaces();
     $('btn-ship').addEventListener('click', () => this.spawnShip());
     $('ship-engine').innerHTML = ENGINES.map((e) => `<option value="${e.id}">${escapeHtml(e.label)}</option>`).join('');
     $('ship-engine').addEventListener('change', () => {

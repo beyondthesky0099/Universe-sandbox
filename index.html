@@ -18,6 +18,7 @@
         <button id="btn-menu" class="icon only-mobile" title="Show / hide panels" aria-label="Toggle panels">☰</button>
         <div class="brand">✦ <span>Astrarium</span></div>
         <button id="btn-search" class="icon" title="Search everything (/ or Ctrl+K)" aria-label="Search">🔍</button>
+        <button id="btn-places" class="icon" title="Places (L): save this view, go back to it, or share it" aria-label="Places">📍</button>
         <button id="btn-photo" class="icon" title="Photo mode (P): hide the interface, frame and save a picture" aria-label="Photo mode">📷</button>
         <nav class="tabs" role="tablist">
           <button id="tab-cosmos" role="tab" title="Real galaxies beyond the Milky Way">Universe</button>
@@ -414,6 +415,24 @@
           <input id="global-search" type="search" placeholder="Search stars, nebulae, galaxies, planets, scenarios…" spellcheck="false" autocomplete="off" />
           <ul id="global-results" class="list"></ul>
           <p id="global-search-status" class="muted small"></p>
+        </div>
+      </div>
+
+      <div id="places-overlay" class="hidden" role="dialog" aria-label="Places">
+        <div class="places-box">
+          <div class="places-head">
+            <h3>📍 Places</h3>
+            <button id="places-close" class="icon" title="Close (Esc)" aria-label="Close">✕</button>
+          </div>
+          <form id="place-save" class="places-save">
+            <input id="place-name" type="text" maxlength="120" placeholder="Name this view" autocomplete="off" />
+            <button type="submit" class="primary">Save this view</button>
+          </form>
+          <h4>Your places</h4>
+          <ul id="place-list" class="list places-list"></ul>
+          <p id="place-empty" class="muted small">Nothing saved yet. Save a view to come back to it later or share it as a link.</p>
+          <h4>Famous places</h4>
+          <ul id="place-builtins" class="list places-list"></ul>
         </div>
       </div>
 

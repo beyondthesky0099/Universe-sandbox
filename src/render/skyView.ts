@@ -421,6 +421,11 @@ export class SkyView {
     this.sizeBodies();
   }
 
+  /** Where the camera looks: altitude and azimuth (degrees, azimuth 0–360 from north) and field of view. */
+  get look(): { alt: number; az: number; fov: number } {
+    return { alt: this.pitch / DEG, az: (((-this.yaw / DEG) % 360) + 360) % 360, fov: this.camera.fov };
+  }
+
   /** Point the camera at an altitude/azimuth (degrees). */
   lookAt(alt: number, az: number): void {
     this.anim = undefined;

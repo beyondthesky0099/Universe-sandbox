@@ -451,6 +451,19 @@ Planets with a magnetic field and air glow around their magnetic poles (`src/ren
 - **Procedural worlds:** gas giants, and rocky worlds with air from 0.3 Earth masses up, get a
   modelled aurora.
 
+## Places
+
+Press **L** or 📍 to save the current viewpoint in any view and come back to it later:
+- **Sandbox:** the scenario and the camera. When you're following a body, the camera is stored
+  relative to it, in its radii, so the place still works after it has moved on its orbit or the
+  real-size toggle has changed.
+- **Galaxy Map and Universe:** the camera and its target.
+- **Sky:** the date, your place on Earth and where you're looking.
+- Each place can be renamed, deleted, or copied as a link (`#place=…`) that opens the same view
+  for anyone.
+- A few famous places are built in: Earth beyond the Moon, Saturn's rings from above, Jupiter and
+  its moons, the Orion Nebula, the Pleiades, the Crab Nebula and the Andromeda Galaxy.
+
 ## Photo mode
 
 Press **P** or 📷 (next to search) to hide the interface and frame a picture in any view:

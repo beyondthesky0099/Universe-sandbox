@@ -92,6 +92,16 @@ export class LayoutUI {
       sync();
     });
     $('body-close').addEventListener('click', () => this.app.selectBody(undefined));
+    // Travel controls (Galaxy Map, Universe): folded into a small 🚀 button until wanted.
+    const travel = $('travel-bar');
+    const setTravel = (open: boolean) => {
+      travel.classList.toggle('open', open);
+      $('travel-toggle').setAttribute('aria-expanded', String(open));
+      prefs.set('travelOpen', open);
+    };
+    setTravel(prefs.get('travelOpen', false));
+    $('travel-toggle').addEventListener('click', () => setTravel(true));
+    $('travel-close').addEventListener('click', () => setTravel(false));
     // The old phone "panels" button (and its hidden-panels state) is replaced by the rail.
     $('btn-menu').classList.add('hidden');
     document.body.classList.remove('panels-hidden');

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { orbitPath } from '../sim/orbits';
 import { aimSun, atmosphereFor, insideAware, scatteringMaterial, shellScale } from './atmosphere';
 import { auroraActivity, auroraFor, auroraMesh, updateAurora } from './aurora';
 import { accretionDiskMesh, blackHoleView, diskAxis, updateAccretionDisk } from './accretionDisk';
@@ -516,7 +517,44 @@ export class BodyVisual {
    * Append the body's position to its trail if it has moved far enough. With `ref`, the trail
    * is stored relative to that body and drawn around its current position.
    */
+  /** Set while the trail shows the body's whole orbit around this parent (see orbitTrail). */
+  orbitParentId?: number;
+
+  /**
+   * At high speed a body goes a long way round between frames, and a trail sampled once a frame
+   * becomes straight chords (a star polygon). Then show its orbit instead: the conic it is
+   * following around `parent` (two-body, μ = G(M + m)), drawn to end at the body so the trail's
+   * fade still runs from tail to head.
+   */
+  orbitTrail(body: Body, parent: Body, mu: number): void {
+    const path = orbitPath(mu, body.x - parent.x, body.y - parent.y, body.z - parent.z, body.vx - parent.vx, body.vy - parent.vy, body.vz - parent.vz, this.trailLength);
+    if (!path) return;
+    const rx = body.x - parent.x, ry = body.y - parent.y, rz = body.z - parent.z;
+    const n = this.trailLength;
+    let best = 0, bestD = Infinity;
+    for (let i = 0; i < n; i++) {
+      const d = (path[i * 3] - rx) ** 2 + (path[i * 3 + 1] - ry) ** 2 + (path[i * 3 + 2] - rz) ** 2;
+      if (d < bestD) {
+        bestD = d;
+        best = i;
+      }
+    }
+    const p = this.trailPos;
+    for (let k = 0; k < n; k++) {
+      const src = (best + 1 + k) % n;
+      p[k * 3] = path[src * 3];
+      p[k * 3 + 1] = path[src * 3 + 1];
+      p[k * 3 + 2] = path[src * 3 + 2];
+    }
+    this.trail.position.set(parent.x, parent.y, parent.z);
+    (this.trail.geometry.attributes.position as THREE.BufferAttribute).needsUpdate = true;
+    this.orbitParentId = parent.id;
+    // Back at normal speed, the ordinary trail starts afresh from wherever the body is.
+    this.trailFilled = false;
+  }
+
   pushTrail(body: Body, spacing: number, ref?: Body): void {
+    this.orbitParentId = undefined;
     const refId = ref?.id;
     if (refId !== this.trailRef) {
       this.trailRef = refId;

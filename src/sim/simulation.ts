@@ -864,6 +864,20 @@ export class Simulation {
     this.applyMass(body, mass, kind);
   }
 
+  /**
+   * A fragment's name: pieces of pieces keep the original body's name and take the next free
+   * number ("Theia fragment 7"), instead of piling up "Theia fragment 4 fragment 5 fragment 2".
+   */
+  fragmentName(parentName: string, pending: readonly Body[] = []): string {
+    const root = parentName.replace(/( fragment \d+)+$/, '');
+    const taken = new Set<number>();
+    const prefix = `${root} fragment `;
+    for (const b of [...this.bodies, ...pending]) if (b.name.startsWith(prefix)) taken.add(Number(b.name.slice(prefix.length)));
+    let n = 1;
+    while (taken.has(n)) n++;
+    return `${prefix}${n}`;
+  }
+
   /** Fast impact between rocky bodies: a largest remnant plus several massive fragments. */
   private shatterPair(big: Body, small: Body, relV: number, vEsc: number): Body[] | undefined {
     const M = big.mass + small.mass;
@@ -911,7 +925,7 @@ export class Simulation {
       const ty = Math.cos(ang + Math.PI / 2) * uy + Math.sin(ang + Math.PI / 2) * wy;
       const tz = Math.cos(ang + Math.PI / 2) * uz + Math.sin(ang + Math.PI / 2) * wz;
       const f = createBody({
-        name: `${small.name} fragment ${i + 1}`,
+        name: this.fragmentName(small.name, fragments),
         kind: 'rocky',
         mass: mFrag,
         color: i % 2 ? small.color : big.color,

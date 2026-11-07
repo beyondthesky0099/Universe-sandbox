@@ -205,6 +205,16 @@ Plan, in priority order:
 - BodyVisual adds it in applyDetail and updates it only when the planet is more than 14 px across
   and a star is present. Tests: tests/aurora.test.ts.
 
+### AE. Fixes from phone testing
+- [x] Travel controls fold into a 🚀 button (#travel-toggle and #travel-close; the state is
+  kept in prefs 'travelOpen').
+- Trails at high speed: when a frame covers more than 1/40 of a body's period around its parent
+  (SystemView.fastOrbit, parents cached for 30 frames), BodyVisual.orbitTrail draws the two-body
+  conic (orbitPath), rotated to end at the body. Before, chords made star polygons.
+- Fragment names: Simulation.fragmentName numbers pieces of pieces from the root name ("Theia
+  fragment 7"). Tested in tests/physics-features.test.ts.
+- Phone: in the Sandbox the inspector sheet sits above the dock.
+
 ### AD. Animated wordmark and label declutter
 - [x] `src/ui/wordmark.ts`: the brand site's BrandWordmark.jsx ported to plain DOM.
   - DEFS and ARTWORK are copied verbatim (by script) from the JSX; the motion is the same.

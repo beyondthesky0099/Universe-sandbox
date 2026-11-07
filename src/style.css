@@ -2064,3 +2064,47 @@ a {
   text-transform: uppercase;
   color: var(--muted);
 }
+
+/* Travel controls fold into a small button until wanted. */
+#travel-bar:not(.open) .travel-controls,
+#travel-bar.open #travel-toggle {
+  display: none;
+}
+.travel-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 999px;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  font-family: var(--font-display);
+}
+#travel-bar .travel-controls {
+  position: relative;
+}
+@media (max-width: 760px) {
+  #travel-bar {
+    left: auto;
+    right: 10px;
+    transform: none;
+    align-items: flex-end;
+  }
+  #travel-bar.open {
+    left: 8px;
+    right: 8px;
+    align-items: stretch;
+  }
+  .travel-toggle span {
+    display: none;
+  }
+}
+@media (max-width: 760px) {
+  /* The inspector sheet sits above the dock in the Sandbox. */
+  body[data-screen='system'] .panel.right {
+    bottom: calc(var(--rail-h) + var(--dock-h) + 14px) !important;
+    max-height: 44vh;
+  }
+}

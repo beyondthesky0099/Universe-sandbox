@@ -224,3 +224,16 @@ describe('orbit path', () => {
     expect(orbitPath(39.48, 1, 0, 0, 0, 0, 20)).toBeNull();
   });
 });
+
+describe('fragment names', () => {
+  it('numbers pieces of pieces from the original body instead of nesting names', async () => {
+    const { Simulation } = await import('../src/sim/simulation');
+    const sim = new Simulation();
+    sim.addBody({ name: 'Theia fragment 1', mass: 1e-7 });
+    sim.addBody({ name: 'Theia fragment 2', mass: 1e-7 });
+    expect(sim.fragmentName('Theia')).toBe('Theia fragment 3');
+    expect(sim.fragmentName('Theia fragment 4 fragment 5')).toBe('Theia fragment 3');
+    expect(sim.fragmentName('Theia fragment 2', [{ name: 'Theia fragment 3' } as never])).toBe('Theia fragment 4');
+    expect(sim.fragmentName('Proto-Earth')).toBe('Proto-Earth fragment 1');
+  });
+});

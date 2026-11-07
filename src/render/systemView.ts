@@ -522,6 +522,32 @@ export class SystemView {
     return this.visuals.get(id)?.planetMesh;
   }
 
+  private lastSimTime = 0;
+  /** Parent of each body (id → id), refreshed every 30 frames: parentOf scans every body. */
+  private trailParents = new Map<number, number | null>();
+
+  /**
+   * The orbit a body is moving fast along: when this frame covered more than 1/40 of its period,
+   * a frame-by-frame trail would be straight chords, so the trail shows the orbit itself.
+   */
+  private fastOrbit(b: Body, simDt: number): { parent: Body; mu: number } | undefined {
+    let pid = this.trailParents.get(b.id);
+    if (pid === undefined) {
+      pid = this.sim.parentOf(b)?.id ?? null;
+      this.trailParents.set(b.id, pid);
+    }
+    const parent = pid !== null ? this.sim.getBody(pid) : undefined;
+    if (!parent) return undefined;
+    const mu = this.sim.effectiveG * (parent.mass + b.mass);
+    const r = Math.hypot(b.x - parent.x, b.y - parent.y, b.z - parent.z);
+    const v2 = (b.vx - parent.vx) ** 2 + (b.vy - parent.vy) ** 2 + (b.vz - parent.vz) ** 2;
+    const energy = v2 / 2 - mu / r;
+    if (!(mu > 0) || energy >= 0) return undefined;
+    const a = -mu / (2 * energy);
+    const period = 2 * Math.PI * Math.sqrt((a * a * a) / mu);
+    return simDt > period / 40 ? { parent, mu } : undefined;
+  }
+
   /** The body being stood on, if any. */
   get landedOn(): Body | undefined {
     return this.landedId !== undefined ? this.sim.getBody(this.landedId) : undefined;
@@ -610,6 +636,10 @@ export class SystemView {
 
     const tmp = new THREE.Vector3();
     const spacing = camDist * 0.004;
+    // Simulated time since the last frame (for orbit trails at high speed).
+    const simDt = Math.max(0, this.sim.time - this.lastSimTime);
+    this.lastSimTime = this.sim.time;
+    if (this.frame % 30 === 0) this.trailParents.clear();
     let detailCandidate: { v: BodyVisual; b: Body; px: number } | undefined;
     // The Sun (the heaviest star) sets comet tail directions; only in AU-scale scenes.
     let sun: Body | undefined;
@@ -629,8 +659,13 @@ export class SystemView {
         else this.locks.delete(b.id);
       }
       if (this.trailsEnabled) {
-        if (simRunning) v.pushTrail(b, spacing, ref);
-        else v.placeTrail(ref);
+        const orbit = simRunning && simDt > 0 ? this.fastOrbit(b, simDt) : undefined;
+        if (orbit) v.orbitTrail(b, orbit.parent, orbit.mu);
+        else if (simRunning) v.pushTrail(b, spacing, ref);
+        else if (v.orbitParentId !== undefined) {
+          const p = this.sim.getBody(v.orbitParentId);
+          if (p) v.trail.position.set(p.x, p.y, p.z);
+        } else v.placeTrail(ref);
       }
       v.trail.visible = this.trailsEnabled && !this.lander.active;
       v.label.visible = this.labelsEnabled && this.shouldLabel(b);

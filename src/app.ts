@@ -563,7 +563,7 @@ export class App {
             }
           }
         }
-        toast(e.message, e.type === 'collapse' || e.type === 'supernova' ? 'collapse' : e.type === 'ignite' ? 'ignite' : '');
+        toast(e.message, e.type === 'collapse' || e.type === 'supernova' ? 'collapse' : e.type === 'ignite' ? 'ignite' : '', e.title);
       }
     }
   }

@@ -409,6 +409,7 @@
         </div>
       </div>
       <div id="travel-bar" class="hidden">
+        <button id="travel-toggle" class="travel-toggle" title="Travel at any speed, up to (and past) the speed of light" aria-expanded="false">🚀 <span>Travel</span></button>
         <div class="travel-controls">
           <label title="How fast you travel: real speeds, fractions of light speed, and (not physically possible) faster than light">🚀 <select id="travel-speed"></select></label>
           <label title="How much faster than real time the trip plays"><select id="travel-warp">
@@ -421,6 +422,7 @@
           </select></label>
           <label class="check" title="Clicking a name, double-clicking, or picking a search result travels there at this speed instead of flying in a moment"><input type="checkbox" id="travel-on" /> Travel at this speed</label>
           <button id="travel-cruise" title="Travel straight ahead at this speed">Cruise ▶</button>
+          <button id="travel-close" class="icon close" title="Hide travel controls" aria-label="Hide travel controls">✕</button>
         </div>
         <div id="travel-hud" class="hidden"></div>
       </div>

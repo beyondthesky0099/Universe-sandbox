@@ -115,5 +115,10 @@ describe('how a star dies depends on its mass and metallicity', () => {
     expect(poor.kind).toBe('blackhole');
     expect(sim.events.some((e) => /Type Ib/.test(e.message) && /Wolf–Rayet/.test(e.message))).toBe(true);
     expect(sim.events.some((e) => /failed supernova/.test(e.message))).toBe(true);
+    // Each also has a short headline for notifications.
+    const titles = sim.events.map((e) => e.title ?? '');
+    expect(titles).toContain('💥 Rich: Type Ib supernova → a 1.8 M☉ neutron star');
+    expect(titles.some((t) => /^🕳 Poor collapsed into a .* black hole \(failed supernova\)$/.test(t))).toBe(true);
+    for (const t of titles) expect(t.length).toBeLessThan(70);
   });
 });

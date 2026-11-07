@@ -26,6 +26,7 @@ import { loadVoyagerEncounter, loadVoyagerEncounters } from './sim/voyager';
 import { synthesizeChirp } from './sim/gwChirp';
 import { loadHalley2061, loadHalleyReturn } from './sim/halley';
 import { loadNeighbourhood100, loadStars100 } from './sim/gaia100';
+import { gaiaPoints, loadGaiaBright } from './sim/gaiaBright';
 import { getSolarData, loadSolarData, poleScene } from './sim/solarSystemData';
 import { esiLabel, exoplanetArchiveUrl, planetFacts, wikipediaUrl } from './sim/planetFacts';
 import { horizonRadius, iscoRadius, radiativeEfficiency } from './sim/kerr';
@@ -1792,6 +1793,15 @@ export class App {
     );
   }
 
+  /** Real stars from Gaia DR3 around the Sun, at their measured distances (Milky Way only). */
+  private async showGaiaOnMap(seed: number): Promise<void> {
+    const stars = await loadGaiaBright().catch(() => undefined);
+    if (!stars || this.galaxySeed !== seed) return;
+    this.galaxy.setGaiaStars(gaiaPoints(stars, galacticToMap, 0.012));
+    this.galaxy.setGaiaVisible($<HTMLInputElement>('opt-gaia-stars').checked);
+    $('galaxy-info').textContent += ` Around the Sun, ${stars.count.toLocaleString('en-US')} real stars from Gaia DR3 (every star brighter than magnitude 8 with a good parallax) sit at their measured distances.`;
+  }
+
   /** Real open and globular star clusters at their measured distances (Milky Way only). */
   private async showClustersOnMap(seed: number): Promise<void> {
     const all = await loadClusters().catch(() => undefined);
@@ -1958,6 +1968,7 @@ export class App {
       void this.showCompactObjectsOnMap(seed);
       void this.showNebulaeOnMap(seed);
       void this.showClustersOnMap(seed);
+      void this.showGaiaOnMap(seed);
     }
     $<HTMLInputElement>('galaxy-seed').value = String(seed);
     $('star-panel').classList.add('hidden');
@@ -4065,6 +4076,7 @@ export class App {
     $<HTMLInputElement>('opt-cosmic-web').addEventListener('change', (e) => this.cosmos.setWebVisible((e.target as HTMLInputElement).checked));
     $<HTMLInputElement>('opt-real-nebulae').addEventListener('change', (e) => this.galaxy.setRealLayerVisible('nebulae', (e.target as HTMLInputElement).checked));
     $<HTMLInputElement>('opt-real-clusters').addEventListener('change', (e) => this.galaxy.setRealLayerVisible('clusters', (e.target as HTMLInputElement).checked));
+    $<HTMLInputElement>('opt-gaia-stars').addEventListener('change', (e) => this.galaxy.setGaiaVisible((e.target as HTMLInputElement).checked));
     $<HTMLInputElement>('opt-cmb').addEventListener('change', (e) => this.cosmos.setCmbVisible((e.target as HTMLInputElement).checked));
     $('cosmos-search').addEventListener('input', () => this.renderCosmosSearch());
     $('cosmos-results').addEventListener('click', (e) => {

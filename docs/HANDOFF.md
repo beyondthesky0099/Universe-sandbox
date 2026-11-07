@@ -205,6 +205,15 @@ Plan, in priority order:
 - BodyVisual adds it in applyDetail and updates it only when the planet is more than 14 px across
   and a star is present. Tests: tests/aurora.test.ts.
 
+### W. More Gaia stars
+- [x] `scripts/build-gaia-bright.mjs` writes public/data/gaia-bright.bin (602 KB).
+  - Query: Gaia DR3, G < 8, parallax_over_error > 5; MAXREC raised past the 50,000 default.
+  - Binary struct of arrays: l, b, d (pc), Teff, G.
+- `src/sim/gaiaBright.ts`: decode/encode, loadGaiaBright, gaiaPoints.
+- Wiring: GalaxyView.setGaiaStars / setGaiaVisible, App.showGaiaOnMap (Milky Way only), checkbox
+  opt-gaia-stars.
+- Tests: tests/gaia-bright.test.ts, including the Pleiades at l 166.6°, b −23.5°, ~135 pc.
+
 ### V. Spinning (Kerr) black holes
 - [x] `src/sim/kerr.ts`:
   - horizonRadius, iscoRadius (BPT 1972), photonOrbits, radiativeEfficiency.

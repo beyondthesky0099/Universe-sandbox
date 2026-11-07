@@ -451,6 +451,17 @@ Planets with a magnetic field and air glow around their magnetic poles (`src/ren
 - **Procedural worlds:** gas giants, and rocky worlds with air from 0.3 Earth masses up, get a
   modelled aurora.
 
+## Real stars around the Sun (Gaia)
+
+The Galaxy Map shows 61,673 real stars around the Sun from ESA's Gaia DR3: every star brighter
+than magnitude 8 whose parallax is measured to 20% or better.
+- **Where and what:** each star sits at its measured distance (after Gaia's parallax zero-point),
+  in its real colour, sized by its luminosity.
+- **What you can see:** zoom in on "You are here" to find the real neighbourhood: the Pleiades and
+  Hyades, the blue giants of Orion and Scorpius–Centaurus, and the Gould Belt. The procedural
+  stars stand in for the billions Gaia can't show at this brightness.
+- Turn them off with "Real stars (Gaia)" in the galaxy panel.
+
 ## Spinning black holes
 
 Black holes have a spin, a* from 0 to 0.998, the most that gas can spin one up to (Thorne 1974).
@@ -735,6 +746,9 @@ push and pull request.
   SkyView (rebuild with `node scripts/build-nebula-images.mjs`).
 - Stars within 100 pc: ESA Gaia DR3 via the Gaia archive (rebuild with `node scripts/build-stars-100pc.mjs`),
   with names and the brightest stars from HYG v4.1.
+- Real stars on the Galaxy Map: every star brighter than G = 8 with a parallax good to 20% (61,673
+  stars), ESA Gaia DR3 (Gaia Collaboration, Vallenari et al. 2023) via the Gaia archive, with the
+  Lindegren et al. (2021) parallax zero-point (rebuild with `node scripts/build-gaia-bright.mjs`).
 - Star clusters: Hunt & Reffert 2023 ("Improving the open cluster census. II.", A&A 673, A114),
   based on ESA Gaia DR3, and the Harris catalogue of Milky Way globular clusters (VII/202), via
   VizieR (CDS); familiar names resolved with SIMBAD (rebuild with `node scripts/build-clusters.mjs`).

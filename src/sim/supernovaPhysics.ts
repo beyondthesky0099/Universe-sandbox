@@ -42,6 +42,30 @@ export interface Explosion {
   progenitorRadius: number;
   /** Ambient interstellar density (hydrogen atoms per cm³). */
   ismDensity: number;
+  /** Core-collapse subtype from the progenitor (stellarFate.ts): II-P, Ib, PISN, … */
+  subtype?: string;
+  /**
+   * Hydrogen envelope (M☉) that the shock heats and that glows on the Type II plateau as it
+   * recombines. Without one (Ib/c, IIb, pair instability) the light is ⁵⁶Ni diffusing out (Arnett).
+   * Defaults to the whole ejecta for Type II.
+   */
+  envelopeMass?: number;
+  /** Extra light from ejecta running into earlier shells (pulsational pair instability). */
+  interaction?: { luminosity: number; days: number };
+}
+
+/** Hydrogen envelope (M☉) for the plateau. */
+function envelopeOf(e: Explosion): number {
+  return e.type === 'Ia' ? 0 : e.envelopeMass ?? e.ejectaMass;
+}
+
+/**
+ * Whether the light curve has a hydrogen-recombination plateau (≥ 0.5 M☉ of envelope). Pair-
+ * instability supernovae are powered by their huge ⁵⁶Ni mass (pulsational ones by colliding
+ * shells), so they follow Arnett's curve even with hydrogen left.
+ */
+export function hasPlateau(e: Explosion): boolean {
+  return envelopeOf(e) >= 0.5 && e.subtype !== 'PISN' && e.subtype !== 'PPISN';
 }
 
 /**
@@ -96,11 +120,18 @@ export function ejectaLayers(e: Explosion): EjectaLayer[] {
     const silicon = Math.min(0.5, Math.max(0, e.ejectaMass - iron) * 0.7);
     return [layer('iron', iron), layer('silicon', silicon), layer('carbon', Math.max(0, e.ejectaMass - iron - silicon))];
   }
-  const iron = e.nickelMass + 0.05;
-  const silicon = 0.15;
-  const oxygen = 0.1 * e.ejectaMass;
-  const helium = 0.12 * e.ejectaMass;
-  return [layer('iron', iron), layer('silicon', silicon), layer('oxygen', oxygen), layer('helium', helium), layer('hydrogen', Math.max(0, e.ejectaMass - iron - silicon - oxygen - helium))];
+  // A failed supernova only loses some of its hydrogen envelope.
+  if (e.subtype === 'failed') return [layer('hydrogen', e.ejectaMass)];
+  const hydrogen = Math.min(envelopeOf(e), e.ejectaMass);
+  const core = Math.max(0, e.ejectaMass - hydrogen);
+  const iron = Math.min(core, e.nickelMass + 0.05);
+  const rest = core - iron;
+  // The core's onion shells: silicon/sulphur, then oxygen (with neon and magnesium), then helium.
+  // Type Ic stars lost their helium; pair-instability cores are mostly oxygen and silicon.
+  const [fSi, fO] = e.subtype === 'PISN' ? [0.3, 0.6] : e.subtype === 'Ic' || e.subtype === 'Ic-BL' ? [0.15, 0.8] : e.subtype === 'ECSN' ? [0.02, 0.1] : [0.1, 0.45];
+  const silicon = rest * fSi, oxygen = rest * fO;
+  const helium = Math.max(0, rest - silicon - oxygen);
+  return [layer('iron', iron), layer('silicon', silicon), layer('oxygen', oxygen), layer('helium', helium), layer('hydrogen', hydrogen)];
 }
 
 /** Fastest ejecta speed (km/s) of a uniform, homologous sphere: KE = (3/10) M v_max². */
@@ -136,7 +167,8 @@ export function arnettLuminosity(e: Explosion, days: number, steps = 400): numbe
 
 /** Type II-P plateau luminosity (erg/s) and duration (days), Kasen & Woosley 2009 scalings. */
 export function plateau(e: Explosion): { luminosity: number; days: number } {
-  const E51 = e.energy / 1e51, M10 = e.ejectaMass / 10, R500 = e.progenitorRadius / 500;
+  // The plateau lasts as long as the hydrogen envelope takes to recombine: its mass, not the core's.
+  const E51 = e.energy / 1e51, M10 = Math.max(0.05, envelopeOf(e)) / 10, R500 = e.progenitorRadius / 500;
   return {
     luminosity: 1.26e42 * E51 ** (5 / 6) * M10 ** -0.5 * R500 ** (2 / 3),
     days: 109 * E51 ** (-1 / 6) * M10 ** 0.5 * R500 ** (1 / 6),
@@ -146,22 +178,26 @@ export function plateau(e: Explosion): { luminosity: number; days: number } {
 /** Bolometric luminosity (erg/s) `days` after the explosion. */
 export function luminosity(e: Explosion, days: number): number {
   if (days <= 0) return 0;
-  if (e.type === 'Ia') return arnettLuminosity(e, days);
-  // Type II-P: a ~10-day rise to the plateau, the plateau, then a ~2-week drop to the ⁵⁶Co tail.
+  const interaction = e.interaction ? e.interaction.luminosity * (1 - Math.exp(-days / 10)) / (1 + Math.exp((days - e.interaction.days) / 15)) : 0;
+  // No hydrogen plateau (Type Ia, Ib/c, IIb, pair instability): ⁵⁶Ni light diffusing out.
+  if (!hasPlateau(e)) return arnettLuminosity(e, days) + interaction;
+  // Type II: a ~10-day rise to the plateau, the plateau, then a ~2-week drop to the ⁵⁶Co tail.
   const p = plateau(e);
   const rise = 1 - Math.exp(-days / 3);
   const drop = 1 / (1 + Math.exp((days - p.days) / 6));
-  return Math.max(p.luminosity * rise * drop, decayPower(e.nickelMass, days));
+  return Math.max(p.luminosity * rise * drop, decayPower(e.nickelMass, days)) + interaction;
 }
 
 /** The peak of the light curve (erg/s), found by a coarse search over the first 150 days (cached). */
 const peaks = new Map<string, number>();
 export function peakLuminosity(e: Explosion): number {
-  const key = `${e.type}|${e.energy}|${e.ejectaMass}|${e.nickelMass}|${e.progenitorRadius}`;
+  const key = `${e.type}|${e.subtype}|${e.energy}|${e.ejectaMass}|${e.nickelMass}|${e.progenitorRadius}|${e.envelopeMass}`;
   let peak = peaks.get(key);
   if (peak === undefined) {
     peak = 0;
-    for (let d = 0.5; d < 150; d += 0.5) peak = Math.max(peak, luminosity(e, d));
+    // Pair-instability light curves peak after months; failed supernovae glow for a year.
+    const span = e.subtype === 'PISN' || e.subtype === 'failed' ? 500 : 150;
+    for (let d = 0.5; d < span; d += span / 300) peak = Math.max(peak, luminosity(e, d));
     if (peaks.size > 64) peaks.clear();
     peaks.set(key, peak);
   }
@@ -179,6 +215,13 @@ export function bolometricMagnitude(lum: number): number {
  */
 export function photosphereTemperature(e: Explosion, days: number): number {
   if (e.type === 'Ia') return days < 20 ? 10000 + 6000 * Math.exp(-days / 6) : Math.max(4000, 10000 - (days - 20) * 60);
+  // A failed supernova's slow, cool envelope: a faint red glow.
+  if (e.subtype === 'failed') return 3000;
+  if (!hasPlateau(e)) {
+    // Stripped and pair-instability explosions: hot at first, ~7,000–9,000 K around the peak.
+    const tm = diffusionTimeDays(e);
+    return days < tm ? 8000 + 12000 * Math.exp(-days / (tm / 4)) : Math.max(4000, 8000 - ((days - tm) * 4000) / (3 * tm));
+  }
   const p = plateau(e);
   if (days < 20) return 6000 + 24000 * Math.exp(-days / 3);
   if (days < p.days) return 6000;

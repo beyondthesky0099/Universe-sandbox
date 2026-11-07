@@ -279,6 +279,38 @@ const supernova: Preset = {
   },
 };
 
+const supernovaZoo: Preset = {
+  id: 'supernova-zoo',
+  name: 'Supernova Zoo',
+  description:
+    'Six massive stars that die six different ways, set by their mass and metallicity: an electron-capture supernova, a red supergiant’s Type II-P, a blue supergiant like SN 1987A’s, a Wolf–Rayet star’s Type Ib, a metal-poor giant that collapses without a supernova, and a 200 M☉ pair-instability explosion that leaves nothing behind.',
+  load(sim) {
+    // [name, initial mass (M☉), metallicity (Z/Z☉)]: one of each fate in stellarFate.ts.
+    const stars: [string, number, number][] = [
+      ['Eight-Eight', 8.8, 1],
+      ['Ruby (red supergiant)', 15, 1],
+      ['Sapphire (blue supergiant)', 20, 0.5],
+      ['Wolf (Wolf–Rayet)', 26, 1],
+      ['Quiet (metal-poor)', 60, 0.1],
+      ['Titan (pair instability)', 200, 0.05],
+    ];
+    stars.forEach(([name, mass, metallicity], i) => {
+      const a = (i / stars.length) * Math.PI * 2;
+      const star = sim.addBody({ name, kind: 'giant', mass, metallicity, x: Math.cos(a) * 3000, z: Math.sin(a) * 3000 });
+      // One every eight days, so each one's light and debris can be told apart.
+      sim.scheduleSupernova(star.id, (6 + 8 * i) / 365.25);
+    });
+    sim.particleCullDistance = 3e5;
+    return {
+      cameraDistance: 11000,
+      timeScale: 4 / 365.25,
+      elevation: 1.1,
+      tip:
+        'Each star dies differently because of its mass and metallicity (select one to see its forecast, and try the metallicity slider on it before it goes). Watch the colours and speeds of the debris: red hydrogen from the supergiants, none from the Wolf–Rayet star, almost nothing from the star that collapses quietly into a black hole, and a huge, fast, oxygen- and iron-rich cloud from the pair-instability explosion.',
+    };
+  },
+};
+
 const giantImpact: Preset = {
   id: 'impact',
   name: 'Giant Impact',
@@ -810,6 +842,7 @@ export const PRESETS: Preset[] = [
   rogueStar,
   blackHoleFeast,
   supernova,
+  supernovaZoo,
   sunsFuture,
   precession,
   inspiral,

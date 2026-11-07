@@ -180,6 +180,14 @@ Plan, in priority order:
   (`remnantClouds` in systemView, scaled to the ejecta edge each frame) coloured by element;
   ejecta are capped at the decelerating shock's speed (reverse shock).
 
+### M. Supernovae by mass and metallicity
+- [x] `src/sim/stellarFate.ts`: winds (Z^0.85), stripping mass 25 M☉·Z^−1.2, helium core
+  0.1 M^1.32, fates ECSN / II-P / II-L / IIb / Ib / Ic / Ic-BL / PPISN / PISN / failed, progenitor
+  T, R, L, explosion and remnant. `Body.metallicity` (Z/Z☉; protocol BODY_STRIDE 14, state,
+  shock frames carry subtype, envelope, interaction: SHOCK_STRIDE 19). Light curves: plateau from
+  the hydrogen envelope only; Arnett otherwise. Tests: tests/stellar-fate.test.ts. Body panel:
+  metallicity slider and fate line. Preset `supernova-zoo`.
+
 ### L. 3D nebulae from photographs
 - [x] `src/render/nebulaVolume.ts`: `gasBrightness` (sky subtraction, star clipping against a 9×9
   box blur), `volumeParticles` (sampling ∝ brightness, spheroidal depth around a noise-warped

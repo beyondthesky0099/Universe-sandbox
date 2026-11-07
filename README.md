@@ -169,6 +169,22 @@ work in the desktop app, so type your latitude and longitude instead.
   Sedov–Taylor, then the radiative snowplow (Cioffi et al. 1988). A body is blown apart when the
   energy it intercepts exceeds its gravitational binding energy; otherwise it survives, but loses
   its orbit if the star lost more than half its mass.
+  **Which supernova a star makes depends on its mass and metallicity** (`src/sim/stellarFate.ts`,
+  after Heger et al. 2003, Sukhbold et al. 2016 and Heger & Woosley 2002). Metal-rich stars lose
+  more mass to winds (Ṁ ∝ Z^0.85), and that decides what the star looks like when it dies and how
+  it explodes:
+  - 8–9.5 M☉: a faint electron-capture supernova (like SN 1054, which made the Crab).
+  - A red supergiant (~3,500 K, 500–1,000 R☉): a Type II-P with a ~100-day plateau and a neutron star.
+  - A blue supergiant at low metallicity (~16,000 K, ~40 R☉): a fainter plateau, like SN 1987A.
+  - Above ~25 M☉ at solar metallicity, winds strip the hydrogen: a Wolf–Rayet star (60,000–110,000 K) makes a Type Ib, Ic or broad-lined Ic hypernova (3×10⁵² erg), with no hydrogen in the debris.
+  - Metal-poor stars of ~40–100 M☉ collapse into black holes without a supernova, just a faint red glow.
+  - Helium cores of 35–64 M☉ make pulsational pair-instability supernovae: bright colliding shells, then a black hole below the ~45 M☉ mass gap.
+  - Helium cores of 64–133 M☉ (around 140–260 M☉ at low metallicity) make pair-instability supernovae, which leave nothing and make up to ~57 M☉ of ⁵⁶Ni.
+  - Type Ia white dwarfs make less ⁵⁶Ni the more metal-rich they are (Timmes et al. 2003).
+
+  Every star has a metallicity slider in its panel, and the panel says how the star will die. The
+  **Supernova Zoo** scenario sets off six stars with six different fates. These are single-star
+  trends: real boundaries also depend on rotation and binary companions.
   The ejecta are layered as in the explosion models (Woosley & Weaver 1995; Sukhbold et al. 2016;
   the W7 Type Ia model): iron and silicon in the slow core, then oxygen and helium, then the
   hydrogen envelope outside. Each glows in its strongest emission line: gold iron, orange-red

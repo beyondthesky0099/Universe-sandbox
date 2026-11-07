@@ -11,6 +11,7 @@ import { moonPhaseName, skyAt } from './sim/sky';
 import { dateToJdTT, eclipsePath, greatestEclipse, jdTTToDate, loadEclipses, localCircumstances, shadowAt, topocentric, type Eclipse } from './sim/eclipse';
 import { displayName, GALAXY_CREDIT, galaxyForm, loadLocalGalaxies, loadNamedGalaxies, loadWebGalaxies, LY_PER_MPC, type LocalGalaxy } from './sim/galaxies';
 import { equatorialToGalactic, galacticToMap, MILKY_WAY_SEED, MW_CLUSTERS, pictureAxes, UNITS_PER_KPC, type GalaxyOptions } from './procgen/galaxy';
+import { describeFate, stellarFate } from './sim/stellarFate';
 import { CLUSTER_COLORS, loadClusters } from './sim/clusters';
 import { clusterSwarms } from './procgen/clusterStars';
 import { diameterPc, galacticToEcliptic, loadNebulae, NEBULA_COLORS } from './sim/nebulae';
@@ -2129,6 +2130,17 @@ export class App {
     } else {
       facts.push(['Speed', formatSpeed(Math.hypot(body.vx, body.vy, body.vz))]);
     }
+    // How it will die: the supernova its mass and metallicity lead to (stellarFate.ts).
+    const isStar = (body.kind === 'star' || body.kind === 'giant') && body.tag !== 'galaxy';
+    const z = body.metallicity ?? 1;
+    if (isStar || body.kind === 'whitedwarf') facts.push(['Metallicity', `${z === 1 ? 'solar' : `${z < 0.1 ? z.toFixed(3) : z.toFixed(2)}× solar`} ([Fe/H] ${Math.log10(Math.max(z, 1e-3)) >= 0 ? '+' : ''}${Math.log10(Math.max(z, 1e-3)).toFixed(2)})`]);
+    $('metallicity-row').classList.toggle('hidden', !(isStar || body.kind === 'whitedwarf'));
+    const slider = $<HTMLInputElement>('metallicity');
+    if (document.activeElement !== slider) slider.value = String(Math.log10(Math.max(z, 0.01)));
+    $('metallicity-out').textContent = z.toFixed(z < 0.1 ? 3 : 2);
+    if (isStar && this.sim.canSupernova(body)) {
+      alerts.push(`<div class="alert info">⭐ ${escapeHtml(describeFate(stellarFate(body.mass, z)))}</div>`);
+    }
     const fuse = this.sim.fuses.get(body.id);
     if (fuse !== undefined) alerts.push(`<div class="alert danger">💥 Goes supernova in ${formatTime(Math.max(0, fuse - this.sim.time))}.</div>`);
     const f = this.forecastResult;
@@ -3565,6 +3577,17 @@ export class App {
     $('btn-follow').addEventListener('click', () => this.toggleFollow());
     $('btn-delete').addEventListener('click', () => this.deleteSelected());
     $('btn-mass-up').addEventListener('click', () => this.scaleSelectedMass(2));
+    // Metallicity slider: log10(Z/Z☉) from −2 (1% of the Sun's metals) to +0.5.
+    $<HTMLInputElement>('metallicity').addEventListener('change', (e) => {
+      const body = this.selectedBody();
+      if (!body) return;
+      const z = Number((10 ** Number((e.target as HTMLInputElement).value)).toPrecision(2));
+      this.mutate(`changing ${body.name}'s metallicity`, () => (body.metallicity = z === 1 ? undefined : z));
+      this.updateBodyPanel();
+    });
+    $<HTMLInputElement>('metallicity').addEventListener('input', (e) => {
+      $('metallicity-out').textContent = (10 ** Number((e.target as HTMLInputElement).value)).toFixed(2);
+    });
     $('btn-mass-down').addEventListener('click', () => this.scaleSelectedMass(0.5));
     $('btn-supernova').addEventListener('click', () => this.detonateSelected());
 

@@ -390,6 +390,11 @@
           <p id="transfer-plan" class="muted small"></p>
           <button id="btn-transfer" class="primary hidden">Burn for transfer</button>
         </div>
+        <label id="metallicity-row" class="row slider hidden" title="How much of the star is heavier than helium, compared with the Sun. Metal-rich stars lose more mass to winds, which changes how they die.">
+          <span>Metallicity</span>
+          <input id="metallicity" type="range" min="-2" max="0.5" step="0.05" value="0" />
+          <output id="metallicity-out"></output>
+        </label>
         <div class="row buttons">
           <button id="btn-mass-down" title="Halve mass">Mass ÷2</button>
           <button id="btn-mass-up" title="Double mass">Mass ×2</button>

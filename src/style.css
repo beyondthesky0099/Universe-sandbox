@@ -524,6 +524,11 @@ input[type='date'] {
   border: 1px solid rgba(255, 74, 74, 0.5);
 }
 
+.alert.info {
+  background: rgba(120, 170, 255, 0.1);
+  border: 1px solid rgba(120, 170, 255, 0.4);
+}
+
 .alert.good {
   background: rgba(61, 220, 132, 0.1);
   border: 1px solid rgba(61, 220, 132, 0.4);

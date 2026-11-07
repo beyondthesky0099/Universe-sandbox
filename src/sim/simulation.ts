@@ -16,7 +16,8 @@ import {
 import { kelvinToRgb } from './color';
 import { Octree } from './octree';
 import { ParticleSet } from './particles';
-import { blastOnBody, coreCollapse, ejectaLayers, L_SUN, peakLuminosity, maxEjectaSpeed, neutronStarKick, remnantInAu, thermonuclear, type Explosion } from './supernovaPhysics';
+import { blastOnBody, ejectaLayers, L_SUN, peakLuminosity, maxEjectaSpeed, neutronStarKick, remnantInAu, thermonuclear, type Explosion } from './supernovaPhysics';
+import { stellarFate, typeIaNickel } from './stellarFate';
 import { BODY_FIELDS, particleAccelSlice } from './particleKernel';
 import type { ParallelForces } from './parallel';
 import { AU_PER_YEAR_IN_KMS, C_AU_PER_YEAR, KPC_PER_MYR_IN_KMS, EARTH_MASS, G, type UnitSystem } from './units';
@@ -1026,7 +1027,8 @@ export class Simulation {
 
   /** A white dwarf pushed past the Chandrasekhar limit detonates completely (Type Ia). */
   private typeIa(wd: Body): void {
-    const e = thermonuclear();
+    // Metal-rich white dwarfs make less ⁵⁶Ni, so dimmer Type Ia supernovae (Timmes et al. 2003).
+    const e = thermonuclear({ nickelMass: typeIaNickel(wd.metallicity ?? 1) });
     this.launchEjecta(wd, e, wd.radius);
     this.addBlast(wd, e);
     this.events.push({
@@ -1049,12 +1051,12 @@ export class Simulation {
    * helium and hydrogen; see ejectaLayers), and most of it is in clumps, as the Rayleigh–Taylor
    * instability breaks the ejecta into the knots seen in young remnants such as Cassiopeia A.
    */
-  private launchEjecta(star: Body, e: Explosion, r: number): void {
+  private launchEjecta(star: Body, e: Explosion, r: number, max = 2400): void {
     const vmax = this.kms(maxEjectaSpeed(e));
     const layers = ejectaLayers(e);
     const total = layers.reduce((sum, l) => sum + l.mass, 0) || 1;
     const p = this.particles;
-    const count = Math.min(2400, p.capacity - p.count);
+    const count = Math.min(max, p.capacity - p.count);
     const clumps = Array.from({ length: 60 }, () => randomUnit());
     for (let i = 0; i < count; i++) {
       let [dx, dy, dz] = randomUnit();
@@ -1116,40 +1118,48 @@ export class Simulation {
   }
 
   /**
-   * Core-collapse supernova: the star becomes a neutron star (8–20 M☉) or black hole
-   * (≥ 20 M☉), its envelope is ejected as an expanding shell, and a shockwave pushes on
-   * everything it passes.
+   * The death of a massive star. What happens depends on its mass and metallicity
+   * (stellarFate.ts): which kind of supernova (or none), how energetic, how much ⁵⁶Ni, how the
+   * ejecta are layered, and whether it leaves a neutron star, a black hole or nothing.
    */
   supernova(star: Body): boolean {
     if (!this.canSupernova(star)) return false;
-    const M = star.mass;
     const R = star.radius;
-    const remnantKind = M >= 20 ? 'blackhole' : 'neutron';
-    const remnant = remnantKind === 'blackhole' ? Math.max(3, M * 0.3) : 1.4;
-    const e = coreCollapse(M, remnant);
-    this.launchEjecta(star, e, R);
+    const fate = stellarFate(star.mass, star.metallicity ?? 1);
+    const e = fate.explosion;
+    const failed = fate.kind === 'failed';
+    this.launchEjecta(star, e, R, failed ? 300 : 2400);
     this.addBlast(star, e);
 
     const name = star.name;
-    star.kind = remnantKind;
-    star.mass = remnant;
-    star.radius = this.bodyRadius(remnantKind, remnant);
-    star.color = defaultColor(remnantKind, remnant);
-    // Neutron stars are born with a kick of a few hundred km/s.
-    if (remnantKind === 'neutron') {
-      const [kx, ky, kz] = neutronStarKick();
-      star.vx += this.kms(kx);
-      star.vy += this.kms(ky);
-      star.vz += this.kms(kz);
+    const p = fate.progenitor;
+    const z = star.metallicity ?? 1;
+    const who = `${name} (${star.mass.toFixed(star.mass < 10 ? 1 : 0)} M☉, ${z === 1 ? 'solar' : `${z.toFixed(2)}× solar`} metallicity, a ${Math.round(p.temperatureK).toLocaleString('en-US')} K ${p.stage.split(' (')[0]})`;
+    let message: string;
+    if (fate.remnant) {
+      const kind = fate.remnant.kind;
+      star.kind = kind;
+      star.mass = fate.remnant.mass;
+      star.radius = this.bodyRadius(kind, star.mass);
+      star.color = defaultColor(kind, star.mass);
+      // Neutron stars are born with a kick of a few hundred km/s.
+      if (kind === 'neutron') {
+        const [kx, ky, kz] = neutronStarKick();
+        star.vx += this.kms(kx);
+        star.vy += this.kms(ky);
+        star.vz += this.kms(kz);
+      }
+      const left = `a ${star.mass.toFixed(1)} M☉ ${kind === 'blackhole' ? 'black hole' : 'neutron star'}`;
+      message = failed
+        ? `${who} collapsed straight into ${left}: a failed supernova, just a faint red glow as it sheds ${e.ejectaMass.toFixed(1)} M☉ of its envelope.`
+        : `${who} exploded as a ${fate.label}, leaving ${left}: ${describeExplosion(e)}`;
+    } else {
+      // Pair instability: the whole star is blown apart.
+      star.radius = 0;
+      this.doomed.add(star);
+      message = `${who} was blown apart by a ${fate.label}, leaving nothing behind: ${describeExplosion(e)}`;
     }
-    this.events.push({
-      type: 'supernova',
-      message: `${name} went supernova (Type II), leaving a ${remnantKind === 'blackhole' ? 'black hole' : 'neutron star'}: ${describeExplosion(e)}`,
-      x: star.x,
-      y: star.y,
-      z: star.z,
-      size: R * 25,
-    });
+    this.events.push({ type: 'supernova', message, x: star.x, y: star.y, z: star.z, size: R * (failed ? 4 : 25) });
     this.forcesDirty = true;
     return true;
   }

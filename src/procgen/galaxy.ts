@@ -192,20 +192,26 @@ function sampleMilkyWay(rng: Rng, s: ShapeParams, out: Float32Array, k: number):
   return Math.hypot(x, z) / R;
 }
 
-/** Real clusters with approximate galactic coordinates (l, b in degrees) and distances (kpc). */
+/**
+ * Real clusters with galactic coordinates (l, b in degrees) and distances (kpc), as in the bundled
+ * catalogues (public/data/clusters.json): Harris (1996, 2010 edition) for the globulars, Hunt &
+ * Reffert (2023) for the open clusters, so their labels sit on the clusters' stars
+ * (procgen/clusterStars.ts). The Beehive has no name in Hunt & Reffert; its values are from the
+ * literature.
+ */
 export const MW_CLUSTERS: { name: string; kind: 'open' | 'globular'; l: number; b: number; d: number; sigmaPc: number }[] = [
-  { name: 'Pleiades (M45)', kind: 'open', l: 166.6, b: -23.5, d: 0.136, sigmaPc: 4 },
-  { name: 'Hyades', kind: 'open', l: 180.1, b: -22.3, d: 0.047, sigmaPc: 5 },
+  { name: 'Pleiades (M45)', kind: 'open', l: 166.53, b: -23.57, d: 0.135, sigmaPc: 4 },
+  { name: 'Hyades', kind: 'open', l: 179.87, b: -22.22, d: 0.047, sigmaPc: 5 },
   { name: 'Beehive (M44)', kind: 'open', l: 205.9, b: 32.5, d: 0.187, sigmaPc: 4 },
-  { name: 'Double Cluster (h & χ Persei)', kind: 'open', l: 135.0, b: -3.6, d: 2.3, sigmaPc: 12 },
-  { name: 'Wild Duck Cluster (M11)', kind: 'open', l: 27.3, b: -2.8, d: 1.9, sigmaPc: 6 },
-  { name: 'Omega Centauri', kind: 'globular', l: 309.1, b: 15.0, d: 5.2, sigmaPc: 40 },
-  { name: '47 Tucanae', kind: 'globular', l: 305.9, b: -44.9, d: 4.5, sigmaPc: 30 },
-  { name: 'Hercules Cluster (M13)', kind: 'globular', l: 59.0, b: 40.9, d: 7.1, sigmaPc: 25 },
-  { name: 'M4', kind: 'globular', l: 351.0, b: 16.0, d: 2.2, sigmaPc: 15 },
-  { name: 'M22', kind: 'globular', l: 9.9, b: -7.6, d: 3.2, sigmaPc: 20 },
-  { name: 'M3', kind: 'globular', l: 42.2, b: 78.7, d: 10.2, sigmaPc: 25 },
-  { name: 'M15', kind: 'globular', l: 65.0, b: -27.3, d: 10.4, sigmaPc: 20 },
+  { name: 'Double Cluster (h & χ Persei)', kind: 'open', l: 134.64, b: -3.73, d: 2.28, sigmaPc: 12 },
+  { name: 'Wild Duck Cluster (M11)', kind: 'open', l: 27.3, b: -2.77, d: 2.233, sigmaPc: 6 },
+  { name: 'Omega Centauri', kind: 'globular', l: 309.1, b: 14.97, d: 5.1, sigmaPc: 40 },
+  { name: '47 Tucanae', kind: 'globular', l: 305.9, b: -44.89, d: 4.3, sigmaPc: 30 },
+  { name: 'Hercules Cluster (M13)', kind: 'globular', l: 59.01, b: 40.91, d: 7.0, sigmaPc: 25 },
+  { name: 'M4', kind: 'globular', l: 350.97, b: 15.97, d: 2.2, sigmaPc: 15 },
+  { name: 'M22', kind: 'globular', l: 9.89, b: -7.55, d: 3.2, sigmaPc: 20 },
+  { name: 'M3', kind: 'globular', l: 42.21, b: 78.71, d: 10.0, sigmaPc: 25 },
+  { name: 'M15', kind: 'globular', l: 65.01, b: -27.31, d: 10.2, sigmaPc: 20 },
 ];
 
 /** Real nebulae with approximate galactic coordinates and distances (kpc). */

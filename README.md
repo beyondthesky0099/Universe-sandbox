@@ -309,6 +309,8 @@ Press **✨ 326 ly (Gaia)** for every star within 100 parsecs (326 light-years) 
 
 32 famous clusters are labelled, matched through SIMBAD by catalogue designation and position: the Pleiades, the Hyades, the Beehive, the Double Cluster, the Jewel Box, Omega Centauri, 47 Tucanae, M13 and others. Toggle them with **Real star clusters** in the Galaxy Map panel, or **Star clusters** in the Sky tab.
 
+The 145 globular clusters with distances, and the open clusters with at least 300 Gaia members or a name, are also drawn as balls of stars at their measured sizes. Each is a Plummer sphere whose half-light radius is the catalogue's (Harris for globulars, Hunt & Reffert for open clusters), so flying to M13 or the Pleiades shows a cluster of stars rather than a dot. The stars are a representative sample: their number follows the cluster's brightness or membership, and their colours its age. They are not the cluster's real individual stars.
+
 ### Voyager Grand Tour
 Pick a flyby and press **Fly with Voyager** to ride along on one of the six real planetary
 encounters: Voyager 1 at Jupiter and Saturn, and Voyager 2 at Jupiter, Saturn, Uranus and

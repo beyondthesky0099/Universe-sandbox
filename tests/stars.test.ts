@@ -72,9 +72,9 @@ describe('the Milky Way map', () => {
     // Toward l = 0 lies the Galactic Centre: 8.2 kpc along l = 0 reaches the origin.
     const gc = galacticToMap(0, 0, 8.2);
     expect(Math.hypot(gc[0], gc[2])).toBeLessThan(0.01);
-    // The Pleiades are 136 pc from the Sun.
+    // The Pleiades are 135 pc from the Sun (Gaia; Hunt & Reffert 2023).
     const pleiades = g.clusters.find((c) => c.name.startsWith('Pleiades'))!;
-    expect(Math.hypot(pleiades.x - sx, pleiades.y - sy, pleiades.z - sz) / UNITS_PER_KPC).toBeCloseTo(0.136, 3);
+    expect(Math.hypot(pleiades.x - sx, pleiades.y - sy, pleiades.z - sz) / UNITS_PER_KPC).toBeCloseTo(0.135, 3);
     expect(g.nebulae.some((n) => n.name === 'Orion Nebula (M42)')).toBe(true);
     // Other seeds stay procedural.
     expect(generateGalaxy(7, 100, 100, 10).name).not.toBe('Milky Way');

@@ -285,6 +285,7 @@ export class GalaxyView {
     for (const t of this.nebulaTextures) t.dispose();
     this.nebulaTextures.length = 0;
     for (const key of [...this.realLayers.keys()]) this.setRealLayer(key, []);
+    this.setClusterSwarms(undefined);
     for (const key of [...this.cloudLayers.keys()]) this.setCloudLayer(key, [], []);
     this.showpieceLabels.length = 0;
 
@@ -340,7 +341,8 @@ export class GalaxyView {
       for (const n of named) {
         const label = textSprite(n.name, n.color, 0.7);
         label.position.set(n.x, n.y, n.z);
-        label.userData.goto = { distance: n.name === 'Sagittarius A*' ? 4 : 1.2 };
+        // Clusters close up (their stars fill the view, see clusterStars.ts); nebulae a little further out.
+        label.userData.goto = { distance: n.name === 'Sagittarius A*' ? 4 : nebulaNames.has(n.name) ? 1.2 : 0.3 };
         label.material.opacity = 0.8;
         this.labelGroup.add(label);
         if (nebulaNames.has(n.name)) this.showpieceLabels.push(label);
@@ -366,7 +368,7 @@ export class GalaxyView {
   }
 
   private applyPointScale(): void {
-    for (const pts of [this.stars, this.glow, this.dust, ...[...this.realLayers.values()].map((l) => l.points)]) {
+    for (const pts of [this.stars, this.glow, this.dust, this.swarms, ...[...this.realLayers.values()].map((l) => l.points)]) {
       if (pts) (pts.material as THREE.ShaderMaterial).uniforms.uScale.value = this.pointScale;
     }
   }
@@ -470,7 +472,7 @@ export class GalaxyView {
    * sized by their physical size but never smaller than a few pixels, with labels for the named
    * ones. An empty list removes the layer. Cleared on rebuild.
    */
-  setRealLayer(key: string, items: { pos: [number, number, number]; color: [number, number, number]; size: number; label?: string; labelColor?: string }[]): void {
+  setRealLayer(key: string, items: { pos: [number, number, number]; color: [number, number, number]; size: number; label?: string; labelColor?: string; distance?: number }[]): void {
     const old = this.realLayers.get(key);
     if (old) {
       this.scene.remove(old.points, old.labels);
@@ -495,7 +497,7 @@ export class GalaxyView {
       if (it.label) {
         const text = textSprite(it.label, it.labelColor ?? '#ffb3c8', 0.55);
         text.position.set(...it.pos);
-        text.userData.goto = { distance: Math.max(0.3, it.size * 3) };
+        text.userData.goto = { distance: it.distance ?? Math.max(0.3, it.size * 3) };
         labels.add(text);
       }
     });
@@ -504,6 +506,24 @@ export class GalaxyView {
     points.renderOrder = 5;
     this.scene.add(points, labels);
     this.realLayers.set(key, { points, labels });
+  }
+
+  private swarms?: THREE.Points;
+
+  /** Star clusters as balls of stars at their real sizes (see procgen/clusterStars.ts). Cleared on rebuild. */
+  setClusterSwarms(swarms: { positions: Float32Array; colors: Float32Array; count: number } | undefined): void {
+    if (this.swarms) {
+      this.scene.remove(this.swarms);
+      this.swarms.geometry.dispose();
+      (this.swarms.material as THREE.Material).dispose();
+      this.swarms = undefined;
+    }
+    if (!swarms?.count) return;
+    // Each star a couple of pixels across from a cluster's doorstep; from afar they merge into a glow.
+    this.swarms = pointCloud(swarms.positions, swarms.colors, new Float32Array(swarms.count).fill(0.0016), pointsMaterial(1, 6));
+    (this.swarms.material as THREE.ShaderMaterial).uniforms.uScale.value = this.pointScale;
+    this.swarms.renderOrder = 4;
+    this.scene.add(this.swarms);
   }
 
   setRealLayerVisible(key: string, on: boolean): void {

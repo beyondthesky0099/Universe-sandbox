@@ -180,6 +180,14 @@ Plan, in priority order:
   (`remnantClouds` in systemView, scaled to the ejecta edge each frame) coloured by element;
   ejecta are capped at the decelerating shock's speed (reverse shock).
 
+### K. Click a label to go there
+- [x] `labelHitDepth` (galaxyView.ts) hit-tests textSprite labels; `userData.goto` on a label
+  makes it a destination (GalaxyView.pickLabel / flyToPoint, SkyView.pickLabel / goToLabel,
+  SystemView.pickLabel for the CSS2D body labels).
+- [x] Clusters as Plummer-sphere star swarms at their catalogue radii
+  (`src/procgen/clusterStars.ts`): all 145 globulars with distances, open clusters with ≥ 300
+  Gaia members or a name. MW_CLUSTERS now uses the catalogue positions so labels sit on them.
+
 ### I. Real nebulae
 - [x] 5,676 nebulae from VizieR catalogues (`scripts/build-nebulae.mjs`, `src/sim/nebulae.ts`):
   HII regions, planetary nebulae and supernova remnants (with Ranasinghe & Leahy 2023

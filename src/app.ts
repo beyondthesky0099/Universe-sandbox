@@ -12,6 +12,7 @@ import { dateToJdTT, eclipsePath, greatestEclipse, jdTTToDate, loadEclipses, loc
 import { displayName, GALAXY_CREDIT, galaxyForm, loadLocalGalaxies, loadNamedGalaxies, loadWebGalaxies, LY_PER_MPC, type LocalGalaxy } from './sim/galaxies';
 import { equatorialToGalactic, galacticToMap, MILKY_WAY_SEED, MW_CLUSTERS, UNITS_PER_KPC, type GalaxyOptions } from './procgen/galaxy';
 import { CLUSTER_COLORS, loadClusters } from './sim/clusters';
+import { clusterSwarms } from './procgen/clusterStars';
 import { diameterPc, galacticToEcliptic, loadNebulae, NEBULA_COLORS } from './sim/nebulae';
 import { loadNebulaImages, NEBULA_IMAGE_CREDIT, nebulaAtlasUrl, nebulaKey, tileRect, type NebulaImageAtlas } from './sim/nebulaImages';
 import type { Cloud } from './render/nebulaClouds';
@@ -1483,10 +1484,14 @@ export class App {
           size,
           label: named ? `${c.name} · ${ly.toLocaleString('en-US')} ly` : undefined,
           labelColor: '#ffe3a3',
+          // Close enough for the cluster's stars to fill a good part of the view.
+          distance: Math.max(0.22, ((c.radiusPc ?? 3) / 1000) * UNITS_PER_KPC * 15),
         };
       }),
     );
     this.galaxy.setRealLayerVisible('clusters', $<HTMLInputElement>('opt-real-clusters').checked);
+    // The globulars and the larger open clusters as balls of stars at their real sizes (always shown).
+    this.galaxy.setClusterSwarms(clusterSwarms(all, LOW_POWER ? 0.5 : 1));
     const count = (k: string) => all.filter((c) => c.kind === k).length.toLocaleString('en-US');
     $('galaxy-info').textContent += ` ${count('open')} open clusters and ${count('group')} moving groups from Gaia (gold), and ${count('globular')} globular clusters (orange), at their measured distances.`;
   }

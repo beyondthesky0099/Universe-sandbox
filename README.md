@@ -433,6 +433,7 @@ Matching ignores case, spaces, punctuation and accents, and knows catalogue name
 | 🔍, `/` or Ctrl+K | Search everything, then Enter or click to go there |
 | Click a name label | Go there: follow the body or the Lagrange point (Sandbox), fly to it (Galaxy Map, Universe), turn and zoom to it (Sky) |
 | `Space` | Pause / resume |
+| Hold ⏩ (or `.`) / tap ⏩ | Fast-forward at 10× while held / double the speed |
 | Hold `R` (or ⏪) | Rewind |
 | `Ctrl+Z` / `Ctrl+Shift+Z` | Undo / redo |
 | `V` / `B` / `N` | Select / Spawn / Nudge tool (in the Galaxy view, `B` bookmarks) |

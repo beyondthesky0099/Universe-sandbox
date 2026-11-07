@@ -395,7 +395,7 @@ export class App {
           this.mp.sendState(this.syncState());
         }
       }
-      const events = this.host.advance(active ? this.timeScale * dt : 0, 12);
+      const events = this.host.advance(active ? this.timeScale * this.fastForward * dt : 0, 12);
       this.handleEvents(events);
       if (this.spawnDrag) this.updateSpawnPreview(performance.now());
       if (this.nudgeDrag) this.updateNudgePreview(performance.now());
@@ -1847,7 +1847,7 @@ export class App {
     else if (this.view === 'galaxy') text = 'Click a name to fly there · Click a star to inspect · Double-click to fly there · Zoom right in (or Enter) to visit · Zoom far out for other galaxies';
     else if (this.tool === 'spawn') text = 'Click to place · Drag to set velocity · Right-drag to orbit camera · Esc to cancel';
     else if (this.tool === 'nudge') text = 'Press on a body and drag to push it · Dashed line previews the new path · Right-drag to orbit camera';
-    else text = 'Click to select · Click a name or double-click to follow · Space pause · Hold R rewind · Ctrl+Z undo · B spawn · M galaxy map';
+    else text = 'Click to select · Click a name or double-click to follow · Space pause · Hold R rewind · Hold . fast-forward · Ctrl+Z undo · B spawn · M galaxy map';
     $('hint').textContent = text;
   }
 
@@ -1931,6 +1931,42 @@ export class App {
     this.rewindTimer = window.setInterval(step, 90);
     $('btn-rewind').classList.add('active');
     step();
+  }
+
+  /** Holding ⏩ (or the . key) runs time 10× faster; a tap doubles the speed instead. */
+  private fastForward = 1;
+  private forwardHold?: { timer: number; wasRunning: boolean; holding: boolean };
+
+  private forwardDown(): void {
+    if (this.forwardHold || this.view !== 'system') return;
+    const hold = { timer: 0, wasRunning: this.running, holding: false };
+    hold.timer = window.setTimeout(() => {
+      hold.holding = true;
+      this.fastForward = 10;
+      this.setRunning(true);
+      $('btn-forward').classList.add('active');
+      $('btn-forward').textContent = '×10';
+    }, 220);
+    this.forwardHold = hold;
+  }
+
+  private forwardUp(): void {
+    const hold = this.forwardHold;
+    if (!hold) return;
+    this.forwardHold = undefined;
+    clearTimeout(hold.timer);
+    if (hold.holding) {
+      this.fastForward = 1;
+      this.setRunning(hold.wasRunning);
+      $('btn-forward').classList.remove('active');
+      $('btn-forward').textContent = '⏩';
+    } else {
+      // A tap: twice as fast (up to the scene's limit), and make sure time is running.
+      const before = this.timeScale;
+      this.setTimeScale(this.timeScale * 2);
+      this.setRunning(true);
+      toast(this.timeScale > before ? `Time: ${formatRate(this.timeScale)}` : `Already at this scene's top speed (${formatRate(this.timeScale)})`);
+    }
   }
 
   private stopRewind(): void {
@@ -3204,6 +3240,9 @@ export class App {
         case 'r':
           if (!e.repeat) this.startRewind();
           break;
+        case '.':
+          if (!e.repeat) this.forwardDown();
+          break;
         case 'v':
           this.setTool('select');
           break;
@@ -3249,6 +3288,7 @@ export class App {
     });
     window.addEventListener('keyup', (e) => {
       if (e.key.toLowerCase() === 'r') this.stopRewind();
+      if (e.key === '.') this.forwardUp();
     });
   }
 
@@ -3297,6 +3337,14 @@ export class App {
       this.startRewind();
     });
     for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) rewind.addEventListener(ev, () => this.stopRewind());
+    const forward = $('btn-forward');
+    forward.addEventListener('pointerdown', (e) => {
+      forward.setPointerCapture(e.pointerId);
+      this.forwardDown();
+    });
+    forward.addEventListener('pointerup', () => this.forwardUp());
+    forward.addEventListener('pointercancel', () => this.forwardHold?.holding && this.forwardUp());
+    forward.addEventListener('contextmenu', (e) => e.preventDefault());
     $('btn-sound').addEventListener('click', () => this.setSound(!this.audio.isEnabled));
     const postfxBox = $<HTMLInputElement>('opt-postfx');
     postfxBox.checked = this.postfxOn;

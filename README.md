@@ -410,12 +410,27 @@ chosen your own settings, and runs the orbit forecast every 2 s instead of every
 a phone emulation (390×844 screen, 4× slower CPU) this took the default Solar System from
 about 2.5 to 17 frames per second. In the Sky tab, pinch to zoom.
 
+## Search everything
+
+The 🔍 button (or `/`, or Ctrl+K) searches about 28,000 things at once, and picking a result
+takes you there:
+- **Galaxy Map:** nebulae and star clusters with measured distances, black holes and pulsars.
+- **Sky tab:** named stars, the Sun, the Moon and the planets, and nebulae or clusters without a distance.
+- **Universe tab:** galaxies and galaxy clusters.
+- **Sandbox:** exoplanet systems and their planets (the system loads), the bodies in the current
+  scene, and scenarios, gravitational-wave events, asteroid flybys and Voyager encounters.
+- **Also:** lessons and challenges start, and eclipses open in the Sky tab.
+
+Matching ignores case, spaces, punctuation and accents, and knows catalogue names: "m42",
+"ngc 7293", "LDN 1689", "trappist-1 e" and "car neb" all work. Famous objects rank first.
+
 ## Controls
 
 | Input | Action |
 | --- | --- |
 | Drag / right-drag / scroll | Orbit / pan / zoom (in Spawn and Nudge modes, right-drag orbits) |
 | Click / double-click | Select / select and follow (Sandbox); select / fly to (Galaxy) |
+| 🔍, `/` or Ctrl+K | Search everything, then Enter or click to go there |
 | Click a name label | Go there: follow the body or the Lagrange point (Sandbox), fly to it (Galaxy Map, Universe), turn and zoom to it (Sky) |
 | `Space` | Pause / resume |
 | Hold `R` (or ⏪) | Rewind |

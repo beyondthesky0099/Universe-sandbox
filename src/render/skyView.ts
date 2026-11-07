@@ -452,9 +452,32 @@ export class SkyView {
    */
   goToLabel(sprite: THREE.Sprite): void {
     const target = this.bodies.get(sprite.userData.body)?.dot ?? sprite;
-    const d = target.getWorldPosition(new THREE.Vector3()).normalize();
+    this.turnToward(target.getWorldPosition(new THREE.Vector3()).normalize(), sprite.userData.radiusDeg);
+  }
+
+  /** Turn to the Sun, Moon or a planet by name. Returns its altitude (degrees), or undefined. */
+  goToBody(name: string): number | undefined {
+    const b = this.bodies.get(name);
+    if (!b || !this.snapshot) return undefined;
+    this.turnToward(b.dot.position.clone().normalize());
+    return this.snapshot.objects.find((o) => o.name === name)?.alt;
+  }
+
+  /**
+   * Turn to a direction among the stars (an ecliptic J2000 unit vector, as the catalogues give
+   * them), zooming to a few times `radiusDeg`. Returns its altitude now (degrees; below 0 it is
+   * under the horizon).
+   */
+  goToSky(v: [number, number, number], radiusDeg?: number): number | undefined {
+    if (!this.snapshot) return undefined;
+    const m = skyMatrix(this.snapshot, this.observer);
+    const d = new THREE.Vector3(...v).applyMatrix4(new THREE.Matrix4().set(m[0], m[1], m[2], 0, m[3], m[4], m[5], 0, m[6], m[7], m[8], 0, 0, 0, 0, 1)).normalize();
+    this.turnToward(d, radiusDeg);
+    return (Math.asin(THREE.MathUtils.clamp(d.y, -1, 1)) * 180) / Math.PI;
+  }
+
+  private turnToward(d: THREE.Vector3, radius?: number): void {
     const yaw1 = Math.atan2(-d.x, -d.z);
-    const radius: number | undefined = sprite.userData.radiusDeg;
     const fov1 = radius ? THREE.MathUtils.clamp(radius * 5, 2, 60) : Math.min(this.camera.fov, 20);
     // Turn the short way round.
     const dyaw = Math.atan2(Math.sin(yaw1 - this.yaw), Math.cos(yaw1 - this.yaw));

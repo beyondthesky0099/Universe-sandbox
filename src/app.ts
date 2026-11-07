@@ -9,7 +9,7 @@ import { CosmosView } from './render/cosmosView';
 import { SkyView } from './render/skyView';
 import { moonPhaseName, skyAt } from './sim/sky';
 import { dateToJdTT, eclipsePath, greatestEclipse, jdTTToDate, loadEclipses, localCircumstances, shadowAt, topocentric, type Eclipse } from './sim/eclipse';
-import { displayName, GALAXY_CREDIT, galaxyForm, loadLocalGalaxies, loadNamedGalaxies, loadWebGalaxies, LY_PER_MPC, type LocalGalaxy } from './sim/galaxies';
+import { displayName, GALAXY_CREDIT, galacticToCosmos, galaxyForm, loadLocalGalaxies, loadNamedGalaxies, loadWebGalaxies, LY_PER_MPC, type LocalGalaxy } from './sim/galaxies';
 import { equatorialToGalactic, galacticToMap, MILKY_WAY_SEED, MW_CLUSTERS, pictureAxes, UNITS_PER_KPC, type GalaxyOptions } from './procgen/galaxy';
 import { describeFate, stellarFate } from './sim/stellarFate';
 import { CLUSTER_COLORS, loadClusters } from './sim/clusters';
@@ -57,6 +57,8 @@ import type { SimState } from './sim/state';
 import { applyNudge, CHALLENGES, dailyChallenge, KMS, newChallengeState, shareText, type Challenge, type ChallengeResult, type ChallengeState } from './game/challenges';
 import { burnDirections, planHohmann } from './game/transfer';
 import { LESSONS, type Lesson } from './game/lessons';
+import { SearchIndex, type SearchEntry } from './ui/search';
+import { activityEntries, clusterEntries, compactEntries, exoplanetEntries, galaxyEntries, nebulaEntries, skyBodyEntries, starEntries, structureEntries } from './ui/searchSources';
 import { LineChart, measure, METRICS, type MetricId, type Series } from './ui/graph';
 
 type ViewName = 'cosmos' | 'galaxy' | 'system' | 'sky';
@@ -2521,6 +2523,182 @@ export class App {
   // ---------------------------------------------------------------------------
   // Real data: exoplanets, the solar neighbourhood, dated Solar System
 
+  // --- Search everything ---------------------------------------------------------------------
+
+  private searchIndex?: Promise<SearchIndex>;
+  private searchResults: SearchEntry[] = [];
+  private searchActive = 0;
+
+  /** Every catalogue the app has, as one search index (built once, on first use). */
+  private buildSearchIndex(): Promise<SearchIndex> {
+    this.searchIndex ??= (async () => {
+      const safe = <T>(p: Promise<T>, fallback: T) => p.catch(() => fallback);
+      const [nebulae, clusters, catalog, bright, near, local, named, compact, gw, flybys, voyager, eclipses] = await Promise.all([
+        safe(loadNebulae(), []),
+        safe(loadClusters(), []),
+        safe(this.getCatalog(), undefined),
+        safe(loadBrightStars(), []),
+        safe(loadNearStars(), []),
+        safe(loadLocalGalaxies(), []),
+        safe(loadNamedGalaxies(), []),
+        safe(
+          fetch(`${import.meta.env.BASE_URL}data/compact-objects.json`).then((r) => r.json() as Promise<{ objects: Parameters<typeof compactEntries>[0] }>).then((d) => d.objects),
+          [],
+        ),
+        safe(loadGwEvents(), []),
+        safe(loadFlybys(), []),
+        safe(loadVoyagerEncounters(), []),
+        safe(loadEclipses(), []),
+      ]);
+      const index = new SearchIndex();
+      index.add(skyBodyEntries());
+      index.add(starEntries(bright, near));
+      index.add(nebulaEntries(nebulae));
+      index.add(clusterEntries(clusters));
+      index.add(compactEntries(compact));
+      if (catalog) index.add(exoplanetEntries(catalog));
+      index.add(galaxyEntries([...local, ...named]));
+      index.add(structureEntries());
+      index.add(activityEntries({ presets: PRESETS, lessons: LESSONS, challenges: CHALLENGES, gw, flybys, voyager, eclipses }));
+      return index;
+    })();
+    return this.searchIndex;
+  }
+
+  private openSearch(): void {
+    $('search-overlay').classList.remove('hidden');
+    const input = $<HTMLInputElement>('global-search');
+    input.focus();
+    input.select();
+    $('global-search-status').textContent = 'Loading the catalogues…';
+    void this.buildSearchIndex().then((index) => {
+      $('global-search-status').textContent = `${index.size.toLocaleString('en-US')} things to find: stars, nebulae, clusters, black holes, exoplanets, galaxies, scenarios, lessons and more. ↑↓ to choose, Enter to go.`;
+      this.renderSearch();
+    });
+  }
+
+  private closeSearch(): void {
+    $('search-overlay').classList.add('hidden');
+    $<HTMLInputElement>('global-search').blur();
+  }
+
+  private async renderSearch(): Promise<void> {
+    const q = $<HTMLInputElement>('global-search').value;
+    const index = await this.buildSearchIndex();
+    // The bodies in the current scene are searchable too.
+    const scene: SearchEntry[] = this.sim.bodies
+      .filter((b) => !/^Body \d+$/.test(b.name))
+      .map((b) => ({ name: b.name, kind: 'In this scene', detail: kindLabel(b), rank: 100, action: { type: 'body', id: b.id } }));
+    this.searchResults = q.trim() ? index.search(q, 40, scene) : [];
+    this.searchActive = 0;
+    $('global-results').innerHTML = this.searchResults.length
+      ? this.searchResults
+          .map((r, i) => `<li data-i="${i}" class="${i === 0 ? 'active' : ''}"><span class="kind">${escapeHtml(r.kind)}</span><span class="name">${escapeHtml(r.name)}</span><span class="detail">${escapeHtml(r.detail ?? '')}</span></li>`)
+          .join('')
+      : q.trim()
+        ? '<li class="muted">Nothing found</li>'
+        : '';
+  }
+
+  private moveSearch(step: number): void {
+    const items = $('global-results').querySelectorAll('li[data-i]');
+    if (!items.length) return;
+    items[this.searchActive]?.classList.remove('active');
+    this.searchActive = (this.searchActive + step + items.length) % items.length;
+    items[this.searchActive].classList.add('active');
+    items[this.searchActive].scrollIntoView({ block: 'nearest' });
+  }
+
+  /** Go to a search result: switch to the right view and fly, turn or load. */
+  private async goToSearchResult(r: SearchEntry): Promise<void> {
+    this.closeSearch();
+    const a = r.action;
+    switch (a.type) {
+      case 'map': {
+        if (!this.galaxyBuilt || this.galaxySeed !== MILKY_WAY_SEED || this.galaxyOrigin !== 'Milky Way') this.buildGalaxy(MILKY_WAY_SEED);
+        if (this.view !== 'galaxy') await this.switchView('galaxy');
+        const size = ((a.sizePc ?? 0) / 1000) * UNITS_PER_KPC;
+        this.galaxy.flyToPoint(new THREE.Vector3(...galacticToMap(a.l, a.b, a.dKpc)), Math.max(0.3, size * 4));
+        toast(`Flying to ${r.name}`);
+        break;
+      }
+      case 'sky': {
+        await this.openSky();
+        const alt = a.body ? this.sky.goToBody(a.body) : this.sky.goToSky(a.v, a.radiusDeg);
+        if (a.body) this.skyPicked = a.body;
+        this.renderSkyList();
+        toast(alt !== undefined && alt < 0 ? `${r.name} is below the horizon from here right now (change the place or time in the panel).` : `Turning to ${r.name}`);
+        break;
+      }
+      case 'galaxy':
+      case 'cosmos': {
+        if (this.view !== 'cosmos') await this.openCosmos(this.view === 'galaxy');
+        if (a.type === 'galaxy') {
+          const i = this.cosmos.indexOf(a.name);
+          if (i >= 0) {
+            this.selectCosmos(i);
+            this.cosmos.flyTo(i);
+          }
+        } else {
+          this.cosmos.flyToPoint(new THREE.Vector3(...galacticToCosmos(a.l, a.b, a.dMpc)), a.dMpc < 1 ? 3 : 8);
+        }
+        toast(`Flying to ${r.name}`);
+        break;
+      }
+      case 'body': {
+        if (this.view !== 'system') await this.switchToSandbox();
+        const body = this.sim.getBody(a.id);
+        if (body) {
+          this.selectBody(body);
+          this.system.follow(body.id);
+        }
+        break;
+      }
+      case 'exo': {
+        const host = (await this.getCatalog().catch(() => undefined))?.hosts.find((h) => h.name === a.host);
+        if (!host) break;
+        if (this.view !== 'system') await this.switchToSandbox();
+        this.loadExoHost(host);
+        break;
+      }
+      case 'preset': {
+        const preset = PRESETS.find((p) => p.id === a.id);
+        if (!preset) break;
+        if (this.view !== 'system') await this.switchToSandbox();
+        this.loadScenario({ name: preset.name, load: () => preset.load(this.sim), presetId: preset.id });
+        break;
+      }
+      case 'lesson': {
+        const def = LESSONS.find((l) => l.id === a.id);
+        if (def) this.startLesson(def);
+        break;
+      }
+      case 'challenge': {
+        const def = CHALLENGES.find((c) => c.id === a.id);
+        if (!def) break;
+        if (this.view !== 'system') await this.switchToSandbox();
+        this.startChallenge(def);
+        break;
+      }
+      case 'gw':
+      case 'flyby':
+      case 'voyager': {
+        // The same as choosing it in the Sandbox panel.
+        if (this.view !== 'system') await this.switchToSandbox();
+        const [select, button] = a.type === 'gw' ? ['gw-select', 'btn-gw-load'] : a.type === 'flyby' ? ['flyby-select', 'btn-flyby-load'] : ['voyager-select', 'btn-voyager-load'];
+        $<HTMLSelectElement>(select).value = String(a.index);
+        $(button).click();
+        break;
+      }
+      case 'eclipse': {
+        await this.openSky();
+        $<HTMLSelectElement>('eclipse-select').value = String(a.index);
+        $('btn-eclipse').click();
+        break;
+      }
+    }
+  }
+
   private async getCatalog(): Promise<ExoCatalog> {
     if (this.catalog) return this.catalog;
     $('exo-status').textContent = 'Loading the NASA Exoplanet Archive catalogue…';
@@ -2972,9 +3150,19 @@ export class App {
     c.addEventListener('dblclick', (e) => this.handleDoubleClick(e));
 
     window.addEventListener('keydown', (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        this.openSearch();
+        return;
+      }
       if (isTyping(e) || this.tutorial.isOpen) return;
       const key = e.key.toLowerCase();
       const mod = e.ctrlKey || e.metaKey;
+      if (e.key === '/') {
+        e.preventDefault();
+        this.openSearch();
+        return;
+      }
       if (mod && key === 'z') {
         e.preventDefault();
         if (e.shiftKey) this.redo();
@@ -3466,6 +3654,29 @@ export class App {
       toast('Pinned. Change something (or press Reset) and compare the new run.');
     });
     $('btn-learn').addEventListener('click', () => this.openLessonMenu());
+    $('btn-search').addEventListener('click', () => this.openSearch());
+    $('global-search').addEventListener('input', () => void this.renderSearch());
+    $('global-search').addEventListener('keydown', (e) => {
+      const k = (e as KeyboardEvent).key;
+      if (k === 'ArrowDown' || k === 'ArrowUp') {
+        e.preventDefault();
+        this.moveSearch(k === 'ArrowDown' ? 1 : -1);
+      } else if (k === 'Enter') {
+        // Not also the views' own Enter ("visit this star / galaxy").
+        e.stopPropagation();
+        const r = this.searchResults[this.searchActive];
+        if (r) void this.goToSearchResult(r);
+      } else if (k === 'Escape') {
+        this.closeSearch();
+      }
+    });
+    $('global-results').addEventListener('click', (e) => {
+      const li = (e.target as HTMLElement).closest<HTMLElement>('li[data-i]');
+      const r = li ? this.searchResults[Number(li.dataset.i)] : undefined;
+      if (r) void this.goToSearchResult(r);
+    });
+    // Clicking outside the box closes it.
+    $('search-overlay').addEventListener('pointerdown', (e) => e.target === $('search-overlay') && this.closeSearch());
     $('lesson-menu-close').addEventListener('click', () => $('lesson-menu').classList.add('hidden'));
     $('lesson-list').addEventListener('click', (e) => {
       const id = (e.target as HTMLElement).closest<HTMLElement>('[data-lesson]')?.dataset.lesson;

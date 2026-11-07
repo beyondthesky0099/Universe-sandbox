@@ -180,6 +180,13 @@ Plan, in priority order:
   (`remnantClouds` in systemView, scaled to the ejecta edge each frame) coloured by element;
   ejecta are capped at the decelerating shock's speed (reverse shock).
 
+### N. Search everything
+- [x] `src/ui/search.ts` (SearchIndex, normalize, ranking: exact 650 / prefix / word starts /
+  substring, + 1.5 × rank), `src/ui/searchSources.ts` (entries per catalogue, each with an
+  action), `App.goToSearchResult` (map / sky / galaxy / cosmos / body / exo / preset / lesson /
+  challenge / gw / flyby / voyager / eclipse). Built lazily on first open. Tests:
+  tests/search.test.ts on the real data files. `isTyping` now covers search inputs.
+
 ### M. Supernovae by mass and metallicity
 - [x] `src/sim/stellarFate.ts`: winds (Z^0.85), stripping mass 25 M☉·Z^−1.2, helium core
   0.1 M^1.32, fates ECSN / II-P / II-L / IIb / Ib / Ic / Ic-BL / PPISN / PISN / failed, progenitor

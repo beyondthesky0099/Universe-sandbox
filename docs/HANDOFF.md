@@ -180,6 +180,14 @@ Plan, in priority order:
   (`remnantClouds` in systemView, scaled to the ejecta edge each frame) coloured by element;
   ejecta are capped at the decelerating shock's speed (reverse shock).
 
+### Q. Real atmospheres
+- [x] `src/render/atmosphere.ts`: ATMOSPHERES (Earth, Mars, Venus, Titan, giants), atmosphereFor
+  (named or by procedural rim colour), shellScale, scatteringMaterial (single scattering, 14 view
+  × 5 light samples, Rayleigh + Henyey–Greenstein-like Mie phase, premultiplied blending,
+  logarithmic depth chunks — the sandbox renderer uses a log depth buffer), insideAware (front
+  faces from outside, back faces from inside), aimSun (per frame from the heaviest star). Wired in
+  BodyVisual.applyDetail/update. Tests: tests/atmosphere.test.ts.
+
 ### P. Spaceships
 - [x] `src/sim/spaceship.ts` (ENGINES, autopilotAccel: brachistochrone approach, then steer to
   the local circular orbit; settles when near-circular within 20% of the radius; orbitAround).

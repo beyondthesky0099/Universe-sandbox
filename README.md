@@ -413,6 +413,22 @@ chosen your own settings, and runs the orbit forecast every 2 s instead of every
 a phone emulation (390×844 screen, 4× slower CPU) this took the default Solar System from
 about 2.5 to 17 frames per second. In the Sky tab, pinch to zoom.
 
+## Real atmospheres
+
+Planets with air scatter sunlight as real atmospheres do (`src/render/atmosphere.ts`): single
+scattering computed per pixel, with molecules scattering blue (Rayleigh, ∝ λ⁻⁴) and haze or dust
+scattering mostly forwards (Mie), and light dimmed on its way in and out. The coefficients and
+scale heights are the real ones:
+- **Earth:** Bruneton & Neyret 2008: a blue limb and sky, and red-orange light along the day–night line.
+- **Mars:** thin CO₂ plus blue-absorbing dust: a pale butterscotch haze.
+- **Venus:** thick sulphuric-acid haze: a featureless yellow-white veil, as in visible-light photos.
+- **Titan:** orange tholin smog reaching 600 km.
+- **The giant planets:** thin limbs.
+- **Procedural worlds:** air picked from their climate.
+
+Each atmosphere is drawn in its real proportion to the planet's radius (Earth's 100 km is 1.6%),
+at least 2% so it stays visible.
+
 ## Fly a spaceship
 
 In the Sandbox, **🚀 Fly a spaceship** puts a ship in orbit around the selected body (or

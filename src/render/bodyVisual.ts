@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { aimSun, atmosphereFor, insideAware, scatteringMaterial, shellScale } from './atmosphere';
 import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import type { Body, BodyKind } from '../sim/body';
 import type { Climate } from '../sim/climate';
@@ -363,9 +364,13 @@ export class BodyVisual {
       this.clouds.scale.setScalar(1.015);
       this.mesh.add(this.clouds);
     }
-    if (tex.atmosphere !== undefined) {
-      this.atmosphere = new THREE.Mesh(SPHERE, atmosphereMaterial(tex.atmosphere, body.kind === 'gas' ? 0.4 : 0.9));
-      this.atmosphere.scale.setScalar(1.04);
+    // Real scattering for worlds with air (atmosphere.ts); the named ones get their own.
+    const air = atmosphereFor(this.name, tex.atmosphere, body.kind);
+    if (air) {
+      this.atmosphere = new THREE.Mesh(SPHERE, scatteringMaterial(air));
+      this.atmosphere.scale.setScalar(shellScale(air));
+      this.atmosphere.renderOrder = 1;
+      insideAware(this.atmosphere);
       this.mesh.add(this.atmosphere);
     }
     if (tex.rings) {
@@ -435,6 +440,7 @@ export class BodyVisual {
       this.mesh.rotation.y += dt * 0.3 * this.spinSign;
     }
     if (this.clouds) this.clouds.rotation.y += dt * 0.05;
+    if (this.atmosphere && sun) aimSun(this.atmosphere.material as THREE.ShaderMaterial, this.mesh, new THREE.Vector3(sun.x, sun.y, sun.z));
     if (this.glow) {
       const big = this.isProbe
         ? worldPerPixel * 14

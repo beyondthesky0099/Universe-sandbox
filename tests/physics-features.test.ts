@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { stellarFate } from '../src/sim/stellarFate';
 import { habitableZone, isHabitable, surfaceTemperature } from '../src/sim/climate';
 import { forecast } from '../src/sim/forecast';
 import { addOrbiting, PRESETS } from '../src/sim/presets';
@@ -114,11 +115,12 @@ describe('tidal disruption', () => {
 describe('supernovae', () => {
   it('massive stars leave a black hole, and losing most of their mass unbinds their planets', () => {
     const sim = new Simulation();
-    const star = sim.addBody({ name: 'Big', kind: 'star', mass: 25 });
+    // 45 M☉ at solar metallicity: a Wolf–Rayet star that dies as a Type Ic (stellarFate.ts).
+    const star = sim.addBody({ name: 'Big', kind: 'star', mass: 45 });
     const planet = addOrbiting(sim, star, { name: 'P', mass: JUPITER_MASS, kind: 'gas' }, { a: 8 });
     expect(sim.supernova(star)).toBe(true);
     expect(star.kind).toBe('blackhole');
-    expect(star.mass).toBeCloseTo(7.5);
+    expect(star.mass).toBeCloseTo(stellarFate(45).remnant!.mass);
     expect(sim.particles.count).toBeGreaterThan(500);
     sim.advance(0.5, 1e6, 1e9);
     const dx = planet.x - star.x, dy = planet.y - star.y, dz = planet.z - star.z;

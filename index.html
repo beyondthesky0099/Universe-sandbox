@@ -17,6 +17,7 @@
       <header id="topbar">
         <button id="btn-menu" class="icon only-mobile" title="Show / hide panels" aria-label="Toggle panels">☰</button>
         <div class="brand">✦ <span>Astrarium</span></div>
+        <button id="btn-search" class="icon" title="Search everything (/ or Ctrl+K)" aria-label="Search">🔍</button>
         <nav class="tabs" role="tablist">
           <button id="tab-cosmos" role="tab" title="Real galaxies beyond the Milky Way">Universe</button>
           <button id="tab-galaxy" role="tab">Galaxy Map</button>
@@ -366,6 +367,14 @@
         <p class="muted tiny" id="exo-credit"></p>
       </aside>
 
+      <div id="search-overlay" class="hidden" role="dialog" aria-label="Search everything">
+        <div class="search-box">
+          <input id="global-search" type="search" placeholder="Search stars, nebulae, galaxies, planets, scenarios…" spellcheck="false" autocomplete="off" />
+          <ul id="global-results" class="list"></ul>
+          <p id="global-search-status" class="muted small"></p>
+        </div>
+      </div>
+
       <aside id="body-panel" class="panel right hidden" data-view="system">
         <h2 id="body-name">Body</h2>
         <dl id="body-facts" class="facts"></dl>
@@ -390,6 +399,11 @@
           <p id="transfer-plan" class="muted small"></p>
           <button id="btn-transfer" class="primary hidden">Burn for transfer</button>
         </div>
+        <label id="metallicity-row" class="row slider hidden" title="How much of the star is heavier than helium, compared with the Sun. Metal-rich stars lose more mass to winds, which changes how they die.">
+          <span>Metallicity</span>
+          <input id="metallicity" type="range" min="-2" max="0.5" step="0.05" value="0" />
+          <output id="metallicity-out"></output>
+        </label>
         <div class="row buttons">
           <button id="btn-mass-down" title="Halve mass">Mass ÷2</button>
           <button id="btn-mass-up" title="Double mass">Mass ×2</button>

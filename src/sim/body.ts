@@ -29,6 +29,11 @@ export interface Body {
   tag?: string;
   /** Remaining delta-v budget (AU/yr) for probes. */
   fuel?: number;
+  /**
+   * Stars: metallicity Z/Z☉ (1 = the Sun's mix; 0.1 = a metal-poor halo star). Sets how much
+   * mass winds strip and so how the star dies (stellarFate.ts). Undefined means solar.
+   */
+  metallicity?: number;
 }
 
 export interface BodyInit {
@@ -48,6 +53,7 @@ export interface BodyInit {
   age?: number;
   tag?: string;
   fuel?: number;
+  metallicity?: number;
 }
 
 const KIND_RANK: Record<BodyKind, number> = { rocky: 0, gas: 1, star: 2, giant: 3, whitedwarf: 4, neutron: 5, blackhole: 6 };
@@ -228,5 +234,6 @@ export function createBody(init: BodyInit): Body {
     age: init.age ?? 0,
     tag: init.tag,
     fuel: init.fuel,
+    ...(init.metallicity !== undefined ? { metallicity: init.metallicity } : {}),
   };
 }

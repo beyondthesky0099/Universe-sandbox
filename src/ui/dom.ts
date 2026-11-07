@@ -29,5 +29,5 @@ export function toast(message: string, kind = ''): void {
 /** True if keyboard focus is in a text field, so global shortcuts should be ignored. */
 export function isTyping(e: KeyboardEvent): boolean {
   const t = e.target as HTMLElement | null;
-  return !!t && (t.tagName === 'INPUT' && (t as HTMLInputElement).type === 'text' || t.tagName === 'SELECT' || t.tagName === 'TEXTAREA');
+  return !!t && ((t.tagName === 'INPUT' && ['text', 'search', 'number', 'email', 'url'].includes((t as HTMLInputElement).type)) || t.tagName === 'SELECT' || t.tagName === 'TEXTAREA' || t.isContentEditable);
 }

@@ -180,6 +180,31 @@ Plan, in priority order:
   (`remnantClouds` in systemView, scaled to the ejecta edge each frame) coloured by element;
   ejecta are capped at the decelerating shock's speed (reverse shock).
 
+### N. Search everything
+- [x] `src/ui/search.ts` (SearchIndex, normalize, ranking: exact 650 / prefix / word starts /
+  substring, + 1.5 × rank), `src/ui/searchSources.ts` (entries per catalogue, each with an
+  action), `App.goToSearchResult` (map / sky / galaxy / cosmos / body / exo / preset / lesson /
+  challenge / gw / flyby / voyager / eclipse). Built lazily on first open. Tests:
+  tests/search.test.ts on the real data files. `isTyping` now covers search inputs.
+
+### M. Supernovae by mass and metallicity
+- [x] `src/sim/stellarFate.ts`: winds (Z^0.85), stripping mass 25 M☉·Z^−1.2, helium core
+  0.1 M^1.32, fates ECSN / II-P / II-L / IIb / Ib / Ic / Ic-BL / PPISN / PISN / failed, progenitor
+  T, R, L, explosion and remnant. `Body.metallicity` (Z/Z☉; protocol BODY_STRIDE 14, state,
+  shock frames carry subtype, envelope, interaction: SHOCK_STRIDE 19). Light curves: plateau from
+  the hydrogen envelope only; Arnett otherwise. Tests: tests/stellar-fate.test.ts. Body panel:
+  metallicity slider and fate line. Preset `supernova-zoo`.
+
+### L. 3D nebulae from photographs
+- [x] `src/render/nebulaVolume.ts`: `gasBrightness` (sky subtraction, star clipping against a 9×9
+  box blur), `volumeParticles` (sampling ∝ brightness, spheroidal depth around a noise-warped
+  mid-surface, colour per unit brightness, `opacity` so the blobs add up to the picture),
+  `NebulaVolume` (premultiplied additive points: colours above 1 would be clamped otherwise).
+- [x] `GalaxyView.updateVolumes`: within 8 picture-widths the nearest photographed nebulae
+  (`volumeBudget`: 2 desktop, 1 phone) fade from the photo billboard (`NebulaClouds.setFade`) to
+  the cloud by 4 widths, except within ~10–30° of the view from Earth. Axes from
+  `pictureAxes` (procgen/galaxy.ts), tested in tests/nebula-volume.test.ts.
+
 ### K. Click a label to go there
 - [x] `labelHitDepth` (galaxyView.ts) hit-tests textSprite labels; `userData.goto` on a label
   makes it a destination (GalaxyView.pickLabel / flyToPoint, SkyView.pickLabel / goToLabel,

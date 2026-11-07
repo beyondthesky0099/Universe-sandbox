@@ -169,6 +169,22 @@ work in the desktop app, so type your latitude and longitude instead.
   Sedov–Taylor, then the radiative snowplow (Cioffi et al. 1988). A body is blown apart when the
   energy it intercepts exceeds its gravitational binding energy; otherwise it survives, but loses
   its orbit if the star lost more than half its mass.
+  **Which supernova a star makes depends on its mass and metallicity** (`src/sim/stellarFate.ts`,
+  after Heger et al. 2003, Sukhbold et al. 2016 and Heger & Woosley 2002). Metal-rich stars lose
+  more mass to winds (Ṁ ∝ Z^0.85), and that decides what the star looks like when it dies and how
+  it explodes:
+  - 8–9.5 M☉: a faint electron-capture supernova (like SN 1054, which made the Crab).
+  - A red supergiant (~3,500 K, 500–1,000 R☉): a Type II-P with a ~100-day plateau and a neutron star.
+  - A blue supergiant at low metallicity (~16,000 K, ~40 R☉): a fainter plateau, like SN 1987A.
+  - Above ~25 M☉ at solar metallicity, winds strip the hydrogen: a Wolf–Rayet star (60,000–110,000 K) makes a Type Ib, Ic or broad-lined Ic hypernova (3×10⁵² erg), with no hydrogen in the debris.
+  - Metal-poor stars of ~40–100 M☉ collapse into black holes without a supernova, just a faint red glow.
+  - Helium cores of 35–64 M☉ make pulsational pair-instability supernovae: bright colliding shells, then a black hole below the ~45 M☉ mass gap.
+  - Helium cores of 64–133 M☉ (around 140–260 M☉ at low metallicity) make pair-instability supernovae, which leave nothing and make up to ~57 M☉ of ⁵⁶Ni.
+  - Type Ia white dwarfs make less ⁵⁶Ni the more metal-rich they are (Timmes et al. 2003).
+
+  Every star has a metallicity slider in its panel, and the panel says how the star will die. The
+  **Supernova Zoo** scenario sets off six stars with six different fates. These are single-star
+  trends: real boundaries also depend on rotation and binary companions.
   The ejecta are layered as in the explosion models (Woosley & Weaver 1995; Sukhbold et al. 2016;
   the W7 Type Ia model): iron and silicon in the slow core, then oxygen and helium, then the
   hydrogen envelope outside. Each glows in its strongest emission line: gold iron, orange-red
@@ -279,6 +295,12 @@ The map shows **5,676 real nebulae** from professional catalogues:
   - `node scripts/build-nebula-images.mjs` photographs every nebula with a distance that is at least 1.2′ in radius, then keeps only the fields where the plates show diffuse light.
   - Most HII regions were found by WISE in the infrared and are hidden behind dust in visible light; their photographs show only stars, so they keep their emission-colour clouds.
   - Phones load only the named nebulae's page (1 MB); desktops load all four pages (5 MB).
+- **Photographed nebulae become 3D clouds up close.** The photograph only shows a nebula as seen from Earth, so its depth is a model:
+  - thousands of glowing particles are placed where the picture is bright, in its colours;
+  - they spread through a roughly spheroidal volume about as deep as the nebula is wide, around a mid-surface warped by smooth noise, so filaments sit at different depths;
+  - stars in the photograph are clipped out first, so they don't become streaks.
+  - Seen from Earth's direction you get the sharp photograph; orbit more than about 30° away and it becomes the 3D cloud, which is as bright overall as the photograph.
+  - Two clouds at a time on desktops, one on phones. The depth is an illustration, not a measurement.
 - Dark nebulae dim the light behind them. 442 of them are placed at the distance of their molecular cloud, measured with Gaia by Zucker et al. 2020: for example the Horsehead in Orion B at 411 pc, the Pipe at 180 pc and Rho Ophiuchi at 139 pc.
 - Planetary-nebula distances come from Gaia parallaxes of their central stars where those are good, and otherwise from statistical estimates.
 - Some HII distances are kinematic estimates, which can be off in the outer Galaxy.
@@ -388,12 +410,27 @@ chosen your own settings, and runs the orbit forecast every 2 s instead of every
 a phone emulation (390×844 screen, 4× slower CPU) this took the default Solar System from
 about 2.5 to 17 frames per second. In the Sky tab, pinch to zoom.
 
+## Search everything
+
+The 🔍 button (or `/`, or Ctrl+K) searches about 28,000 things at once, and picking a result
+takes you there:
+- **Galaxy Map:** nebulae and star clusters with measured distances, black holes and pulsars.
+- **Sky tab:** named stars, the Sun, the Moon and the planets, and nebulae or clusters without a distance.
+- **Universe tab:** galaxies and galaxy clusters.
+- **Sandbox:** exoplanet systems and their planets (the system loads), the bodies in the current
+  scene, and scenarios, gravitational-wave events, asteroid flybys and Voyager encounters.
+- **Also:** lessons and challenges start, and eclipses open in the Sky tab.
+
+Matching ignores case, spaces, punctuation and accents, and knows catalogue names: "m42",
+"ngc 7293", "LDN 1689", "trappist-1 e" and "car neb" all work. Famous objects rank first.
+
 ## Controls
 
 | Input | Action |
 | --- | --- |
 | Drag / right-drag / scroll | Orbit / pan / zoom (in Spawn and Nudge modes, right-drag orbits) |
 | Click / double-click | Select / select and follow (Sandbox); select / fly to (Galaxy) |
+| 🔍, `/` or Ctrl+K | Search everything, then Enter or click to go there |
 | Click a name label | Go there: follow the body or the Lagrange point (Sandbox), fly to it (Galaxy Map, Universe), turn and zoom to it (Sky) |
 | `Space` | Pause / resume |
 | Hold `R` (or ⏪) | Rewind |

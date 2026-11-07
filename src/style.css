@@ -1340,3 +1340,38 @@ body.photo-mode #toasts {
   padding: 3px 7px;
   font-size: 12px;
 }
+
+/* Body "More about" section */
+#body-wiki {
+  margin: 8px 0;
+  border-top: 1px solid rgba(140, 170, 255, 0.15);
+  padding-top: 6px;
+}
+#body-wiki summary {
+  cursor: pointer;
+  font-weight: 600;
+  padding: 4px 0;
+}
+.esi {
+  margin: 8px 0 4px;
+  font-size: 12px;
+}
+.esi-bar {
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+  margin: 4px 0;
+}
+.esi-bar span {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #c84a3a, #d9b44a 50%, #4ac26b 80%, #4ac2b4);
+  background-size: 100% 100%;
+}
+.esi-parts {
+  color: rgba(220, 230, 255, 0.6);
+}
+#body-wiki-links a {
+  color: #8fc1ff;
+}

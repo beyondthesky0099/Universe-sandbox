@@ -451,6 +451,18 @@ Planets with a magnetic field and air glow around their magnetic poles (`src/ren
 - **Procedural worlds:** gas giants, and rocky worlds with air from 0.3 Earth masses up, get a
   modelled aurora.
 
+## More about a planet
+
+Select a planet or moon and open **📖 More about** in its panel:
+- **Measured physical values:** radius, surface gravity, escape velocity, mean density, rotation,
+  axial tilt and albedo (JPL), or for exoplanets the NASA Exoplanet Archive's radius, equilibrium
+  temperature and discovery year. Modelled worlds get their size from their mass, and say so.
+- **Worked out from its orbit:** starlight received, equilibrium temperature, and Hill sphere.
+- **Earth Similarity Index** (Schulze-Makuch et al. 2011): radius, density, escape velocity and
+  temperature compared with Earth's. Earth scores 1, Mars ≈ 0.7 and Jupiter ≈ 0.3. The index
+  measures likeness, not habitability.
+- Links to Wikipedia, or to the NASA Exoplanet Archive for exoplanets.
+
 ## Places
 
 Press **L** or 📍 to save the current viewpoint in any view and come back to it later:

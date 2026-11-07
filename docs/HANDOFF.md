@@ -205,6 +205,17 @@ Plan, in priority order:
 - BodyVisual adds it in applyDetail and updates it only when the planet is more than 14 px across
   and a star is present. Tests: tests/aurora.test.ts.
 
+### U. Planet "More about" section
+- [x] `src/sim/planetFacts.ts`:
+  - planetFacts: gravity, escape velocity, density, insolation, equilibrium T and Hill radius.
+    The radius is measured where known, otherwise from physicalRadius.
+  - earthSimilarity: ESI with weights 0.57, 1.07, 0.70 and 5.58 (n = 4; Earth 288 K). esiLabel.
+  - wikipediaUrl (disambiguation table) and exoplanetArchiveUrl.
+- App.updateBodyWiki fills `<details id="body-wiki">`, only while it is open.
+  - It uses real data when the mass still matches the catalogue to within 1%.
+  - Exoplanets use the scenario's ExoHost.
+- Tests: tests/planet-facts.test.ts.
+
 ### T. Places
 - [x] `src/ui/places.ts`:
   - Place / PlaceView: system, galaxy, cosmos, sky, or a built-in "search" query.

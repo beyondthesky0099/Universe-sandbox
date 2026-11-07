@@ -27,6 +27,8 @@ import { synthesizeChirp } from './sim/gwChirp';
 import { loadHalley2061, loadHalleyReturn } from './sim/halley';
 import { loadNeighbourhood100, loadStars100 } from './sim/gaia100';
 import { getSolarData, loadSolarData, poleScene } from './sim/solarSystemData';
+import { esiLabel, exoplanetArchiveUrl, planetFacts, wikipediaUrl } from './sim/planetFacts';
+import { stellarFlux } from './sim/climate';
 import { isCompact, kindForMass, mainSequenceLifetime, mergedKind, NEUTRON_MAX_MASS, type Body, type BodyKind } from './sim/body';
 import { isTidallyLocked, nearResonance, orbitalPeriod } from './sim/analysis';
 import { bodyTemperature, climateFor, formatTemperature, isHabitable } from './sim/climate';
@@ -2604,6 +2606,68 @@ export class App {
     $('btn-follow').textContent = followed ? 'Unfollow' : 'Follow';
   }
 
+  /**
+   * The "More about" section: physical facts worked out from mass, size and orbit (measured
+   * values for real bodies), the Earth Similarity Index and links to read more.
+   */
+  private updateBodyWiki(body: Body, craft: boolean, parent: Body | undefined): void {
+    const box = $('body-wiki');
+    const planetLike = !craft && (body.kind === 'rocky' || body.kind === 'gas') && body.tag !== 'galaxy';
+    box.classList.toggle('hidden', !planetLike);
+    $('body-wiki-name').textContent = body.name;
+    // Only worked out while the section is open.
+    if (!planetLike || !(box as HTMLDetailsElement).open) return;
+    // Measured data, if this is the real body (and its mass hasn't been changed).
+    const solar = getSolarData()?.byName.get(body.name);
+    const real = solar?.mass && Math.abs(body.mass / solar.mass - 1) < 0.01 ? solar : undefined;
+    const origin = this.scenario.origin;
+    const exo = origin?.kind === 'exo' ? origin.host.planets.find((p) => p.name === body.name) : undefined;
+    const exoReal = exo && Math.abs(body.mass / (exo.massEarth * EARTH_MASS) - 1) < 0.01 ? exo : undefined;
+    const radiusKm = real?.radiusKm ?? (exoReal?.radiusEarth ? exoReal.radiusEarth * 6371 : undefined);
+    const distance = parent ? Math.hypot(body.x - parent.x, body.y - parent.y, body.z - parent.z) : undefined;
+    const f = planetFacts({
+      kind: body.kind,
+      mass: body.mass,
+      radiusKm,
+      albedo: real?.albedo,
+      flux: stellarFlux(this.sim.bodies, body.x, body.y, body.z, body),
+      surfaceK: bodyTemperature(this.sim.bodies, body),
+      parentMass: parent?.mass,
+      distance,
+    });
+    const me = body.mass / EARTH_MASS;
+    const rows: [string, string][] = [
+      [f.radiusEstimated ? 'Radius (from mass)' : 'Radius', `${f.radiusEstimated ? '≈ ' : ''}${Math.round(f.radiusKm).toLocaleString('en-US')} km (${fmt(f.radiusKm / 6371)} R⊕)`],
+      ['Surface gravity', `${f.gravity.toFixed(f.gravity < 1 ? 2 : 1)} m/s² (${fmt(f.gravity / 9.80665)} g)`],
+      ['Escape velocity', `${f.escapeKms.toFixed(f.escapeKms < 1 ? 2 : 1)} km/s`],
+      ['Mean density', `${f.density.toFixed(2)} g/cm³`],
+    ];
+    if (exoReal?.massEstimated) rows.push(['Mass', `${fmt(me)} Earth masses (estimated from its radius)`]);
+    if (real?.rotationHours) {
+      const h = real.rotationHours;
+      rows.push(['Day (rotation)', `${h < 48 ? `${h.toFixed(1)} hours` : `${fmt(h / 24)} days`}${real.retrograde ? ', backwards' : ''}`]);
+    } else if (real?.synchronous) {
+      rows.push(['Day (rotation)', 'Same as its orbit (tidally locked)']);
+    }
+    if (real?.obliquityDeg !== undefined) rows.push(['Axial tilt', `${real.obliquityDeg.toFixed(1)}°`]);
+    if (f.insolation > 1e-6) rows.push(['Starlight', `${fmt(f.insolation)}× Earth's`], ['Equilibrium temp.', `${Math.round(f.equilibriumK)} K${real?.albedo !== undefined ? ` (albedo ${real.albedo})` : ''}`]);
+    if (exoReal?.eqTempK) rows.push(['Measured eq. temp.', `${Math.round(exoReal.eqTempK)} K`]);
+    if (exoReal?.year) rows.push(['Discovered', String(exoReal.year)]);
+    if (f.hillAU && parent) rows.push([`Hill sphere`, `${formatDistance(f.hillAU)} (moons can orbit within ~⅓ of it)`]);
+    setFacts($('body-wiki-facts'), rows);
+    const p = f.esiParts;
+    const esiHtml = `<div class="esi" title="Earth Similarity Index (Schulze-Makuch et al. 2011): 1 is Earth. It compares size, density, escape velocity and temperature, not habitability."><div>Earth Similarity Index <b>${f.esi.toFixed(2)}</b> · ${esiLabel(f.esi)}</div><div class="esi-bar"><span style="width:${(f.esi * 100).toFixed(1)}%"></span></div><div class="esi-parts">size ${p.radius.toFixed(2)} · density ${p.density.toFixed(2)} · escape ${p.escape.toFixed(2)} · temperature ${p.temperature.toFixed(2)}</div></div>`;
+    const esiEl = $('body-wiki-esi');
+    if (esiEl.innerHTML !== esiHtml) esiEl.innerHTML = esiHtml;
+    const links: string[] = [];
+    if (real) links.push(`<a href="${wikipediaUrl(body.name, real.kind === 'moon')}" target="_blank" rel="noopener">Wikipedia ↗</a>`);
+    if (origin?.kind === 'exo' && exo) links.push(`<a href="${exoplanetArchiveUrl(origin.host.name)}" target="_blank" rel="noopener">NASA Exoplanet Archive ↗</a>`);
+    if (!real && !exoReal) links.push('<span class="muted">Modelled values: size from mass, temperature from starlight.</span>');
+    const linkHtml = links.join(' · ');
+    const linkEl = $('body-wiki-links');
+    if (linkEl.innerHTML !== linkHtml) linkEl.innerHTML = linkHtml;
+  }
+
   private updateBodyPanel(): void {
     const body = this.selectedBody();
     if (!body) return;
@@ -2698,6 +2762,7 @@ export class App {
       );
     }
     setFacts($('body-facts'), facts);
+    this.updateBodyWiki(body, craft, parent);
     const html = alerts.join('');
     const alertsEl = $('body-alerts');
     if (alertsEl.innerHTML !== html) alertsEl.innerHTML = html;
@@ -4368,6 +4433,7 @@ export class App {
     $('btn-search').addEventListener('click', () => this.openSearch());
     this.bindPhoto();
     this.bindPlaces();
+    $('body-wiki').addEventListener('toggle', () => this.updateBodyPanel());
     $('btn-ship').addEventListener('click', () => this.spawnShip());
     $('ship-engine').innerHTML = ENGINES.map((e) => `<option value="${e.id}">${escapeHtml(e.label)}</option>`).join('');
     $('ship-engine').addEventListener('change', () => {

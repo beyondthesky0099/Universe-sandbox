@@ -261,6 +261,7 @@ export class SystemView {
     this.flashes.length = 0;
     this.selectedId = undefined;
     this.followId = undefined;
+    this.followedLagrange = undefined;
     this.approachGroup.visible = false;
     const el = setup.elevation ?? 0.8;
     const dir = setup.viewFrom ? new THREE.Vector3(...setup.viewFrom).normalize() : new THREE.Vector3(0, Math.sin(el), Math.cos(el));
@@ -386,6 +387,7 @@ export class SystemView {
   /** Follow a body. Without `distance`, zoom to see it properly but keep a reasonable user zoom. */
   follow(id: number | undefined, distance?: number): void {
     this.followId = id;
+    this.followedLagrange = undefined;
     this.followBlend = 0;
     const body = id !== undefined ? this.sim.getBody(id) : undefined;
     if (body) {
@@ -418,6 +420,23 @@ export class SystemView {
         const d = Math.exp(THREE.MathUtils.lerp(Math.log(this.followStartDistance), Math.log(this.followDistance), ease));
         offset.setLength(d);
         this.camera.position.copy(this.controls.target).add(offset);
+      }
+    }
+    // Following a Lagrange point: the same glide, without changing the zoom.
+    if (this.followedLagrange !== undefined && !followed) {
+      // Where the point is now (the markers themselves are placed later in the frame).
+      const sel = this.selectedId !== undefined ? this.sim.getBody(this.selectedId) : undefined;
+      const parent = this.lagrangeEnabled && sel ? this.sim.parentOf(sel) : undefined;
+      const p = sel && parent ? lagrangePoints(parent, sel)[this.followedLagrange] : undefined;
+      if (!p) {
+        this.followedLagrange = undefined;
+      } else {
+        const blending = this.followBlend < 1;
+        this.followBlend = Math.min(1, this.followBlend + dt * 1.2);
+        const ease = 1 - Math.pow(1 - this.followBlend, 3);
+        const delta = new THREE.Vector3(p.x, p.y, p.z).sub(this.controls.target).multiplyScalar(blending ? ease : 1);
+        this.controls.target.add(delta);
+        this.camera.position.add(delta);
       }
     }
     if (this.cameraAnim) {
@@ -810,18 +829,33 @@ export class SystemView {
     }
   }
 
-  /** The body whose name label is under a point on the page (client pixels), if any. */
-  pickLabel(clientX: number, clientY: number): number | undefined {
-    if (!this.labelsEnabled) return undefined;
-    for (const [id, v] of this.visuals) {
-      const el = v.label.element;
-      if (!v.label.visible || el.style.display === 'none') continue;
+  /**
+   * The label under a point on the page (client pixels), if any: a body's name (its id), or a
+   * Lagrange point's (its position).
+   */
+  pickLabel(clientX: number, clientY: number): { body: number } | { name: string; lagrange: number } | undefined {
+    const hit = (el: HTMLElement) => {
+      if (el.style.display === 'none') return false;
       const r = el.getBoundingClientRect();
       // A few pixels of slack around short labels.
-      if (r.width > 0 && clientX >= r.left - 3 && clientX <= r.right + 3 && clientY >= r.top - 3 && clientY <= r.bottom + 3) return id;
+      return r.width > 0 && clientX >= r.left - 3 && clientX <= r.right + 3 && clientY >= r.top - 3 && clientY <= r.bottom + 3;
+    };
+    for (const [i, m] of this.lagrangeMarkers.entries()) {
+      const label = m.children[0] as CSS2DObject;
+      if (m.visible && hit(label.element)) return { name: label.element.textContent ?? '', lagrange: i };
     }
+    if (!this.labelsEnabled) return undefined;
+    for (const [id, v] of this.visuals) if (v.label.visible && hit(v.label.element)) return { body: id };
     return undefined;
   }
+
+  /** Glide the view to a Lagrange point (0–4 for L1–L5) and keep it centred as it moves along the orbit. */
+  followLagrange(index: number): void {
+    this.followId = undefined;
+    this.followedLagrange = index;
+    this.followBlend = 0;
+  }
+  private followedLagrange?: number;
 
   /** Nearest body to a screen point, using projected positions (forgiving for tiny bodies). */
   pick(ndcX: number, ndcY: number, viewportWidth: number, viewportHeight: number): Body | undefined {

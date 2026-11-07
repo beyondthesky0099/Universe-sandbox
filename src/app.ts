@@ -1826,7 +1826,7 @@ export class App {
   private updateHint(): void {
     let text: string;
     if (this.view === 'sky') text = 'Drag to look around · Scroll to zoom · Click a name to turn to it · Click the Moon or a planet for details';
-    else if (this.view === 'cosmos') text = 'Click a galaxy to inspect · Double-click to fly there · Zoom right in (or Enter) to visit · Scroll out for the cosmic web';
+    else if (this.view === 'cosmos') text = 'Click a name to fly there · Click a galaxy to inspect · Double-click to fly there · Zoom right in (or Enter) to visit · Scroll out for the cosmic web';
     else if (this.view === 'galaxy') text = 'Click a name to fly there · Click a star to inspect · Double-click to fly there · Zoom right in (or Enter) to visit · Zoom far out for other galaxies';
     else if (this.tool === 'spawn') text = 'Click to place · Drag to set velocity · Right-drag to orbit camera · Esc to cancel';
     else if (this.tool === 'nudge') text = 'Press on a body and drag to push it · Dashed line previews the new path · Right-drag to orbit camera';
@@ -2787,7 +2787,13 @@ export class App {
     if (this.view === 'system' && this.tool === 'select') {
       // A click on a name label goes there: select the body and follow it.
       const labelled = this.system.pickLabel(e.clientX, e.clientY);
-      const body = labelled !== undefined ? this.sim.getBody(labelled) : undefined;
+      if (labelled && 'lagrange' in labelled) {
+        // A Lagrange point: glide to it and keep it centred as it moves.
+        this.system.followLagrange(labelled.lagrange);
+        toast(`Following ${labelled.name}`);
+        return;
+      }
+      const body = labelled && 'body' in labelled ? this.sim.getBody(labelled.body) : undefined;
       if (body) {
         this.selectBody(body);
         this.system.follow(body.id);
@@ -2804,6 +2810,17 @@ export class App {
       }
       this.selectTarget(this.galaxy.pick(x, y, this.width, this.height));
     } else if (this.view === 'cosmos') {
+      const label = this.cosmos.pickLabel(x, y);
+      if (label) {
+        if (label.index !== undefined) {
+          this.selectCosmos(label.index);
+          this.cosmos.flyTo(label.index);
+        } else {
+          this.cosmos.flyToPoint(label.pos, label.distance);
+        }
+        toast(`Flying to ${label.name}`);
+        return;
+      }
       this.selectCosmos(this.cosmos.pick(x, y, this.width, this.height));
     } else if (this.view === 'sky') {
       const label = this.sky.pickLabel(x, y);
@@ -2881,6 +2898,7 @@ export class App {
         const onLabel =
           this.view === 'galaxy' ? !!this.galaxy.pickLabel(x, y)
           : this.view === 'sky' ? !!this.sky.pickLabel(x, y)
+          : this.view === 'cosmos' ? !!this.cosmos.pickLabel(x, y)
           : this.view === 'system' && this.tool === 'select' ? this.system.pickLabel(e.clientX, e.clientY) !== undefined
           : false;
         c.style.cursor = onLabel ? 'pointer' : '';

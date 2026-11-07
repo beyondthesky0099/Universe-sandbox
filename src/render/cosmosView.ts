@@ -12,7 +12,7 @@ import {
   type LocalGalaxy,
   type WebCatalog,
 } from '../sim/galaxies';
-import { textSprite } from './galaxyView';
+import { labelHitDepth, textSprite } from './galaxyView';
 import { ringTexture } from './textures';
 
 /**
@@ -175,6 +175,7 @@ export class CosmosView {
       if (!isFamous(g)) return;
       const sprite = textSprite(displayName(g), g.name === 'Milky Way' ? '#ffd36b' : '#cfe3ff', 0.75);
       sprite.position.set(this.positions[i * 3], this.positions[i * 3 + 1], this.positions[i * 3 + 2]);
+      sprite.userData.goto = { index: i };
       // Nearby companions only make sense when zoomed in; big galaxies stay labelled longer.
       const far = g.d < 0.3 ? 3 : g.d < 1.5 ? 12 : 45;
       this.labels.push({ sprite, min: 0, max: far });
@@ -183,6 +184,8 @@ export class CosmosView {
     for (const s of COSMIC_STRUCTURES) {
       const sprite = textSprite(s.name, '#ffb38a', 0.85);
       sprite.position.set(...galacticToCosmos(s.l, s.b, s.d));
+      // The Local Group is ~3 Mpc across, a rich galaxy cluster a few Mpc: stop where it fills the view.
+      sprite.userData.goto = { distance: s.name === 'Local Group' ? 3 : 8 };
       this.labels.push({ sprite, min: s.d < 1 ? 1.5 : s.d * 0.25, max: s.d < 1 ? 40 : 5000 });
       this.scene.add(sprite);
     }
@@ -235,6 +238,8 @@ export class CosmosView {
     this.scene.add(mesh);
     const sprite = textSprite('Cosmic microwave background · edge of the observable universe, 46 billion light-years', '#ffcf9a', 0.85);
     sprite.position.set(0, CMB_RADIUS_MPC * 1.02, 0);
+    // Out past the edge, to see the whole observable universe inside it.
+    sprite.userData.goto = { distance: CMB_RADIUS_MPC * 2.6, center: true };
     this.labels.push({ sprite, min: CMB_RADIUS_MPC * 0.8, max: 1e9 });
     this.scene.add(sprite);
   }
@@ -298,6 +303,32 @@ export class CosmosView {
     const to = this.position(index);
     const dir = this.camera.position.clone().sub(this.controls.target).normalize();
     this.anim = { fromTarget: this.controls.target.clone(), toTarget: to, fromPos: this.camera.position.clone(), toPos: to.clone().add(dir.multiplyScalar(distance)), t: 0, speed };
+  }
+
+  /** Animate the camera to a point, stopping `distance` from it on the side it's looking from. */
+  flyToPoint(to: THREE.Vector3, distance: number, speed = 0.8): void {
+    const dir = this.camera.position.clone().sub(this.controls.target).normalize();
+    this.anim = { fromTarget: this.controls.target.clone(), toTarget: to.clone(), fromPos: this.camera.position.clone(), toPos: to.clone().add(dir.multiplyScalar(distance)), t: 0, speed };
+  }
+
+  /** The label under a screen point (normalised device coordinates), nearest first, if any. */
+  pickLabel(ndcX: number, ndcY: number): { name: string; index?: number; pos: THREE.Vector3; distance: number } | undefined {
+    this.camera.updateMatrixWorld();
+    let best: { name: string; index?: number; pos: THREE.Vector3; distance: number } | undefined;
+    let bestDepth = Infinity;
+    for (const { sprite } of this.labels) {
+      const goto = sprite.userData.goto as { index?: number; distance?: number; center?: boolean } | undefined;
+      if (!goto || !sprite.visible || !sprite.parent) continue;
+      const depth = labelHitDepth(sprite, this.camera, ndcX, ndcY);
+      if (depth >= bestDepth) continue;
+      bestDepth = depth;
+      const name = String(sprite.userData.labelText).split(' · ')[0];
+      best =
+        goto.index !== undefined
+          ? { name, index: goto.index, pos: this.position(goto.index), distance: this.viewDistance(goto.index) }
+          : { name, pos: goto.center ? new THREE.Vector3() : sprite.position.clone(), distance: goto.distance ?? 8 };
+    }
+    return best;
   }
 
   /** Start close to a galaxy and pull back (arriving from its galaxy map). */

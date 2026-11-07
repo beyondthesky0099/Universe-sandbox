@@ -407,7 +407,7 @@ years.
 
 ### Scenarios
 Solar System (today) · Solar System (true scale) · Milky Way meets Andromeda (real) · Earth & Moon · Mars, Jupiter, Saturn, Uranus and Neptune with their moons ·
-Pluto & Charon · Protoplanetary Disk · Giant Impact · Ring Maker · Binary Star ·
+Pluto & Charon · Planet Formation · Giant Impact · Ring Maker · Binary Star ·
 Figure-8 Three-Body · Rogue Star Flyby · Black Hole Feast · Supernova · The Sun's Future ·
 Relativistic Precession · Black Hole Inspiral · Galactic Core · Star Cluster Collapse ·
 Self-Gravitating Disk · Galaxy Collision · Empty Space
@@ -456,6 +456,25 @@ Planets with a magnetic field and air glow around their magnetic poles (`src/ren
 - **No aurora:** Venus, Mars and the Moon have no global magnetic field.
 - **Procedural worlds:** gas giants, and rocky worlds with air from 0.3 Earth masses up, get a
   modelled aurora.
+
+## Planet formation
+
+The **Planet Formation** scene grows a planetary system from a young star's disc
+(`src/sim/planetFormation.ts`), following the core-accretion picture:
+- **The disc:** 80 planetary embryos carry the solids of a disc six times the minimum-mass solar
+  nebula (Hayashi 1981). Beyond the snow line at 2.7 AU ice freezes out, so there is about four
+  times more solid material there. The snow line is drawn as a blue ring, and the gas disc as a
+  warm glow.
+- **Collisions:** embryos crash and merge into bigger bodies. Their isolation masses (Kokubo & Ida
+  2002) range from about a Moon to a Mars inside the snow line, and several Earths beyond it.
+- **Giants:** a core past ~10 Earth masses pulls in gas faster and faster (runaway accretion,
+  Pollack et al. 1996). It stops when it opens a gap in the disc, about a Jupiter mass at 5 AU
+  (Lin & Papaloizou 1993), or when the gas runs out.
+- **Clearing:** after 3 million years (Haisch et al. 2001) the star blows the gas away, and what
+  hasn't become a giant by then stays rocky or icy. The new giants often scatter the leftover
+  embryos, and sometimes each other.
+- **Speed:** bodies here are drawn and collide much larger than real ones, so growth runs about
+  3,000× faster than in nature, and the gas clock is sped up to match.
 
 ## Land on planets
 
@@ -816,7 +835,9 @@ src/
   net/        companion-server and multiplayer clients
   ui/         history, sharing, graphs, replays/video, scripting console, tutorial
   audio.ts    WebAudio drone and effects
-  app.ts      wires everything together
+  app.ts      the orchestrator: simulation, views, frame loop, scenarios, history, selection
+  app/        one controller per feature (places, photo, landing, VR, sky, travel, ship,
+              search, body panel, galaxy map, lessons, input wiring…)
 server/       companion server (gallery, multiplayer, scene builder)
 scripts/      data build scripts
 tests/        vitest suites

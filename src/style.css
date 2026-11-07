@@ -1401,3 +1401,8 @@ body.landed #exo-panel,
 body.landed #graph-panel {
   display: none;
 }
+
+.snow-label {
+  color: #9fd4ff;
+  opacity: 0.8;
+}

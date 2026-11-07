@@ -20,6 +20,7 @@ import { shadowProfile } from '../sim/kerr';
 import { SHADOW_BINS, type LensInfo } from './postfx';
 import { DISK_LAYER } from './accretionDisk';
 import { Lander } from './lander';
+import { SNOW_LINE_AU } from '../sim/planetFormation';
 import { getSolarData } from '../sim/solarSystemData';
 
 const MAX_LIGHTS = 4;
@@ -214,6 +215,49 @@ export class SystemView {
       ring.visible = false;
       this.hzRings.push(ring);
       this.scene.add(ring);
+    }
+    // Planet formation: the snow line, beyond which water freezes into ice (planetFormation.ts).
+    this.snowLine.rotation.x = -Math.PI / 2;
+    this.snowLine.visible = false;
+    const tag = document.createElement('div');
+    tag.className = 'body-label snow-label';
+    tag.textContent = 'Snow line: ice beyond';
+    const label = new CSS2DObject(tag);
+    label.position.set(SNOW_LINE_AU, 0, 0);
+    this.snowLine.add(label);
+    this.scene.add(this.snowLine);
+    this.gasDisc.rotation.x = -Math.PI / 2;
+    this.gasDisc.visible = false;
+    this.gasDisc.renderOrder = -1;
+    this.scene.add(this.gasDisc);
+  }
+
+  private readonly snowLine = new THREE.Mesh(
+    new THREE.RingGeometry(SNOW_LINE_AU * 0.995, SNOW_LINE_AU * 1.005, 192, 1),
+    new THREE.MeshBasicMaterial({ color: 0x9fd4ff, transparent: true, opacity: 0.35, side: THREE.DoubleSide, depthWrite: false }),
+  );
+
+  /** The young star's gas disc: a soft glow from 0.3 to 12 AU that thins as it disperses. */
+  private readonly gasDisc = new THREE.Mesh(
+    new THREE.RingGeometry(0.3, 12, 160, 16),
+    new THREE.MeshBasicMaterial({ map: gasDiscTexture(), color: 0xd8a070, transparent: true, opacity: 0.5, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending }),
+  );
+
+  /** Show the snow line and the gas disc while a young star still has its gas. */
+  private updateSnowLine(): void {
+    const f = this.sim.formation;
+    const star = f ? this.sim.getBody(f.starId) : undefined;
+    const on = !!(f && star && this.sim.time < f.gasUntil && !this.lander.active);
+    this.snowLine.visible = on;
+    this.snowLine.children.forEach((c) => (c.visible = on));
+    this.gasDisc.visible = on;
+    if (on && star && f) {
+      this.snowLine.position.set(star.x, star.y, star.z);
+      this.gasDisc.position.set(star.x, star.y, star.z);
+      // Photoevaporation clears the disc from the inside out near the end: thin it over the last fifth.
+      const left = (f.gasUntil - this.sim.time) / (f.gasUntil * 0.2);
+      (this.gasDisc.material as THREE.MeshBasicMaterial).opacity = 0.5 * Math.min(1, Math.max(0, left));
+      this.gasDisc.rotation.z = -this.sim.time * 0.05;
     }
   }
 
@@ -604,6 +648,7 @@ export class SystemView {
     this.updateParticles();
     this.updateBodyPoints();
     this.updateHabitableZones();
+    this.updateSnowLine();
     this.updateOrbitLine();
     this.updateShockwaves();
     this.updateLagrange();
@@ -913,6 +958,7 @@ export class SystemView {
       supernova: 0xd8ecff,
       gwmerger: 0xb8d4ff,
       redgiant: 0xff7040,
+      formation: 0xffe0a0,
       nebula: 0x60f0d0,
       script: 0x000000,
       ship: 0x000000,
@@ -1098,4 +1144,34 @@ function hashName(name: string): number {
   let h = 2166136261;
   for (let i = 0; i < name.length; i++) h = Math.imul(h ^ name.charCodeAt(i), 16777619);
   return h >>> 0;
+}
+
+/** Radial glow for the gas disc (RingGeometry maps uv over its square: centre at 0.5, 0.5). */
+function gasDiscTexture(): THREE.Texture {
+  const size = 512;
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext('2d')!;
+  const img = ctx.createImageData(size, size);
+  const rand = mulberry32(7);
+  const phase = Array.from({ length: 6 }, () => rand() * Math.PI * 2);
+  for (let j = 0; j < size; j++) {
+    for (let i = 0; i < size; i++) {
+      const x = (i / size - 0.5) * 2, y = (j / size - 0.5) * 2;
+      const r = Math.hypot(x, y); // 1 = 12 AU
+      const au = r * 12;
+      // Fainter outwards (the gas thins as r^−1.5; drawn gentler so the whole disc shows), soft edges.
+      let a = 0.7 * Math.min(1, Math.pow(Math.max(au, 0.3), -0.45)) * Math.min(1, (au - 0.3) / 0.4) * Math.max(0, 1 - Math.pow(r, 4));
+      // Faint spiral texture, so the slow turning shows.
+      const t = Math.atan2(y, x);
+      a *= 0.8 + 0.2 * Math.sin(t * 2 + Math.log(au + 0.1) * 6 + phase[0]) * Math.sin(t * 3 - au + phase[1]);
+      const k = (j * size + i) * 4;
+      img.data[k] = img.data[k + 1] = img.data[k + 2] = 255;
+      img.data[k + 3] = Math.round(Math.max(0, Math.min(1, a)) * 255);
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
 }

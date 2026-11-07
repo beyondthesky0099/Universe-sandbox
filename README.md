@@ -394,7 +394,7 @@ about 2.5 to 17 frames per second. In the Sky tab, pinch to zoom.
 | --- | --- |
 | Drag / right-drag / scroll | Orbit / pan / zoom (in Spawn and Nudge modes, right-drag orbits) |
 | Click / double-click | Select / select and follow (Sandbox); select / fly to (Galaxy) |
-| Click a name label | Go there: follow the body (Sandbox), fly to it (Galaxy Map), turn and zoom to it (Sky) |
+| Click a name label | Go there: follow the body or the Lagrange point (Sandbox), fly to it (Galaxy Map, Universe), turn and zoom to it (Sky) |
 | `Space` | Pause / resume |
 | Hold `R` (or ⏪) | Rewind |
 | `Ctrl+Z` / `Ctrl+Shift+Z` | Undo / redo |

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { LabelDeclutter } from './labelDeclutter';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { generateGalaxy, type GalaxyData, type GalaxyOptions } from '../procgen/galaxy';
 import { mulberry32 } from '../procgen/rng';
@@ -289,6 +290,7 @@ export class GalaxyView {
     solRing.renderOrder = 11;
     const solLabel = textSprite('You are here', '#ffd36b');
     solLabel.userData.goto = { distance: 10, target: 'sol' };
+    solLabel.userData.priority = 1000;
     this.solMarker.add(solRing, solLabel);
     this.scene.add(this.solMarker);
 
@@ -540,6 +542,7 @@ export class GalaxyView {
   }
 
   private swarms?: THREE.Points;
+  private readonly declutter = new LabelDeclutter();
   private gaia?: THREE.Points;
 
   /** Real stars from Gaia (sim/gaiaBright.ts) around the Sun. Cleared on rebuild. */
@@ -688,7 +691,8 @@ export class GalaxyView {
     let bestDepth = Infinity;
     this.scene.traverseVisible((o) => {
       const goto = o.userData.goto as { distance: number; target?: GalaxyTarget } | undefined;
-      if (!goto || !(o instanceof THREE.Sprite) || o.material.opacity < 0.05 || !shown(o)) return;
+      // (Faded-out labels, hidden by the declutter, can't be clicked.)
+      if (!goto || !(o instanceof THREE.Sprite) || o.material.opacity < 0.3 || !shown(o)) return;
       const depth = labelHitDepth(o, this.camera, ndcX, ndcY);
       if (depth < bestDepth) {
         bestDepth = depth;
@@ -798,6 +802,8 @@ export class GalaxyView {
 
   update(dt: number): void {
     this.updateVolumes(dt);
+    // Overlapping names: keep the important ones, fade the rest until there's room.
+    this.declutter.update(this.scene, this.camera, dt);
     if (this.anim) {
       const a = this.anim;
       a.t = Math.min(1, a.t + dt * a.speed);

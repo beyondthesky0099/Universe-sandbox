@@ -31,14 +31,14 @@ export class TutorialUI {
       },
       {
         title: 'Spawn things',
-        body: 'Choose the Spawn tool, pick an object, then click to place it and drag to set its velocity. Auto-orbit gives it a circular orbit, and the dashed line previews its path.',
+        body: 'Choose ➕ Add in the bottom dock, pick an object, then click to place it and drag to set its velocity. Auto-orbit gives it a circular orbit, and the dashed line previews its path.',
         target: '#section-tools',
         enter: toSystem,
       },
       {
         title: 'Control time',
         body: 'Pause, hold ⏪ (or R) to rewind, and undo or redo any change with Ctrl+Z / Ctrl+Shift+Z.',
-        target: '#topbar .clock',
+        target: '#dock',
         enter: toSystem,
       },
       {
@@ -53,8 +53,8 @@ export class TutorialUI {
       },
       {
         title: 'Play, learn, create',
-        body: 'The top-right buttons open challenges and a daily puzzle (🏆), interactive lessons (📚), a live graph (📈), multiplayer rooms (👥), the community gallery (🌐) and a scripting console (⌨). Type a scene into “Create with Claude” to have it built for you.',
-        target: '#btn-console',
+        body: 'The ⋯ menu (top right) opens challenges and a daily puzzle, interactive lessons, a live graph, multiplayer rooms, the community gallery and a scripting console. Type a scene into “Create with Claude” to have it built for you.',
+        target: '#btn-more',
       },
       {
         title: 'Display',

@@ -3,58 +3,61 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <meta name="theme-color" content="#02030a" />
+    <meta name="theme-color" content="#030405" />
     <meta name="description" content="Astrarium: explore a procedural galaxy and play with real N-body gravity in your browser." />
     <title>Astrarium: Universe Sandbox</title>
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✦</text></svg>" />
+    <link rel="icon" type="image/svg+xml" href="brand-mark.svg" />
+    <!-- Beyond The Sky brand fonts; system fonts stand in when offline. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" />
   </head>
   <body>
     <div id="app">
       <canvas id="scene"></canvas>
       <div id="labels"></div>
       <div id="fade"></div>
+      <div id="splash" aria-hidden="true"><div class="splash-mark"></div><p class="splash-app">Astrarium</p></div>
+      <nav id="rail" aria-label="Panels"></nav>
 
       <header id="topbar">
         <button id="btn-menu" class="icon only-mobile" title="Show / hide panels" aria-label="Toggle panels">☰</button>
-        <div class="brand">✦ <span>Astrarium</span></div>
+        <div class="brand" title="Astrarium, by Beyond The Sky"><span id="wordmark" class="wordmark"></span><img class="brand-mark" src="brand-mark.svg" alt="Beyond The Sky" /><span class="brand-app">Astrarium</span></div>
         <button id="btn-search" class="icon" title="Search everything (/ or Ctrl+K)" aria-label="Search">🔍</button>
         <button id="btn-places" class="icon" title="Places (L): save this view, go back to it, or share it" aria-label="Places">📍</button>
-        <button id="btn-vr" class="icon hidden" title="Virtual reality: a tabletop Sandbox, or fly through the Galaxy Map and the Universe (WebXR headset)" aria-label="Enter VR">🥽</button>
         <button id="btn-photo" class="icon" title="Photo mode (P): hide the interface, frame and save a picture" aria-label="Photo mode">📷</button>
         <nav class="tabs" role="tablist">
           <button id="tab-cosmos" role="tab" title="Real galaxies beyond the Milky Way">Universe</button>
-          <button id="tab-galaxy" role="tab">Galaxy Map</button>
+          <button id="tab-galaxy" role="tab">Galaxy<span class="tab-long"> Map</span></button>
           <button id="tab-system" role="tab">Sandbox</button>
           <button id="tab-sky" role="tab" title="The real sky from anywhere on Earth">Sky</button>
         </nav>
-        <div class="clock" data-view="system">
-          <button id="btn-rewind" class="icon" title="Hold to rewind (R)" aria-label="Rewind">⏪</button>
-          <button id="btn-play" class="icon" title="Play / pause (Space)" aria-label="Play or pause">⏸</button>
-          <button id="btn-forward" class="icon" title="Hold to fast-forward ×10 (hold .) · tap to double the speed" aria-label="Fast forward">⏩</button>
-          <span id="sim-time">0 days</span>
-          <span id="lag" class="warn hidden" title="The simulation can't keep up at this speed. Time is being dropped.">lagging</span>
-          <button id="btn-record" class="icon" title="Record a replay (then play, scrub, save or export it)" aria-label="Record replay">⏺</button>
-          <button id="btn-undo" class="icon" title="Undo (Ctrl+Z)" aria-label="Undo" disabled>↶</button>
-          <button id="btn-redo" class="icon" title="Redo (Ctrl+Shift+Z)" aria-label="Redo" disabled>↷</button>
-        </div>
         <div id="stats"></div>
-        <button id="btn-console" class="icon" title="Scripting console (`)" aria-label="Console">⌨</button>
-        <button id="btn-gallery" class="icon" title="Community gallery" aria-label="Gallery">🌐</button>
-        <button id="btn-mp" class="icon" title="Multiplayer" aria-label="Multiplayer">👥</button>
-        <button id="btn-learn" class="icon" title="Interactive lessons" aria-label="Lessons">📚</button>
-        <button id="btn-graph" class="icon" title="Live graph (G)" aria-label="Graph">📈</button>
-        <button id="btn-challenges" class="icon" title="Challenges & daily puzzle" aria-label="Challenges">🏆</button>
-        <button id="btn-sound" class="icon" title="Sound on / off" aria-label="Toggle sound">🔇</button>
-        <button id="btn-help" class="icon" title="Tutorial (?)" aria-label="Show tutorial">?</button>
+        <div class="top-actions">
+          <button id="btn-vr" class="icon hidden" title="Virtual reality: a tabletop Sandbox, or fly through the Galaxy Map and the Universe (WebXR headset)" aria-label="Enter VR">🥽</button>
+          <button id="btn-more" class="icon" title="More: lessons, challenges, graph, multiplayer, gallery, console, sound, tutorial" aria-label="More" aria-haspopup="menu" aria-expanded="false">⋯</button>
+          <div id="more-menu" class="menu hidden" role="menu">
+          <button class="icon menu-item only-narrow" data-proxy="btn-places" data-label="Places">📍</button>
+          <button class="icon menu-item only-narrow" data-proxy="btn-photo" data-label="Photo mode">📷</button>
+          <button id="btn-console" class="icon menu-item" data-label="Scripting console" title="Scripting console (`)" aria-label="Console">⌨</button>
+          <button id="btn-gallery" class="icon menu-item" data-label="Community gallery" title="Community gallery" aria-label="Gallery">🌐</button>
+          <button id="btn-mp" class="icon menu-item" data-label="Multiplayer" title="Multiplayer" aria-label="Multiplayer">👥</button>
+          <button id="btn-learn" class="icon menu-item" data-label="Lessons" title="Interactive lessons" aria-label="Lessons">📚</button>
+          <button id="btn-graph" class="icon menu-item" data-label="Live graph" title="Live graph (G)" aria-label="Graph">📈</button>
+          <button id="btn-challenges" class="icon menu-item" data-label="Challenges" title="Challenges & daily puzzle" aria-label="Challenges">🏆</button>
+          <button id="btn-sound" class="icon menu-item" data-label="Sound" title="Sound on / off" aria-label="Toggle sound">🔇</button>
+          <button id="btn-help" class="icon menu-item" data-label="Tutorial" title="Tutorial (?)" aria-label="Show tutorial">?</button>
+          </div>
+        </div>
       </header>
 
       <!-- Galaxy map -->
       <aside id="cosmos-panel" class="panel left hidden" data-view="cosmos">
-        <section>
+        <section data-pane="about" data-icon="🌌" data-title="Universe">
           <h2>The Universe</h2>
           <p class="muted" id="cosmos-info">Loading real galaxies…</p>
         </section>
-        <section>
+        <section data-pane="find" data-icon="🔍" data-title="Find">
           <h3>Find a galaxy</h3>
           <input id="cosmos-search" type="search" placeholder="Andromeda, M81, Centaurus A…" spellcheck="false" autocomplete="off" />
           <ul id="cosmos-results" class="list"></ul>
@@ -64,7 +67,7 @@
           <label class="check"><input id="opt-cosmic-web" type="checkbox" checked /> Cosmic web (2MASS redshift survey)</label>
           <label class="check"><input id="opt-cmb" type="checkbox" checked /> Cosmic microwave background (WMAP)</label>
         </section>
-        <section>
+        <section data-pane="help" data-icon="❔" data-title="How to">
           <p class="muted small">
             Drag to orbit, scroll to zoom out to the cosmic web, click a galaxy to inspect it, and zoom right into it (or press Visit) to explore it.
             Yellow: ellipticals · white-blue: spirals · blue: irregulars.
@@ -74,11 +77,11 @@
       </aside>
 
       <aside id="sky-panel" class="panel left hidden" data-view="sky">
-        <section>
+        <section data-pane="about" data-icon="🌍" data-title="Sky">
           <h2>Sky from Earth</h2>
           <p class="muted small">The real sky from anywhere on Earth: the Sun, Moon and planets from JPL's planetary elements and the ELP-2000 lunar theory, and 8,900 stars from the HYG catalogue, checked against JPL Horizons.</p>
         </section>
-        <section>
+        <section data-pane="where" data-icon="📍" data-title="Where">
           <h3>Where</h3>
           <select id="sky-place"></select>
           <div class="row">
@@ -87,7 +90,7 @@
           </div>
           <button id="btn-sky-here">📍 Use my location</button>
         </section>
-        <section>
+        <section data-pane="when" data-icon="🕒" data-title="When">
           <h3>When</h3>
           <input id="sky-time" type="datetime-local" step="60" />
           <p class="muted tiny" id="sky-utc"></p>
@@ -104,11 +107,11 @@
             </select>
           </div>
         </section>
-        <section>
+        <section data-pane="layers" data-icon="✨" data-title="Layers">
           <label class="check" title="Every catalogued HII region (pink), planetary nebula (teal), supernova remnant (pale blue), dark nebula (brown) and reflection nebula (blue), outlined at its real size"><input id="opt-sky-nebulae" type="checkbox" checked /> <span id="sky-nebula-count">Nebulae from real catalogues</span></label>
           <label class="check" title="Open clusters and moving groups from Gaia (gold) and globular clusters (orange), outlined at their half-member radius"><input id="opt-sky-clusters" type="checkbox" checked /> <span id="sky-cluster-count">Star clusters</span></label>
         </section>
-        <section>
+        <section data-pane="eclipses" data-icon="🌘" data-title="Eclipses">
           <h3>Solar eclipses</h3>
           <div class="row buttons">
             <select id="eclipse-select" title="Total, annular and hybrid eclipses, 2024–2035 (NASA catalogue, JPL positions)"><option value="">Loading eclipses…</option></select>
@@ -117,7 +120,7 @@
           <canvas id="eclipse-map" width="560" height="280" title="Click the map to watch from there" class="hidden"></canvas>
           <p class="muted small" id="eclipse-info"></p>
         </section>
-        <section>
+        <section data-pane="up" data-icon="🔭" data-title="In the sky">
           <h3>In the sky</h3>
           <ul id="sky-list" class="list"></ul>
           <p class="muted small" id="sky-info"></p>
@@ -134,7 +137,7 @@
       </aside>
 
       <aside id="galaxy-panel" class="panel left" data-view="galaxy">
-        <section>
+        <section data-pane="about" data-icon="🌌" data-title="Galaxy">
           <h2 id="galaxy-name">Galaxy</h2>
           <p class="muted" id="galaxy-info"></p>
           <label class="check" title="HII regions (pink) and planetary nebulae (teal) with measured distances, from professional catalogues"><input id="opt-real-nebulae" type="checkbox" checked /> Real nebulae</label>
@@ -149,7 +152,7 @@
             <button id="btn-galaxy-random">Random galaxy</button>
           </div>
         </section>
-        <section>
+        <section data-pane="find" data-icon="🔍" data-title="Find">
           <h3>Find</h3>
           <input id="star-search" type="search" placeholder="Search star names…" spellcheck="false" autocomplete="off" />
           <ul id="search-results" class="list"></ul>
@@ -170,7 +173,7 @@
           </label>
           <p id="filter-status" class="muted small"></p>
         </section>
-        <section>
+        <section data-pane="bookmarks" data-icon="★" data-title="Bookmarks">
           <h3>Bookmarks</h3>
           <ul id="bookmark-list" class="list"></ul>
           <p class="muted small">Click a name to fly there. Click a star to inspect it, double-click to fly there, and click the bright core for the central black hole. Zoom right into a star to enter its system.</p>
@@ -194,8 +197,8 @@
 
       <!-- System sandbox -->
       <aside id="system-panel" class="panel left" data-view="system">
-        <section id="section-scenario">
-          <h3>Scenario</h3>
+        <section id="section-scenario" data-pane="scenes" data-icon="🪐" data-title="Scenes">
+          <h3>Scenes</h3>
           <div id="origin" class="origin hidden">
             <span>Exploring <b id="origin-name"></b></span>
             <button id="btn-back" class="link">← Galaxy map</button>
@@ -205,6 +208,13 @@
             <button id="btn-preset-load">Load</button>
           </div>
           <p id="preset-desc" class="muted small"></p>
+          <div class="row">
+            <input id="solar-date" type="date" title="Load the real Solar System on this date" />
+            <button id="btn-solar-date" title="Real planet positions from JPL ephemerides">Solar System</button>
+          </div>
+        </section>
+        <section data-pane="create" data-icon="✨" data-title="Create">
+          <h3>Create</h3>
           <div class="describe">
             <textarea id="describe-input" rows="2" maxlength="800" placeholder="✨ Describe a scene… e.g. “a red dwarf with three water worlds and a rogue Jupiter passing through”"></textarea>
             <div class="row">
@@ -212,58 +222,8 @@
             </div>
             <p id="describe-status" class="muted tiny"></p>
           </div>
-          <div class="row">
-            <input id="solar-date" type="date" title="Load the real Solar System on this date" />
-            <button id="btn-solar-date" title="Real planet positions from JPL ephemerides">Solar System</button>
-          </div>
-          <div class="row buttons">
-            <button id="btn-gpu" title="Tens of thousands of mutually gravitating stars on your GPU (WebGPU)">⚡ GPU mega-sim</button>
-          </div>
-          <div class="row buttons">
-            <button id="btn-exoplanets" title="Browse 4,800+ real planetary systems">🪐 Real exoplanets</button>
-            <button id="btn-neighbourhood" title="Every catalogued star within 10 parsecs of the Sun (HYG database)">Nearby stars</button>
-            <button id="btn-halley" title="Comet Halley's real 2061 return (JPL Horizons)">☄️ Halley 2061</button>
-            <button id="btn-gaia100" title="Every star within 326 light-years brighter than magnitude 11 (44,500 stars from ESA Gaia DR3), moving with its real velocity">✨ 326 ly (Gaia)</button>
-          </div>
-          <div class="row buttons">
-            <select id="gw-select" title="Real gravitational-wave detections (LIGO/Virgo/KAGRA)"><option value="">Loading GW events…</option></select>
-            <button id="btn-gw-load" title="Replay this merger with its real masses">Replay merger</button>
-          </div>
-          <div class="row buttons">
-            <button id="btn-gw-hear" title="Hear this event's chirp, synthesized from its real masses as the detectors heard it">🔊 Hear the chirp</button>
-            <label class="check small" title="Raise every frequency 4× so low chirps are audible on small speakers"><input id="gw-pitch" type="checkbox" /> 4× higher</label>
-          </div>
-          <div class="row buttons">
-            <select id="flyby-select" title="Upcoming asteroid close approaches to Earth (JPL)"><option value="">Loading flybys…</option></select>
-            <button id="btn-flyby-load" title="Fly this real close approach">Watch flyby</button>
-          </div>
-          <div class="row buttons">
-            <select id="voyager-select" title="The Voyager Grand Tour: real planetary flybys (JPL Horizons)"><option value="">Loading Voyager…</option></select>
-            <button id="btn-voyager-load" title="Ride along with Voyager past this planet">Fly with Voyager</button>
-          </div>
-          <div class="row buttons">
-            <button id="btn-ship" class="primary" title="Put a spacecraft in orbit around the selected body (or Earth) and fly it">🚀 Fly a spaceship</button>
-          </div>
-          <div class="row buttons">
-            <button id="btn-save" title="Download this scene as a file">Save</button>
-            <button id="btn-open" title="Open a saved scene file">Open</button>
-            <button id="btn-share" title="Copy a link to this scene">Share link</button>
-          </div>
-          <div class="row buttons">
-            <button id="btn-embed" title="Copy HTML to embed this scene in a web page">Embed</button>
-            <button id="btn-video" title="Record what you see to a video file">🎥 Video</button>
-            <button id="btn-publish" title="Publish this scene to the community gallery">Publish</button>
-          </div>
-          <input id="file-input" type="file" accept=".json,application/json" class="hidden" />
-        </section>
-
-        <section id="section-tools">
-          <h3>Tools</h3>
-          <div class="segmented">
-            <button id="tool-select" data-tool="select" title="Select tool (V)">Select</button>
-            <button id="tool-spawn" data-tool="spawn" title="Spawn tool (B)">Spawn</button>
-            <button id="tool-nudge" data-tool="nudge" title="Nudge tool (N): drag from a body to push it">Nudge</button>
-          </div>
+          <div id="section-tools">
+          <h4>Add bodies</h4>
           <div id="spawn-options" class="hidden">
             <div id="spawn-palette" class="palette"></div>
             <label class="row slider">
@@ -273,15 +233,49 @@
             </label>
             <label class="check"><input id="spawn-orbit" type="checkbox" checked /> Auto-orbit (start in a circular orbit)</label>
           </div>
+          </div>
+          <h4>More</h4>
+          <div class="row buttons">
+            <button id="btn-ship" class="primary" title="Put a spacecraft in orbit around the selected body (or Earth) and fly it">🚀 Fly a spaceship</button>
+          </div>
+          <div class="row buttons">
+            <button id="btn-gpu" title="Tens of thousands of mutually gravitating stars on your GPU (WebGPU)">⚡ GPU mega-sim</button>
+          </div>
         </section>
-
-        <section id="section-sim">
-          <h3>Simulation</h3>
-          <label class="row slider">
-            <span>Speed</span>
-            <input id="time-scale" type="range" min="-3" max="2" step="0.01" value="-0.4" />
-            <output id="time-scale-out"></output>
-          </label>
+        <section data-pane="real" data-icon="🔭" data-title="Real data">
+          <h3>Real data</h3>
+          <p class="muted small">Real systems and stars from NASA, JPL and ESA Gaia.</p>
+          <div class="row buttons">
+            <button id="btn-exoplanets" title="Browse 4,800+ real planetary systems">🪐 Real exoplanets</button>
+            <button id="btn-neighbourhood" title="Every catalogued star within 10 parsecs of the Sun (HYG database)">Nearby stars</button>
+            <button id="btn-halley" title="Comet Halley's real 2061 return (JPL Horizons)">☄️ Halley 2061</button>
+            <button id="btn-gaia100" title="Every star within 326 light-years brighter than magnitude 11 (44,500 stars from ESA Gaia DR3), moving with its real velocity">✨ 326 ly (Gaia)</button>
+          </div>
+        </section>
+        <section data-pane="events" data-icon="💫" data-title="Events">
+          <h3>Events</h3>
+          <h4>Gravitational waves</h4>
+          <div class="row buttons">
+            <select id="gw-select" title="Real gravitational-wave detections (LIGO/Virgo/KAGRA)"><option value="">Loading GW events…</option></select>
+            <button id="btn-gw-load" title="Replay this merger with its real masses">Replay merger</button>
+          </div>
+          <div class="row buttons">
+            <button id="btn-gw-hear" title="Hear this event's chirp, synthesized from its real masses as the detectors heard it">🔊 Hear the chirp</button>
+            <label class="check small" title="Raise every frequency 4× so low chirps are audible on small speakers"><input id="gw-pitch" type="checkbox" /> 4× higher</label>
+          </div>
+          <h4>Asteroid flybys</h4>
+          <div class="row buttons">
+            <select id="flyby-select" title="Upcoming asteroid close approaches to Earth (JPL)"><option value="">Loading flybys…</option></select>
+            <button id="btn-flyby-load" title="Fly this real close approach">Watch flyby</button>
+          </div>
+          <h4>Voyager Grand Tour</h4>
+          <div class="row buttons">
+            <select id="voyager-select" title="The Voyager Grand Tour: real planetary flybys (JPL Horizons)"><option value="">Loading Voyager…</option></select>
+            <button id="btn-voyager-load" title="Ride along with Voyager past this planet">Fly with Voyager</button>
+          </div>
+        </section>
+        <section id="section-sim" data-pane="physics" data-icon="⚛️" data-title="Physics">
+          <h3>Physics</h3>
           <label class="row slider">
             <span>Gravity ×</span>
             <input id="gravity" type="range" min="0" max="3" step="0.05" value="1" />
@@ -311,8 +305,7 @@
             <button id="btn-reset">Reset</button>
           </div>
         </section>
-
-        <section id="section-display">
+        <section id="section-display" data-pane="display" data-icon="👁" data-title="Display">
           <h3>Display</h3>
           <div class="checks">
             <label class="check"><input id="opt-trails" type="checkbox" checked /> Trails</label>
@@ -326,8 +319,21 @@
             <button id="btn-clear-trails">Clear trails</button>
           </div>
         </section>
-
-        <section id="section-settings">
+        <section data-pane="file" data-icon="💾" data-title="Save & share">
+          <h3>Save & share</h3>
+          <div class="row buttons">
+            <button id="btn-save" title="Download this scene as a file">Save</button>
+            <button id="btn-open" title="Open a saved scene file">Open</button>
+            <button id="btn-share" title="Copy a link to this scene">Share link</button>
+          </div>
+          <div class="row buttons">
+            <button id="btn-embed" title="Copy HTML to embed this scene in a web page">Embed</button>
+            <button id="btn-video" title="Record what you see to a video file">🎥 Video</button>
+            <button id="btn-publish" title="Publish this scene to the community gallery">Publish</button>
+          </div>
+          <input id="file-input" type="file" accept=".json,application/json" class="hidden" />
+        </section>
+        <section id="section-settings" data-pane="settings" data-icon="⚙️" data-title="Settings">
           <h3>Settings</h3>
           <label class="row">
             <span>Graphics</span>
@@ -372,6 +378,36 @@
         <p class="muted tiny" id="exo-credit"></p>
       </aside>
 
+      <div id="dock" data-view="system">
+        <div class="dock-group dock-time">
+          <button id="btn-rewind" class="icon" title="Hold to rewind (R)" aria-label="Rewind">⏪</button>
+          <button id="btn-play" class="icon" title="Play / pause (Space)" aria-label="Play or pause">⏸</button>
+          <button id="btn-forward" class="icon" title="Hold to fast-forward ×10 (hold .) · tap to double the speed" aria-label="Fast forward">⏩</button>
+          <span id="sim-time">0 days</span>
+          <span id="lag" class="warn hidden" title="The simulation can't keep up at this speed. Time is being dropped.">lagging</span>
+          <span class="dock-sep"></span>
+          <button id="btn-record" class="icon" title="Record a replay (then play, scrub, save or export it)" aria-label="Record replay">⏺</button>
+          <button id="btn-undo" class="icon" title="Undo (Ctrl+Z)" aria-label="Undo" disabled>↶</button>
+          <button id="btn-redo" class="icon" title="Redo (Ctrl+Shift+Z)" aria-label="Redo" disabled>↷</button>
+          <label class="dock-speed" title="Simulation speed">
+            <input id="time-scale" type="range" min="-3" max="2" step="0.01" value="-0.4" />
+            <output id="time-scale-out"></output>
+          </label>
+        </div>
+        <div class="dock-group">
+          <div class="segmented dock-tools">
+            <button id="tool-select" data-tool="select" title="Select tool (V)">👆 <span>Select</span></button>
+            <button id="tool-spawn" data-tool="spawn" title="Spawn tool (B)">➕ <span>Add</span></button>
+            <button id="tool-nudge" data-tool="nudge" title="Nudge tool (N): drag from a body to push it">✋ <span>Nudge</span></button>
+          </div>
+        </div>
+        <div class="dock-group dock-toggles">
+          <button class="toggle" data-toggle="opt-trails" title="Trails (T)">〰 <span>Trails</span></button>
+          <button class="toggle" data-toggle="opt-orbits" title="Orbit path (O)">◯ <span>Orbits</span></button>
+          <button class="toggle" data-toggle="opt-labels" title="Labels">🏷 <span>Labels</span></button>
+          <button class="toggle" data-toggle="opt-hz" title="Habitable zones (H)">🌱 <span>Zones</span></button>
+        </div>
+      </div>
       <div id="travel-bar" class="hidden">
         <div class="travel-controls">
           <label title="How fast you travel: real speeds, fractions of light speed, and (not physically possible) faster than light">🚀 <select id="travel-speed"></select></label>
@@ -436,7 +472,7 @@
       </div>
 
       <aside id="body-panel" class="panel right hidden" data-view="system">
-        <h2 id="body-name">Body</h2>
+        <div class="panel-head"><h2 id="body-name">Body</h2><button id="body-close" class="icon close" title="Deselect (Esc)" aria-label="Close">✕</button></div>
         <dl id="body-facts" class="facts"></dl>
         <div id="body-alerts"></div>
         <details id="body-wiki" class="hidden">

@@ -205,6 +205,51 @@ Plan, in priority order:
 - BodyVisual adds it in applyDetail and updates it only when the planet is more than 14 px across
   and a star is present. Tests: tests/aurora.test.ts.
 
+### AD. Animated wordmark and label declutter
+- [x] `src/ui/wordmark.ts`: the brand site's BrandWordmark.jsx ported to plain DOM.
+  - DEFS and ARTWORK are copied verbatim (by script) from the JSX; the motion is the same.
+  - mountWordmark(container, segments) returns a stop function. It pauses off screen and when
+    the tab is hidden, and slows for prefers-reduced-motion.
+  - Mounted in the top bar (40 segments) and on #splash, which fades after 2.5 s or on any
+    input and is skipped in embeds.
+- `src/render/labelDeclutter.ts`: every 3 frames, label rects are placed greedily by priority
+  (userData.priority, then size, then non-catalogue names, then depth), on a grid hash. Labels
+  that overlap fade out by opacity (baseOpacity is kept).
+  - Used by GalaxyView.update and CosmosView.update.
+  - pickLabel ignores labels below 0.3 opacity. "You are here" has priority 1000.
+- Tests: tests/label-declutter.test.ts.
+
+### AC. Beyond The Sky brand kit
+- [x] Brand kit from beyondthesky0099/beyondthesky_new (horizons-export/apps/web:
+  tailwind.config.js, src/index.css, public/favicon.svg).
+- `public/brand-mark.svg` (the favicon mark) is used in the top bar and as the favicon;
+  desktop/icon.svg is the same mark at 512 px (icon.png regenerated with make-icon.mjs).
+- Fonts are Space Grotesk, Inter and IBM Plex Mono, loaded from Google Fonts in index.html with
+  system fallbacks.
+- style.css: the old cyan and blue literals are mapped onto the brand palette. A closing
+  "brand kit" block sets the tokens (--accent-strong is Eclipse Red, --accent Cosmic Blue),
+  type, corners and primary states.
+- In the 3D scene, the selection ring, orbit line and predicted path are Cosmic Blue.
+
+### AB. Interface frame
+- [x] `src/app/layout.ts` (LayoutUI):
+  - Builds the icon rail from the current view's `.panel.left section[data-pane]` (data-icon,
+    data-title). One pane at a time; each view's last pane is kept in prefs. Clicking the open
+    pane folds the panel (`body.rail-collapsed`).
+  - The ⋯ menu (#more-menu). Items are the old top-bar buttons with the same IDs, labelled via
+    CSS `attr(data-label)` so code that rewrites their text keeps the label. `data-proxy` items
+    press another button.
+  - The dock toggles mirror the Display checkboxes. #body-close deselects.
+  - Sets `body[data-screen]` for CSS. It must not be `data-view`: App.setView hides every
+    [data-view] that isn't current.
+- index.html:
+  - The Sandbox panel is split into panes. All old element IDs are kept (checked by diffing
+    them), and the tutorial targets still resolve; Tutorial now reveals the pane holding a
+    target.
+  - The clock, the speed slider and the tools moved into #dock.
+- style.css "Interface frame" block: rail, panes, dock, menu. Phones get a bottom tab bar, sheet
+  panes, a compact dock, and Places and Photo moved into the menu.
+
 ### AA. Planet formation
 - [x] `src/sim/planetFormation.ts`:
   - Disc: MMSN densities (solid/ice/gas) and the snow line at 2.7 AU; solidMass, gasMass,

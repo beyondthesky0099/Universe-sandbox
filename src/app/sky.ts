@@ -153,7 +153,7 @@ export class SkyUI {
       ctx.fill();
     }
     const [ox, oy] = xy(this.app.sky.observer);
-    ctx.strokeStyle = '#7fdcff';
+    ctx.strokeStyle = '#5ea7ff';
     ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.moveTo(ox - 6, oy);

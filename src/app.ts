@@ -65,6 +65,7 @@ import { SearchUI } from './app/search';
 import { RealDataUI } from './app/realData';
 import { SpawnUI } from './app/spawn';
 import { InputUI } from './app/input';
+import { LayoutUI } from './app/layout';
 import { TutorialUI } from './app/tutorial';
 
 /**
@@ -94,6 +95,7 @@ export class App {
   readonly realDataUI = new RealDataUI(this);
   readonly spawnUI = new SpawnUI(this);
   readonly inputUI = new InputUI(this);
+  readonly layoutUI = new LayoutUI(this);
   readonly tutorialUI = new TutorialUI(this);
 
   readonly canvas = $<HTMLCanvasElement>('scene');
@@ -273,7 +275,7 @@ export class App {
     if (LOW_POWER) this.galaxy.volumeBudget = { max: 1, steps: 32 };
     this.cosmos = new CosmosView(this.canvas);
     this.sky = new SkyView(this.canvas);
-    this.tutorial = new Tutorial(this.tutorialUI.tutorialSteps());
+    this.tutorial = new Tutorial(this.tutorialUI.tutorialSteps(), (target) => this.layoutUI.reveal(target));
     this.photo = new PhotoMode({
       renderer: this.renderer,
       current: () => {
@@ -290,7 +292,6 @@ export class App {
     const hashSeed = params.get('galaxy');
     this.galaxySeed = hashSeed ? seedFromString(hashSeed) : 1;
 
-    if (window.innerWidth < 760) document.body.classList.add('panels-hidden');
     this.mp = new Multiplayer({
       onState: (state) => this.onlineUI.applyRemoteState(state),
       onEdit: (state) => this.onlineUI.applyRemoteState(state),
@@ -320,6 +321,7 @@ export class App {
       log: (text, kind) => this.scriptingUI.consoleLog(text, kind),
     });
     this.inputUI.bindUi();
+    this.layoutUI.bind();
     this.inputUI.bindInput();
     window.addEventListener('resize', () => this.resize());
     this.applyQuality(this.quality);
@@ -657,6 +659,7 @@ export class App {
       else if (el.id === 'body-panel') el.classList.toggle('hidden', !match || this.system.selectedId === undefined);
       else el.classList.toggle('hidden', !match);
     });
+    this.layoutUI.onView(view);
     this.updateHint();
   }
 
@@ -861,6 +864,8 @@ export class App {
     $('tool-nudge').classList.toggle('active', tool === 'nudge');
     this.nudgeUI.cancelNudge();
     $('spawn-options').classList.toggle('hidden', tool !== 'spawn');
+    // The spawn palette lives in the Create pane: show it.
+    if (tool === 'spawn') this.layoutUI.openPane('create');
     const mb = this.system.controls.mouseButtons;
     const touches = this.system.controls.touches;
     if (tool === 'spawn' || tool === 'nudge') {

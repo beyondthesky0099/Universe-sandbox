@@ -15,7 +15,11 @@ export class Tutorial {
   private readonly root = $('tutorial');
   private onDone?: () => void;
 
-  constructor(private readonly steps: TutorialStep[]) {
+  constructor(
+    private readonly steps: TutorialStep[],
+    /** Bring a step's target on screen (e.g. open the panel pane that holds it). */
+    private readonly reveal: (target: string) => void = () => {},
+  ) {
     $('tutorial-next').addEventListener('click', () => this.go(this.index + 1));
     $('tutorial-back').addEventListener('click', () => this.go(this.index - 1));
     $('tutorial-skip').addEventListener('click', () => this.close());
@@ -56,6 +60,7 @@ export class Tutorial {
     $('tutorial-body').textContent = step.body;
     $<HTMLButtonElement>('tutorial-back').disabled = this.index === 0;
     $('tutorial-next').textContent = this.index === this.steps.length - 1 ? 'Start exploring' : 'Next';
+    if (step.target) this.reveal(step.target);
     // Let layout settle (views may have switched) before measuring.
     requestAnimationFrame(() => this.position());
   }

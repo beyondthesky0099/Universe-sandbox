@@ -40,6 +40,10 @@ Before every commit, run the typecheck, the app tests, the build and the server 
   - Shared types, constants and helpers live in `src/app/shared.ts`.
   - A new feature gets its own controller rather than more methods on App.
 - UI markup is in `index.html` and styles in `src/style.css`.
+  - The frame (icon rail, panes, bottom dock, ⋯ menu) is `src/app/layout.ts`.
+  - A side panel's `<section data-pane data-icon data-title>` blocks become rail panes
+    automatically.
+  - Keep element IDs stable: the controllers bind by ID.
 - Multi-core particle forces: `src/sim/particleKernel.ts` (the force loop), `parallel.ts` (splits it
   over helper workers via SharedArrayBuffer + Atomics), `forceWorker.ts`. Only when the page is
   cross-origin isolated (COOP + COEP `credentialless`, sent by the desktop app and the Vite

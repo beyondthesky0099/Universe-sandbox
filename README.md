@@ -84,6 +84,38 @@ To publish a release, push a tag such as `v0.2.0`. GitHub Actions builds both .e
 Windows and attaches them to a release for that tag. "Use my location" in the Sky tab doesn't
 work in the desktop app, so type your latitude and longitude instead.
 
+## The interface
+
+Astrarium wears the **Beyond The Sky** brand kit:
+- **Colours:** Void Black, Eclipse Red for primary actions and the active view, Cosmic Blue
+  accents, and Starlight and Orbit Grey text.
+- **Type:** Space Grotesk for headings, Inter for text, and IBM Plex Mono for labels and numbers.
+- **Shape:** sharp corners.
+- **Logo:** the full animated Beyond The Sky wordmark (ported from the brand site) sits in the
+  top bar and on a short opening splash. In it, a helium-4 atom traces an infinity loop through
+  the eclipse "O"; helium was found in the Sun's spectrum during the 1868 eclipse. The
+  eclipse-ring mark is the favicon, the phone logo and the desktop app's icon.
+
+On the Galaxy Map and Universe views, names never pile up. Where labels would overlap, the
+important ones stay and the rest fade out until you zoom in and there's room for them:
+- "You are here" first;
+- then well-known names like the Orion Nebula or M13, ahead of bare catalogue numbers;
+- then nearer objects.
+
+
+- **Top bar:** search, Places and photo mode on the left; the four views (Universe, Galaxy Map,
+  Sandbox, Sky) in the middle; the ⋯ menu on the right. The menu holds lessons, challenges, the
+  live graph, multiplayer, the gallery, the console, sound and the tutorial.
+- **Icon rail (left):** each view's panel is split into panes, one at a time:
+  - Sandbox: Scenes, Create, Real data, Events, Physics, Display, Save & share, Settings.
+  - The Galaxy Map, Universe and Sky have their own panes.
+  Click the open pane's icon again to fold the panel away and give the view the whole screen.
+- **Dock (bottom, Sandbox):** rewind, play and fast-forward; the clock; the speed slider; record
+  and undo; the Select, Add and Nudge tools; and quick toggles for trails, orbits, labels and
+  habitable zones.
+- **Inspector (right):** the selected body's facts and actions, with ✕ to close it.
+- **Phones:** the rail becomes a tab bar along the bottom, and panes open as sheets above it.
+
 ## Features
 
 ### Play

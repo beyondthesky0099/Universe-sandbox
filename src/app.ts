@@ -226,6 +226,7 @@ export class App {
   private sceneScale = 10;
   private exoOpen = false;
   private photo!: PhotoMode;
+  private timeBeforeLanding?: number;
   private readonly places = new PlaceStore();
 
   constructor() {
@@ -434,6 +435,7 @@ export class App {
       if (this.lesson) this.lesson.events.push(...events);
       if (this.graphOpen) this.sampleGraph(dt);
       if (this.lesson && this.frames % 10 === 0) this.checkLesson();
+      if (this.frames % 10 === 0 && this.system.lander.active) this.updateLandHud();
       if (this.challenge && !this.challenge.result) {
         this.challenge.st.events.push(...events);
         if (this.frames % 3 === 0) this.evaluateChallenge();
@@ -553,6 +555,53 @@ export class App {
     } catch {
       window.prompt('Copy this embed code:', html);
     }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Standing on a planet (render/lander.ts)
+
+  private landOnSelected(): void {
+    const body = this.selectedBody();
+    if (!body) return;
+    let sun: Body | undefined;
+    for (const b of this.sim.bodies) if (b.kind === 'star' && (!sun || b.mass > sun.mass)) sun = b;
+    const why = this.system.land(body.id, sun);
+    if (why) return void toast(why);
+    document.body.classList.add('landed');
+    $('land-hud').classList.remove('hidden');
+    // Ten minutes a second: a day goes by in a few minutes.
+    this.timeBeforeLanding ??= this.timeScale;
+    this.setTimeScale(1 / (8766 * 6));
+    toast(`Standing on ${body.name}. Drag to look around, WASD to walk.`);
+    this.updateLandHud();
+  }
+
+  private takeOff(): void {
+    this.system.takeOff();
+    if (this.timeBeforeLanding !== undefined) this.setTimeScale(this.timeBeforeLanding);
+    this.timeBeforeLanding = undefined;
+    document.body.classList.remove('landed');
+    $('land-hud').classList.add('hidden');
+  }
+
+  private updateLandHud(): void {
+    const body = this.system.landedOn;
+    if (!body) {
+      if (document.body.classList.contains('landed')) this.takeOff();
+      return;
+    }
+    const { lat, lon } = this.system.lander.position;
+    let sun: Body | undefined;
+    for (const b of this.sim.bodies) if (b.kind === 'star' && (!sun || b.mass > sun.mass)) sun = b;
+    const mesh = this.system.planetMeshOf(body.id);
+    let time = '';
+    if (sun && mesh) {
+      const local = mesh.worldToLocal(new THREE.Vector3(sun.x, sun.y, sun.z)).normalize();
+      const h = this.system.lander.localTime(local);
+      time = ` · local time ${String(Math.floor(h)).padStart(2, '0')}:${String(Math.floor((h % 1) * 60)).padStart(2, '0')}`;
+    }
+    const text = `🛬 ${body.name} · ${Math.abs(lat).toFixed(1)}°${lat >= 0 ? 'N' : 'S'} ${Math.abs(lon).toFixed(1)}°${lon >= 0 ? 'E' : 'W'}${time}`;
+    if ($('land-info').textContent !== text) $('land-info').textContent = text;
   }
 
   // ---------------------------------------------------------------------------
@@ -1366,6 +1415,7 @@ export class App {
 
   private loadScenario(sc: Scenario, opts: { zoomFrom?: number; undoable?: boolean; challenge?: boolean; lesson?: boolean } = {}): void {
     const { zoomFrom = 1, undoable = true } = opts;
+    if (this.system.lander.active) this.takeOff();
     if (!opts.challenge && this.challenge) this.quitChallenge();
     if (!opts.lesson && this.lesson) this.exitLesson();
     // A pinned comparison run survives Reset of the same scenario, not a switch to another one.
@@ -2801,6 +2851,7 @@ export class App {
     if (alertsEl.innerHTML !== html) alertsEl.innerHTML = html;
     $('btn-supernova').classList.toggle('hidden', !this.sim.canSupernova(body) || body.tag === 'galaxy');
     $('btn-visit').classList.toggle('hidden', !(body.tag?.startsWith('exohost:') || body.tag === 'home'));
+    $('btn-land').classList.toggle('hidden', craft || body.kind !== 'rocky' || this.system.landedOn === body);
     const inChallenge = !!this.challenge;
     for (const id of ['btn-mass-up', 'btn-mass-down', 'btn-delete']) $(id).classList.toggle('hidden', inChallenge);
     if (inChallenge) $('btn-supernova').classList.add('hidden');
@@ -3927,6 +3978,17 @@ export class App {
         return;
       }
       if (isTyping(e) || this.tutorial.isOpen) return;
+      // Walking on a planet's surface.
+      if (this.view === 'system' && this.system.lander.active && !e.ctrlKey && !e.metaKey) {
+        if (this.system.lander.key(e.code, true)) {
+          e.preventDefault();
+          return;
+        }
+        if (e.key === 'Escape') {
+          this.takeOff();
+          return;
+        }
+      }
       const key = e.key.toLowerCase();
       const mod = e.ctrlKey || e.metaKey;
       if (e.key === '/') {
@@ -4047,6 +4109,7 @@ export class App {
       }
     });
     window.addEventListener('keyup', (e) => {
+      this.system.lander.key(e.code, false);
       if (e.key.toLowerCase() === 'r') this.stopRewind();
       if (e.key === '.') this.forwardUp();
       if (this.shipThrustDir && 'wsadqe'.includes(e.key.toLowerCase())) this.stopShipThrust();
@@ -4668,6 +4731,8 @@ export class App {
       $('bh-spin-out').textContent = Number((e.target as HTMLInputElement).value).toFixed(2);
     });
     $('btn-mass-down').addEventListener('click', () => this.scaleSelectedMass(0.5));
+    $('btn-land').addEventListener('click', () => this.landOnSelected());
+    $('btn-takeoff').addEventListener('click', () => this.takeOff());
     $('btn-supernova').addEventListener('click', () => this.detonateSelected());
 
     // Gentle UI ticks.

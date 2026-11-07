@@ -1375,3 +1375,29 @@ body.photo-mode #toasts {
 #body-wiki-links a {
   color: #8fc1ff;
 }
+
+/* Standing on a planet */
+#land-hud {
+  position: absolute;
+  top: 64px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 6;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 6px 12px;
+  max-width: calc(100vw - 24px);
+  padding: 6px 12px;
+  border-radius: 10px;
+  background: rgba(10, 14, 26, 0.78);
+  border: 1px solid rgba(140, 170, 255, 0.2);
+  font-size: 13px;
+}
+body.landed #system-panel,
+body.landed #body-panel,
+body.landed #exo-panel,
+body.landed #graph-panel {
+  display: none;
+}

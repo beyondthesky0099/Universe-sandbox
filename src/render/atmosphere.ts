@@ -13,7 +13,9 @@ import * as THREE from 'three';
  *   g = 0.76 (Bruneton & Neyret 2008, after Riley et al. 2004).
  * - Mars: ~0.6% of Earth's surface pressure of CO₂, whose molecules scatter ~2.4× more than
  *   air's, so ~1.6% of Earth's Rayleigh; the colour comes from suspended dust that absorbs blue
- *   (H ≈ 11 km, optical depth ~0.5; Smith & Lemmon 1999), strongly forward-scattering.
+ *   (H ≈ 11 km, optical depth ~0.5; Smith & Lemmon 1999). Single dust grains scatter forwards
+ *   (g ≈ 0.7, Tomasko et al. 1999); a lower g of 0.6 stands in for the multiple scattering
+ *   that fills the whole Martian sky with butterscotch light.
  * - Venus: 92 bar of CO₂ under a sulphuric-acid cloud deck at 48–70 km: drawn as dense, bright,
  *   slightly yellow haze (H ≈ 15 km above the deck).
  * - Titan: 1.5 bar of N₂ (H ≈ 40 km, reaching ~600 km in a 2,575 km world) with orange tholin
@@ -35,6 +37,11 @@ export interface Atmosphere {
   absorb: [number, number, number];
   /** Brightness of the sunlight for this world (relative; the shader tone-maps). */
   sun: number;
+  /**
+   * Exposure from the ground, inside the air (default 1). The eye adapts: the dusty Martian sky
+   * gives far less single-scattered light than Earth's, yet looks bright to someone standing there.
+   */
+  groundExposure?: number;
 }
 
 const EARTH: Atmosphere = {
@@ -49,8 +56,8 @@ export const ATMOSPHERES: Record<string, Atmosphere> = {
   Mars: {
     top: 80e3, radius: 3390e3,
     rayleigh: [0.09e-6, 0.21e-6, 0.53e-6], rayleighH: 11e3,
-    mie: [2.4e-5, 1.8e-5, 1.25e-5], mieH: 11e3, g: 0.8,
-    absorb: [0.2e-5, 0.6e-5, 1.25e-5], sun: 8,
+    mie: [2.4e-5, 1.8e-5, 1.25e-5], mieH: 11e3, g: 0.6,
+    absorb: [0.2e-5, 0.6e-5, 1.25e-5], sun: 8, groundExposure: 4,
   },
   Venus: {
     top: 120e3, radius: 6052e3,
@@ -117,6 +124,7 @@ const FRAGMENT = /* glsl */ `
   uniform float uHM;
   uniform float uG;
   uniform float uSunPower;
+  uniform float uExposure;
   uniform float uExaggerate; // scale heights stretched to fill the drawn shell when it is thicker than real
   varying vec3 vPos;
   varying vec3 vCam;
@@ -144,7 +152,9 @@ const FRAGMENT = /* glsl */ `
     vec3 ro = vCam;
     vec3 rd = normalize(vPos - vCam);
     vec2 atm = sphere(ro, rd, uShell);
-    vec2 ground = sphere(ro, rd, 1.0);
+    // The ground just below the planet's radius, so a viewer standing in a hollow of the terrain (lander.ts)
+    // is still above it.
+    vec2 ground = sphere(ro, rd, 0.996);
     float t0 = max(atm.x, 0.0);
     float t1 = atm.y;
     if (ground.x > 0.0) t1 = min(t1, ground.x);
@@ -158,7 +168,7 @@ const FRAGMENT = /* glsl */ `
       depthView += d;
       // Optical depth towards the sun (skipped if the planet is in the way).
       vec2 toSun = sphere(p, uSun, uShell);
-      vec2 blocked = sphere(p, uSun, 1.0);
+      vec2 blocked = sphere(p, uSun, 0.996);
       if (blocked.x > 0.0) continue;
       float ls = toSun.y / float(LIGHT);
       vec2 depthSun = vec2(0.0);
@@ -174,7 +184,7 @@ const FRAGMENT = /* glsl */ `
     float phaseM = 3.0 / (8.0 * PI) * ((1.0 - g2) * (1.0 + mu * mu)) / ((2.0 + g2) * pow(1.0 + g2 - 2.0 * uG * mu, 1.5));
     vec3 light = uSunPower * (sumR * uRayleigh * phaseR + sumM * uMie * phaseM);
     // Tone map (soft exposure) so bright limbs don't clip.
-    vec3 col = 1.0 - exp(-light);
+    vec3 col = 1.0 - exp(-light * uExposure);
     // How much the air in front dims what lies behind (the planet's day side, the stars).
     vec3 trans = exp(-(uRayleigh * depthView.x + (uMie * 1.1 + uAbsorb) * depthView.y));
     float alpha = 1.0 - dot(trans, vec3(0.333));
@@ -202,6 +212,7 @@ export function scatteringMaterial(a: Atmosphere): THREE.ShaderMaterial {
       uHM: { value: (a.mieH / R) * stretch },
       uG: { value: a.g },
       uSunPower: { value: a.sun },
+      uExposure: { value: 1 },
       uExaggerate: { value: stretch },
     },
     transparent: true,
@@ -227,6 +238,7 @@ export function insideAware(mesh: THREE.Mesh): void {
     const m = mesh.material as THREE.ShaderMaterial;
     const side = inside ? THREE.BackSide : THREE.FrontSide;
     if (m.side !== side) m.side = side;
+    m.uniforms.uExposure.value = inside ? (mesh.userData.groundExposure ?? 1) : 1;
   };
 }
 

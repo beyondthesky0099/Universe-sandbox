@@ -488,6 +488,7 @@
         <div class="row buttons">
           <button id="btn-supernova" class="danger hidden" title="Detonate this star">💥 Go supernova</button>
           <button id="btn-visit" class="primary hidden">Visit system →</button>
+          <button id="btn-land" class="primary hidden" title="Stand on its surface">🛬 Land</button>
         </div>
       </aside>
 
@@ -697,6 +698,11 @@
         <button id="photo-capture" class="primary">📷 Save picture</button>
         <button id="photo-reset" title="Reset the sliders">Reset</button>
         <button id="photo-exit" class="icon" title="Leave photo mode (Esc)" aria-label="Leave photo mode">✕</button>
+      </div>
+      <div id="land-hud" class="hidden">
+        <span id="land-info"></span>
+        <span class="muted small">Drag to look · WASD to walk · wheel to zoom</span>
+        <button id="btn-takeoff" class="primary" title="Back to orbit (Esc)">🚀 Take off</button>
       </div>
       <div id="toasts"></div>
       <footer id="hint"></footer>

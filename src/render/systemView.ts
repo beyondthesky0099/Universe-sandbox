@@ -19,6 +19,8 @@ import { AU_PER_YEAR_IN_KMS } from '../sim/units';
 import { shadowProfile } from '../sim/kerr';
 import { SHADOW_BINS, type LensInfo } from './postfx';
 import { DISK_LAYER } from './accretionDisk';
+import { Lander } from './lander';
+import { getSolarData } from '../sim/solarSystemData';
 
 const MAX_LIGHTS = 4;
 const MAX_HZ = 4;
@@ -100,6 +102,11 @@ export class SystemView {
   private readonly lagrangeMarkers: THREE.Sprite[] = [];
   private readonly ripples: { mesh: THREE.Mesh; age: number; life: number; size: number }[] = [];
 
+  /** Standing on a planet's surface (lander.ts). */
+  readonly lander: Lander;
+  private landedId?: number;
+  private starLight = 1;
+
   constructor(
     private readonly sim: Simulation,
     domElement: HTMLElement,
@@ -113,6 +120,7 @@ export class SystemView {
     this.camera.layers.enable(DISK_LAYER);
     this.camera.position.set(0, 5, 8);
     this.controls = new OrbitControls(this.camera, domElement);
+    this.lander = new Lander(this.camera, domElement);
     this.controls.enableDamping = true;
     this.controls.dampingFactor = 0.08;
     this.controls.zoomSpeed = 1.4;
@@ -426,6 +434,55 @@ export class SystemView {
     return (2 * dist * Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2))) / viewportHeight;
   }
 
+  /**
+   * Land on a planet or moon. Returns why not, if it can't be done. `sun` is the star lighting it.
+   */
+  land(id: number, sun?: Body): string | undefined {
+    const body = this.sim.getBody(id);
+    const v = this.visuals.get(id);
+    if (!body || !v) return 'Nothing to land on.';
+    if (body.kind === 'gas') return `${body.name} is a gas giant: there's no solid surface, only deeper and hotter cloud.`;
+    if (body.kind !== 'rocky' || body.tag === 'probe' || body.tag === 'ship') return `You can't stand on ${body.name}.`;
+    const mesh = v.planetMesh;
+    mesh.updateMatrixWorld(true);
+    // Arrive in the mid-morning (about 10:00 local time), at 20° latitude, facing the Sun.
+    const sunLocal = sun ? mesh.worldToLocal(new THREE.Vector3(sun.x, sun.y, sun.z)).normalize() : new THREE.Vector3(1, 0, 0);
+    const lon = Math.atan2(sunLocal.z, sunLocal.x) + (30 * Math.PI) / 180;
+    const lat = (20 * Math.PI) / 180;
+    const site = new THREE.Vector3(Math.cos(lat) * Math.cos(lon), Math.sin(lat), Math.cos(lat) * Math.sin(lon));
+    const real = getSolarData()?.byName.get(body.name);
+    const hours = (real?.rotationHours ?? 24) * (real?.retrograde ? -1 : 1);
+    this.follow(undefined);
+    this.cameraAnim = undefined;
+    this.lander.land(mesh, site, { seed: hashName(body.name), air: v.hasAir }, hours, this.sim.time);
+    this.lander.faceTowards(sunLocal);
+    this.landedId = id;
+    return undefined;
+  }
+
+  /** Leave the surface: rise to a view of the whole planet. */
+  takeOff(): void {
+    if (!this.lander.active) return;
+    const id = this.landedId;
+    this.lander.takeOff();
+    this.landedId = undefined;
+    const body = id !== undefined ? this.sim.getBody(id) : undefined;
+    if (body) {
+      this.controls.target.set(body.x, body.y, body.z);
+      this.follow(body.id, body.radius * 4);
+    }
+  }
+
+  /** A planet's spinning mesh (for working out directions in its frame). */
+  planetMeshOf(id: number): THREE.Mesh | undefined {
+    return this.visuals.get(id)?.planetMesh;
+  }
+
+  /** The body being stood on, if any. */
+  get landedOn(): Body | undefined {
+    return this.landedId !== undefined ? this.sim.getBody(this.landedId) : undefined;
+  }
+
   /** Follow a body. Without `distance`, zoom to see it properly but keep a reasonable user zoom. */
   follow(id: number | undefined, distance?: number): void {
     this.followId = id;
@@ -446,9 +503,12 @@ export class SystemView {
 
     // Follow camera: move target and camera together.
     const followed = this.followId !== undefined ? this.sim.getBody(this.followId) : undefined;
+    // On a planet's surface the lander drives the camera instead (end of this update).
+    const landed = this.lander.active;
+    if (landed && (this.landedId === undefined || !this.sim.getBody(this.landedId))) this.takeOff();
     // Zoom in as far as just outside the followed body's surface (real sizes are tiny).
     this.controls.minDistance = followed ? Math.max(1e-7, followed.radius * 1.15) : 1e-7;
-    if (followed) {
+    if (followed && !this.lander.active) {
       const blending = this.followBlend < 1;
       this.followBlend = Math.min(1, this.followBlend + dt * 1.2);
       const ease = 1 - Math.pow(1 - this.followBlend, 3);
@@ -465,7 +525,7 @@ export class SystemView {
       }
     }
     // Following a Lagrange point: the same glide, without changing the zoom.
-    if (this.followedLagrange !== undefined && !followed) {
+    if (this.followedLagrange !== undefined && !followed && !this.lander.active) {
       // Where the point is now (the markers themselves are placed later in the frame).
       const sel = this.selectedId !== undefined ? this.sim.getBody(this.selectedId) : undefined;
       const parent = this.lagrangeEnabled && sel ? this.sim.parentOf(sel) : undefined;
@@ -481,7 +541,7 @@ export class SystemView {
         this.camera.position.add(delta);
       }
     }
-    if (this.cameraAnim) {
+    if (this.cameraAnim && !this.lander.active) {
       const a = this.cameraAnim;
       a.t = Math.min(1, a.t + dt * a.speed);
       const e = 1 - Math.pow(1 - a.t, 3);
@@ -489,7 +549,8 @@ export class SystemView {
       if (!followed) this.controls.target.copy(a.target);
       if (a.t >= 1) this.cameraAnim = undefined;
     }
-    this.controls.update();
+    this.controls.enabled = !this.lander.active;
+    if (!this.lander.active) this.controls.update();
 
     // Climate (temperature-dependent looks) a couple of times per second.
     this.climateTimer -= dt;
@@ -527,7 +588,7 @@ export class SystemView {
         if (simRunning) v.pushTrail(b, spacing, ref);
         else v.placeTrail(ref);
       }
-      v.trail.visible = this.trailsEnabled;
+      v.trail.visible = this.trailsEnabled && !this.lander.active;
       v.label.visible = this.labelsEnabled && this.shouldLabel(b);
       if (v.isPlanet) {
         const px = v.pixelRadius(b, wpp);
@@ -556,6 +617,28 @@ export class SystemView {
     for (const e of events) this.addFlash(e);
     this.updateFlashes(dt);
 
+    if (this.lander.active) {
+      // Orbit guides would cut across the sky.
+      this.orbitLine.visible = false;
+      this.marker.visible = false;
+      for (const ring of this.hzRings) ring.visible = false;
+      this.lander.update(dt, this.sim.time);
+    }
+    // By day a sky drowns the stars: fade them with the Sun's height (gone by +2°, back by −12°).
+    let starLight = 1;
+    if (this.lander.active && this.lander.hasAir && sun) {
+      const elevation = this.lander.sunElevation(new THREE.Vector3(sun.x, sun.y, sun.z));
+      starLight = 0.03 + 0.97 * (1 - THREE.MathUtils.smoothstep(elevation, -12, 2));
+    }
+    if (starLight !== this.starLight) {
+      this.starLight = starLight;
+      this.starfield.traverse((o) => {
+        if (o instanceof THREE.Points) (o.material as THREE.PointsMaterial).opacity = starLight;
+      });
+      // Distant planets drawn as dots, and the asteroids (particles), fade with the stars.
+      (this.bodyPoints.material as THREE.PointsMaterial).opacity = starLight;
+      (this.particlePoints.material as THREE.PointsMaterial).opacity = starLight;
+    }
     this.starfield.position.copy(this.camera.position);
     this.starfield.scale.setScalar(this.camera.far * 0.5);
   }
@@ -1009,4 +1092,10 @@ function remnantClouds(e: Explosion, seed: number): Cloud[] {
     });
   }
   return out;
+}
+
+function hashName(name: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < name.length; i++) h = Math.imul(h ^ name.charCodeAt(i), 16777619);
+  return h >>> 0;
 }

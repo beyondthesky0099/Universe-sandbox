@@ -205,6 +205,23 @@ Plan, in priority order:
 - BodyVisual adds it in applyDetail and updates it only when the planet is more than 14 px across
   and a star is present. Tests: tests/aurora.test.ts.
 
+### X. Land on planets
+- [x] `src/render/lander.ts` Lander:
+  - The camera rides the planet mesh's frame at EYE_HEIGHT.
+  - The planet spins at its real rate (rotationAngle from the JPL rotationHours) while landed.
+  - The terrain patch is a polar grid of radius PATCH_RADIUS around the site: fbm/ridged relief,
+    craters (many if airless), uv matching SphereGeometry (sphereUv, unwrapped at the seam), and
+    an edge fade into the sphere. It is rebuilt when you walk away from the centre.
+  - Look, walk and zoom controls; localSolarTime; sunElevation.
+- SystemView.land/takeOff:
+  - Skips follow and OrbitControls while landed; hides the orbit line, marker and HZ rings.
+  - Fades the starfield, body dots and particles by Sun elevation if the world has air.
+- Atmosphere: the ground sphere is at 0.996 so hollows stay above it; groundExposure is used from
+  inside (Mars 4).
+- App: the Land button (rocky bodies), #land-hud, keys (WASD/arrows, Esc). Time is 10 min/s
+  while landed and is restored on take-off.
+- Tests: tests/lander.test.ts.
+
 ### W. More Gaia stars
 - [x] `scripts/build-gaia-bright.mjs` writes public/data/gaia-bright.bin (602 KB).
   - Query: Gaia DR3, G < 8, parallax_over_error > 5; MAXREC raised past the 50,000 default.

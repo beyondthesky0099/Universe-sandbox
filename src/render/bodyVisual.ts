@@ -242,6 +242,16 @@ export class BodyVisual {
     pos.needsUpdate = true;
   }
 
+  /** The planet's own (spinning) mesh: a unit sphere scaled to its radius. */
+  get planetMesh(): THREE.Mesh {
+    return this.mesh;
+  }
+
+  /** Whether it has air (an atmosphere shell is drawn). */
+  get hasAir(): boolean {
+    return !!this.atmosphere;
+  }
+
   /** A black hole's spin axis (its disc's normal) in world space. */
   spinAxis(): THREE.Vector3 | undefined {
     return this.disk ? diskAxis(this.disk) : undefined;
@@ -378,6 +388,7 @@ export class BodyVisual {
       this.atmosphere = new THREE.Mesh(SPHERE, scatteringMaterial(air));
       this.atmosphere.scale.setScalar(shellScale(air));
       this.atmosphere.renderOrder = 1;
+      this.atmosphere.userData.groundExposure = air.groundExposure;
       insideAware(this.atmosphere);
       this.mesh.add(this.atmosphere);
     }

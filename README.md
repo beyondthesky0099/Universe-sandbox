@@ -451,6 +451,23 @@ Planets with a magnetic field and air glow around their magnetic poles (`src/ren
 - **Procedural worlds:** gas giants, and rocky worlds with air from 0.3 Earth masses up, get a
   modelled aurora.
 
+## Land on planets
+
+Select a rocky planet or moon and press **🛬 Land** to stand on its surface (`src/render/lander.ts`):
+- **The sky is the planet's own atmosphere seen from inside:**
+  - Earth: blue by day, red at sunset.
+  - Mars: butterscotch.
+  - The Moon: black, with stars even at noon.
+- **The day passes for real:** the Sun rises and sets as the planet turns at its real rotation
+  rate. Time runs at ten minutes a second while you're down, and the HUD shows the local time.
+- **The ground uses the planet's real map:** you land in the Arabian desert's colours if that's
+  where you are. Relief is added on top: hills on worlds with air, craters on airless ones.
+- **By day the stars fade:** a lit sky drowns them; at night they come back.
+- **Controls:** drag to look around, WASD to walk, and the wheel to zoom. Take off (or Esc)
+  returns to orbit.
+- Gas giants have no surface to stand on.
+- The terrain's shape is a model; only its colours come from the real maps.
+
 ## Real stars around the Sun (Gaia)
 
 The Galaxy Map shows 61,673 real stars around the Sun from ESA's Gaia DR3: every star brighter

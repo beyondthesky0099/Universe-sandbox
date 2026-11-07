@@ -61,6 +61,7 @@ import { applyNudge, CHALLENGES, dailyChallenge, KMS, newChallengeState, shareTe
 import { burnDirections, planHohmann } from './game/transfer';
 import { LESSONS, type Lesson } from './game/lessons';
 import { SearchIndex, type SearchEntry } from './ui/search';
+import { PhotoMode } from './ui/photo';
 import { autoWarp, formatDuration, formatSpeed as formatTravelSpeed, lorentz, SPEEDS, Trip, tripTimes } from './sim/travel';
 import { setObserverVelocity } from './render/relativity';
 import { activityEntries, clusterEntries, compactEntries, exoplanetEntries, galaxyEntries, nebulaEntries, skyBodyEntries, starEntries, structureEntries } from './ui/searchSources';
@@ -218,6 +219,7 @@ export class App {
   /** Typical camera distance of the loaded scene; zooming far beyond it returns to the galaxy. */
   private sceneScale = 10;
   private exoOpen = false;
+  private photo!: PhotoMode;
 
   constructor() {
     // Ask for the discrete GPU on laptops that have two.
@@ -235,6 +237,18 @@ export class App {
     this.cosmos = new CosmosView(this.canvas);
     this.sky = new SkyView(this.canvas);
     this.tutorial = new Tutorial(this.tutorialSteps());
+    this.photo = new PhotoMode({
+      renderer: this.renderer,
+      current: () => {
+        const v = this.view;
+        if (v === 'galaxy') return { scene: this.galaxy.scene, camera: this.galaxy.camera, name: 'galaxy' };
+        if (v === 'cosmos') return { scene: this.cosmos.scene, camera: this.cosmos.camera, name: 'universe' };
+        if (v === 'sky') return { scene: this.sky.scene, camera: this.sky.camera, name: 'sky' };
+        return { scene: this.system.scene, camera: this.system.camera, name: this.scenario.name };
+      },
+      resize: () => this.resize(),
+      renderNow: () => this.frame(0),
+    });
 
     const hashSeed = params.get('galaxy');
     this.galaxySeed = hashSeed ? seedFromString(hashSeed) : 1;
@@ -528,7 +542,51 @@ export class App {
     }
   }
 
+  // ---------------------------------------------------------------------------
+  // Photo mode
+
+  private togglePhoto(): void {
+    if (this.photo.active) {
+      this.photo.exit();
+      return;
+    }
+    this.photo.enter();
+    const fov = Math.round(this.photo.fov ?? 50);
+    $<HTMLInputElement>('photo-fov').value = String(fov);
+    $('photo-fov-val').textContent = `${fov}°`;
+    $<HTMLInputElement>('photo-labels').checked = true;
+    toast(this.view === 'system' ? 'Photo mode: O and T hide orbits and trails; P or Esc to leave.' : 'Photo mode: P or Esc to leave.');
+  }
+
+  private bindPhoto(): void {
+    $('btn-photo').addEventListener('click', () => this.togglePhoto());
+    $('photo-exit').addEventListener('click', () => this.togglePhoto());
+    const slider = (id: string, apply: (v: number) => void) => $<HTMLInputElement>(id).addEventListener('input', (e) => apply(Number((e.target as HTMLInputElement).value)));
+    slider('photo-exposure', (v) => this.photo.setGrade({ exposure: v }));
+    slider('photo-contrast', (v) => this.photo.setGrade({ contrast: v }));
+    slider('photo-saturation', (v) => this.photo.setGrade({ saturation: v }));
+    slider('photo-fov', (v) => {
+      this.photo.setFov(v);
+      $('photo-fov-val').textContent = `${v}°`;
+    });
+    $<HTMLInputElement>('photo-labels').addEventListener('change', (e) => this.photo.setLabels((e.target as HTMLInputElement).checked));
+    $('photo-reset').addEventListener('click', () => {
+      for (const id of ['photo-exposure', 'photo-contrast', 'photo-saturation']) $<HTMLInputElement>(id).value = '1';
+      this.photo.setGrade({ exposure: 1, contrast: 1, saturation: 1 });
+    });
+    $('photo-capture').addEventListener('click', async () => {
+      const scale = Number($<HTMLSelectElement>('photo-scale').value);
+      try {
+        const { width, height } = await this.photo.capture(scale);
+        toast(`Saved a ${width} × ${height} picture.`);
+      } catch (err) {
+        toast(`Couldn't save the picture: ${(err as Error).message}`);
+      }
+    });
+  }
+
   private renderView(scene: THREE.Scene, camera: THREE.Camera, lenses: THREE.Vector3[]): void {
+    if (camera instanceof THREE.PerspectiveCamera) this.photo.beforeRender(scene, camera);
     // Post-processing isn't supported inside WebXR sessions; low quality skips it too.
     // The galaxy map is already a sea of additive glow; bloom there only adds haze.
     if (this.postfxOn && this.quality !== 'low' && !this.renderer.xr.isPresenting && this.view === 'system') {
@@ -3569,6 +3627,14 @@ export class App {
         return;
       }
       if (mod) return;
+      if (key === 'p') {
+        this.togglePhoto();
+        return;
+      }
+      if (this.photo.active && key === 'escape') {
+        this.togglePhoto();
+        return;
+      }
       if (key === 'm') {
         if (this.view !== 'system') void this.switchToSandbox();
         else void this.exitToGalaxy();
@@ -4070,6 +4136,7 @@ export class App {
     });
     $('btn-learn').addEventListener('click', () => this.openLessonMenu());
     $('btn-search').addEventListener('click', () => this.openSearch());
+    this.bindPhoto();
     $('btn-ship').addEventListener('click', () => this.spawnShip());
     $('ship-engine').innerHTML = ENGINES.map((e) => `<option value="${e.id}">${escapeHtml(e.label)}</option>`).join('');
     $('ship-engine').addEventListener('change', () => {

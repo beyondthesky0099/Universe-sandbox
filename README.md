@@ -451,6 +451,15 @@ Planets with a magnetic field and air glow around their magnetic poles (`src/ren
 - **Procedural worlds:** gas giants, and rocky worlds with air from 0.3 Earth masses up, get a
   modelled aurora.
 
+## Photo mode
+
+Press **P** or 📷 (next to search) to hide the interface and frame a picture in any view:
+- Sliders for exposure, contrast, colour and field of view.
+- Labels can be shown or hidden. In the Sandbox, O and T hide orbits and trails.
+- **Save picture** renders the view again at 1×, 2× or 4× the screen's resolution, within the
+  GPU's limits and about 16 megapixels, and downloads it as a PNG.
+- Esc or P leaves photo mode.
+
 ## Fly a spaceship
 
 In the Sandbox, **🚀 Fly a spaceship** puts a ship in orbit around the selected body (or

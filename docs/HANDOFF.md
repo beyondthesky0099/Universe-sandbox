@@ -205,6 +205,20 @@ Plan, in priority order:
 - BodyVisual adds it in applyDetail and updates it only when the planet is more than 14 px across
   and a star is present. Tests: tests/aurora.test.ts.
 
+### S. Photo mode
+- [x] `src/ui/photo.ts` PhotoMode:
+  - enter/exit toggles `body.photo-mode`, which hides everything but the canvas, labels and
+    #photo-bar.
+  - The grade is a CSS filter on the canvas, and the same filter goes through ctx.filter on
+    capture.
+  - The FOV is applied per camera in beforeRender, called from App.renderView, and restored on
+    exit.
+  - Hiding labels hides in-scene text sprites (userData.labelText) and the CSS2D layer.
+  - capture(scale) sets the pixel ratio, resizes, calls frame(0), copies to a 2D canvas in the same
+    task, restores, then downloads the PNG.
+- captureRatio caps the long side at 8192 or the GPU limit, and the size at 16 MP.
+- Key P; Esc leaves. Tests: tests/photo.test.ts.
+
 ### P. Spaceships
 - [x] `src/sim/spaceship.ts` (ENGINES, autopilotAccel: brachistochrone approach, then steer to
   the local circular orbit; settles when near-circular within 20% of the radius; orbitAround).

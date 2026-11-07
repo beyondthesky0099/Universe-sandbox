@@ -207,7 +207,13 @@ work in the desktop app, so type your latitude and longitude instead.
   and rings, all generated in more detail as you zoom in.
 - **GPU mega-sim** (WebGPU): 8k–32k mutually attracting bodies, every pair computed directly
   on the GPU. It's only offered when the browser supports WebGPU.
-- **VR:** the 🥽 button appears when a WebXR headset is available.
+- **VR:** the 🥽 button in the top bar appears when a WebXR headset is available (`src/render/vr.ts`).
+  - **Sandbox:** a tabletop. The trigger pauses, the left stick turns the table and the right
+    stick resizes it.
+  - **Galaxy Map and Universe:** you stand where the camera was. The left stick flies where you
+    look; the right stick snap-turns (left/right) and changes speed (up/down).
+  - **Sky:** you stand under the real sky.
+  - The thumbstick logic is unit-tested, but it hasn't been tried on a headset here.
 - Graphics presets: Low, Medium and High.
 
 ### Create and share
@@ -412,6 +418,128 @@ less, the app starts with lighter graphics (low quality, bloom and lensing off) 
 chosen your own settings, and runs the orbit forecast every 2 s instead of every second. In
 a phone emulation (390×844 screen, 4× slower CPU) this took the default Solar System from
 about 2.5 to 17 frames per second. In the Sky tab, pinch to zoom.
+
+## Real atmospheres
+
+Planets with air scatter sunlight as real atmospheres do (`src/render/atmosphere.ts`): single
+scattering computed per pixel, with molecules scattering blue (Rayleigh, ∝ λ⁻⁴) and haze or dust
+scattering mostly forwards (Mie), and light dimmed on its way in and out. The coefficients and
+scale heights are the real ones:
+- **Earth:** Bruneton & Neyret 2008: a blue limb and sky, and red-orange light along the day–night line.
+- **Mars:** thin CO₂ plus blue-absorbing dust: a pale butterscotch haze.
+- **Venus:** thick sulphuric-acid haze: a featureless yellow-white veil, as in visible-light photos.
+- **Titan:** orange tholin smog reaching 600 km.
+- **The giant planets:** thin limbs.
+- **Procedural worlds:** air picked from their climate.
+
+Each atmosphere is drawn in its real proportion to the planet's radius (Earth's 100 km is 1.6%),
+at least 2% so it stays visible.
+
+## Auroras
+
+Planets with a magnetic field and air glow around their magnetic poles (`src/render/aurora.ts`):
+- **Shape:** curtains of light ride the auroral oval, with drifting rays and folds, and a diffuse
+  glow beneath them. Each oval sits around the magnetic axis, which is tilted from the spin axis
+  and turns with the planet.
+- **Earth:** dipole tilt 9.4° (IGRF-14). The oval is at ~67° magnetic latitude on the night side
+  and ~77° on the day side. The light is green oxygen at 557.7 nm (100–150 km, the brightest), red
+  oxygen at 630.0 nm above 200 km, and a violet N₂⁺ lower edge.
+- **Jupiter:** tilt 10.3° (Juno). Its main oval is held in place by the planet's rotation, not the
+  solar wind.
+- **Saturn:** aligned within 0.01°. **Uranus:** tilt 59°. **Neptune:** tilt 47°.
+- The giants' auroras shine in ultraviolet and infrared. They are drawn in false colour, as in the
+  Hubble and JWST images.
+- Visible auroras fade on the day side, where sunlight swamps them.
+- **Strength:** set by the stellar wind, which scales with (starting distance ÷ distance)². Push a
+  planet towards its star and its auroras brighten and spread towards the equator, as in a
+  geomagnetic storm.
+- **No aurora:** Venus, Mars and the Moon have no global magnetic field.
+- **Procedural worlds:** gas giants, and rocky worlds with air from 0.3 Earth masses up, get a
+  modelled aurora.
+
+## Land on planets
+
+Select a rocky planet or moon and press **🛬 Land** to stand on its surface (`src/render/lander.ts`):
+- **The sky is the planet's own atmosphere seen from inside:**
+  - Earth: blue by day, red at sunset.
+  - Mars: butterscotch.
+  - The Moon: black, with stars even at noon.
+- **The day passes for real:** the Sun rises and sets as the planet turns at its real rotation
+  rate. Time runs at ten minutes a second while you're down, and the HUD shows the local time.
+- **The ground uses the planet's real map:** you land in the Arabian desert's colours if that's
+  where you are. Relief is added on top: hills on worlds with air, craters on airless ones.
+- **By day the stars fade:** a lit sky drowns them; at night they come back.
+- **Controls:** drag to look around, WASD to walk, and the wheel to zoom. Take off (or Esc)
+  returns to orbit.
+- Gas giants have no surface to stand on.
+- The terrain's shape is a model; only its colours come from the real maps.
+
+## Real stars around the Sun (Gaia)
+
+The Galaxy Map shows 61,673 real stars around the Sun from ESA's Gaia DR3: every star brighter
+than magnitude 8 whose parallax is measured to 20% or better.
+- **Where and what:** each star sits at its measured distance (after Gaia's parallax zero-point),
+  in its real colour, sized by its luminosity.
+- **What you can see:** zoom in on "You are here" to find the real neighbourhood: the Pleiades and
+  Hyades, the blue giants of Orion and Scorpius–Centaurus, and the Gould Belt. The procedural
+  stars stand in for the billions Gaia can't show at this brightness.
+- Turn them off with "Real stars (Gaia)" in the galaxy panel.
+
+## Spinning black holes
+
+Black holes have a spin, a* from 0 to 0.998, the most that gas can spin one up to (Thorne 1974).
+It is set with a slider in the black hole's panel (`src/sim/kerr.ts`).
+- **The horizon shrinks:** from 2 to about 1 GM/c².
+- **The disc gets closer:** its inner edge, the innermost stable orbit, moves in from 6 to 1.24
+  GM/c² (Bardeen, Press & Teukolsky 1972).
+- **More energy comes out:** the disc turns 5.7% of the infalling mass into light without spin,
+  and 32% at a* = 0.998.
+- **The shadow changes shape:** seen from the side, it is flattened and pushed sideways, exactly
+  as Bardeen (1973) calculated.
+- **The accretion disc is shaded per pixel:**
+  - Thin-disc temperatures.
+  - The gas orbits at up to ~40% of light speed, so the side coming towards you is
+    Doppler-boosted, bluer and brighter, and the other side is dimmed and reddened.
+  - Gravitational redshift dims the inner edge.
+  - The disc is drawn after the lensing, so its near side passes in front of the shadow.
+- **Mergers leave spinning holes:** spin is worked out from the masses and spins (Rezzolla et al.
+  2008). Two equal holes give 0.69; LIGO measured GW150914's remnant at 0.67.
+- **Real values:** the galactic-core scene's hole spins at 0.94, as the Event Horizon Telescope's
+  favoured Sgr A* models do.
+
+## More about a planet
+
+Select a planet or moon and open **📖 More about** in its panel:
+- **Measured physical values:** radius, surface gravity, escape velocity, mean density, rotation,
+  axial tilt and albedo (JPL), or for exoplanets the NASA Exoplanet Archive's radius, equilibrium
+  temperature and discovery year. Modelled worlds get their size from their mass, and say so.
+- **Worked out from its orbit:** starlight received, equilibrium temperature, and Hill sphere.
+- **Earth Similarity Index** (Schulze-Makuch et al. 2011): radius, density, escape velocity and
+  temperature compared with Earth's. Earth scores 1, Mars ≈ 0.7 and Jupiter ≈ 0.3. The index
+  measures likeness, not habitability.
+- Links to Wikipedia, or to the NASA Exoplanet Archive for exoplanets.
+
+## Places
+
+Press **L** or 📍 to save the current viewpoint in any view and come back to it later:
+- **Sandbox:** the scenario and the camera. When you're following a body, the camera is stored
+  relative to it, in its radii, so the place still works after it has moved on its orbit or the
+  real-size toggle has changed.
+- **Galaxy Map and Universe:** the camera and its target.
+- **Sky:** the date, your place on Earth and where you're looking.
+- Each place can be renamed, deleted, or copied as a link (`#place=…`) that opens the same view
+  for anyone.
+- A few famous places are built in: Earth beyond the Moon, Saturn's rings from above, Jupiter and
+  its moons, the Orion Nebula, the Pleiades, the Crab Nebula and the Andromeda Galaxy.
+
+## Photo mode
+
+Press **P** or 📷 (next to search) to hide the interface and frame a picture in any view:
+- Sliders for exposure, contrast, colour and field of view.
+- Labels can be shown or hidden. In the Sandbox, O and T hide orbits and trails.
+- **Save picture** renders the view again at 1×, 2× or 4× the screen's resolution, within the
+  GPU's limits and about 16 megapixels, and downloads it as a PNG.
+- Esc or P leaves photo mode.
 
 ## Fly a spaceship
 
@@ -641,6 +769,9 @@ push and pull request.
   SkyView (rebuild with `node scripts/build-nebula-images.mjs`).
 - Stars within 100 pc: ESA Gaia DR3 via the Gaia archive (rebuild with `node scripts/build-stars-100pc.mjs`),
   with names and the brightest stars from HYG v4.1.
+- Real stars on the Galaxy Map: every star brighter than G = 8 with a parallax good to 20% (61,673
+  stars), ESA Gaia DR3 (Gaia Collaboration, Vallenari et al. 2023) via the Gaia archive, with the
+  Lindegren et al. (2021) parallax zero-point (rebuild with `node scripts/build-gaia-bright.mjs`).
 - Star clusters: Hunt & Reffert 2023 ("Improving the open cluster census. II.", A&A 673, A114),
   based on ESA Gaia DR3, and the Harris catalogue of Milky Way globular clusters (VII/202), via
   VizieR (CDS); familiar names resolved with SIMBAD (rebuild with `node scripts/build-clusters.mjs`).

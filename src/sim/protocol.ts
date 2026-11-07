@@ -45,7 +45,7 @@ export interface Frame {
   fuses: [number, number][];
 }
 
-export const BODY_STRIDE = 14;
+export const BODY_STRIDE = 15;
 export const SHOCK_STRIDE = 19;
 /** Core-collapse subtypes, in the order they are numbered in frames (stellarFate.ts). */
 const SUBTYPES = ['ECSN', 'II-P', 'II-L', 'IIb', 'Ib', 'Ic', 'Ic-BL', 'PPISN', 'PISN', 'failed'];
@@ -72,6 +72,7 @@ export function encodeFrame(sim: Simulation, version: number, result: AdvanceRes
     bodies[k + 11] = b.age;
     bodies[k + 12] = b.fuel ?? NaN;
     bodies[k + 13] = b.metallicity ?? NaN;
+    bodies[k + 14] = b.spin ?? NaN;
   }
   const p = sim.particles;
   const n3 = p.count * 3;
@@ -141,6 +142,8 @@ export function applyFrame(sim: Simulation, f: Frame): void {
     b.fuel = Number.isNaN(fuel) ? undefined : fuel;
     const metallicity = f.bodies[k + 13];
     b.metallicity = Number.isNaN(metallicity) ? undefined : metallicity;
+    const spin = f.bodies[k + 14];
+    b.spin = Number.isNaN(spin) ? undefined : spin;
     next.push(b);
   }
   sim.bodies = next;

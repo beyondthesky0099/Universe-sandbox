@@ -311,6 +311,7 @@ export class GalaxyView {
     this.nebulaTextures.length = 0;
     for (const key of [...this.realLayers.keys()]) this.setRealLayer(key, []);
     this.setClusterSwarms(undefined);
+    this.setGaiaStars(undefined);
     for (const key of [...this.cloudLayers.keys()]) this.setCloudLayer(key, [], []);
     this.showpieceLabels.length = 0;
 
@@ -393,7 +394,7 @@ export class GalaxyView {
   }
 
   private applyPointScale(): void {
-    for (const pts of [this.stars, this.glow, this.dust, this.swarms, ...[...this.realLayers.values()].map((l) => l.points)]) {
+    for (const pts of [this.stars, this.glow, this.dust, this.swarms, this.gaia, ...[...this.realLayers.values()].map((l) => l.points)]) {
       if (pts) (pts.material as THREE.ShaderMaterial).uniforms.uScale.value = this.pointScale;
     }
   }
@@ -539,6 +540,26 @@ export class GalaxyView {
   }
 
   private swarms?: THREE.Points;
+  private gaia?: THREE.Points;
+
+  /** Real stars from Gaia (sim/gaiaBright.ts) around the Sun. Cleared on rebuild. */
+  setGaiaStars(stars: { positions: Float32Array; colors: Float32Array; sizes: Float32Array; count: number } | undefined): void {
+    if (this.gaia) {
+      this.scene.remove(this.gaia);
+      this.gaia.geometry.dispose();
+      (this.gaia.material as THREE.Material).dispose();
+      this.gaia = undefined;
+    }
+    if (!stars?.count) return;
+    this.gaia = pointCloud(stars.positions, stars.colors, stars.sizes, pointsMaterial(0.7, 7));
+    (this.gaia.material as THREE.ShaderMaterial).uniforms.uScale.value = this.pointScale;
+    this.gaia.renderOrder = 4;
+    this.scene.add(this.gaia);
+  }
+
+  setGaiaVisible(on: boolean): void {
+    if (this.gaia) this.gaia.visible = on;
+  }
 
   /** Star clusters as balls of stars at their real sizes (see procgen/clusterStars.ts). Cleared on rebuild. */
   setClusterSwarms(swarms: { positions: Float32Array; colors: Float32Array; count: number } | undefined): void {

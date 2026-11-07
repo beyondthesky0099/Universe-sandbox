@@ -21,6 +21,8 @@ export interface BodyState {
   fuel?: number;
   /** Stars: Z/Z☉. */
   metallicity?: number;
+  /** Black holes: spin a*. */
+  spin?: number;
 }
 
 export interface ParticleState {
@@ -130,6 +132,7 @@ export function captureState(sim: Simulation, opts: CaptureOptions = {}): SimSta
       ...(b.tag ? { tag: b.tag } : {}),
       ...(b.fuel !== undefined ? { fuel: round(b.fuel) } : {}),
       ...(b.metallicity !== undefined ? { metallicity: round(b.metallicity) } : {}),
+      ...(b.spin !== undefined ? { spin: round(b.spin) } : {}),
     })),
   };
   if (sim.shockwaves.length) state.shockwaves = sim.shockwaves.map((w) => ({ ...w, hit: [...w.hit] }));

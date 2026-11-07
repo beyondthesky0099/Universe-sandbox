@@ -26,7 +26,11 @@ import { loadVoyagerEncounter, loadVoyagerEncounters } from './sim/voyager';
 import { synthesizeChirp } from './sim/gwChirp';
 import { loadHalley2061, loadHalleyReturn } from './sim/halley';
 import { loadNeighbourhood100, loadStars100 } from './sim/gaia100';
-import { getSolarData, loadSolarData } from './sim/solarSystemData';
+import { gaiaPoints, loadGaiaBright } from './sim/gaiaBright';
+import { getSolarData, loadSolarData, poleScene } from './sim/solarSystemData';
+import { esiLabel, exoplanetArchiveUrl, planetFacts, wikipediaUrl } from './sim/planetFacts';
+import { horizonRadius, iscoRadius, radiativeEfficiency } from './sim/kerr';
+import { stellarFlux } from './sim/climate';
 import { isCompact, kindForMass, mainSequenceLifetime, mergedKind, NEUTRON_MAX_MASS, type Body, type BodyKind } from './sim/body';
 import { isTidallyLocked, nearResonance, orbitalPeriod } from './sim/analysis';
 import { bodyTemperature, climateFor, formatTemperature, isHabitable } from './sim/climate';
@@ -49,7 +53,8 @@ import { GalaxyStore, prefs } from './ui/galaxyStore';
 import { History } from './ui/history';
 import { decodeScene, downloadJson, encodeScene, readSceneFile, type SceneFile } from './ui/share';
 import { Tutorial } from './ui/tutorial';
-import { PostFX } from './render/postfx';
+import { PostFX, type LensInfo } from './render/postfx';
+import { blackHoleView } from './render/accretionDisk';
 import { MegaSim, webgpuAvailable, type MegaScenario } from './gpu/megaSim';
 import { buildFromSpec } from './game/sceneSpec';
 import { defaultServerUrl, ServerClient } from './net/server';
@@ -61,6 +66,9 @@ import { applyNudge, CHALLENGES, dailyChallenge, KMS, newChallengeState, shareTe
 import { burnDirections, planHohmann } from './game/transfer';
 import { LESSONS, type Lesson } from './game/lessons';
 import { SearchIndex, type SearchEntry } from './ui/search';
+import { PhotoMode } from './ui/photo';
+import { tabletopStep, VrRig } from './render/vr';
+import { BUILT_IN_PLACES, decodePlace, encodePlace, newId, PlaceStore, placeSummary, type Place, type Vec3 } from './ui/places';
 import { autoWarp, formatDuration, formatSpeed as formatTravelSpeed, lorentz, SPEEDS, Trip, tripTimes } from './sim/travel';
 import { setObserverVelocity } from './render/relativity';
 import { activityEntries, clusterEntries, compactEntries, exoplanetEntries, galaxyEntries, nebulaEntries, skyBodyEntries, starEntries, structureEntries } from './ui/searchSources';
@@ -218,6 +226,11 @@ export class App {
   /** Typical camera distance of the loaded scene; zooming far beyond it returns to the galaxy. */
   private sceneScale = 10;
   private exoOpen = false;
+  private photo!: PhotoMode;
+  private timeBeforeLanding?: number;
+  private vrRig?: VrRig;
+  private vrBase?: XRReferenceSpace;
+  private readonly places = new PlaceStore();
 
   constructor() {
     // Ask for the discrete GPU on laptops that have two.
@@ -235,6 +248,18 @@ export class App {
     this.cosmos = new CosmosView(this.canvas);
     this.sky = new SkyView(this.canvas);
     this.tutorial = new Tutorial(this.tutorialSteps());
+    this.photo = new PhotoMode({
+      renderer: this.renderer,
+      current: () => {
+        const v = this.view;
+        if (v === 'galaxy') return { scene: this.galaxy.scene, camera: this.galaxy.camera, name: 'galaxy' };
+        if (v === 'cosmos') return { scene: this.cosmos.scene, camera: this.cosmos.camera, name: 'universe' };
+        if (v === 'sky') return { scene: this.sky.scene, camera: this.sky.camera, name: 'sky' };
+        return { scene: this.system.scene, camera: this.system.camera, name: this.scenario.name };
+      },
+      resize: () => this.resize(),
+      renderNow: () => this.frame(0),
+    });
 
     const hashSeed = params.get('galaxy');
     this.galaxySeed = hashSeed ? seedFromString(hashSeed) : 1;
@@ -348,7 +373,13 @@ export class App {
         .then((s) => this.applyScene(s, false))
         .catch((err) => toast(`Couldn't open shared scene: ${(err as Error).message}`));
     }
-    if (!prefs.get('tutorialDone', false) && params.get('tour') !== '0' && !this.embed) setTimeout(() => this.openTutorial(), 1200);
+    const placeCode = params.get('place');
+    if (placeCode) {
+      const place = decodePlace(placeCode);
+      if (place) setTimeout(() => void this.goToPlace(place), 600);
+      else toast("Couldn't read the shared place.");
+    }
+    if (!prefs.get('tutorialDone', false) && params.get('tour') !== '0' && !this.embed && !placeCode) setTimeout(() => this.openTutorial(), 1200);
 
     // setAnimationLoop (rather than requestAnimationFrame) also drives WebXR sessions.
     let last = performance.now();
@@ -356,6 +387,7 @@ export class App {
       const dt = Math.min(0.1, (now - last) / 1000);
       last = now;
       if (this.mega) return; // the GPU mega-sim owns the screen
+      if (this.renderer.xr.isPresenting) this.tickVR(dt);
       this.frame(dt);
     });
     void this.detectVR();
@@ -407,6 +439,7 @@ export class App {
       if (this.lesson) this.lesson.events.push(...events);
       if (this.graphOpen) this.sampleGraph(dt);
       if (this.lesson && this.frames % 10 === 0) this.checkLesson();
+      if (this.frames % 10 === 0 && this.system.lander.active) this.updateLandHud();
       if (this.challenge && !this.challenge.result) {
         this.challenge.st.events.push(...events);
         if (this.frames % 3 === 0) this.evaluateChallenge();
@@ -528,10 +561,317 @@ export class App {
     }
   }
 
-  private renderView(scene: THREE.Scene, camera: THREE.Camera, lenses: THREE.Vector3[]): void {
+  // ---------------------------------------------------------------------------
+  // Standing on a planet (render/lander.ts)
+
+  private landOnSelected(): void {
+    const body = this.selectedBody();
+    if (!body) return;
+    let sun: Body | undefined;
+    for (const b of this.sim.bodies) if (b.kind === 'star' && (!sun || b.mass > sun.mass)) sun = b;
+    const why = this.system.land(body.id, sun);
+    if (why) return void toast(why);
+    document.body.classList.add('landed');
+    $('land-hud').classList.remove('hidden');
+    // Ten minutes a second: a day goes by in a few minutes.
+    this.timeBeforeLanding ??= this.timeScale;
+    this.setTimeScale(1 / (8766 * 6));
+    toast(`Standing on ${body.name}. Drag to look around, WASD to walk.`);
+    this.updateLandHud();
+  }
+
+  private takeOff(): void {
+    this.system.takeOff();
+    if (this.timeBeforeLanding !== undefined) this.setTimeScale(this.timeBeforeLanding);
+    this.timeBeforeLanding = undefined;
+    document.body.classList.remove('landed');
+    $('land-hud').classList.add('hidden');
+  }
+
+  private updateLandHud(): void {
+    const body = this.system.landedOn;
+    if (!body) {
+      if (document.body.classList.contains('landed')) this.takeOff();
+      return;
+    }
+    const { lat, lon } = this.system.lander.position;
+    let sun: Body | undefined;
+    for (const b of this.sim.bodies) if (b.kind === 'star' && (!sun || b.mass > sun.mass)) sun = b;
+    const mesh = this.system.planetMeshOf(body.id);
+    let time = '';
+    if (sun && mesh) {
+      const local = mesh.worldToLocal(new THREE.Vector3(sun.x, sun.y, sun.z)).normalize();
+      const h = this.system.lander.localTime(local);
+      time = ` · local time ${String(Math.floor(h)).padStart(2, '0')}:${String(Math.floor((h % 1) * 60)).padStart(2, '0')}`;
+    }
+    const text = `🛬 ${body.name} · ${Math.abs(lat).toFixed(1)}°${lat >= 0 ? 'N' : 'S'} ${Math.abs(lon).toFixed(1)}°${lon >= 0 ? 'E' : 'W'}${time}`;
+    if ($('land-info').textContent !== text) $('land-info').textContent = text;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Places: saved viewpoints
+
+  private openPlaces(): void {
+    $('places-overlay').classList.remove('hidden');
+    const input = $<HTMLInputElement>('place-name');
+    input.value = '';
+    input.placeholder = `Name this view (${this.suggestPlaceName()})`;
+    this.renderPlaces();
+  }
+
+  private closePlaces(): void {
+    $('places-overlay').classList.add('hidden');
+    $<HTMLInputElement>('place-name').blur();
+  }
+
+  /** A default name: the followed body, the selected star or galaxy, or the view. */
+  private suggestPlaceName(): string {
+    if (this.view === 'system') {
+      const b = this.system.followId !== undefined ? this.sim.getBody(this.system.followId) : undefined;
+      return b ? `Near ${b.name}` : this.scenario.name;
+    }
+    if (this.view === 'sky') return `Sky from ${$<HTMLInputElement>('sky-lat').value}°, ${$<HTMLInputElement>('sky-lon').value}°`;
+    if (this.view === 'galaxy') {
+      const t = this.galaxy.selected;
+      if (typeof t === 'number' && t >= 0) return this.galaxy.data.names[t];
+      return this.galaxyOrigin;
+    }
+    const i = this.cosmos.selected;
+    return i >= 0 ? `Near ${this.cosmos.local[i]?.name ?? 'a galaxy'}` : 'The Universe';
+  }
+
+  /** The current viewpoint as a place. */
+  private capturePlace(name: string): Place {
+    const v3 = (v: THREE.Vector3): Vec3 => [v.x, v.y, v.z];
+    const base = { id: newId(), name, created: Date.now() };
+    if (this.view === 'sky') {
+      const look = this.sky.look;
+      return { ...base, fov: look.fov, view: { kind: 'sky', date: this.skyDate.toISOString(), lat: Number($<HTMLInputElement>('sky-lat').value), lon: Number($<HTMLInputElement>('sky-lon').value), alt: look.alt, az: look.az } };
+    }
+    if (this.view === 'galaxy') return { ...base, view: { kind: 'galaxy', seed: this.galaxySeed, origin: this.galaxyOrigin, camera: v3(this.galaxy.camera.position), target: v3(this.galaxy.controls.target) } };
+    if (this.view === 'cosmos') return { ...base, view: { kind: 'cosmos', camera: v3(this.cosmos.camera.position), target: v3(this.cosmos.controls.target) } };
+    const cam = this.system.camera.position;
+    const target = this.system.controls.target;
+    const followed = this.system.followId !== undefined ? this.sim.getBody(this.system.followId) : undefined;
+    if (followed) {
+      // Relative to the body, in its radii: still right after it has moved on its orbit.
+      const c = new THREE.Vector3(followed.x, followed.y, followed.z);
+      const rel = (v: THREE.Vector3) => v3(v.clone().sub(c).divideScalar(followed.radius));
+      return { ...base, view: { kind: 'system', scenario: this.scenario.name, presetId: this.scenario.presetId, follow: followed.name, camera: rel(cam), target: rel(target) } };
+    }
+    return { ...base, view: { kind: 'system', scenario: this.scenario.name, presetId: this.scenario.presetId, camera: v3(cam), target: v3(target) } };
+  }
+
+  private async goToPlace(p: Place): Promise<void> {
+    this.closePlaces();
+    const v = p.view;
+    const set = (camera: THREE.PerspectiveCamera, controls: { target: THREE.Vector3; update(): void }, c: Vec3, t: Vec3) => {
+      controls.target.set(...t);
+      camera.position.set(...c);
+      controls.update();
+    };
+    switch (v.kind) {
+      case 'search': {
+        const index = await this.buildSearchIndex();
+        const top = index.search(v.query, 1)[0];
+        if (top) await this.goToSearchResult(top);
+        else toast(`Couldn't find ${v.query}.`);
+        return;
+      }
+      case 'sky': {
+        await this.openSky();
+        this.skyDate = new Date(v.date);
+        this.setSkyTimeInput();
+        this.setSkyPlace(v.lat, v.lon);
+        this.sky.lookAt(v.alt, v.az);
+        if (p.fov) this.sky.setFov(p.fov);
+        this.sky.setTime(this.skyDate);
+        break;
+      }
+      case 'galaxy': {
+        if (!this.galaxyBuilt || this.galaxySeed !== v.seed) this.buildGalaxy(v.seed);
+        if (this.view !== 'galaxy') await this.switchView('galaxy');
+        this.galaxy.cancelFlight();
+        set(this.galaxy.camera, this.galaxy.controls, v.camera, v.target);
+        break;
+      }
+      case 'cosmos': {
+        if (this.view !== 'cosmos') await this.openCosmos(this.view === 'galaxy');
+        this.cosmos.cancelFlight();
+        set(this.cosmos.camera, this.cosmos.controls, v.camera, v.target);
+        break;
+      }
+      case 'system': {
+        if (this.view !== 'system') await this.switchToSandbox();
+        const preset = v.presetId ? PRESETS.find((q) => q.id === v.presetId) : undefined;
+        if (preset && this.scenario.presetId !== preset.id) this.loadScenario({ name: preset.name, load: () => preset.load(this.sim), presetId: preset.id });
+        else if (!preset && this.scenario.name !== v.scenario) toast(`This place was saved in “${v.scenario}”, which isn't loaded: showing the same viewpoint here.`);
+        this.system.stopCameraAnimation();
+        const body = v.follow ? this.sim.bodies.find((b) => b.name === v.follow) : undefined;
+        if (v.follow && !body) {
+          toast(`${v.follow} isn't in this scene any more.`);
+          break;
+        }
+        if (body) {
+          const c = new THREE.Vector3(body.x, body.y, body.z);
+          const offset = new THREE.Vector3(...v.camera);
+          const solar = getSolarData()?.byName.get(body.name);
+          const pole = v.poleFrame && solar ? poleScene(solar) : undefined;
+          if (pole) offset.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(...pole)));
+          let camera = offset.multiplyScalar(body.radius).add(c);
+          const other = v.lookAt ? this.sim.bodies.find((b) => b.name === v.lookAt) : undefined;
+          if (other) {
+            // Behind the body, looking past it at the other one, raised so the other one shows
+            // just above its limb.
+            const dir = c.clone().sub(new THREE.Vector3(other.x, other.y, other.z)).normalize();
+            const up = new THREE.Vector3(0, 1, 0).projectOnPlane(dir).normalize();
+            const distance = v.distance ?? 6;
+            const tilt = Math.asin(1 / distance) * 1.6;
+            camera = c.clone().addScaledVector(dir.multiplyScalar(Math.cos(tilt)).addScaledVector(up, Math.sin(tilt)), body.radius * distance);
+          }
+          const target = new THREE.Vector3(...v.target).multiplyScalar(body.radius).add(c);
+          this.system.controls.target.copy(target);
+          this.system.camera.position.copy(camera);
+          this.system.controls.update();
+          // Hold still: the view lines up with the other body only for a moment.
+          if (other && this.running) {
+            this.setRunning(false);
+            toast('Paused to hold the view: press Space to carry on.');
+          }
+          this.selectBody(body);
+          this.system.follow(body.id, camera.distanceTo(target));
+        } else {
+          this.system.follow(undefined);
+          set(this.system.camera, this.system.controls, v.camera, v.target);
+        }
+        break;
+      }
+    }
+    if (p.fov && this.photo.active && v.kind !== 'sky') {
+      this.photo.setFov(p.fov);
+      $<HTMLInputElement>('photo-fov').value = String(Math.round(p.fov));
+      $('photo-fov-val').textContent = `${Math.round(p.fov)}°`;
+    }
+    toast(`📍 ${p.name}`);
+  }
+
+  private renderPlaces(): void {
+    const item = (p: Place, own: boolean) =>
+      `<li tabindex="0" data-id="${escapeHtml(p.id)}"><span class="place-name">${escapeHtml(p.name)}</span><span class="place-detail">${escapeHtml(placeSummary(p))}</span>` +
+      (own ? `<span class="place-actions"><button data-act="link" title="Copy a link to this place">🔗</button><button data-act="rename" title="Rename">✎</button><button data-act="delete" title="Delete">🗑</button></span>` : '') +
+      '</li>';
+    const mine = this.places.places;
+    $('place-list').innerHTML = mine.map((p) => item(p, true)).join('');
+    $('place-empty').classList.toggle('hidden', mine.length > 0);
+    $('place-builtins').innerHTML = BUILT_IN_PLACES.map((p) => item(p, false)).join('');
+  }
+
+  private async copyPlaceLink(p: Place): Promise<void> {
+    const url = `${location.origin}${location.pathname}#tour=0&place=${encodePlace(p)}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      toast('Link copied: it opens this view.');
+    } catch {
+      window.prompt('Copy this link:', url);
+    }
+  }
+
+  private bindPlaces(): void {
+    $('btn-places').addEventListener('click', () => this.openPlaces());
+    $('places-close').addEventListener('click', () => this.closePlaces());
+    $('places-overlay').addEventListener('click', (e) => {
+      if (e.target === e.currentTarget) this.closePlaces();
+    });
+    $('place-save').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const input = $<HTMLInputElement>('place-name');
+      const place = this.capturePlace(input.value.trim() || this.suggestPlaceName());
+      this.places.add(place);
+      input.value = '';
+      this.renderPlaces();
+      toast(`Saved “${place.name}”.`);
+    });
+    const onList = (e: Event, own: boolean) => {
+      const li = (e.target as HTMLElement).closest('li[data-id]') as HTMLElement | null;
+      if (!li) return;
+      const id = li.dataset.id!;
+      const place = (own ? this.places.places : BUILT_IN_PLACES).find((p) => p.id === id);
+      if (!place) return;
+      const act = (e.target as HTMLElement).closest('button')?.dataset.act;
+      if (act === 'delete') {
+        this.places.remove(id);
+        this.renderPlaces();
+      } else if (act === 'rename') {
+        const name = window.prompt('New name:', place.name);
+        if (name) {
+          this.places.rename(id, name);
+          this.renderPlaces();
+        }
+      } else if (act === 'link') {
+        void this.copyPlaceLink(place);
+      } else {
+        void this.goToPlace(place);
+      }
+    };
+    for (const [id, own] of [['place-list', true], ['place-builtins', false]] as const) {
+      $(id).addEventListener('click', (e) => onList(e, own));
+      $(id).addEventListener('keydown', (e) => {
+        if ((e as KeyboardEvent).key === 'Enter' && (e.target as HTMLElement).tagName === 'LI') onList(e, own);
+      });
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Photo mode
+
+  private togglePhoto(): void {
+    if (this.photo.active) {
+      this.photo.exit();
+      return;
+    }
+    this.photo.enter();
+    const fov = Math.round(this.photo.fov ?? 50);
+    $<HTMLInputElement>('photo-fov').value = String(fov);
+    $('photo-fov-val').textContent = `${fov}°`;
+    $<HTMLInputElement>('photo-labels').checked = true;
+    toast(this.view === 'system' ? 'Photo mode: O and T hide orbits and trails; P or Esc to leave.' : 'Photo mode: P or Esc to leave.');
+  }
+
+  private bindPhoto(): void {
+    $('btn-photo').addEventListener('click', () => this.togglePhoto());
+    $('photo-exit').addEventListener('click', () => this.togglePhoto());
+    const slider = (id: string, apply: (v: number) => void) => $<HTMLInputElement>(id).addEventListener('input', (e) => apply(Number((e.target as HTMLInputElement).value)));
+    slider('photo-exposure', (v) => this.photo.setGrade({ exposure: v }));
+    slider('photo-contrast', (v) => this.photo.setGrade({ contrast: v }));
+    slider('photo-saturation', (v) => this.photo.setGrade({ saturation: v }));
+    slider('photo-fov', (v) => {
+      this.photo.setFov(v);
+      $('photo-fov-val').textContent = `${v}°`;
+    });
+    $<HTMLInputElement>('photo-labels').addEventListener('change', (e) => this.photo.setLabels((e.target as HTMLInputElement).checked));
+    $('photo-reset').addEventListener('click', () => {
+      for (const id of ['photo-exposure', 'photo-contrast', 'photo-saturation']) $<HTMLInputElement>(id).value = '1';
+      this.photo.setGrade({ exposure: 1, contrast: 1, saturation: 1 });
+    });
+    $('photo-capture').addEventListener('click', async () => {
+      const scale = Number($<HTMLSelectElement>('photo-scale').value);
+      try {
+        const { width, height } = await this.photo.capture(scale);
+        toast(`Saved a ${width} × ${height} picture.`);
+      } catch (err) {
+        toast(`Couldn't save the picture: ${(err as Error).message}`);
+      }
+    });
+  }
+
+  private renderView(scene: THREE.Scene, camera: THREE.Camera, lenses: LensInfo[]): void {
+    if (camera instanceof THREE.PerspectiveCamera) this.photo.beforeRender(scene, camera);
     // Post-processing isn't supported inside WebXR sessions; low quality skips it too.
     // The galaxy map is already a sea of additive glow; bloom there only adds haze.
-    if (this.postfxOn && this.quality !== 'low' && !this.renderer.xr.isPresenting && this.view === 'system') {
+    const fx = this.postfxOn && this.quality !== 'low' && !this.renderer.xr.isPresenting && this.view === 'system';
+    // With lensing on, black holes show their spin-shaped shadow and the sphere is only the horizon.
+    blackHoleView.lensed = fx;
+    if (fx) {
       this.postfx.setLenses(lenses);
       this.postfx.setBloom(this.quality === 'high' ? 0.55 : 0.4);
       this.postfx.render(scene, camera);
@@ -556,10 +896,13 @@ export class App {
   private async enterVR(): Promise<void> {
     const xr = (navigator as Navigator & { xr?: XRSystem }).xr;
     if (!xr) return;
-    if (this.view !== 'system') this.setView('system');
     const session = await xr.requestSession('immersive-vr', { optionalFeatures: ['local-floor', 'bounded-floor'] });
     this.renderer.xr.setReferenceSpaceType('local-floor');
     await this.renderer.xr.setSession(session);
+    if (this.view !== 'system') {
+      this.enterImmersiveVR(session);
+      return;
+    }
     // Tabletop scale: the whole scene fits in about a metre, at waist height in front of you.
     const scene = this.system.scene;
     scene.scale.setScalar(0.6 / this.system.sceneExtent());
@@ -578,7 +921,39 @@ export class App {
         scene.remove(c);
       }
     });
-    toast('VR: pull the trigger to pause or resume.');
+    toast('VR: pull the trigger to pause or resume; left stick turns the table, right stick resizes it.');
+  }
+
+  /** Galaxy Map, Universe or Sky in VR: stand where the camera was and fly with the thumbsticks (render/vr.ts). */
+  private enterImmersiveVR(session: XRSession): void {
+    const view = this.view === 'galaxy' ? this.galaxy : this.view === 'cosmos' ? this.cosmos : undefined;
+    const camera = view ? view.camera : this.sky.camera;
+    // Flying speed from how far away the camera was looking; the sky is a sphere around you, so no flying there.
+    const scale = view ? Math.max(1e-6, view.camera.position.distanceTo(view.controls.target) * 0.05) : 0;
+    this.vrRig = new VrRig(camera, scale);
+    this.vrBase = this.renderer.xr.getReferenceSpace() ?? undefined;
+    if (view) view.controls.enabled = false;
+    session.addEventListener('end', () => {
+      this.vrRig = undefined;
+      this.vrBase = undefined;
+      if (view) {
+        view.controls.enabled = true;
+        view.controls.update();
+      }
+    });
+    toast(view ? 'VR: left stick flies where you look; right stick turns (left/right) and changes speed (up/down).' : 'VR: look around the sky.');
+  }
+
+  /** Per frame while a headset is on. */
+  private tickVR(dt: number): void {
+    const session = this.renderer.xr.getSession();
+    if (this.view === 'system') {
+      tabletopStep(this.system.scene, session, dt);
+    } else if (this.vrRig && this.vrBase) {
+      const camera = this.view === 'galaxy' ? this.galaxy.camera : this.view === 'cosmos' ? this.cosmos.camera : this.sky.camera;
+      if (this.vrRig.scale > 0) this.vrRig.update(session, camera, dt);
+      this.renderer.xr.setReferenceSpace(this.vrRig.space(this.vrBase));
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -1079,6 +1454,7 @@ export class App {
 
   private loadScenario(sc: Scenario, opts: { zoomFrom?: number; undoable?: boolean; challenge?: boolean; lesson?: boolean } = {}): void {
     const { zoomFrom = 1, undoable = true } = opts;
+    if (this.system.lander.active) this.takeOff();
     if (!opts.challenge && this.challenge) this.quitChallenge();
     if (!opts.lesson && this.lesson) this.exitLesson();
     // A pinned comparison run survives Reset of the same scenario, not a switch to another one.
@@ -1506,6 +1882,15 @@ export class App {
     );
   }
 
+  /** Real stars from Gaia DR3 around the Sun, at their measured distances (Milky Way only). */
+  private async showGaiaOnMap(seed: number): Promise<void> {
+    const stars = await loadGaiaBright().catch(() => undefined);
+    if (!stars || this.galaxySeed !== seed) return;
+    this.galaxy.setGaiaStars(gaiaPoints(stars, galacticToMap, 0.012));
+    this.galaxy.setGaiaVisible($<HTMLInputElement>('opt-gaia-stars').checked);
+    $('galaxy-info').textContent += ` Around the Sun, ${stars.count.toLocaleString('en-US')} real stars from Gaia DR3 (every star brighter than magnitude 8 with a good parallax) sit at their measured distances.`;
+  }
+
   /** Real open and globular star clusters at their measured distances (Milky Way only). */
   private async showClustersOnMap(seed: number): Promise<void> {
     const all = await loadClusters().catch(() => undefined);
@@ -1672,6 +2057,7 @@ export class App {
       void this.showCompactObjectsOnMap(seed);
       void this.showNebulaeOnMap(seed);
       void this.showClustersOnMap(seed);
+      void this.showGaiaOnMap(seed);
     }
     $<HTMLInputElement>('galaxy-seed').value = String(seed);
     $('star-panel').classList.add('hidden');
@@ -2325,6 +2711,68 @@ export class App {
     $('btn-follow').textContent = followed ? 'Unfollow' : 'Follow';
   }
 
+  /**
+   * The "More about" section: physical facts worked out from mass, size and orbit (measured
+   * values for real bodies), the Earth Similarity Index and links to read more.
+   */
+  private updateBodyWiki(body: Body, craft: boolean, parent: Body | undefined): void {
+    const box = $('body-wiki');
+    const planetLike = !craft && (body.kind === 'rocky' || body.kind === 'gas') && body.tag !== 'galaxy';
+    box.classList.toggle('hidden', !planetLike);
+    $('body-wiki-name').textContent = body.name;
+    // Only worked out while the section is open.
+    if (!planetLike || !(box as HTMLDetailsElement).open) return;
+    // Measured data, if this is the real body (and its mass hasn't been changed).
+    const solar = getSolarData()?.byName.get(body.name);
+    const real = solar?.mass && Math.abs(body.mass / solar.mass - 1) < 0.01 ? solar : undefined;
+    const origin = this.scenario.origin;
+    const exo = origin?.kind === 'exo' ? origin.host.planets.find((p) => p.name === body.name) : undefined;
+    const exoReal = exo && Math.abs(body.mass / (exo.massEarth * EARTH_MASS) - 1) < 0.01 ? exo : undefined;
+    const radiusKm = real?.radiusKm ?? (exoReal?.radiusEarth ? exoReal.radiusEarth * 6371 : undefined);
+    const distance = parent ? Math.hypot(body.x - parent.x, body.y - parent.y, body.z - parent.z) : undefined;
+    const f = planetFacts({
+      kind: body.kind,
+      mass: body.mass,
+      radiusKm,
+      albedo: real?.albedo,
+      flux: stellarFlux(this.sim.bodies, body.x, body.y, body.z, body),
+      surfaceK: bodyTemperature(this.sim.bodies, body),
+      parentMass: parent?.mass,
+      distance,
+    });
+    const me = body.mass / EARTH_MASS;
+    const rows: [string, string][] = [
+      [f.radiusEstimated ? 'Radius (from mass)' : 'Radius', `${f.radiusEstimated ? '≈ ' : ''}${Math.round(f.radiusKm).toLocaleString('en-US')} km (${fmt(f.radiusKm / 6371)} R⊕)`],
+      ['Surface gravity', `${f.gravity.toFixed(f.gravity < 1 ? 2 : 1)} m/s² (${fmt(f.gravity / 9.80665)} g)`],
+      ['Escape velocity', `${f.escapeKms.toFixed(f.escapeKms < 1 ? 2 : 1)} km/s`],
+      ['Mean density', `${f.density.toFixed(2)} g/cm³`],
+    ];
+    if (exoReal?.massEstimated) rows.push(['Mass', `${fmt(me)} Earth masses (estimated from its radius)`]);
+    if (real?.rotationHours) {
+      const h = real.rotationHours;
+      rows.push(['Day (rotation)', `${h < 48 ? `${h.toFixed(1)} hours` : `${fmt(h / 24)} days`}${real.retrograde ? ', backwards' : ''}`]);
+    } else if (real?.synchronous) {
+      rows.push(['Day (rotation)', 'Same as its orbit (tidally locked)']);
+    }
+    if (real?.obliquityDeg !== undefined) rows.push(['Axial tilt', `${real.obliquityDeg.toFixed(1)}°`]);
+    if (f.insolation > 1e-6) rows.push(['Starlight', `${fmt(f.insolation)}× Earth's`], ['Equilibrium temp.', `${Math.round(f.equilibriumK)} K${real?.albedo !== undefined ? ` (albedo ${real.albedo})` : ''}`]);
+    if (exoReal?.eqTempK) rows.push(['Measured eq. temp.', `${Math.round(exoReal.eqTempK)} K`]);
+    if (exoReal?.year) rows.push(['Discovered', String(exoReal.year)]);
+    if (f.hillAU && parent) rows.push([`Hill sphere`, `${formatDistance(f.hillAU)} (moons can orbit within ~⅓ of it)`]);
+    setFacts($('body-wiki-facts'), rows);
+    const p = f.esiParts;
+    const esiHtml = `<div class="esi" title="Earth Similarity Index (Schulze-Makuch et al. 2011): 1 is Earth. It compares size, density, escape velocity and temperature, not habitability."><div>Earth Similarity Index <b>${f.esi.toFixed(2)}</b> · ${esiLabel(f.esi)}</div><div class="esi-bar"><span style="width:${(f.esi * 100).toFixed(1)}%"></span></div><div class="esi-parts">size ${p.radius.toFixed(2)} · density ${p.density.toFixed(2)} · escape ${p.escape.toFixed(2)} · temperature ${p.temperature.toFixed(2)}</div></div>`;
+    const esiEl = $('body-wiki-esi');
+    if (esiEl.innerHTML !== esiHtml) esiEl.innerHTML = esiHtml;
+    const links: string[] = [];
+    if (real) links.push(`<a href="${wikipediaUrl(body.name, real.kind === 'moon')}" target="_blank" rel="noopener">Wikipedia ↗</a>`);
+    if (origin?.kind === 'exo' && exo) links.push(`<a href="${exoplanetArchiveUrl(origin.host.name)}" target="_blank" rel="noopener">NASA Exoplanet Archive ↗</a>`);
+    if (!real && !exoReal) links.push('<span class="muted">Modelled values: size from mass, temperature from starlight.</span>');
+    const linkHtml = links.join(' · ');
+    const linkEl = $('body-wiki-links');
+    if (linkEl.innerHTML !== linkHtml) linkEl.innerHTML = linkHtml;
+  }
+
   private updateBodyPanel(): void {
     const body = this.selectedBody();
     if (!body) return;
@@ -2404,6 +2852,23 @@ export class App {
     const slider = $<HTMLInputElement>('metallicity');
     if (document.activeElement !== slider) slider.value = String(Math.log10(Math.max(z, 0.01)));
     $('metallicity-out').textContent = z.toFixed(z < 0.1 ? 3 : 2);
+    // Spinning black holes (kerr.ts).
+    const hole = body.kind === 'blackhole' && body.tag !== 'galaxy';
+    $('spin-row').classList.toggle('hidden', !hole);
+    if (hole) {
+      const a = body.spin ?? 0;
+      const gm = body.mass * 1.4766; // GM/c² in km
+      const km = (x: number) => (x * gm >= 1e7 ? `${fmt((x * gm) / 1.496e8)} AU` : `${Math.round(x * gm).toLocaleString('en-US')} km`);
+      facts.push(
+        ['Spin a*', a ? a.toFixed(3) : '0 (not spinning)'],
+        ['Event horizon', km(horizonRadius(a))],
+        ['Innermost stable orbit', km(iscoRadius(a))],
+        ['Disc efficiency', `${(radiativeEfficiency(a) * 100).toFixed(1)}% of mass → light`],
+      );
+      const spinSlider = $<HTMLInputElement>('bh-spin');
+      if (document.activeElement !== spinSlider) spinSlider.value = String(a);
+      $('bh-spin-out').textContent = a.toFixed(2);
+    }
     if (isStar && this.sim.canSupernova(body)) {
       alerts.push(`<div class="alert info">⭐ ${escapeHtml(describeFate(stellarFate(body.mass, z)))}</div>`);
     }
@@ -2419,11 +2884,13 @@ export class App {
       );
     }
     setFacts($('body-facts'), facts);
+    this.updateBodyWiki(body, craft, parent);
     const html = alerts.join('');
     const alertsEl = $('body-alerts');
     if (alertsEl.innerHTML !== html) alertsEl.innerHTML = html;
     $('btn-supernova').classList.toggle('hidden', !this.sim.canSupernova(body) || body.tag === 'galaxy');
     $('btn-visit').classList.toggle('hidden', !(body.tag?.startsWith('exohost:') || body.tag === 'home'));
+    $('btn-land').classList.toggle('hidden', craft || body.kind !== 'rocky' || this.system.landedOn === body);
     const inChallenge = !!this.challenge;
     for (const id of ['btn-mass-up', 'btn-mass-down', 'btn-delete']) $(id).classList.toggle('hidden', inChallenge);
     if (inChallenge) $('btn-supernova').classList.add('hidden');
@@ -3550,6 +4017,17 @@ export class App {
         return;
       }
       if (isTyping(e) || this.tutorial.isOpen) return;
+      // Walking on a planet's surface.
+      if (this.view === 'system' && this.system.lander.active && !e.ctrlKey && !e.metaKey) {
+        if (this.system.lander.key(e.code, true)) {
+          e.preventDefault();
+          return;
+        }
+        if (e.key === 'Escape') {
+          this.takeOff();
+          return;
+        }
+      }
       const key = e.key.toLowerCase();
       const mod = e.ctrlKey || e.metaKey;
       if (e.key === '/') {
@@ -3569,6 +4047,23 @@ export class App {
         return;
       }
       if (mod) return;
+      if (key === 'p') {
+        this.togglePhoto();
+        return;
+      }
+      if (key === 'l') {
+        if ($('places-overlay').classList.contains('hidden')) this.openPlaces();
+        else this.closePlaces();
+        return;
+      }
+      if (key === 'escape' && !$('places-overlay').classList.contains('hidden')) {
+        this.closePlaces();
+        return;
+      }
+      if (this.photo.active && key === 'escape') {
+        this.togglePhoto();
+        return;
+      }
       if (key === 'm') {
         if (this.view !== 'system') void this.switchToSandbox();
         else void this.exitToGalaxy();
@@ -3653,6 +4148,7 @@ export class App {
       }
     });
     window.addEventListener('keyup', (e) => {
+      this.system.lander.key(e.code, false);
       if (e.key.toLowerCase() === 'r') this.stopRewind();
       if (e.key === '.') this.forwardUp();
       if (this.shipThrustDir && 'wsadqe'.includes(e.key.toLowerCase())) this.stopShipThrust();
@@ -3682,6 +4178,7 @@ export class App {
     $<HTMLInputElement>('opt-cosmic-web').addEventListener('change', (e) => this.cosmos.setWebVisible((e.target as HTMLInputElement).checked));
     $<HTMLInputElement>('opt-real-nebulae').addEventListener('change', (e) => this.galaxy.setRealLayerVisible('nebulae', (e.target as HTMLInputElement).checked));
     $<HTMLInputElement>('opt-real-clusters').addEventListener('change', (e) => this.galaxy.setRealLayerVisible('clusters', (e.target as HTMLInputElement).checked));
+    $<HTMLInputElement>('opt-gaia-stars').addEventListener('change', (e) => this.galaxy.setGaiaVisible((e.target as HTMLInputElement).checked));
     $<HTMLInputElement>('opt-cmb').addEventListener('change', (e) => this.cosmos.setCmbVisible((e.target as HTMLInputElement).checked));
     $('cosmos-search').addEventListener('input', () => this.renderCosmosSearch());
     $('cosmos-results').addEventListener('click', (e) => {
@@ -4070,6 +4567,9 @@ export class App {
     });
     $('btn-learn').addEventListener('click', () => this.openLessonMenu());
     $('btn-search').addEventListener('click', () => this.openSearch());
+    this.bindPhoto();
+    this.bindPlaces();
+    $('body-wiki').addEventListener('toggle', () => this.updateBodyPanel());
     $('btn-ship').addEventListener('click', () => this.spawnShip());
     $('ship-engine').innerHTML = ENGINES.map((e) => `<option value="${e.id}">${escapeHtml(e.label)}</option>`).join('');
     $('ship-engine').addEventListener('change', () => {
@@ -4259,7 +4759,19 @@ export class App {
     $<HTMLInputElement>('metallicity').addEventListener('input', (e) => {
       $('metallicity-out').textContent = (10 ** Number((e.target as HTMLInputElement).value)).toFixed(2);
     });
+    $<HTMLInputElement>('bh-spin').addEventListener('change', (e) => {
+      const body = this.selectedBody();
+      if (!body) return;
+      const a = Number((e.target as HTMLInputElement).value);
+      this.mutate(`spinning ${body.name} to a* = ${a.toFixed(2)}`, () => (body.spin = a || undefined));
+      this.updateBodyPanel();
+    });
+    $<HTMLInputElement>('bh-spin').addEventListener('input', (e) => {
+      $('bh-spin-out').textContent = Number((e.target as HTMLInputElement).value).toFixed(2);
+    });
     $('btn-mass-down').addEventListener('click', () => this.scaleSelectedMass(0.5));
+    $('btn-land').addEventListener('click', () => this.landOnSelected());
+    $('btn-takeoff').addEventListener('click', () => this.takeOff());
     $('btn-supernova').addEventListener('click', () => this.detonateSelected());
 
     // Gentle UI ticks.

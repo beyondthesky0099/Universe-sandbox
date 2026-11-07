@@ -34,6 +34,8 @@ export interface Body {
    * mass winds strip and so how the star dies (stellarFate.ts). Undefined means solar.
    */
   metallicity?: number;
+  /** Black holes: dimensionless spin a* = cJ/GM² (0 … 0.998; kerr.ts). Undefined means not spinning. */
+  spin?: number;
 }
 
 export interface BodyInit {
@@ -54,6 +56,7 @@ export interface BodyInit {
   tag?: string;
   fuel?: number;
   metallicity?: number;
+  spin?: number;
 }
 
 const KIND_RANK: Record<BodyKind, number> = { rocky: 0, gas: 1, star: 2, giant: 3, whitedwarf: 4, neutron: 5, blackhole: 6 };
@@ -235,5 +238,6 @@ export function createBody(init: BodyInit): Body {
     tag: init.tag,
     fuel: init.fuel,
     ...(init.metallicity !== undefined ? { metallicity: init.metallicity } : {}),
+    ...(init.spin !== undefined ? { spin: init.spin } : {}),
   };
 }

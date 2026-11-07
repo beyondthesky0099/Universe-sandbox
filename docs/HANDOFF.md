@@ -180,6 +180,121 @@ Plan, in priority order:
   (`remnantClouds` in systemView, scaled to the ejecta edge each frame) coloured by element;
   ejecta are capped at the decelerating shock's speed (reverse shock).
 
+### Q. Real atmospheres
+- [x] `src/render/atmosphere.ts`: ATMOSPHERES (Earth, Mars, Venus, Titan, giants), atmosphereFor
+  (named or by procedural rim colour), shellScale, scatteringMaterial (single scattering, 14 view
+  × 5 light samples, Rayleigh + Henyey–Greenstein-like Mie phase, premultiplied blending,
+  logarithmic depth chunks — the sandbox renderer uses a log depth buffer), insideAware (front
+  faces from outside, back faces from inside), aimSun (per frame from the heaviest star). Wired in
+  BodyVisual.applyDetail/update. Tests: tests/atmosphere.test.ts.
+
+### R. Auroras
+- [x] `src/render/aurora.ts`. AURORAS holds the data:
+  - Earth, Jupiter, Saturn, Uranus and Neptune;
+  - magnetic tilt, oval colatitude, night-side shift and width;
+  - emission altitudes, as fractions of the radius;
+  - up to three emission layers (colour, height, width, weight).
+- auroraFor: named bodies use the table; real bodies missing from it get none; procedural giants
+  and rocky worlds with air of ≥ 0.3 M⊕ get one.
+- auroraActivity: (d₀/d)² wind times a substorm flicker. ovalColatitude widens with activity.
+- auroraMesh: 7 curtains plus a flat diffuse ribbon per hemisphere, positioned in the vertex
+  shader.
+  - Optically thin, so the light is brightened by path length (up to 6×) when seen edge-on.
+  - The fragment shader needs `#include <logdepthbuf_fragment>`, or it fails the planet's depth
+    test.
+- BodyVisual adds it in applyDetail and updates it only when the planet is more than 14 px across
+  and a star is present. Tests: tests/aurora.test.ts.
+
+### Y. VR everywhere
+- [x] `src/render/vr.ts`:
+  - deadZone, flyStep, scaleStep, SnapTurn, readSticks (xr-standard axes 2/3).
+  - offsetTransform / VrRig: moves the viewer by an offset XR reference space, re-derived from
+    the base space each frame, so the camera stays in world coordinates and views work unchanged.
+  - tabletopStep.
+- App: btn-vr moved to the top bar. enterVR: tabletop for the Sandbox, enterImmersiveVR for the
+  others (controls disabled). tickVR runs before frame() each animation frame.
+- Untested on a real headset (no WebXR device here). Tests: tests/vr.test.ts.
+
+### X. Land on planets
+- [x] `src/render/lander.ts` Lander:
+  - The camera rides the planet mesh's frame at EYE_HEIGHT.
+  - The planet spins at its real rate (rotationAngle from the JPL rotationHours) while landed.
+  - The terrain patch is a polar grid of radius PATCH_RADIUS around the site: fbm/ridged relief,
+    craters (many if airless), uv matching SphereGeometry (sphereUv, unwrapped at the seam), and
+    an edge fade into the sphere. It is rebuilt when you walk away from the centre.
+  - Look, walk and zoom controls; localSolarTime; sunElevation.
+- SystemView.land/takeOff:
+  - Skips follow and OrbitControls while landed; hides the orbit line, marker and HZ rings.
+  - Fades the starfield, body dots and particles by Sun elevation if the world has air.
+- Atmosphere: the ground sphere is at 0.996 so hollows stay above it; groundExposure is used from
+  inside (Mars 4).
+- App: the Land button (rocky bodies), #land-hud, keys (WASD/arrows, Esc). Time is 10 min/s
+  while landed and is restored on take-off.
+- Tests: tests/lander.test.ts.
+
+### W. More Gaia stars
+- [x] `scripts/build-gaia-bright.mjs` writes public/data/gaia-bright.bin (602 KB).
+  - Query: Gaia DR3, G < 8, parallax_over_error > 5; MAXREC raised past the 50,000 default.
+  - Binary struct of arrays: l, b, d (pc), Teff, G.
+- `src/sim/gaiaBright.ts`: decode/encode, loadGaiaBright, gaiaPoints.
+- Wiring: GalaxyView.setGaiaStars / setGaiaVisible, App.showGaiaOnMap (Milky Way only), checkbox
+  opt-gaia-stars.
+- Tests: tests/gaia-bright.test.ts, including the Pleiades at l 166.6°, b −23.5°, ~135 pc.
+
+### V. Spinning (Kerr) black holes
+- [x] `src/sim/kerr.ts`:
+  - horizonRadius, iscoRadius (BPT 1972), photonOrbits, radiativeEfficiency.
+  - shadowOutline / shadowProfile: Bardeen 1973, 32 bins relative to √27 M, +x = approaching
+    side.
+  - mergerSpin: Rezzolla+ 2008, aligned spins.
+- Body field `spin` added to body.ts, protocol (BODY_STRIDE 15) and state.ts.
+  Simulation.merge sets the remnant's spin.
+- Rendering:
+  - `render/accretionDisk.ts`: ShaderMaterial disc on DISK_LAYER (2). Unit = √27 M. It has the
+    ISCO inner edge, a thin-disc T profile, Doppler D³ beaming and gravitational redshift, and
+    hides far-side light directly behind the hole.
+  - postfx: LensInfo, with the D-shaped shadow from the uShadow table, a beamed photon ring, and
+    an Einstein ring that takes light from just outside the hole. A LayerPass draws the discs
+    after the lens; it must null scene.background.
+  - BodyVisual: with the lens on, the sphere shrinks to the horizon and the glow is hidden.
+- UI: spin slider and facts (horizon, ISCO, efficiency). Tests: tests/kerr.test.ts.
+
+### U. Planet "More about" section
+- [x] `src/sim/planetFacts.ts`:
+  - planetFacts: gravity, escape velocity, density, insolation, equilibrium T and Hill radius.
+    The radius is measured where known, otherwise from physicalRadius.
+  - earthSimilarity: ESI with weights 0.57, 1.07, 0.70 and 5.58 (n = 4; Earth 288 K). esiLabel.
+  - wikipediaUrl (disambiguation table) and exoplanetArchiveUrl.
+- App.updateBodyWiki fills `<details id="body-wiki">`, only while it is open.
+  - It uses real data when the mass still matches the catalogue to within 1%.
+  - Exoplanets use the scenario's ExoHost.
+- Tests: tests/planet-facts.test.ts.
+
+### T. Places
+- [x] `src/ui/places.ts`:
+  - Place / PlaceView: system, galaxy, cosmos, sky, or a built-in "search" query.
+  - BUILT_IN_PLACES. Two optional fields: `lookAt` (camera behind the followed body, tilted so
+    the other shows above its limb; the sim pauses) and `poleFrame` (offsets in the body's spin
+    frame).
+  - validPlace: places from storage and links are untrusted.
+  - encodePlace / decodePlace: base64url JSON. PlaceStore: localStorage, newest first, max 200.
+- App: capturePlace / goToPlace / renderPlaces / bindPlaces. Key L. `#place=` is read at startup.
+  SkyView.look gives alt, az and fov. Tests: tests/places.test.ts.
+
+### S. Photo mode
+- [x] `src/ui/photo.ts` PhotoMode:
+  - enter/exit toggles `body.photo-mode`, which hides everything but the canvas, labels and
+    #photo-bar.
+  - The grade is a CSS filter on the canvas, and the same filter goes through ctx.filter on
+    capture.
+  - The FOV is applied per camera in beforeRender, called from App.renderView, and restored on
+    exit.
+  - Hiding labels hides in-scene text sprites (userData.labelText) and the CSS2D layer.
+  - capture(scale) sets the pixel ratio, resizes, calls frame(0), copies to a 2D canvas in the same
+    task, restores, then downloads the PNG.
+- captureRatio caps the long side at 8192 or the GPU limit, and the size at 16 MP.
+- Key P; Esc leaves. Tests: tests/photo.test.ts.
+
 ### P. Spaceships
 - [x] `src/sim/spaceship.ts` (ENGINES, autopilotAccel: brachistochrone approach, then steer to
   the local circular orbit; settles when near-circular within 20% of the radius; orbitAround).

@@ -1,16 +1,19 @@
 import * as THREE from 'three';
+import { aimSun, atmosphereFor, insideAware, scatteringMaterial, shellScale } from './atmosphere';
+import { auroraActivity, auroraFor, auroraMesh, updateAurora } from './aurora';
+import { accretionDiskMesh, blackHoleView, diskAxis, updateAccretionDisk } from './accretionDisk';
+import { horizonRadius, SHADOW_RADIUS_SCHWARZSCHILD } from '../sim/kerr';
 import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import type { Body, BodyKind } from '../sim/body';
 import type { Climate } from '../sim/climate';
 import { EARTH_MASS } from '../sim/units';
 import { makePlanetTextures, seedFromName } from './planetTextures';
 import { mulberry32 } from '../procgen/rng';
-import { accretionTexture, glowTexture } from './textures';
+import { glowTexture } from './textures';
 import { getSolarData, poleScene, REAL_COLORS } from '../sim/solarSystemData';
 
 const SPHERE = new THREE.SphereGeometry(1, 64, 32);
 const SPHERE_LOW = new THREE.SphereGeometry(1, 24, 12);
-const DISK = new THREE.RingGeometry(1.6, 5, 96, 1);
 const RINGS = new THREE.RingGeometry(1.35, 2.5, 128, 1);
 const PROBE = new THREE.OctahedronGeometry(1, 0);
 const BEAM = new THREE.ConeGeometry(0.05, 1, 24, 1, true).translate(0, 0.5, 0);
@@ -114,6 +117,9 @@ export class BodyVisual {
   private disk?: THREE.Mesh;
   private clouds?: THREE.Mesh;
   private atmosphere?: THREE.Mesh;
+  private aurora?: THREE.Mesh;
+  /** Distance from the star when the aurora was first lit (its stellar-wind reference). */
+  private auroraD0 = 0;
   private rings?: THREE.Mesh;
   private beams?: THREE.Group;
   private readonly trailPos: Float32Array;
@@ -236,6 +242,21 @@ export class BodyVisual {
     pos.needsUpdate = true;
   }
 
+  /** The planet's own (spinning) mesh: a unit sphere scaled to its radius. */
+  get planetMesh(): THREE.Mesh {
+    return this.mesh;
+  }
+
+  /** Whether it has air (an atmosphere shell is drawn). */
+  get hasAir(): boolean {
+    return !!this.atmosphere;
+  }
+
+  /** A black hole's spin axis (its disc's normal) in world space. */
+  spinAxis(): THREE.Vector3 | undefined {
+    return this.disk ? diskAxis(this.disk) : undefined;
+  }
+
   get isPlanet(): boolean {
     return (this.kind === 'rocky' || this.kind === 'gas') && !this.isProbe;
   }
@@ -279,10 +300,8 @@ export class BodyVisual {
       }
       case 'blackhole':
         material = new THREE.MeshBasicMaterial({ color: 0x000000 });
-        this.disk = new THREE.Mesh(
-          DISK,
-          new THREE.MeshBasicMaterial({ map: accretionTexture(), side: THREE.DoubleSide, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }),
-        );
+        // The disc lies in the hole's equator: its normal is the spin axis (accretionDisk.ts).
+        this.disk = accretionDiskMesh();
         this.disk.rotation.x = -Math.PI / 2 + 0.25;
         this.glow = this.makeGlow(0xff9a4a, 0.5);
         break;
@@ -363,10 +382,22 @@ export class BodyVisual {
       this.clouds.scale.setScalar(1.015);
       this.mesh.add(this.clouds);
     }
-    if (tex.atmosphere !== undefined) {
-      this.atmosphere = new THREE.Mesh(SPHERE, atmosphereMaterial(tex.atmosphere, body.kind === 'gas' ? 0.4 : 0.9));
-      this.atmosphere.scale.setScalar(1.04);
+    // Real scattering for worlds with air (atmosphere.ts); the named ones get their own.
+    const air = atmosphereFor(this.name, tex.atmosphere, body.kind);
+    if (air) {
+      this.atmosphere = new THREE.Mesh(SPHERE, scatteringMaterial(air));
+      this.atmosphere.scale.setScalar(shellScale(air));
+      this.atmosphere.renderOrder = 1;
+      this.atmosphere.userData.groundExposure = air.groundExposure;
+      insideAware(this.atmosphere);
       this.mesh.add(this.atmosphere);
+    }
+    const isReal = !!getSolarData()?.byName.get(this.name);
+    const aurora = auroraFor(this.name, isReal, body.kind, !!air, body.mass / EARTH_MASS, seedFromName(this.name));
+    if (aurora) {
+      this.aurora = auroraMesh(aurora);
+      this.aurora.visible = false;
+      this.mesh.add(this.aurora);
     }
     if (tex.rings) {
       this.textures.push(tex.rings);
@@ -435,6 +466,20 @@ export class BodyVisual {
       this.mesh.rotation.y += dt * 0.3 * this.spinSign;
     }
     if (this.clouds) this.clouds.rotation.y += dt * 0.05;
+    if (this.atmosphere && sun) aimSun(this.atmosphere.material as THREE.ShaderMaterial, this.mesh, new THREE.Vector3(sun.x, sun.y, sun.z));
+    if (this.aurora) {
+      // Only worth drawing when the planet is big on screen and a star blows a wind at it.
+      const show = !!sun && r / worldPerPixel > 14;
+      this.aurora.visible = show;
+      if (show && sun) {
+        const d = Math.hypot(body.x - sun.x, body.y - sun.y, body.z - sun.z);
+        if (!this.auroraD0) this.auroraD0 = d;
+        this.mesh.updateMatrixWorld();
+        const local = this.mesh.worldToLocal(new THREE.Vector3(sun.x, sun.y, sun.z)).normalize();
+        const seconds = performance.now() / 1000;
+        updateAurora(this.aurora, local, auroraActivity(this.auroraD0, d, seconds), seconds);
+      }
+    }
     if (this.glow) {
       const big = this.isProbe
         ? worldPerPixel * 14
@@ -449,7 +494,12 @@ export class BodyVisual {
     }
     if (this.disk) {
       this.disk.scale.setScalar(r);
-      this.disk.rotation.z += dt * 0.8;
+      updateAccretionDisk(this.disk, body.spin ?? 0, performance.now() / 1000);
+      // With the lensing pass drawing the (spin-shaped) shadow, the black sphere is just the
+      // event horizon; without it, the sphere stands in for the shadow.
+      if (blackHoleView.lensed) this.mesh.scale.setScalar(r * (horizonRadius(body.spin ?? 0) / SHADOW_RADIUS_SCHWARZSCHILD));
+      // The shaded disc gives the light; the soft glow would only be smeared into rings by the lens.
+      if (this.glow) this.glow.visible = !blackHoleView.lensed;
     }
     if (this.beams) {
       this.beams.scale.setScalar(Math.max(body.radius * 40, worldPerPixel * 90));
@@ -529,12 +579,12 @@ export class BodyVisual {
   private disposeDetail(): void {
     for (const t of this.textures) t.dispose();
     this.textures = [];
-    for (const m of [this.clouds, this.atmosphere, this.rings]) {
+    for (const m of [this.clouds, this.atmosphere, this.aurora, this.rings]) {
       if (!m) continue;
       m.parent?.remove(m);
       (m.material as THREE.Material).dispose();
     }
-    this.clouds = this.atmosphere = this.rings = undefined;
+    this.clouds = this.atmosphere = this.aurora = this.rings = undefined;
   }
 
   private disposeParts(): void {

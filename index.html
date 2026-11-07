@@ -18,6 +18,9 @@
         <button id="btn-menu" class="icon only-mobile" title="Show / hide panels" aria-label="Toggle panels">☰</button>
         <div class="brand">✦ <span>Astrarium</span></div>
         <button id="btn-search" class="icon" title="Search everything (/ or Ctrl+K)" aria-label="Search">🔍</button>
+        <button id="btn-places" class="icon" title="Places (L): save this view, go back to it, or share it" aria-label="Places">📍</button>
+        <button id="btn-vr" class="icon hidden" title="Virtual reality: a tabletop Sandbox, or fly through the Galaxy Map and the Universe (WebXR headset)" aria-label="Enter VR">🥽</button>
+        <button id="btn-photo" class="icon" title="Photo mode (P): hide the interface, frame and save a picture" aria-label="Photo mode">📷</button>
         <nav class="tabs" role="tablist">
           <button id="tab-cosmos" role="tab" title="Real galaxies beyond the Milky Way">Universe</button>
           <button id="tab-galaxy" role="tab">Galaxy Map</button>
@@ -136,6 +139,7 @@
           <p class="muted" id="galaxy-info"></p>
           <label class="check" title="HII regions (pink) and planetary nebulae (teal) with measured distances, from professional catalogues"><input id="opt-real-nebulae" type="checkbox" checked /> Real nebulae</label>
           <label class="check" title="Open clusters and moving groups from Gaia (Hunt & Reffert 2023, gold) and globular clusters (Harris, orange) at their measured distances"><input id="opt-real-clusters" type="checkbox" checked /> Real star clusters</label>
+          <label class="check" title="Every star brighter than magnitude 8 with a good Gaia DR3 parallax (about 62,000), at its measured distance and in its real colour"><input id="opt-gaia-stars" type="checkbox" checked /> Real stars (Gaia)</label>
           <label class="row">
             <span>Seed</span>
             <input id="galaxy-seed" type="text" spellcheck="false" />
@@ -336,9 +340,6 @@
           <div class="checks">
             <label class="check" title="Bloom glow and black-hole gravitational lensing"><input id="opt-postfx" type="checkbox" checked /> Bloom & lensing</label>
           </div>
-          <div class="row buttons">
-            <button id="btn-vr" class="hidden" title="View in a VR headset (WebXR)">🥽 Enter VR</button>
-          </div>
           <label class="row">
             <span>Server</span>
             <input id="server-url" type="text" placeholder="https://your-astrarium-server" spellcheck="false" />
@@ -416,10 +417,34 @@
         </div>
       </div>
 
+      <div id="places-overlay" class="hidden" role="dialog" aria-label="Places">
+        <div class="places-box">
+          <div class="places-head">
+            <h3>📍 Places</h3>
+            <button id="places-close" class="icon" title="Close (Esc)" aria-label="Close">✕</button>
+          </div>
+          <form id="place-save" class="places-save">
+            <input id="place-name" type="text" maxlength="120" placeholder="Name this view" autocomplete="off" />
+            <button type="submit" class="primary">Save this view</button>
+          </form>
+          <h4>Your places</h4>
+          <ul id="place-list" class="list places-list"></ul>
+          <p id="place-empty" class="muted small">Nothing saved yet. Save a view to come back to it later or share it as a link.</p>
+          <h4>Famous places</h4>
+          <ul id="place-builtins" class="list places-list"></ul>
+        </div>
+      </div>
+
       <aside id="body-panel" class="panel right hidden" data-view="system">
         <h2 id="body-name">Body</h2>
         <dl id="body-facts" class="facts"></dl>
         <div id="body-alerts"></div>
+        <details id="body-wiki" class="hidden">
+          <summary>📖 More about <span id="body-wiki-name"></span></summary>
+          <dl id="body-wiki-facts" class="facts"></dl>
+          <div id="body-wiki-esi"></div>
+          <p id="body-wiki-links" class="small"></p>
+        </details>
         <div id="probe-controls" class="hidden">
           <h3>Probe · <span id="probe-fuel"></span></h3>
           <div class="burns">
@@ -445,6 +470,11 @@
           <input id="metallicity" type="range" min="-2" max="0.5" step="0.05" value="0" />
           <output id="metallicity-out"></output>
         </label>
+        <label id="spin-row" class="row slider hidden" title="How fast the black hole spins: a* = cJ/GM², from 0 (not spinning) to 0.998 (as fast as gas can spin one up). Spin shrinks the horizon, lets the disc reach closer in and squashes the shadow.">
+          <span>Spin a*</span>
+          <input id="bh-spin" type="range" min="0" max="0.998" step="0.002" value="0" />
+          <output id="bh-spin-out"></output>
+        </label>
         <div class="row buttons">
           <button id="btn-mass-down" title="Halve mass">Mass ÷2</button>
           <button id="btn-mass-up" title="Double mass">Mass ×2</button>
@@ -456,6 +486,7 @@
         <div class="row buttons">
           <button id="btn-supernova" class="danger hidden" title="Detonate this star">💥 Go supernova</button>
           <button id="btn-visit" class="primary hidden">Visit system →</button>
+          <button id="btn-land" class="primary hidden" title="Stand on its surface">🛬 Land</button>
         </div>
       </aside>
 
@@ -651,6 +682,26 @@
 
       <a id="embed-open" class="hidden" target="_blank" rel="noopener">Open in Astrarium ↗</a>
 
+      <div id="photo-bar" role="toolbar" aria-label="Photo mode">
+        <label>Exposure <input id="photo-exposure" type="range" min="0.3" max="3" step="0.05" value="1" /></label>
+        <label>Contrast <input id="photo-contrast" type="range" min="0.5" max="2" step="0.05" value="1" /></label>
+        <label>Colour <input id="photo-saturation" type="range" min="0" max="2.5" step="0.05" value="1" /></label>
+        <label>Field of view <input id="photo-fov" type="range" min="5" max="120" step="1" value="50" /> <span id="photo-fov-val">50°</span></label>
+        <label class="photo-check"><input id="photo-labels" type="checkbox" checked /> Labels</label>
+        <select id="photo-scale" title="Picture size" aria-label="Picture size">
+          <option value="1">Screen size</option>
+          <option value="2" selected>2× screen</option>
+          <option value="4">4× screen</option>
+        </select>
+        <button id="photo-capture" class="primary">📷 Save picture</button>
+        <button id="photo-reset" title="Reset the sliders">Reset</button>
+        <button id="photo-exit" class="icon" title="Leave photo mode (Esc)" aria-label="Leave photo mode">✕</button>
+      </div>
+      <div id="land-hud" class="hidden">
+        <span id="land-info"></span>
+        <span class="muted small">Drag to look · WASD to walk · wheel to zoom</span>
+        <button id="btn-takeoff" class="primary" title="Back to orbit (Esc)">🚀 Take off</button>
+      </div>
       <div id="toasts"></div>
       <footer id="hint"></footer>
 

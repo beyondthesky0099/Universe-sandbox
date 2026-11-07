@@ -1166,3 +1166,238 @@ body.embed #topbar {
     display: none !important;
   }
 }
+
+/* Photo mode: only the picture (and the photo bar) stay on screen. */
+#photo-bar {
+  display: none;
+}
+body.photo-mode #app > :not(#scene):not(#labels):not(#fade):not(#photo-bar):not(#toasts) {
+  display: none !important;
+}
+body.photo-nolabels #labels {
+  display: none;
+}
+body.photo-mode #photo-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px 14px;
+  position: fixed;
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(-50%);
+  z-index: 50;
+  max-width: calc(100vw - 24px);
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: rgba(8, 12, 26, 0.82);
+  border: 1px solid rgba(140, 170, 255, 0.18);
+  font-size: 12px;
+  opacity: 0.35;
+  transition: opacity 0.2s;
+}
+body.photo-mode #photo-bar:hover,
+body.photo-mode #photo-bar:focus-within {
+  opacity: 1;
+}
+#photo-bar label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+#photo-bar input[type='range'] {
+  width: 90px;
+}
+#photo-fov-val {
+  min-width: 2.5em;
+}
+@media (hover: none) {
+  body.photo-mode #photo-bar {
+    opacity: 0.9;
+  }
+}
+body.photo-mode #toasts {
+  top: 12px;
+  bottom: auto;
+}
+@media (max-width: 640px) {
+  body.photo-mode #photo-bar {
+    left: 8px;
+    right: 8px;
+    bottom: 8px;
+    transform: none;
+    max-width: none;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 8px;
+  }
+  #photo-bar label {
+    justify-content: space-between;
+    min-width: 0;
+  }
+  #photo-bar select,
+  #photo-bar button {
+    width: 100%;
+    min-width: 0;
+  }
+  #photo-bar input[type='range'] {
+    width: auto;
+    flex: 1;
+    min-width: 0;
+  }
+  #photo-fov-val {
+    display: none;
+  }
+}
+#photo-bar label.photo-check {
+  justify-content: flex-start;
+}
+
+/* Places */
+#places-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: rgba(2, 4, 12, 0.55);
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 72px 16px 16px;
+}
+#places-overlay.hidden {
+  display: none;
+}
+#places-overlay .places-box {
+  width: min(560px, 100%);
+  max-height: calc(100vh - 100px);
+  overflow-y: auto;
+  background: rgba(14, 18, 32, 0.97);
+  border: 1px solid rgba(140, 170, 255, 0.25);
+  border-radius: 12px;
+  padding: 12px 14px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
+}
+.places-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.places-head h3 {
+  margin: 0;
+}
+.places-save {
+  display: flex;
+  gap: 8px;
+  margin: 10px 0 4px;
+}
+.places-save input {
+  flex: 1;
+  min-width: 0;
+}
+#places-overlay h4 {
+  margin: 12px 0 4px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: rgba(220, 230, 255, 0.6);
+}
+.places-list li {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px 8px;
+  align-items: center;
+  padding: 6px 8px;
+  border-radius: 7px;
+  cursor: pointer;
+}
+.places-list li:hover,
+.places-list li:focus-visible {
+  background: rgba(120, 160, 255, 0.16);
+}
+.places-list .place-name {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.places-list .place-detail {
+  grid-column: 1;
+  font-size: 12px;
+  color: rgba(220, 230, 255, 0.6);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.places-list .place-actions {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  display: flex;
+  gap: 4px;
+}
+.places-list .place-actions button {
+  padding: 3px 7px;
+  font-size: 12px;
+}
+
+/* Body "More about" section */
+#body-wiki {
+  margin: 8px 0;
+  border-top: 1px solid rgba(140, 170, 255, 0.15);
+  padding-top: 6px;
+}
+#body-wiki summary {
+  cursor: pointer;
+  font-weight: 600;
+  padding: 4px 0;
+}
+.esi {
+  margin: 8px 0 4px;
+  font-size: 12px;
+}
+.esi-bar {
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+  margin: 4px 0;
+}
+.esi-bar span {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #c84a3a, #d9b44a 50%, #4ac26b 80%, #4ac2b4);
+  background-size: 100% 100%;
+}
+.esi-parts {
+  color: rgba(220, 230, 255, 0.6);
+}
+#body-wiki-links a {
+  color: #8fc1ff;
+}
+
+/* Standing on a planet */
+#land-hud {
+  position: absolute;
+  top: 64px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 6;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 6px 12px;
+  max-width: calc(100vw - 24px);
+  padding: 6px 12px;
+  border-radius: 10px;
+  background: rgba(10, 14, 26, 0.78);
+  border: 1px solid rgba(140, 170, 255, 0.2);
+  font-size: 13px;
+}
+body.landed #system-panel,
+body.landed #body-panel,
+body.landed #exo-panel,
+body.landed #graph-panel {
+  display: none;
+}

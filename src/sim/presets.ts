@@ -230,7 +230,7 @@ const blackHoleFeast: Preset = {
     solarSystem.load(sim);
     for (const b of [...sim.bodies]) if (b.kind === 'gas') sim.removeBody(b.id);
     sim.particles.clear();
-    sim.addBody({ name: 'Maw', kind: 'blackhole', mass: 8, x: 18, y: 0.5, z: 18, vx: -1.6, vz: -2.2 });
+    sim.addBody({ name: 'Maw', kind: 'blackhole', mass: 8, spin: 0.9, x: 18, y: 0.5, z: 18, vx: -1.6, vz: -2.2 });
     return { cameraDistance: 28, timeScale: 0.4, elevation: 0.9 };
   },
 };
@@ -438,7 +438,8 @@ export const galacticCore: Preset = {
   load(sim) {
     sim.dtMax = 0.02;
     const M = 4e5;
-    const bh = sim.addBody({ name: 'Heart of the Galaxy', kind: 'blackhole', mass: M });
+    // Sgr A*: the Event Horizon Telescope's favoured models spin fast (a* = 0.5–0.94; EHT 2022, paper V).
+    const bh = sim.addBody({ name: 'Heart of the Galaxy', kind: 'blackhole', mass: M, spin: 0.94 });
     for (let i = 0; i < 28; i++) {
       addOrbiting(sim, bh, { name: `S${i + 1}`, mass: 1 + Math.pow(Math.random(), 2) * 14, kind: 'star' }, {
         a: 250 + Math.random() * 1300,

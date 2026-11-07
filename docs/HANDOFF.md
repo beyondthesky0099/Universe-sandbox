@@ -205,6 +205,25 @@ Plan, in priority order:
 - BodyVisual adds it in applyDetail and updates it only when the planet is more than 14 px across
   and a star is present. Tests: tests/aurora.test.ts.
 
+### AB. Interface frame
+- [x] `src/app/layout.ts` (LayoutUI):
+  - Builds the icon rail from the current view's `.panel.left section[data-pane]` (data-icon,
+    data-title). One pane at a time; each view's last pane is kept in prefs. Clicking the open
+    pane folds the panel (`body.rail-collapsed`).
+  - The ⋯ menu (#more-menu). Items are the old top-bar buttons with the same IDs, labelled via
+    CSS `attr(data-label)` so code that rewrites their text keeps the label. `data-proxy` items
+    press another button.
+  - The dock toggles mirror the Display checkboxes. #body-close deselects.
+  - Sets `body[data-screen]` for CSS. It must not be `data-view`: App.setView hides every
+    [data-view] that isn't current.
+- index.html:
+  - The Sandbox panel is split into panes. All old element IDs are kept (checked by diffing
+    them), and the tutorial targets still resolve; Tutorial now reveals the pane holding a
+    target.
+  - The clock, the speed slider and the tools moved into #dock.
+- style.css "Interface frame" block: rail, panes, dock, menu. Phones get a bottom tab bar, sheet
+  panes, a compact dock, and Places and Photo moved into the menu.
+
 ### AA. Planet formation
 - [x] `src/sim/planetFormation.ts`:
   - Disc: MMSN densities (solid/ice/gas) and the snow line at 2.7 AU; solidMass, gasMass,

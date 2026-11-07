@@ -84,6 +84,21 @@ To publish a release, push a tag such as `v0.2.0`. GitHub Actions builds both .e
 Windows and attaches them to a release for that tag. "Use my location" in the Sky tab doesn't
 work in the desktop app, so type your latitude and longitude instead.
 
+## The interface
+
+- **Top bar:** search, Places and photo mode on the left; the four views (Universe, Galaxy Map,
+  Sandbox, Sky) in the middle; the ⋯ menu on the right. The menu holds lessons, challenges, the
+  live graph, multiplayer, the gallery, the console, sound and the tutorial.
+- **Icon rail (left):** each view's panel is split into panes, one at a time:
+  - Sandbox: Scenes, Create, Real data, Events, Physics, Display, Save & share, Settings.
+  - The Galaxy Map, Universe and Sky have their own panes.
+  Click the open pane's icon again to fold the panel away and give the view the whole screen.
+- **Dock (bottom, Sandbox):** rewind, play and fast-forward; the clock; the speed slider; record
+  and undo; the Select, Add and Nudge tools; and quick toggles for trails, orbits, labels and
+  habitable zones.
+- **Inspector (right):** the selected body's facts and actions, with ✕ to close it.
+- **Phones:** the rail becomes a tab bar along the bottom, and panes open as sheets above it.
+
 ## Features
 
 ### Play

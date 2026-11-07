@@ -1406,3 +1406,414 @@ body.landed #graph-panel {
   color: #9fd4ff;
   opacity: 0.8;
 }
+
+/* =============================================================================
+   Interface frame (src/app/layout.ts): top bar, icon rail, panes, bottom dock,
+   More menu and inspector. Later rules here refine the older ones above.
+   ============================================================================= */
+:root {
+  --panel: rgba(10, 14, 28, 0.82);
+  --panel-solid: rgba(12, 16, 32, 0.97);
+  --panel-border: rgba(140, 180, 255, 0.16);
+  --accent-soft: rgba(63, 184, 255, 0.16);
+  --radius: 12px;
+  --top-h: 52px;
+  --rail-w: 62px;
+  --dock-h: 52px;
+}
+
+/* Top bar: brand and quick actions left, views centred, the rest right. */
+#topbar {
+  height: var(--top-h);
+  gap: 8px;
+  padding: 0 12px;
+}
+#topbar .tabs {
+  margin: 0 auto;
+}
+#stats {
+  margin-left: 0;
+  font-size: 12px;
+}
+#topbar button.icon {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 10px;
+  font-size: 15px;
+}
+.top-actions {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+#btn-more {
+  font-size: 20px;
+  line-height: 1;
+}
+
+/* More menu */
+#more-menu {
+  position: absolute;
+  right: 0;
+  top: 44px;
+  z-index: 30;
+  min-width: 230px;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: var(--panel-solid);
+  border: 1px solid var(--panel-border);
+  border-radius: var(--radius);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55);
+}
+#more-menu.hidden {
+  display: none;
+}
+#topbar #more-menu .menu-item {
+  width: 100%;
+  height: auto;
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  font-size: 15px;
+  text-align: left;
+}
+#more-menu .menu-item::after {
+  content: attr(data-label);
+  font-size: 13px;
+  color: var(--text);
+}
+#more-menu .menu-item:hover,
+#more-menu .menu-item.active {
+  background: var(--accent-soft);
+}
+
+/* Icon rail */
+#rail {
+  position: absolute;
+  top: calc(var(--top-h) + 8px);
+  left: 10px;
+  z-index: 3;
+  width: var(--rail-w);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 5px;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: var(--radius);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+}
+.rail-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 7px 2px 6px;
+  border: none;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--muted);
+}
+.rail-btn:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text);
+}
+.rail-btn.active {
+  background: var(--accent-soft);
+  color: var(--text);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+.rail-icon {
+  font-size: 18px;
+  line-height: 1;
+}
+.rail-label {
+  font-size: 9.5px;
+  line-height: 1.15;
+  text-align: center;
+}
+
+/* Side panels: one pane at a time, next to the rail; folded away when collapsed. */
+.panel {
+  top: calc(var(--top-h) + 8px);
+  width: 300px;
+  max-height: calc(100% - var(--top-h) - var(--dock-h) - 44px);
+  padding: 14px 14px 16px;
+}
+.panel.left {
+  left: calc(var(--rail-w) + 20px);
+}
+body.rail-collapsed .panel.left {
+  display: none !important;
+}
+.panel section.pane-off {
+  display: none !important;
+}
+.panel section[data-pane] + section[data-pane] {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
+}
+.panel h3 {
+  font-size: 11px;
+  margin-bottom: 10px;
+}
+.panel h4 {
+  margin: 14px 0 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.panel section h2 + p {
+  line-height: 1.5;
+}
+
+/* Inspector header */
+.panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.panel-head h2 {
+  margin: 0;
+}
+button.close {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 8px;
+  color: var(--muted);
+  flex: none;
+}
+
+/* Bottom dock (Sandbox): time, speed, tools, quick toggles. */
+#dock {
+  position: absolute;
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(-50%);
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: calc(100vw - 24px);
+  min-height: var(--dock-h);
+  padding: 6px 8px;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 16px;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.45);
+  white-space: nowrap;
+}
+.dock-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.dock-group + .dock-group {
+  padding-left: 10px;
+  border-left: 1px solid var(--panel-border);
+}
+#dock button.icon {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border-radius: 9px;
+}
+#sim-time {
+  min-width: 86px;
+  text-align: center;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.dock-sep {
+  width: 1px;
+  height: 22px;
+  margin: 0 3px;
+  background: var(--panel-border);
+}
+.dock-speed {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 4px;
+}
+.dock-speed input[type='range'] {
+  width: 110px;
+}
+.dock-speed output {
+  min-width: 70px;
+  font-size: 12px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+#dock .dock-tools {
+  margin: 0;
+}
+#dock .dock-tools button {
+  flex: none;
+  padding: 6px 10px;
+}
+#dock .toggle {
+  padding: 6px 9px;
+  font-size: 12px;
+}
+#dock .toggle.active {
+  background: var(--accent-soft);
+  border-color: rgba(127, 220, 255, 0.55);
+}
+
+/* Things that sit above the bottom edge make room for the dock in the Sandbox. */
+body[data-screen='system'] #hint {
+  bottom: calc(var(--dock-h) + 26px);
+}
+body[data-screen='system'] #toasts {
+  bottom: calc(var(--dock-h) + 52px);
+}
+body[data-screen='system'] #replay-bar,
+body[data-screen='system'] #ship-panel {
+  bottom: calc(var(--dock-h) + 24px);
+}
+body[data-screen='system'] #graph-panel {
+  bottom: calc(var(--dock-h) + 24px);
+}
+
+/* Narrower screens: hide the dock's words, keep its icons. */
+@media (max-width: 1180px) {
+  #dock .dock-tools span,
+  #dock .toggle span {
+    display: none;
+  }
+}
+
+/* Phones: the rail is a bottom tab bar and panes open as sheets above it. */
+@media (max-width: 760px) {
+  :root {
+    --rail-h: 58px;
+  }
+  #rail {
+    top: auto;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    width: auto;
+    flex-direction: row;
+    gap: 2px;
+    overflow-x: auto;
+    padding: 4px 6px calc(4px + env(safe-area-inset-bottom));
+    border-radius: 0;
+    border-width: 1px 0 0;
+    scrollbar-width: none;
+  }
+  .rail-btn {
+    flex: 1 0 58px;
+  }
+  .rail-btn.active {
+    box-shadow: inset 0 2px 0 var(--accent);
+  }
+  .panel.left,
+  .panel.right {
+    top: auto !important;
+    bottom: calc(var(--rail-h) + 8px) !important;
+    left: 8px !important;
+    right: 8px !important;
+    width: auto;
+    max-height: 52vh;
+  }
+  #dock {
+    bottom: calc(var(--rail-h) + 8px);
+    gap: 6px;
+    padding: 4px 6px;
+    min-height: 0;
+  }
+  body:not(.rail-collapsed) #dock {
+    display: none;
+  }
+  .dock-toggles,
+  .dock-speed output,
+  #btn-record,
+  .dock-sep {
+    display: none !important;
+  }
+  .dock-speed input[type='range'] {
+    width: 80px;
+  }
+  #sim-time {
+    min-width: 64px;
+    font-size: 12px;
+  }
+  #topbar .tabs button {
+    padding: 6px 8px;
+    font-size: 12px;
+  }
+  body[data-screen='system'] #toasts {
+    bottom: calc(var(--rail-h) + var(--dock-h) + 24px);
+  }
+  body[data-screen='system'] #replay-bar,
+  body[data-screen='system'] #ship-panel,
+  #travel-bar {
+    bottom: calc(var(--rail-h) + 10px);
+  }
+}
+
+.only-narrow {
+  display: none !important;
+}
+@media (max-width: 760px) {
+  .tab-long,
+  #btn-places,
+  #btn-photo {
+    display: none !important;
+  }
+  #topbar #more-menu .only-narrow {
+    display: flex !important;
+  }
+  #topbar {
+    gap: 6px;
+    padding: 0 8px;
+  }
+  #topbar .tabs {
+    margin: 0 auto;
+  }
+  #dock {
+    gap: 4px;
+  }
+  .dock-group {
+    gap: 2px;
+  }
+  .dock-group + .dock-group {
+    padding-left: 5px;
+  }
+  #dock button.icon,
+  #dock .dock-tools button {
+    width: 32px;
+    height: 32px;
+    padding: 0;
+  }
+  .dock-speed {
+    margin-left: 2px;
+  }
+  #dock #lag {
+    display: none;
+  }
+  .dock-speed input[type='range'] {
+    width: 64px;
+  }
+}

@@ -160,6 +160,7 @@ export class BodyVisual {
     const el = document.createElement('div');
     el.className = 'body-label';
     el.textContent = body.name;
+    el.dataset.bodyId = String(body.id);
     this.label = new CSS2DObject(el);
     this.label.center.set(-0.15, 1.2);
     this.group.add(this.label);

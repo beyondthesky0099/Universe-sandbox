@@ -810,6 +810,19 @@ export class SystemView {
     }
   }
 
+  /** The body whose name label is under a point on the page (client pixels), if any. */
+  pickLabel(clientX: number, clientY: number): number | undefined {
+    if (!this.labelsEnabled) return undefined;
+    for (const [id, v] of this.visuals) {
+      const el = v.label.element;
+      if (!v.label.visible || el.style.display === 'none') continue;
+      const r = el.getBoundingClientRect();
+      // A few pixels of slack around short labels.
+      if (r.width > 0 && clientX >= r.left - 3 && clientX <= r.right + 3 && clientY >= r.top - 3 && clientY <= r.bottom + 3) return id;
+    }
+    return undefined;
+  }
+
   /** Nearest body to a screen point, using projected positions (forgiving for tiny bodies). */
   pick(ndcX: number, ndcY: number, viewportWidth: number, viewportHeight: number): Body | undefined {
     const v = new THREE.Vector3();

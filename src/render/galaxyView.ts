@@ -109,7 +109,8 @@ export function textSprite(text: string, color: string, scale = 1): THREE.Sprite
   const font = '600 26px Inter, system-ui, sans-serif';
   const measure = canvas.getContext('2d')!;
   measure.font = font;
-  canvas.width = Math.max(256, Math.ceil(measure.measureText(text).width + 24));
+  const textWidth = measure.measureText(text).width + 24;
+  canvas.width = Math.max(256, Math.ceil(textWidth));
   canvas.height = 64;
   const ctx = canvas.getContext('2d')!;
   ctx.font = font;
@@ -125,7 +126,50 @@ export function textSprite(text: string, color: string, scale = 1): THREE.Sprite
   sprite.scale.set(0.16 * (canvas.width / 256) * scale, 0.04 * scale, 1);
   sprite.center.set(0.5, -0.6);
   sprite.renderOrder = 11;
+  // For clicking on the label: its text, and the share of the canvas width the text covers.
+  sprite.userData.labelText = text;
+  sprite.userData.textFrac = Math.min(1, textWidth / canvas.width);
   return sprite;
+}
+
+/**
+ * Whether a screen point (normalised device coordinates) falls on a text label's lettering, and
+ * if so how far away the label is (its clip-space w; smaller is nearer), else Infinity. Works for
+ * labels made by textSprite (constant screen size: `sizeAttenuation: false`).
+ */
+export function labelHitDepth(sprite: THREE.Sprite, camera: THREE.PerspectiveCamera, ndcX: number, ndcY: number): number {
+  const p = sprite.getWorldPosition(new THREE.Vector3()).applyMatrix4(camera.matrixWorldInverse);
+  if (p.z >= 0) return Infinity;
+  const P = camera.projectionMatrix.elements;
+  const w = -p.z;
+  const ax = (P[0] * p.x + P[8] * p.z) / w;
+  const ay = (P[5] * p.y + P[9] * p.z) / w;
+  // The sprite's quad spans [-0.5, 0.5] around its centre point, scaled; without size attenuation
+  // the scale is in units of the projection's focal length (see three's sprite vertex shader).
+  const f = sprite.userData.textFrac ?? 1;
+  const cx = sprite.center.x - 0.5, cy = sprite.center.y - 0.5;
+  const sx = sprite.scale.x * P[0], sy = sprite.scale.y * P[5];
+  const x0 = ax + (-f / 2 - cx) * sx, x1 = ax + (f / 2 - cx) * sx;
+  // The letters fill the middle of the canvas's height; allow its full height for fat fingers.
+  const y0 = ay + (-0.5 - cy) * sy, y1 = ay + (0.5 - cy) * sy;
+  return ndcX >= x0 && ndcX <= x1 && ndcY >= y0 && ndcY <= y1 ? w : Infinity;
+}
+
+/** Whether an object and all its parents are visible. */
+function shown(o: THREE.Object3D | null): boolean {
+  for (; o; o = o.parent) if (!o.visible) return false;
+  return true;
+}
+
+/** Where a clicked label leads on the galaxy map. */
+export interface LabelTarget {
+  /** The object's name (the label without its distance and other details). */
+  name: string;
+  pos: THREE.Vector3;
+  /** How far from it the camera should stop (map units). */
+  distance: number;
+  /** The map's own target for it, when it has one (the Sun). */
+  target?: GalaxyTarget;
 }
 
 /** Procedurally generated spiral galaxy where every bright point is a selectable star system. */
@@ -218,7 +262,9 @@ export class GalaxyView {
     const solRing = new THREE.Sprite(new THREE.SpriteMaterial({ map: ringTexture(), color: 0xffd36b, sizeAttenuation: false, depthTest: false, transparent: true }));
     solRing.scale.setScalar(0.03);
     solRing.renderOrder = 11;
-    this.solMarker.add(solRing, textSprite('You are here', '#ffd36b'));
+    const solLabel = textSprite('You are here', '#ffd36b');
+    solLabel.userData.goto = { distance: 10, target: 'sol' };
+    this.solMarker.add(solRing, solLabel);
     this.scene.add(this.solMarker);
 
     this.bookmarkPoints = markerPoints(0xffd36b, 16);
@@ -294,6 +340,7 @@ export class GalaxyView {
       for (const n of named) {
         const label = textSprite(n.name, n.color, 0.7);
         label.position.set(n.x, n.y, n.z);
+        label.userData.goto = { distance: n.name === 'Sagittarius A*' ? 4 : 1.2 };
         label.material.opacity = 0.8;
         this.labelGroup.add(label);
         if (nebulaNames.has(n.name)) this.showpieceLabels.push(label);
@@ -344,7 +391,12 @@ export class GalaxyView {
 
   /** Animate the camera to close in on a star or the core. */
   flyTo(target: GalaxyTarget, distance = 10, speed = 0.9): void {
-    const to = this.targetPosition(target);
+    this.flyToPoint(this.targetPosition(target), distance, speed);
+  }
+
+  /** Animate the camera to a point, stopping `distance` from it on the side it's looking from. */
+  flyToPoint(to: THREE.Vector3, distance: number, speed = 0.9): void {
+    distance = Math.max(distance, this.controls.minDistance * 1.05);
     const dir = this.camera.position.clone().sub(this.controls.target).normalize();
     this.anim = {
       fromTarget: this.controls.target.clone(),
@@ -443,6 +495,7 @@ export class GalaxyView {
       if (it.label) {
         const text = textSprite(it.label, it.labelColor ?? '#ffb3c8', 0.55);
         text.position.set(...it.pos);
+        text.userData.goto = { distance: Math.max(0.3, it.size * 3) };
         labels.add(text);
       }
     });
@@ -471,7 +524,7 @@ export class GalaxyView {
   setCloudLayer(
     key: string,
     sets: { clouds: Cloud[]; atlas?: THREE.Texture; absorb?: boolean }[],
-    labels: { pos: [number, number, number]; label: string; color: string }[],
+    labels: { pos: [number, number, number]; label: string; color: string; size?: number }[],
   ): void {
     const old = this.cloudLayers.get(key);
     if (old) {
@@ -504,6 +557,7 @@ export class GalaxyView {
     for (const l of labels) {
       const text = textSprite(l.label, l.color, 0.55);
       text.position.set(...l.pos);
+      text.userData.goto = { distance: Math.max(0.3, (l.size ?? 0.1) * 3) };
       group.add(text);
     }
     this.scene.add(...layers.map((l) => l.mesh), group);
@@ -520,6 +574,7 @@ export class GalaxyView {
       ring.renderOrder = 11;
       const text = textSprite(it.label, it.kind === 'blackhole' ? '#ff9de3' : '#b8f4ff', 0.6);
       text.position.set(...it.pos);
+      text.userData.goto = { distance: 0.6 };
       this.labelGroup.add(ring, text);
     }
   }
@@ -534,6 +589,23 @@ export class GalaxyView {
     };
     fill(this.bookmarkPoints, bookmarks);
     fill(this.visitedPoints, visited.filter((v) => !bookmarks.includes(v)));
+  }
+
+  /** The label under a screen point (normalised device coordinates), nearest first, if any. */
+  pickLabel(ndcX: number, ndcY: number): LabelTarget | undefined {
+    this.camera.updateMatrixWorld();
+    let best: LabelTarget | undefined;
+    let bestDepth = Infinity;
+    this.scene.traverseVisible((o) => {
+      const goto = o.userData.goto as { distance: number; target?: GalaxyTarget } | undefined;
+      if (!goto || !(o instanceof THREE.Sprite) || o.material.opacity < 0.05 || !shown(o)) return;
+      const depth = labelHitDepth(o, this.camera, ndcX, ndcY);
+      if (depth < bestDepth) {
+        bestDepth = depth;
+        best = { name: String(o.userData.labelText).split(' · ')[0], pos: o.getWorldPosition(new THREE.Vector3()), distance: goto.distance, target: goto.target };
+      }
+    });
+    return best;
   }
 
   /** Index of the star nearest the cursor within a few pixels (or 'core'), preferring closer stars. */

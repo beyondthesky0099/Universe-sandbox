@@ -3,7 +3,7 @@ import { kelvinToRgb } from '../sim/color';
 import { dateToJdTT, discOverlap, span, topocentric, type Eclipse } from '../sim/eclipse';
 import { altAzToScene, skyAt, skyMatrix, type Observer, type SkySnapshot } from '../sim/sky';
 import { temperatureFromBV, type BrightStar } from '../sim/stars';
-import { textSprite } from './galaxyView';
+import { labelHitDepth, textSprite } from './galaxyView';
 import { dotTexture } from './textures';
 
 const DEG = Math.PI / 180;
@@ -159,6 +159,7 @@ export class SkyView {
       if (it.label) {
         const sprite = this.label(it.label, labelColor, 0.7);
         sprite.center.set(0.5, 1.4);
+        sprite.userData.radiusDeg = it.radiusDeg;
         labels.push({ sprite, v: new THREE.Vector3(...it.v) });
         this.scene.add(sprite);
       }
@@ -263,6 +264,7 @@ export class SkyView {
       const dot = new THREE.Sprite(new THREE.SpriteMaterial({ map, color, transparent: true, depthWrite: false, blending: name === 'Moon' ? THREE.NormalBlending : THREE.AdditiveBlending }));
       const label = this.label(name, color, 0.85);
       label.center.set(0.5, -0.9);
+      label.userData.body = name;
       this.scene.add(dot, label);
       this.bodies.set(name, { dot, label });
     };
@@ -421,11 +423,54 @@ export class SkyView {
 
   /** Point the camera at an altitude/azimuth (degrees). */
   lookAt(alt: number, az: number): void {
+    this.anim = undefined;
     this.yaw = -az * DEG;
     this.pitch = alt * DEG;
   }
 
+  private anim?: { yaw0: number; yaw1: number; pitch0: number; pitch1: number; fov0: number; fov1: number; start: number };
+
+  /** The label under a screen point (normalised device coordinates), if any. */
+  pickLabel(x: number, y: number): THREE.Sprite | undefined {
+    this.camera.updateMatrixWorld();
+    let best: THREE.Sprite | undefined;
+    let bestDepth = Infinity;
+    for (const { sprite } of this.labels) {
+      if (!sprite.visible || !sprite.parent || (sprite.material as THREE.SpriteMaterial).opacity < 0.05) continue;
+      const depth = labelHitDepth(sprite, this.camera, x, y);
+      if (depth < bestDepth) {
+        bestDepth = depth;
+        best = sprite;
+      }
+    }
+    return best;
+  }
+
+  /**
+   * Turn smoothly to centre what a label names, and zoom so it fills a good part of the view:
+   * a nebula or cluster to a few times its size, a star or planet to a 20° field.
+   */
+  goToLabel(sprite: THREE.Sprite): void {
+    const target = this.bodies.get(sprite.userData.body)?.dot ?? sprite;
+    const d = target.getWorldPosition(new THREE.Vector3()).normalize();
+    const yaw1 = Math.atan2(-d.x, -d.z);
+    const radius: number | undefined = sprite.userData.radiusDeg;
+    const fov1 = radius ? THREE.MathUtils.clamp(radius * 5, 2, 60) : Math.min(this.camera.fov, 20);
+    // Turn the short way round.
+    const dyaw = Math.atan2(Math.sin(yaw1 - this.yaw), Math.cos(yaw1 - this.yaw));
+    this.anim = { yaw0: this.yaw, yaw1: this.yaw + dyaw, pitch0: this.pitch, pitch1: Math.asin(THREE.MathUtils.clamp(d.y, -1, 1)), fov0: this.camera.fov, fov1, start: performance.now() };
+  }
+
   update(): void {
+    if (this.anim) {
+      const a = this.anim;
+      const t = Math.min(1, (performance.now() - a.start) / 1200);
+      const e = t < 0.5 ? 4 * t ** 3 : 1 - (-2 * t + 2) ** 3 / 2;
+      this.yaw = a.yaw0 + (a.yaw1 - a.yaw0) * e;
+      this.pitch = a.pitch0 + (a.pitch1 - a.pitch0) * e;
+      this.setFov(a.fov0 * Math.pow(a.fov1 / a.fov0, e));
+      if (t >= 1) this.anim = undefined;
+    }
     this.pitch = THREE.MathUtils.clamp(this.pitch, -10 * DEG, 89.9 * DEG);
     this.camera.rotation.set(this.pitch, this.yaw, 0);
     // Keep the Moon's bright limb pointing at the Sun.
@@ -483,7 +528,8 @@ export class SkyView {
     window.addEventListener('pointermove', (e) => {
       const p = pointers.get(e.pointerId);
       if (!p || !this.enabled) return;
-      if (pointers.size === 1) {
+      if (pointers.size === 1 && (e.clientX !== p.x || e.clientY !== p.y)) {
+        this.anim = undefined;
         const k = (this.camera.fov * DEG) / this.height;
         this.yaw += (e.clientX - p.x) * k;
         this.pitch += (e.clientY - p.y) * k;
@@ -501,6 +547,7 @@ export class SkyView {
       (e) => {
         if (!this.enabled) return;
         e.preventDefault();
+        this.anim = undefined;
         this.setFov(this.camera.fov * Math.exp(e.deltaY * 0.001));
       },
       { passive: false },

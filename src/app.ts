@@ -1509,7 +1509,7 @@ export class App {
     const perPage: Cloud[][] = atlases.map(() => []);
     const glow: Cloud[] = [];
     const dust: Cloud[] = [];
-    const labels: { pos: [number, number, number]; label: string; color: string }[] = [];
+    const labels: { pos: [number, number, number]; label: string; color: string; size: number }[] = [];
     let k = 0;
     for (const n of placed) {
       const pc = diameterPc(n) ?? (n.kind === 'pn' ? 0.5 : n.kind === 'snr' ? 20 : n.kind === 'refl' ? 1 : 5);
@@ -1545,7 +1545,7 @@ export class App {
       }
       if (n.name) {
         const ly = Math.round((n.distanceKpc! * 3261.6) / 10) * 10;
-        labels.push({ pos, label: `${n.name} · ${ly.toLocaleString('en-US')} ly`, color: n.kind === 'dark' ? '#d9b99a' : '#ffb3c8' });
+        labels.push({ pos, label: `${n.name} · ${ly.toLocaleString('en-US')} ly`, color: n.kind === 'dark' ? '#d9b99a' : '#ffb3c8', size });
       }
     }
     this.galaxy.setCloudLayer(
@@ -1820,12 +1820,12 @@ export class App {
 
   private updateHint(): void {
     let text: string;
-    if (this.view === 'sky') text = 'Drag to look around · Scroll to zoom · Click the Moon or a planet for details';
+    if (this.view === 'sky') text = 'Drag to look around · Scroll to zoom · Click a name to turn to it · Click the Moon or a planet for details';
     else if (this.view === 'cosmos') text = 'Click a galaxy to inspect · Double-click to fly there · Zoom right in (or Enter) to visit · Scroll out for the cosmic web';
-    else if (this.view === 'galaxy') text = 'Click a star to inspect · Double-click to fly there · Zoom right in (or Enter) to visit · Zoom far out for other galaxies';
+    else if (this.view === 'galaxy') text = 'Click a name to fly there · Click a star to inspect · Double-click to fly there · Zoom right in (or Enter) to visit · Zoom far out for other galaxies';
     else if (this.tool === 'spawn') text = 'Click to place · Drag to set velocity · Right-drag to orbit camera · Esc to cancel';
     else if (this.tool === 'nudge') text = 'Press on a body and drag to push it · Dashed line previews the new path · Right-drag to orbit camera';
-    else text = 'Click to select · Double-click to follow · Space pause · Hold R rewind · Ctrl+Z undo · B spawn · M galaxy map';
+    else text = 'Click to select · Click a name or double-click to follow · Space pause · Hold R rewind · Ctrl+Z undo · B spawn · M galaxy map';
     $('hint').textContent = text;
   }
 
@@ -2780,13 +2780,30 @@ export class App {
   private handleClick(e: { clientX: number; clientY: number }): void {
     const [x, y] = this.ndc(e);
     if (this.view === 'system' && this.tool === 'select') {
+      // A click on a name label goes there: select the body and follow it.
+      const labelled = this.system.pickLabel(e.clientX, e.clientY);
+      const body = labelled !== undefined ? this.sim.getBody(labelled) : undefined;
+      if (body) {
+        this.selectBody(body);
+        this.system.follow(body.id);
+        return;
+      }
       this.selectBody(this.system.pick(x, y, this.width, this.height));
     } else if (this.view === 'galaxy') {
+      const label = this.galaxy.pickLabel(x, y);
+      if (label) {
+        if (label.target !== undefined) this.selectTarget(label.target);
+        this.galaxy.flyToPoint(label.pos, label.distance);
+        toast(`Flying to ${label.name}`);
+        return;
+      }
       this.selectTarget(this.galaxy.pick(x, y, this.width, this.height));
     } else if (this.view === 'cosmos') {
       this.selectCosmos(this.cosmos.pick(x, y, this.width, this.height));
     } else if (this.view === 'sky') {
-      this.skyPicked = this.sky.pick(x, y);
+      const label = this.sky.pickLabel(x, y);
+      if (label) this.sky.goToLabel(label);
+      this.skyPicked = label?.userData.body ?? this.sky.pick(x, y);
       this.renderSkyList();
     }
   }
@@ -2815,6 +2832,8 @@ export class App {
       }
     }
   }
+
+  private lastHover = 0;
 
   private bindInput(): void {
     const c = this.canvas;
@@ -2850,6 +2869,17 @@ export class App {
     });
 
     c.addEventListener('pointermove', (e) => {
+      // A pointing hand over name labels, which can be clicked to go there (checked ~10 times a second).
+      if (e.pointerType === 'mouse' && e.buttons === 0 && performance.now() - this.lastHover > 100) {
+        this.lastHover = performance.now();
+        const [x, y] = this.ndc(e);
+        const onLabel =
+          this.view === 'galaxy' ? !!this.galaxy.pickLabel(x, y)
+          : this.view === 'sky' ? !!this.sky.pickLabel(x, y)
+          : this.view === 'system' && this.tool === 'select' ? this.system.pickLabel(e.clientX, e.clientY) !== undefined
+          : false;
+        c.style.cursor = onLabel ? 'pointer' : '';
+      }
       if (this.nudgeDrag && e.isPrimary) {
         const [x, y] = this.ndc(e);
         const p = this.system.planePoint(x, y, this.nudgeDrag.start.y);

@@ -9,6 +9,7 @@ import { diameterPc, loadNebulae, NEBULA_COLORS } from '../sim/nebulae';
 import { loadNebulaImages, NEBULA_IMAGE_CREDIT, nebulaAtlasUrl, nebulaKey, tileRect, type NebulaImageAtlas } from '../sim/nebulaImages';
 import type { Cloud } from '../render/nebulaClouds';
 import { gaiaPoints, loadGaiaBright } from '../sim/gaiaBright';
+import { isMillisecond, loadPulsars, pulsarName } from '../sim/pulsars';
 import { fmt } from '../sim/units';
 import { $, escapeHtml, setFacts, toast } from '../ui/dom';
 import { LOW_POWER, sleep } from './shared';
@@ -31,6 +32,40 @@ export class GalaxyMapUI {
         return { label: `${o.name} · ${what} · ${ly.toLocaleString('en-US')} ly`, pos: galacticToMap(l, b, o.distanceKpc), kind: o.kind };
       }),
     );
+  }
+
+  /**
+   * Every Milky Way pulsar in the ATNF catalogue at its distance: young pulsars pale blue,
+   * millisecond pulsars white, magnetars magenta. The famous ones are named.
+   */
+  async showPulsarsOnMap(seed: number): Promise<void> {
+    const all = await loadPulsars().catch(() => undefined);
+    if (!all || this.app.galaxySeed !== seed) return;
+    // Already labelled as famous compact objects (compact-objects.json).
+    const labelled = new Set(['J0835-4510', 'J0437-4715']);
+    this.app.galaxy.setRealLayer(
+      'pulsars',
+      all.map((p) => {
+        const [l, b] = equatorialToGalactic(p.raDeg, p.decDeg);
+        const named = !labelled.has(p.jname) && (p.magnetar || !!p.snr || ['B0531+21', 'B1257+12', 'B1913+16', 'B1937+21'].includes(p.bname ?? ''));
+        const ly = Math.round((p.distanceKpc * 3261.6) / 10) * 10;
+        const what = p.magnetar ? 'magnetar' : isMillisecond(p) ? 'millisecond pulsar' : 'pulsar';
+        const per = p.period < 1 ? `${(p.period * 1000).toPrecision(3)} ms` : `${p.period.toPrecision(3)} s`;
+        return {
+          pos: galacticToMap(l, b, p.distanceKpc),
+          color: (p.magnetar ? [1, 0.45, 0.9] : isMillisecond(p) ? [0.9, 0.95, 1] : [0.55, 0.85, 1]) as [number, number, number],
+          // A point source: a few pixels across from a few kiloparsecs away.
+          size: 0.08,
+          label: named ? `${pulsarName(p)}${p.snr ? ` (${p.snr})` : ''} · ${what} · ${per} · ${ly.toLocaleString('en-US')} ly` : undefined,
+          labelColor: p.magnetar ? '#ff9de3' : '#b8f4ff',
+          distance: 0.02,
+        };
+      }),
+    );
+    this.app.galaxy.setRealLayerVisible('pulsars', $<HTMLInputElement>('opt-real-pulsars').checked);
+    const magnetars = all.filter((p) => p.magnetar).length;
+    const msp = all.filter((p) => isMillisecond(p)).length;
+    $('galaxy-info').textContent += ` ${all.length.toLocaleString('en-US')} real pulsars from the ATNF Pulsar Catalogue (blue; ${msp.toLocaleString('en-US')} millisecond pulsars in white, ${magnetars} magnetars in magenta) at their estimated distances, most from how much their radio pulses are smeared by free electrons on the way.`;
   }
 
   /** Real stars from Gaia DR3 around the Sun, at their measured distances (Milky Way only). */
@@ -214,6 +249,7 @@ export class GalaxyMapUI {
       void this.showCompactObjectsOnMap(seed);
       void this.showNebulaeOnMap(seed);
       void this.showClustersOnMap(seed);
+      void this.showPulsarsOnMap(seed);
       void this.showGaiaOnMap(seed);
     }
     $<HTMLInputElement>('galaxy-seed').value = String(seed);

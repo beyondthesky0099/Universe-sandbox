@@ -26,6 +26,9 @@ import { BODY_FIELDS, particleAccelSlice } from './particleKernel';
 import type { ParallelForces } from './parallel';
 import { AU_PER_YEAR_IN_KMS, C_AU_PER_YEAR, KPC_PER_MYR_IN_KMS, EARTH_MASS, G, type UnitSystem } from './units';
 
+const SOLAR_MASS_G = 1.98847e33;
+const AU_CM = 1.495978707e13;
+
 export type SimEventType = 'merge' | 'ignite' | 'collapse' | 'shatter' | 'disrupt' | 'supernova' | 'gwmerger' | 'redgiant' | 'nebula' | 'script' | 'ship' | 'formation';
 
 /** A user-defined force law: the body of `function (body, time, sim)` returning [ax, ay, az] in AU/yr². */
@@ -1002,7 +1005,13 @@ export class Simulation {
   /** Distance (AU) inside which `primary` tears `victim` apart. */
   rocheLimit(primary: Body, victim: Body): number {
     if (isCompact(primary.kind)) {
-      // Classic tidal-disruption radius r_t ≈ R (M / m)^⅓.
+      if (victim.kind === 'rocky' || victim.kind === 'gas') {
+        // A planet: r_t ≈ R (M / m)^⅓ = (3M / 4πρ)^⅓ from its true density. (Its game radius is
+        // hundreds of times too big; using it put the tidal radius of a neutron star at 0.7 AU.)
+        return Math.cbrt((3 * primary.mass * SOLAR_MASS_G) / (4 * Math.PI * NOMINAL_DENSITY[victim.kind])) / AU_CM;
+      }
+      // A star: the classic tidal-disruption radius r_t ≈ R (M / m)^⅓, with the star's
+      // (enlarged) radius, so it is torn apart before it touches the hole.
       return 0.8 * victim.radius * Math.cbrt(primary.mass / victim.mass);
     }
     return 2.44 * primary.radius * Math.cbrt(NOMINAL_DENSITY[primary.kind] / NOMINAL_DENSITY[victim.kind]);

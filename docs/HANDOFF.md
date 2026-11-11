@@ -205,6 +205,45 @@ Plan, in priority order:
 - BodyVisual adds it in applyDetail and updates it only when the planet is more than 14 px across
   and a star is present. Tests: tests/aurora.test.ts.
 
+### AF. Pulsars and neutron stars; zooming in on small nebulae
+- [x] Galaxy Map zoom goes down to 0.0004 units (about 0.2 light-years; it stopped at 0.2 units,
+  about 100 ly).
+  - The near plane follows the camera in (GalaxyView.update).
+  - Label "go to" distances scale with the object's true size, from 0.003 units.
+- [x] Small photographed nebulae (galaxyMap.showNebulaeOnMap).
+  - The survey picture is never less than 3′ across, so a planetary nebula fills only its middle.
+    The flat picture is now drawn at its true field.
+  - Up close, a nebula whose picture is much bigger than it becomes its modelled ray-marched
+    shape, not the burnt-out photo.
+  - Planetary nebulae get their central star (nebulaRaymarch, uShape 2).
+- [x] Real pulsars: `scripts/build-pulsars.mjs` writes `public/data/pulsars.json` from the ATNF
+  Pulsar Catalogue v2.6.1.
+  - 3,632 Milky Way pulsars with a period, distance and position, plus flags (magnetar, binary,
+    high-energy, globular, RRAT) and the supernova remnant each sits in.
+  - `src/sim/pulsars.ts` loads it.
+  - It is a Galaxy Map real layer (#opt-real-pulsars) and a search source.
+- [x] `src/sim/neutronStar.ts` (headless): compactness, Beloborodov light bending, the visible
+  fraction, redshift, gravity, density, light cylinder, polar cap, Rankin beam width, spin-down
+  (B, age, Ė), and a rough cooling curve.
+  - `pulsarParams(name, id)`: catalogued values for known pulsars (KNOWN_PULSARS; a test keeps
+    them in step with pulsars.json), else a newborn pulsar from Faucher-Giguère & Kaspi 2006,
+    seeded by the body id.
+  - `neutronFacts()` feeds the body panel.
+- [x] `src/render/neutronStar.ts` (NeutronStarVisual, used by BodyVisual for kind 'neutron').
+  - A surface shader that bends light: each pixel's true surface point comes from Beloborodov.
+  - Warm magnetic poles (flux ∝ cos²θ + 0.25 sin²θ) and hot polar caps.
+  - Dipole field lines and hollow-cone beams, all on a magnetic axis tilted by the obliquity.
+  - It turns at the real period, slowed to at most 4 turns a second (displayPeriod).
+  - The glow flashes when a beam points at the camera. BodyVisual.update now takes the camera
+    position.
+- [x] Preset 'pulsar-planets': PSR B1257+12 (Lich) with Draugr, Poltergeist and Phobetor. Orbits
+  are from the ATNF timing solution.
+- [x] Bug fix: tidal disruption of planets by compact stars used the planet's game radius, so a
+  neutron star tore planets apart 0.7 AU away.
+  - It now uses (3M / 4πρ)^⅓ with the nominal density.
+  - Stars still use the old formula, so black holes shred them before contact.
+- Tests: tests/neutron-star.test.ts.
+
 ### AE. Fixes from phone testing
 - [x] Travel controls fold into a 🚀 button (#travel-toggle and #travel-close; the state is
   kept in prefs 'travelOpen').

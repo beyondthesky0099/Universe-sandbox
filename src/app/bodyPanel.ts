@@ -2,6 +2,7 @@ import { describeFate, stellarFate } from '../sim/stellarFate';
 import { getSolarData } from '../sim/solarSystemData';
 import { esiLabel, exoplanetArchiveUrl, planetFacts, wikipediaUrl } from '../sim/planetFacts';
 import { horizonRadius, iscoRadius, radiativeEfficiency } from '../sim/kerr';
+import { neutronFacts } from '../sim/neutronStar';
 import { stellarFlux } from '../sim/climate';
 import { isCompact, mainSequenceLifetime, type Body } from '../sim/body';
 import { isTidallyLocked, nearResonance, orbitalPeriod } from '../sim/analysis';
@@ -222,6 +223,7 @@ export class BodyPanelUI {
       if (document.activeElement !== spinSlider) spinSlider.value = String(a);
       $('bh-spin-out').textContent = a.toFixed(2);
     }
+    if (body.kind === 'neutron') facts.push(...neutronFacts(body));
     if (isStar && this.app.sim.canSupernova(body)) {
       alerts.push(`<div class="alert info">⭐ ${escapeHtml(describeFate(stellarFate(body.mass, z)))}</div>`);
     }

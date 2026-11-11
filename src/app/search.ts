@@ -3,6 +3,7 @@ import { loadEclipses } from '../sim/eclipse';
 import { galacticToCosmos, loadLocalGalaxies, loadNamedGalaxies } from '../sim/galaxies';
 import { galacticToMap, MILKY_WAY_SEED, UNITS_PER_KPC } from '../procgen/galaxy';
 import { loadClusters } from '../sim/clusters';
+import { loadPulsars } from '../sim/pulsars';
 import { loadNebulae } from '../sim/nebulae';
 import { loadGwEvents } from '../sim/gwEvents';
 import { loadFlybys } from '../sim/flybys';
@@ -13,7 +14,7 @@ import { $, escapeHtml, toast } from '../ui/dom';
 import { CHALLENGES } from '../game/challenges';
 import { LESSONS } from '../game/lessons';
 import { SearchIndex, type SearchEntry } from '../ui/search';
-import { activityEntries, clusterEntries, compactEntries, exoplanetEntries, galaxyEntries, nebulaEntries, skyBodyEntries, starEntries, structureEntries } from '../ui/searchSources';
+import { activityEntries, clusterEntries, compactEntries, pulsarEntries, exoplanetEntries, galaxyEntries, nebulaEntries, skyBodyEntries, starEntries, structureEntries } from '../ui/searchSources';
 import { kindLabel } from './shared';
 import type { App } from '../app';
 
@@ -25,7 +26,7 @@ export class SearchUI {
   buildSearchIndex(): Promise<SearchIndex> {
     this.app.searchIndex ??= (async () => {
       const safe = <T>(p: Promise<T>, fallback: T) => p.catch(() => fallback);
-      const [nebulae, clusters, catalog, bright, near, local, named, compact, gw, flybys, voyager, eclipses] = await Promise.all([
+      const [nebulae, clusters, catalog, bright, near, local, named, compact, gw, flybys, voyager, eclipses, pulsars] = await Promise.all([
         safe(loadNebulae(), []),
         safe(loadClusters(), []),
         safe(this.app.realDataUI.getCatalog(), undefined),
@@ -41,6 +42,7 @@ export class SearchUI {
         safe(loadFlybys(), []),
         safe(loadVoyagerEncounters(), []),
         safe(loadEclipses(), []),
+        safe(loadPulsars(), []),
       ]);
       const index = new SearchIndex();
       index.add(skyBodyEntries());
@@ -48,6 +50,8 @@ export class SearchUI {
       index.add(nebulaEntries(nebulae));
       index.add(clusterEntries(clusters));
       index.add(compactEntries(compact));
+      // (Vela and J0437−4715 are already in as famous compact objects.)
+      index.add(pulsarEntries(pulsars.filter((p) => p.jname !== 'J0835-4510' && p.jname !== 'J0437-4715')));
       if (catalog) index.add(exoplanetEntries(catalog));
       index.add(galaxyEntries([...local, ...named]));
       index.add(structureEntries());

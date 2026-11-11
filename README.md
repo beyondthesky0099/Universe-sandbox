@@ -296,6 +296,12 @@ important ones stay and the rest fade out until you zoom in and there's room for
     known black hole at 1,570 light-years, plus Gaia BH2 and BH3, Cygnus X-1, V404 Cygni,
     A0620-00, the Vela Pulsar and PSR J0437-4715. Positions come from SIMBAD; masses and
     distances come from each discovery paper.
+  - **3,632 real pulsars** from the ATNF Pulsar Catalogue at their estimated distances: young
+    pulsars in blue, millisecond pulsars in white, 13 magnetars in magenta. The famous ones are
+    named, and every one can be found with search.
+  - **Zoom in to about 0.2 light-years.** Even a planetary nebula under a light-year across, like
+    the Ghost of Jupiter, fills the view, as a shell of glowing oxygen and hydrogen around its
+    white-dwarf star.
   - **4,813 real stars with known exoplanets** (NASA Exoplanet Archive), placed by their real
     galactic coordinates and distances. Click one to see its planets and visit it. The streak
     toward Cygnus is the field of view of the Kepler space telescope.
@@ -441,7 +447,7 @@ years.
 Solar System (today) · Solar System (true scale) · Milky Way meets Andromeda (real) · Earth & Moon · Mars, Jupiter, Saturn, Uranus and Neptune with their moons ·
 Pluto & Charon · Planet Formation · Giant Impact · Ring Maker · Binary Star ·
 Figure-8 Three-Body · Rogue Star Flyby · Black Hole Feast · Supernova · The Sun's Future ·
-Relativistic Precession · Black Hole Inspiral · Galactic Core · Star Cluster Collapse ·
+Relativistic Precession · Black Hole Inspiral · Pulsar Planets (PSR B1257+12) · Galactic Core · Star Cluster Collapse ·
 Self-Gravitating Disk · Galaxy Collision · Empty Space
 
 ### Phones and tablets
@@ -557,6 +563,30 @@ It is set with a slider in the black hole's panel (`src/sim/kerr.ts`).
   2008). Two equal holes give 0.69; LIGO measured GW150914's remnant at 0.67.
 - **Real values:** the galactic-core scene's hole spins at 0.94, as the Event Horizon Telescope's
   favoured Sgr A* models do.
+
+## Neutron stars and pulsars
+
+Zoom in on a neutron star and you see what its gravity and magnetism do (`src/sim/neutronStar.ts`,
+`src/render/neutronStar.ts`):
+
+- **Bent light.** Gravity bends its light so much that about three quarters of the surface shows
+  at once, often both magnetic poles together (Beloborodov 2002).
+- **Hot poles.** Heat flows along the magnetic field, so the magnetic poles glow brighter than the
+  equator. The polar caps, where particles rain back down, are hottest.
+- **Magnetic field and beams.** A dipole field is tilted from the spin axis. Beams run along the
+  magnetic axis, as wide as real radio beams (Rankin 1993), and sweep round like a lighthouse.
+  The star flashes when one crosses you.
+- **Real spin.** Known pulsars (the Crab, Vela, PSR J0437−4715, PSR B1257+12, the Hulse–Taylor
+  pulsar) use their catalogued period and spin-down.
+  - Other neutron stars, like those born in a supernova here, are typical newborn pulsars
+    (Faucher-Giguère & Kaspi 2006).
+  - Pulsars faster than 4 turns a second are slowed so the screen can show them.
+- **Its panel** gives the period, magnetic field, age, temperature, spin-down power, light
+  cylinder, density, gravity, escape speed and how much of the surface you can see.
+
+The **Pulsar Planets** scene is PSR B1257+12, where the first planets beyond the Sun were found
+in 1992. Its three planets, Draugr, Poltergeist and Phobetor, sit on orbits from the pulsar's
+timing.
 
 ## More about a planet
 
@@ -795,6 +825,12 @@ push and pull request.
   with `node scripts/build-flybys.mjs`).
 - Black holes and pulsars: positions from SIMBAD; masses and distances from the discovery papers,
   verified against their arXiv abstracts by `node scripts/build-compact-objects.mjs`.
+- Pulsars: the ATNF Pulsar Catalogue v2.6.1 (Manchester, Hobbs, Teoh & Hobbs 2005, AJ 129, 1993;
+  https://www.atnf.csiro.au/research/pulsar/psrcat/), rebuilt with
+  `node scripts/build-pulsars.mjs`. The PSR B1257+12 planets' orbits come from its timing
+  solution there (Konacki & Wolszczan 2003).
+- Neutron stars: light bending from Beloborodov (2002), beam widths from Rankin (1993), the
+  newborn-pulsar population from Faucher-Giguère & Kaspi (2006).
 - Cosmic microwave background: the NASA WMAP 9-year ILC map from LAMBDA (public domain),
   reprojected from HEALPix by `python3 -I scripts/build-cmb.py` (needs numpy and ImageMagick).
 - Spacecraft trajectories: NASA/JPL Horizons, state vectors every 10 days (rebuild with

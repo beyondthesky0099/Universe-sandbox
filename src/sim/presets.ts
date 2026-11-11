@@ -529,6 +529,39 @@ const inspiral: Preset = {
   },
 };
 
+/**
+ * PSR B1257+12 (Lich) and the first planets found outside the Solar System (Wolszczan & Frail
+ * 1992). Orbits from the ATNF Pulsar Catalogue (pulse-timing fit of Konacki & Wolszczan 2003):
+ * periods 25.262, 66.5419 and 98.2114 days, eccentricities 0, 0.0186 and 0.0252, arguments of
+ * periastron 250.4° and 108.3°, masses 0.020, 4.3 and 3.9 Earth masses (6.0 × 10⁻⁸,
+ * 1.29 × 10⁻⁵ and 1.17 × 10⁻⁵ M☉). Pulsar mass 1.4 M☉ (assumed). The two big planets'
+ * orbits are tilted 53° and 47° to the sky and close to one plane; here all three share one.
+ * Names: IAU NameExoWorlds 2015.
+ */
+const pulsarPlanets: Preset = {
+  id: 'pulsar-planets',
+  name: 'Pulsar Planets (PSR B1257+12)',
+  description:
+    'The first planets ever found beyond the Sun, in 1992, circle a dead star: the pulsar Lich, spinning 161 times a second. Its pulses arrive up to 1.3 milliseconds early or late as three planets tug it about.',
+  load(sim) {
+    const mass = 1.4;
+    const lich = sim.addBody({ name: 'Lich (PSR B1257+12)', kind: 'neutron', mass });
+    const deg = Math.PI / 180;
+    const planets = [
+      { name: 'Draugr', mEarth: 0.02, days: 25.262, e: 0, w: 0, color: 0x8a8580 },
+      { name: 'Poltergeist', mEarth: 4.3, days: 66.5419, e: 0.0186, w: 250.4, color: 0x7d6f66 },
+      { name: 'Phobetor', mEarth: 3.9, days: 98.2114, e: 0.0252, w: 108.3, color: 0x6c7480 },
+    ];
+    for (const p of planets) {
+      const years = p.days / 365.25;
+      const a = Math.cbrt(years * years * (mass + p.mEarth * EARTH_MASS));
+      addOrbiting(sim, lich, { name: p.name, mass: p.mEarth * EARTH_MASS, kind: 'rocky', color: p.color }, { a, e: p.e, argp: p.w * deg, nu: p.w * deg + 1 });
+    }
+    sim.recenter();
+    return { cameraDistance: 1.4, timeScale: 0.03, elevation: 0.9, tip: 'Click Lich and zoom in: its magnetic field, its beams, and a flash each time a beam sweeps past you.' };
+  },
+};
+
 const sunsFuture: Preset = {
   id: 'future',
   name: 'The Sun\u2019s Future',
@@ -868,6 +901,7 @@ export const PRESETS: Preset[] = [
   sunsFuture,
   precession,
   inspiral,
+  pulsarPlanets,
   galacticCore,
   starCluster,
   selfGravitatingGalaxy,

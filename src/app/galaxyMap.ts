@@ -103,21 +103,28 @@ export class GalaxyMapUI {
       const image = n.kind === 'dark' ? undefined : imageOf.get(nebulaKey(n));
       k++;
       if (image) {
-        // The image spans 2.6 catalogue radii; a soft glow in the nebula's colour gives it depth.
+        // The image spans 2.6 catalogue radii, but never less than 3 arcminutes: a small nebula
+        // fills only the middle of its picture, so the picture is drawn at its true field.
+        // A soft glow in the nebula's colour gives it depth.
         const named = image.page === 0;
         const page = images!.pages[image.page];
         const rect = tileRect(page, image.tile);
+        const fieldSize = ((n.distanceKpc! * 1000 * Math.tan((image.fieldDeg * Math.PI) / 180)) / 1000) * UNITS_PER_KPC;
+        const photoSize = Math.max(size * 1.3, fieldSize);
         // Up close it becomes a volume that looks like the photograph from Earth's direction.
+        // A nebula only a few dozen survey pixels across (most planetary nebulae) is a burnt-out
+        // blob on the plate; up close it becomes its modelled shape instead.
+        const tiny = fieldSize > size * 1.3 * 1.5;
         volumes.push({
           center: pos,
-          radius: (size * 1.3) / 2,
-          shape: 'photo',
+          radius: tiny ? size * 0.6 : photoSize / 2,
+          shape: tiny ? n.kind : 'photo',
           seed: k,
-          photo: { set: 2 + image.page, rect },
+          photo: tiny ? undefined : { set: 2 + image.page, rect },
           axes: pictureAxes(n.l, n.b, n.distanceKpc!),
           fade: [[2 + image.page, perPage[image.page].length], [1, glow.length]],
         });
-        perPage[image.page].push({ pos, size: size * 1.3, color, tile: rect, minPx: named ? 40 : 14, brightness: 1.1, rotation: 0, puff: 0 });
+        perPage[image.page].push({ pos, size: photoSize, color, tile: rect, minPx: named ? 40 : 14, brightness: 1.1, rotation: 0, puff: 0 });
         glow.push({ pos, size: size * 1.6, color, minPx: named ? 50 : 18, brightness: 0.3, rotation: k, puff: k });
       } else {
         // A few overlapping puffs spread through the nebula's volume.

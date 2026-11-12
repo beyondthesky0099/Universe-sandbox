@@ -208,6 +208,21 @@ Plan, in priority order:
 - BodyVisual adds it in applyDetail and updates it only when the planet is more than 14 px across
   and a star is present. Tests: tests/aurora.test.ts.
 
+### AI. Desktop: any laptop's graphics, higher resolution, speed
+- [x] Quality 'ultra' (QUALITY_PRESETS): 1.5× supersampling (pixelRatio cap 3), 1024-wide planet
+  textures, 500 full bodies. It is the desktop default; 'high' on low-power machines.
+  - The default applies unless the user picked a quality (pref 'qualityChosen').
+- [x] AdaptiveResolution (src/app/resolution.ts): scales the pixel ratio 0.5–1× of the preset to
+  hold ~55 fps (#opt-autores, pref 'autoResolution'). The fps readout shows "% res" when lowered.
+- [x] Settings shows the GPU (WEBGL_debug_renderer_info, #gpu-info).
+- [x] desktop/main.cjs adds ignore-gpu-blocklist and js-flags --max-old-space-size=4096 to
+  force_high_performance_gpu.
+- [x] Windows builds: x64 and arm64, as separate installer and portable builds (dist:win runs
+  electron-builder twice; artifact names carry ${arch}). Desktop version 0.2.0.
+- [x] Bug: connecting to the desktop's local server saved its URL, so the next launch (new port)
+  tried a dead address. connectServer(url, announce, remember) now skips that, and startup falls
+  back to the local server when a chosen one fails.
+
 ### AH. Realism pass (stars, giants, planets)
 - [x] Stars: src/render/starSurface.ts (StarSurface; starLook by kind/temperature).
   - Voronoi granulation with domain warp and per-cell brightness, faded by on-screen cell size.

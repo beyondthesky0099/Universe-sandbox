@@ -68,9 +68,22 @@ with a browser tab, it:
   - The Claude scene builder turns on if `ANTHROPIC_API_KEY` is set.
   - A server you choose in the app's settings takes precedence.
 
-Download `Astrarium-Setup-<version>.exe` (installer) or `Astrarium-Portable-<version>.exe` (runs
-without installing) from the [Releases](https://github.com/beyondthesky0099/Universe-sandbox/releases)
-page, or from the latest **Desktop app** run on the Actions tab. The files aren't code-signed,
+Download `Astrarium-Setup-<version>-x64.exe` (installer) or `Astrarium-Portable-<version>-x64.exe`
+(runs without installing) from the [Releases](https://github.com/beyondthesky0099/Universe-sandbox/releases)
+page, or from the latest **Desktop app** run on the Actions tab. Laptops with a Snapdragon (ARM)
+processor take the `-arm64` files.
+
+**Graphics on any laptop:**
+- It asks Windows for the high-performance GPU, and ignores Chromium's GPU blocklist, so older
+  Intel, AMD and NVIDIA laptop chips still draw with the GPU instead of software.
+- It starts at **Ultra** quality: it renders at 1.5× the screen's resolution for sharp edges, with
+  the largest planet textures and more bodies in full detail.
+- **Keep it smooth** (on by default) lowers the resolution when the frame rate drops below about
+  55 fps, and raises it again when there is room. A strong graphics card stays above screen
+  resolution; integrated graphics stay smooth. The frame-rate readout shows the resolution
+  whenever it is lowered.
+- Settings shows which graphics chip is drawing, so you can check that the laptop is using its
+  dedicated GPU. The files aren't code-signed,
 so the first time you run one, Windows SmartScreen may say it's from an unknown publisher:
 choose *More info → Run anyway*. Press F11 for full screen.
 

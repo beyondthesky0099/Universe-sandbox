@@ -413,7 +413,23 @@ export class InputUI {
     });
     $('btn-help').addEventListener('click', () => this.app.tutorialUI.openTutorial());
     $('btn-menu').addEventListener('click', () => document.body.classList.toggle('panels-hidden'));
-    $<HTMLSelectElement>('quality').addEventListener('change', (e) => this.app.applyQuality((e.target as HTMLSelectElement).value as QualityName));
+    $<HTMLSelectElement>('quality').addEventListener('change', (e) => {
+      prefs.set('qualityChosen', true);
+      this.app.applyQuality((e.target as HTMLSelectElement).value as QualityName);
+    });
+    const autores = $<HTMLInputElement>('opt-autores');
+    autores.checked = this.app.autoResolution;
+    autores.addEventListener('change', () => {
+      this.app.autoResolution = autores.checked;
+      prefs.set('autoResolution', autores.checked);
+      // Back to full resolution when turned off.
+      if (!autores.checked) this.app.applyQuality(this.app.quality);
+    });
+    // Which graphics chip is drawing (to check a laptop uses its dedicated GPU).
+    const gl = this.app.renderer.getContext();
+    const dbg = gl.getExtension('WEBGL_debug_renderer_info');
+    const gpu = dbg ? String(gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL)) : '';
+    if (gpu) $('gpu-info').textContent = `Graphics: ${gpu.replace(/^ANGLE \((.*)\)$/, '$1')}`;
 
     // Galaxy
     const goSeed = () => this.app.galaxyMapUI.buildGalaxy(seedFromString($<HTMLInputElement>('galaxy-seed').value || '1'));

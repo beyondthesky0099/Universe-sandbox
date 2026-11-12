@@ -11,13 +11,14 @@ import type { App } from '../app';
 export class OnlineUI {
   constructor(private readonly app: App) {}
 
-  async connectServer(url: string, announce = true): Promise<void> {
+  /** Connect to a companion server; `remember` keeps it as the user's choice for next time. */
+  async connectServer(url: string, announce = true, remember = true): Promise<void> {
     const status = $('server-status');
     try {
       const client = new ServerClient(url);
       const features = await client.health();
       this.app.server = client;
-      prefs.set('serverUrl', url);
+      if (remember) prefs.set('serverUrl', url);
       $<HTMLInputElement>('server-url').value = url;
       const on = Object.entries(features).filter(([, v]) => v).map(([k]) => k);
       status.textContent = `Connected: ${on.join(', ') || 'no features'}.`;

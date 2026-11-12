@@ -3,6 +3,11 @@
  *
  * Why a desktop build runs faster than a browser tab:
  * - It asks for the high-performance GPU, so laptops with two GPUs use the discrete one.
+ * - It ignores Chromium's GPU blocklist, so older Intel, AMD and NVIDIA laptop chips (whose
+ *   drivers Chromium distrusts) still get hardware-accelerated WebGL instead of software.
+ * - It allows the JavaScript heap to grow to 4 GB for very large simulations.
+ * - It starts at Ultra quality (above screen resolution); the app lowers the resolution itself
+ *   if the frame rate drops (src/app/resolution.ts).
  * - The window is never throttled in the background, and GPU rasterization is on.
  * - Pages are cross-origin isolated, so the physics spreads particle forces over all CPU cores.
  * - The app detects the desktop shell and starts at high quality.
@@ -37,8 +42,10 @@ async function startServer() {
 }
 
 app.commandLine.appendSwitch('force_high_performance_gpu');
+app.commandLine.appendSwitch('ignore-gpu-blocklist');
 app.commandLine.appendSwitch('enable-gpu-rasterization');
 app.commandLine.appendSwitch('enable-zero-copy');
+app.commandLine.appendSwitch('js-flags', '--max-old-space-size=4096');
 
 protocol.registerSchemesAsPrivileged([
   { scheme: 'app', privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true, codeCache: true } },

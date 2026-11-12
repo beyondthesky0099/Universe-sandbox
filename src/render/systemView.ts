@@ -34,10 +34,16 @@ export interface RenderQuality {
   trailLength: number;
 }
 
-export const QUALITY_PRESETS: Record<'low' | 'medium' | 'high', RenderQuality & { pixelRatio: number }> = {
+/**
+ * Graphics presets. `pixelRatio` caps the render resolution relative to CSS pixels; `supersample`
+ * renders above the screen's own resolution (Ultra: 1.5×, for sharper edges and fine detail).
+ * The resolution then adapts to keep the frame rate up (src/app/resolution.ts).
+ */
+export const QUALITY_PRESETS: Record<'low' | 'medium' | 'high' | 'ultra', RenderQuality & { pixelRatio: number; supersample?: number }> = {
   low: { textureWidth: 128, maxFullBodies: 80, trailLength: 250, pixelRatio: 1 },
   medium: { textureWidth: 256, maxFullBodies: 160, trailLength: 500, pixelRatio: 1.5 },
   high: { textureWidth: 512, maxFullBodies: 300, trailLength: 700, pixelRatio: 2 },
+  ultra: { textureWidth: 1024, maxFullBodies: 500, trailLength: 1000, pixelRatio: 3, supersample: 1.5 },
 };
 
 export type TrailFrame = 'absolute' | 'follow';

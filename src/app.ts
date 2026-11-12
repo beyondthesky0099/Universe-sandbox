@@ -536,6 +536,7 @@ export class App {
         !this.transitioning &&
         !this.trip &&
         sel !== -1 &&
+        this.cosmos.kindOf(sel) !== 'cluster' &&
         !this.cosmos.animating &&
         this.cosmos.cameraDistance < this.cosmos.viewDistance(sel) * 0.12 &&
         this.cosmos.controls.target.distanceTo(this.cosmos.position(sel)) < this.cosmos.viewDistance(sel) * 0.5

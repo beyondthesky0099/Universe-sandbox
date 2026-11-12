@@ -8,10 +8,29 @@
  * galactic (x toward l = 0, y toward l = 90°, z north) → scene (x, z, −y).
  */
 
+import { comovingDistance } from './cosmology';
+
 export const LY_PER_MPC = 3.2616e6;
+
+/** What a Universe map entry is: a galaxy unless said otherwise. */
+export type CosmosKind = 'galaxy' | 'cluster' | 'quasar';
 
 export interface LocalGalaxy {
   name: string;
+  kind?: CosmosKind;
+  /** A familiar name (Sombrero Galaxy, Coma Cluster) from the catalogue. */
+  common?: string;
+  /** Redshift, for objects placed by it. */
+  z?: number;
+  /** Rich clusters: Abell richness class (0–5), member count and Bautz–Morgan type. */
+  rich?: number;
+  count?: number;
+  bm?: string;
+  /** Quasars: V magnitude. */
+  vmag?: number;
+  /** Record holders: why they matter, and the paper. */
+  note?: string;
+  ref?: string;
   /** Galactic longitude and latitude (degrees) and distance from the Sun (Mpc). */
   l: number;
   b: number;
@@ -124,20 +143,28 @@ const COMMON: Record<string, string> = {
   NGC1399: 'NGC 1399 (Fornax Cluster centre)',
 };
 
-/** Readable name: common names, then "M 31"/"NGC 253"-style catalogue numbers. */
-export function displayName(g: Pick<LocalGalaxy, 'name'>): string {
-  const n = g.name.trim();
-  if (COMMON[n]) return COMMON[n];
+/** The catalogue name made readable: "M31", "NGC 253", "Abell 1656". */
+export function catalogueName(name: string): string {
+  const n = name.trim();
   const messier = n.match(/^MESSIER0*(\d+)$/);
   if (messier) return `M${messier[1]}`;
-  const cat = n.match(/^(NGC|IC|UGC|UGCA|PGC|ESO|DDO|KK|KKH|KKs)0*(\d.*)$/);
+  const cat = n.match(/^(NGC|IC|UGC|UGCA|PGC|ESO|DDO|KK|KKH|KKs|MCG|MRK|CGCG|KUG|ARK|AM|WKK)0*(\d.*)$/);
   if (cat) return `${cat[1]} ${cat[2]}`;
-  return n;
+  return n.replace(/\.0$/, '');
 }
 
-/** True for galaxies worth a permanent label on the map. */
-export function isFamous(g: Pick<LocalGalaxy, 'name'>): boolean {
-  return !!COMMON[g.name.trim()];
+/** Readable name: well-known names, then catalogue common names, then "M31"/"NGC 253"-style numbers. */
+export function displayName(g: Pick<LocalGalaxy, 'name' | 'common'>): string {
+  const n = g.name.trim();
+  if (COMMON[n]) return COMMON[n];
+  const cat = catalogueName(n);
+  if (g.common) return g.common.includes(cat) ? g.common : `${g.common} (${cat})`;
+  return cat;
+}
+
+/** True for objects worth a permanent label on the map. */
+export function isFamous(g: Pick<LocalGalaxy, 'name' | 'common' | 'note'>): boolean {
+  return !!COMMON[g.name.trim()] || !!g.common || !!g.note;
 }
 
 /**
@@ -148,22 +175,46 @@ export const COSMIC_STRUCTURES: { name: string; l: number; b: number; d: number 
   { name: 'Local Group', l: 0, b: 0, d: 0.4 },
   { name: 'Virgo Cluster', l: 283.8, b: 74.5, d: 16.5 },
   { name: 'Fornax Cluster', l: 236.7, b: -53.6, d: 19 },
-  { name: 'Centaurus Cluster', l: 302.4, b: 21.6, d: 48 },
-  { name: 'Hydra Cluster', l: 269.6, b: 26.5, d: 54 },
-  { name: 'Norma Cluster (Great Attractor)', l: 325.3, b: -7.3, d: 68 },
-  { name: 'Perseus Cluster', l: 150.6, b: -13.3, d: 74 },
-  { name: 'Coma Cluster', l: 58.1, b: 88.0, d: 99 },
+  { name: 'Local Void', l: 33.9, b: -1.9, d: 25 },
+  { name: 'Perseus–Pisces Supercluster', l: 132.8, b: -32.1, d: 70 },
+  { name: 'CfA2 Great Wall', l: 241.4, b: 76.2, d: 95 },
+  { name: 'Hercules Superclusters', l: 31.2, b: 44.5, d: 155 },
+  { name: 'Shapley Supercluster', l: 311.5, b: 32.3, d: 200 },
+  { name: 'Boötes Void', l: 79.7, b: 59.9, d: 215 },
+  { name: 'Horologium–Reticulum Supercluster', l: 262.2, b: -53.8, d: 265 },
+  { name: 'Sloan Great Wall', l: 332.7, b: 59.4, d: 330 },
 ];
 
+/** Familiar names of Abell clusters. */
+export const ABELL_NAMES: Record<number, string> = {
+  1656: 'Coma Cluster',
+  426: 'Perseus Cluster',
+  1367: 'Leo Cluster',
+  2151: 'Hercules Cluster',
+  3526: 'Centaurus Cluster',
+  1060: 'Hydra Cluster',
+  3627: 'Norma Cluster (Great Attractor)',
+  3558: 'Shapley Supercluster core',
+  2199: 'Abell 2199 (Hercules)',
+  1689: 'Abell 1689 (gravitational lens)',
+  2218: 'Abell 2218 (gravitational lens)',
+  370: 'Abell 370 (gravitational lens)',
+  2744: "Pandora's Cluster",
+  2029: 'Abell 2029 (giant cD galaxy)',
+  262: 'Abell 262 (Perseus–Pisces)',
+  85: 'Abell 85',
+  2256: 'Abell 2256 (merging cluster)',
+};
+
 /** [name, l, b, cz (km/s), total Ks magnitude, T-type, position angle (degrees), axis ratio] */
-type NamedRow = [string, number, number, number, number, number | null, (number | null)?, (number | null)?];
+type NamedRow = [string, number, number, number, number, number | null, (number | null)?, (number | null)?, (string | null)?];
 
 /**
  * The brightest galaxies beyond the Local Volume (2MRS), as clickable map entries. Distances
  * are from redshift; luminosities and sizes are estimated from the Ks magnitude.
  */
 export function namedFromSurvey(rows: NamedRow[], H0: number): LocalGalaxy[] {
-  return rows.map(([name, l, b, cz, kt, t, pa, ba]) => {
+  return rows.map(([name, l, b, cz, kt, t, pa, ba, common]) => {
     const d = cz / H0;
     const absK = kt - 5 * Math.log10(d * 1e6) + 5;
     const lk = (3.28 - absK) / 2.5; // log10 Ks luminosity, solar units
@@ -179,6 +230,7 @@ export function namedFromSurvey(rows: NamedRow[], H0: number): LocalGalaxy[] {
       zd: true,
       ...(pa !== null && pa !== undefined ? { pa } : {}),
       ...(ba !== null && ba !== undefined ? { ba } : {}),
+      ...(common ? { common } : {}),
     };
   });
 }
@@ -190,6 +242,53 @@ export function loadNamedGalaxies(baseUrl = import.meta.env.BASE_URL): Promise<L
     .then((d) => namedFromSurvey(d.galaxies, d.H0))
     .catch(() => []);
   return namedPromise;
+}
+
+/** Raw rows of public/data/universe-objects.json (scripts/build-deep-universe.mjs). */
+export interface UniverseObjects {
+  /** [Abell number, l, b, z, richness class, member count, Bautz–Morgan type] */
+  clusters: [number, number, number, number, number | null, number | null, string | null][];
+  /** [name, l, b, z, V magnitude] */
+  quasars: [string, number, number, number, number | null][];
+  records: { name: string; l: number; b: number; z: number; kind: 'galaxy' | 'quasar'; note: string; ref: string }[];
+}
+
+const normName = (n: string) => n.replace(/\.0$/, '').replace(/[\s_−-]/g, '').toUpperCase();
+
+/**
+ * Rich clusters, quasars and record holders as map entries, placed at the comoving distance for
+ * their redshift. A record holder replaces a catalogue quasar of the same name.
+ */
+export function universeEntries(u: UniverseObjects): LocalGalaxy[] {
+  const out: LocalGalaxy[] = [];
+  for (const [n, l, b, z, rich, count, bm] of u.clusters) {
+    const g: LocalGalaxy = { name: `Abell ${n}`, kind: 'cluster', l, b, d: comovingDistance(z), z, zd: true, size: 4000, lk: 11.5 + (rich ?? 0) * 0.5 };
+    if (rich !== null) g.rich = rich;
+    if (count !== null) g.count = count;
+    if (bm) g.bm = bm;
+    if (ABELL_NAMES[n]) g.common = ABELL_NAMES[n];
+    out.push(g);
+  }
+  const recordNames = new Set(u.records.map((r) => normName(r.name)));
+  for (const [name, l, b, z, vmag] of u.quasars) {
+    if (recordNames.has(normName(name))) continue;
+    const g: LocalGalaxy = { name, kind: 'quasar', l, b, d: comovingDistance(z), z, zd: true, size: 30, t: -5, lk: vmag !== null ? 12.5 - vmag * 0.15 : 10 };
+    if (vmag !== null) g.vmag = vmag;
+    out.push(g);
+  }
+  for (const r of u.records) {
+    out.push({ name: r.name, kind: r.kind === 'quasar' ? 'quasar' : 'galaxy', l: r.l, b: r.b, d: comovingDistance(r.z), z: r.z, zd: true, size: r.kind === 'quasar' ? 30 : 2, t: r.kind === 'quasar' ? -5 : 9, lk: 11, note: r.note, ref: r.ref });
+  }
+  return out;
+}
+
+let universePromise: Promise<LocalGalaxy[]> | undefined;
+export function loadUniverseObjects(baseUrl = import.meta.env.BASE_URL): Promise<LocalGalaxy[]> {
+  universePromise ??= fetch(`${baseUrl}data/universe-objects.json`)
+    .then((r) => (r.ok ? (r.json() as Promise<UniverseObjects>) : { clusters: [], quasars: [], records: [] }))
+    .then(universeEntries)
+    .catch(() => []);
+  return universePromise;
 }
 
 let localPromise: Promise<LocalGalaxy[]> | undefined;
@@ -214,4 +313,4 @@ export function loadWebGalaxies(baseUrl = import.meta.env.BASE_URL): Promise<Web
 }
 
 export const GALAXY_CREDIT =
-  'Galaxy data: Updated Nearby Galaxy Catalog (Karachentsev, Makarov & Kaisina 2013), the 2MASS Redshift Survey (Huchra et al. 2012) and HyperLEDA position angles (Paturel et al. 2003), via VizieR (CDS).';
+  'Galaxy data: Updated Nearby Galaxy Catalog (Karachentsev, Makarov & Kaisina 2013), the 2MASS Redshift Survey (Huchra et al. 2012), HyperLEDA position angles (Paturel et al. 2003), OpenNGC (Mattia Verga, CC BY-SA 4.0), the Abell cluster catalogue (Abell, Corwin & Olowin 1989) and the Véron-Cetty & Véron quasar catalogue (2010), via VizieR (CDS).';

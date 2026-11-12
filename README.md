@@ -960,7 +960,19 @@ push and pull request.
   ("fingers of God"). Cluster labels use approximate published positions. Each galaxy's
   position angle on the sky comes from **HyperLEDA** (Paturel et al. 2003, A&A 412, 45;
   VizieR VII/237), matched by position; the Universe view draws galaxies at that angle and
-  the catalogue's inclination.
+  the catalogue's inclination. Every 2MRS galaxy with a catalogue name (NGC, IC, UGC, ESO,
+  MCG, Markarian…) is a named, clickable entry; the NGC/IC ones take their position angles,
+  optical axis ratios and common names from **OpenNGC** (Mattia Verga,
+  https://github.com/mattiaverga/OpenNGC, **CC BY-SA 4.0**).
+- Deep universe (`node scripts/build-deep-universe.mjs`): rich galaxy clusters from the
+  **Abell catalogue** (Abell, Corwin & Olowin 1989, ApJS 70, 1; VizieR VII/110A) with the
+  redshifts of Struble & Rood (1987); quasars from the **Véron-Cetty & Véron** catalogue, 13th
+  edition (2010, A&A 518, A10; VizieR VII/258), the brightest and every one beyond redshift 5;
+  and record holders (JADES-GS-z14-0, GN-z11, J0313−1806, ULAS J1120+0641, TON 618, 3C 273)
+  entered by hand from the papers cited in `public/data/universe-objects.json`. They sit at the
+  comoving distance for their redshift in a flat ΛCDM cosmology (H0 = 70 km/s/Mpc, Ωm = 0.3;
+  `src/sim/cosmology.ts`). Supercluster, wall and void labels use approximate published
+  positions.
 - Star data: **HYG database v4.1** by David Nash (astronexus), licensed **CC BY-SA 4.0**
   (https://codeberg.org/astronexus/hyg). The derived files `public/data/stars-near.json` and
   `public/data/stars-bright.json` are also CC BY-SA 4.0. Rebuild them with

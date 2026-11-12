@@ -6,6 +6,7 @@ import type { CompactObject } from '../sim/compactObjects';
 import * as THREE from 'three';
 import { type StarSystemSpec } from '../procgen/starSystem';
 import { displayName, galaxyForm, LY_PER_MPC, type LocalGalaxy } from '../sim/galaxies';
+import { ageAt, formatLookback, lookbackTime } from '../sim/cosmology';
 import { QUALITY_PRESETS } from '../render/systemView';
 import { type Body, type BodyKind } from '../sim/body';
 import { GAS_PALETTE, ROCKY_PALETTE } from '../sim/color';
@@ -174,20 +175,39 @@ export function sciMass(log10: number): string {
 
 export function cosmosFacts(g: LocalGalaxy): [string, string][] {
   const form = galaxyForm(g);
-  const facts: [string, string][] = [['Type', `${form[0].toUpperCase()}${form.slice(1)} galaxy`]];
+  const facts: [string, string][] = [];
+  const kind = g.kind ?? 'galaxy';
+  if (kind === 'cluster') facts.push(['Type', 'Rich galaxy cluster (Abell)']);
+  else if (kind === 'quasar') facts.push(['Type', 'Quasar: a galaxy with a feeding supermassive black hole']);
+  else facts.push(['Type', `${form[0].toUpperCase()}${form.slice(1)} galaxy`]);
+  if (g.note) facts.push(['Why it matters', g.note]);
   if (g.name === 'Milky Way') {
     facts.push(['Distance', 'You are here'], ['Diameter', 'about 100,000 light-years']);
   } else {
     const mly = (g.d * LY_PER_MPC) / 1e6;
     facts.push([g.zd ? 'Distance (from redshift)' : 'Distance', `${mly < 1 ? `${Math.round(mly * 1000).toLocaleString('en-US')} thousand` : fmt(mly)} ${mly < 1 ? '' : 'million '}light-years`.replace('  ', ' ')]);
+    if (g.z !== undefined) {
+      facts.push(['Redshift', g.z >= 1 ? g.z.toFixed(2) : g.z.toFixed(4)]);
+      facts.push(['Light left it', `${formatLookback(lookbackTime(g.z))} ago${g.z > 3 ? `, when the universe was ${formatLookback(ageAt(g.z))} old` : ''}`]);
+    }
     if (g.size && !g.zd) facts.push(['Diameter', `${Math.round(g.size * 3261.6).toLocaleString('en-US')} light-years`]);
     if (g.name === 'MESSIER087') facts.push(['Central black hole', '6.5 billion M☉: the first black hole ever imaged (Event Horizon Telescope, 2019)']);
   }
+  if (kind === 'cluster') {
+    if (g.rich !== undefined) facts.push(['Richness class', `${g.rich} (${['poorest', 'poor', 'moderate', 'rich', 'very rich', 'richest'][g.rich] ?? ''})`]);
+    if (g.count !== undefined) facts.push(['Bright members', `${g.count} galaxies within 2 magnitudes of the third brightest`]);
+    if (g.bm) facts.push(['Bautz–Morgan type', g.bm]);
+  }
+  if (g.vmag !== undefined) facts.push(['Brightness', `magnitude ${g.vmag.toFixed(1)}`]);
   if (g.mass !== undefined) facts.push(['Mass', sciMass(g.mass)]);
   if (g.hi !== undefined) facts.push(['Hydrogen gas', sciMass(g.hi)]);
-  if (g.v !== undefined && g.name !== 'Milky Way') facts.push([g.zd ? 'Recession velocity' : 'Radial velocity', `${Math.abs(g.v)} km/s ${g.v < 0 ? 'toward us' : 'away from us'}`]);
+  if (g.v !== undefined && g.name !== 'Milky Way' && g.z === undefined) facts.push([g.zd ? 'Recession velocity' : 'Radial velocity', `${Math.abs(g.v)} km/s ${g.v < 0 ? 'toward us' : 'away from us'}`]);
   if (g.md && g.name !== 'Milky Way') facts.push(['Main neighbour', displayName({ name: g.md })]);
-  facts.push(['Data', g.zd ? '2MASS Redshift Survey (Huchra et al. 2012)' : 'Karachentsev et al. 2013']);
+  if (g.pa !== undefined && kind === 'galaxy') facts.push(['Position angle', `${g.pa}° (HyperLEDA / OpenNGC)`]);
+  facts.push([
+    'Data',
+    g.ref ?? (kind === 'cluster' ? 'Abell, Corwin & Olowin 1989' : kind === 'quasar' ? 'Véron-Cetty & Véron 2010' : g.zd ? '2MASS Redshift Survey (Huchra et al. 2012)' : 'Karachentsev et al. 2013'),
+  ]);
   return facts;
 }
 

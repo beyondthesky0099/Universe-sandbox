@@ -16,57 +16,22 @@
  * angle of the major axis (degrees, north through east) and, where the Local Volume catalogue
  * has none, the axis ratio. Each galaxy is cross-matched by position in a small cone.
  *
+ *   public/data/galaxies-named.json   every 2MRS galaxy beyond the Local Volume with a catalogue
+ *                                     name (NGC, IC, UGC, ESO, MCG, Markarian, …), with its
+ *                                     position angle, size and common name from OpenNGC
+ *                                     (Mattia Verga, CC BY-SA 4.0) where it is an NGC/IC object.
+ *
  *   node scripts/build-galaxies.mjs
  */
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { num, parseTsv, round, vizierClient } from './lib/vizier.mjs';
 
-const VIZIER = 'https://vizier.cfa.harvard.edu/viz-bin/asu-tsv';
 const H0 = 70; // km/s/Mpc
 const MAX_CZ = 15000; // km/s, about 214 Mpc
 
+const vizier = vizierClient('galaxies');
 const cache = new URL('../node_modules/.cache/galaxies/', import.meta.url).pathname;
-mkdirSync(cache, { recursive: true });
-
-async function vizier(name, params) {
-  const file = join(cache, `${name}.tsv`);
-  if (existsSync(file)) return readFileSync(file, 'utf8');
-  const url = new URL(VIZIER);
-  for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
-  for (let attempt = 0; ; attempt++) {
-    let problem;
-    try {
-      const res = await fetch(url);
-      const text = res.ok ? await res.text() : '';
-      // A body with a nameless, empty RESOURCE is the mirror failing quietly, not an empty result.
-      if (res.ok && !text.includes('#INFO\tError=') && !/^#RESOURCE=\s*$/m.test(text)) {
-        writeFileSync(file, text);
-        return text;
-      }
-      problem = `HTTP ${res.status} ${text.match(/Error=.*/)?.[0] ?? ''}`;
-    } catch (err) {
-      // Dropped connections happen on large responses; retry.
-      problem = String(err?.cause?.code ?? err);
-    }
-    if (attempt >= 5) throw new Error(`VizieR ${name}: ${problem}`);
-    console.warn(`VizieR ${name}: ${problem}, retrying…`);
-    await new Promise((r) => setTimeout(r, 3000 * 2 ** attempt));
-  }
-}
-
-/** Parse VizieR TSV: header line, units line, dashes line, then rows. */
-function parseTsv(text) {
-  const lines = text.split('\n').filter((l) => l && !l.startsWith('#'));
-  if (lines.length < 4) return []; // an empty cone search has no table at all
-  const header = lines[0].split('\t').map((h) => h.trim());
-  return lines.slice(3).map((line) => {
-    const cells = line.split('\t');
-    return Object.fromEntries(header.map((h, i) => [h, (cells[i] ?? '').trim()]));
-  });
-}
-
-const num = (s) => (s === '' || s === undefined ? undefined : Number(s));
-const round = (v, d) => (v === undefined || !Number.isFinite(v) ? undefined : Number(v.toFixed(d)));
 
 // ---------------------------------------------------------------------------
 // Local Volume: Updated Nearby Galaxy Catalog
@@ -110,9 +75,9 @@ local.sort((a, b) => a.d - b.d);
 // Cosmic web: 2MASS Redshift Survey
 
 const tmrs = parseTsv(
-  await vizier('2mrs', {
+  await vizier('2mrs-ba', {
     '-source': 'J/ApJS/199/26/table3',
-    '-out': 'GLON,GLAT,Ktmag,cz,type,CAT',
+    '-out': 'GLON,GLAT,Ktmag,cz,type,CAT,b/a',
     '-out.max': 'unlimited',
   }),
 );
@@ -126,15 +91,59 @@ for (const r of tmrs) {
   web.push([round(l, 2), round(b, 2), Math.round(cz), round(num(r.Ktmag), 1)]);
 }
 
-// Named galaxies beyond the Local Volume: the brightest 2MRS galaxies (total Ks < 8.5), with
-// their catalogue names and numeric T-types (leading integer of the ZCAT type code).
+// ---------------------------------------------------------------------------
+// OpenNGC: position angles, sizes and common names of NGC/IC objects
+
+const OPENNGC_URL = 'https://raw.githubusercontent.com/mattiaverga/OpenNGC/master/database_files/NGC.csv';
+async function openNgc() {
+  const file = join(cache, 'openngc.csv');
+  if (!existsSync(file)) {
+    const res = await fetch(OPENNGC_URL);
+    if (!res.ok) throw new Error(`OpenNGC: HTTP ${res.status}`);
+    writeFileSync(file, await res.text());
+  }
+  const lines = readFileSync(file, 'utf8').split('\n').filter((l) => l.trim());
+  const header = lines[0].split(';');
+  const rows = lines.slice(1).map((line) => {
+    const cells = line.split(';');
+    return Object.fromEntries(header.map((h, i) => [h, (cells[i] ?? '').trim()]));
+  });
+  const byName = new Map();
+  for (const r of rows) {
+    byName.set(ngcKey(r.Name), r);
+    if (r.M) byName.set(`M${Number(r.M)}`, r); // Messier numbers too
+  }
+  return byName;
+}
+/** "NGC0253", "NGC_0253", "IC 342", "NGC4594A" → "NGC253", "IC342", "NGC4594A". */
+function ngcKey(name) {
+  const n = name.replace(/[_\s]/g, '');
+  const messier = n.match(/^MESSIER0*(\d+)$/i);
+  if (messier) return `M${messier[1]}`;
+  const m = n.match(/^(NGC|IC)0*(\d+)(.*)$/i);
+  return m ? `${m[1].toUpperCase()}${m[2]}${m[3].toUpperCase()}` : undefined;
+}
+const openngc = await openNgc();
+
+// Named galaxies beyond the Local Volume: every 2MRS galaxy with a catalogue name (not the
+// anonymous "g…" and "A…" entries), with numeric T-types (leading integer of the ZCAT type code),
+// position angles (OpenNGC, then HyperLEDA for the brightest), axis ratios (2MRS) and common names.
 const named = [];
 for (const r of tmrs) {
   const cz = num(r.cz);
   const kt = num(r.Ktmag);
-  if (!(cz / H0 > 11) || cz > MAX_CZ || !(kt < 8.5)) continue;
+  if (!(cz / H0 > 11) || cz > MAX_CZ) continue;
+  const cat = r.CAT.replace(/_/g, '');
+  if (!/^(NGC|IC|UGC|ESO|MCG|MRK|CGCG|KUG|ARK|AM|WKK|MESSIER|PGC|UGCA|DDO|HIZSS|LEDA)/.test(cat) && !(kt < 8.5)) continue;
+  if (/^(g|A|2MASX)/.test(cat)) continue;
   const t = r.type.match(/^-?\d+/);
-  named.push([r.CAT.replace(/_/g, ''), round(num(r.GLON), 3), round(num(r.GLAT), 3), Math.round(cz), round(kt, 2), t ? Number(t[0]) : null]);
+  const ngc = openngc.get(ngcKey(cat) ?? '');
+  const common = ngc?.['Common names']?.split(',')[0] || null;
+  const pa = ngc && ngc.PosAng !== '' ? Number(ngc.PosAng) : null;
+  // Axis ratio: OpenNGC's optical axes where it has them (the 2MASS K-band ratio is bulge-heavy,
+  // so edge-on discs look too round), else the 2MRS value.
+  const optical = ngc && num(ngc.MajAx) > 0 && num(ngc.MinAx) > 0 ? num(ngc.MinAx) / num(ngc.MajAx) : undefined;
+  named.push([cat, round(num(r.GLON), 3), round(num(r.GLAT), 3), Math.round(cz), round(kt, 2), t ? Number(t[0]) : null, pa, round(optical ?? num(r['b/a']), 2) ?? null, common]);
 }
 
 // ---------------------------------------------------------------------------
@@ -223,13 +232,18 @@ console.log(`HyperLEDA position angles: ${oriented} of ${local.length} Local Vol
 // The named distant galaxies get [..., PA, b/a] appended (null when unknown).
 let orientedNamed = 0;
 await mapLimited(named, 6, async (row) => {
-  const [name, l, b, cz] = row;
+  const [name, l, b, , kt] = row;
+  if (row[6] !== null) {
+    orientedNamed++;
+    return;
+  }
+  if (!(kt < 8.5)) return; // the bright ones only: a cone search each
   const o = await ledaOrientation(`named-${name}`, l, b, undefined).catch(() => undefined);
-  const pa = o && Number.isFinite(o.pa) ? o.pa : null;
-  const ba = o?.ba ?? null;
-  if (pa !== null) orientedNamed++;
-  row.push(pa, ba);
-  void cz;
+  if (o && Number.isFinite(o.pa)) {
+    row[6] = o.pa;
+    orientedNamed++;
+  }
+  if (row[7] === null && o?.ba !== undefined) row[7] = o.ba;
 });
 console.log(`HyperLEDA position angles: ${orientedNamed} of ${named.length} named distant galaxies`);
 
@@ -237,6 +251,7 @@ const credit = {
   local:
     'Updated Nearby Galaxy Catalog: Karachentsev, Makarov & Kaisina 2013, AJ 145, 101 (VizieR J/AJ/145/101). Positions in galactic coordinates; distances in Mpc. Position angles (pa, degrees north through east) from HyperLEDA (Paturel et al. 2003, VizieR VII/237).',
   web: `2MASS Redshift Survey: Huchra et al. 2012, ApJS 199, 26 (VizieR J/ApJS/199/26). Distances are cz/H0 with H0 = ${H0} km/s/Mpc, cz ≤ ${MAX_CZ} km/s.`,
+  named: `2MASS Redshift Survey (Huchra et al. 2012) names and redshifts; position angles and common names of NGC/IC objects from OpenNGC (Mattia Verga, CC BY-SA 4.0), others from HyperLEDA (Paturel et al. 2003). Distances are cz/H0 with H0 = ${H0} km/s/Mpc.`,
 };
 const out = new URL('../public/data/', import.meta.url);
 writeFileSync(new URL('galaxies-local.json', out), JSON.stringify({ source: credit.local, galaxies: local }) + '\n');
@@ -246,7 +261,7 @@ writeFileSync(
 );
 writeFileSync(
   new URL('galaxies-named.json', out),
-  JSON.stringify({ source: credit.web, H0, fields: ['name', 'l_deg', 'b_deg', 'cz_kms', 'Kt_mag', 'T_type', 'PA_deg', 'b/a'], galaxies: named }) + '\n',
+  JSON.stringify({ source: credit.named, H0, fields: ['name', 'l_deg', 'b_deg', 'cz_kms', 'Kt_mag', 'T_type', 'PA_deg', 'b/a', 'common_name'], galaxies: named }) + '\n',
 );
 console.log(`Named distant galaxies: ${named.length}`);
 console.log(`Local Volume: ${local.length} galaxies (nearest: ${local.slice(0, 5).map((g) => g.name).join(', ')})`);

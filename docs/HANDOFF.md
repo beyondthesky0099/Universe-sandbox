@@ -208,6 +208,47 @@ Plan, in priority order:
 - BodyVisual adds it in applyDetail and updates it only when the planet is more than 14 px across
   and a star is present. Tests: tests/aurora.test.ts.
 
+### AL. Every catalogued object in the Universe view
+The user asked for *"every celestial object discovered"* in the galaxy and universe views. This
+round covers the Universe view; the Galaxy Map already carries the HII regions, planetary nebulae,
+supernova remnants, dark and reflection nebulae, clusters, pulsars, black holes, exoplanet hosts
+and the 62,000 Gaia stars (sections F–J). Ideas for the next rounds are at the end.
+- [x] Named galaxies: every 2MRS galaxy beyond 11 Mpc with a catalogue name (10,629, was 647):
+      NGC, IC, UGC, ESO, MCG, Markarian, CGCG…; anonymous "g…"/"A…" entries stay in the web.
+  - OpenNGC (scripts/build-galaxies.mjs `openNgc()`, cached as node_modules/.cache/galaxies/
+    openngc.csv) gives NGC/IC position angles (3,338), optical axis ratios and common names;
+    HyperLEDA cone searches only for the bright rest (Kt < 8.5). Rows end in PA, b/a, common.
+  - galaxies-named.json is 10,629 rows (~500 KB). `isFamous` now includes catalogue common names
+    (Needle Galaxy, Fornax A…) and record holders.
+- [x] scripts/lib/vizier.mjs: the shared VizieR fetch/cache/retry, TSV parser and coordinate
+      helpers (used by build-galaxies.mjs and build-deep-universe.mjs).
+- [x] scripts/build-deep-universe.mjs → public/data/universe-objects.json: 683 Abell clusters
+      with redshifts (VII/110A tables 3–4), 7,160 Véron quasars (V < 17.5 or z ≥ 5), 6 hand-entered
+      record holders with notes and references.
+- [x] src/sim/cosmology.ts: comoving/luminosity distance, lookback time, age (flat ΛCDM, H0 70,
+      Ωm 0.3). Lookback integrates in the scale factor so the age converges. tests/cosmology.test.ts.
+- [x] src/sim/galaxies.ts: `kind` ('galaxy' | 'cluster' | 'quasar'), `common`, `z`, cluster and
+      quasar facts, `universeEntries()` / `loadUniverseObjects()`, ABELL_NAMES, catalogueName().
+      COSMIC_STRUCTURES: the five clusters that are Abell clusters became real entries; added the
+      Local Void, Perseus–Pisces, CfA2 Great Wall, Hercules, Shapley, Boötes Void,
+      Horologium–Reticulum and the Sloan Great Wall (approximate hand-entered positions).
+- [x] CosmosView: one Points layer per kind (clusters are orange rings 4 Mpc across, quasars
+      violet points, record holders brighter), `setKindVisible`, labels with priorities (the
+      brighter galaxy keeps its label where two collide), pick() skips hidden layers.
+  - Checkboxes #opt-cosmos-clusters and #opt-cosmos-quasars (Find pane).
+  - A cluster has no Visit button and auto-visit skips it; a quasar visits its host (an
+    elliptical stand-in).
+- Tests: tests/galaxies.test.ts (named count, Needle Galaxy PA 135°, Coma at ~100 Mpc, 3C 273
+  dedupe, JADES-GS-z14-0 inside the CMB sphere).
+
+**Next rounds for "every object":**
+- Galaxy Map: X-ray binaries (Liu et al. 2006/2007 HMXB/LMXB, VizieR J/A+A/455/1165 and
+  J/A+A/469/807), novae and cataclysmic variables with Gaia distances, Wolf–Rayet stars, masers;
+  more Gaia stars (mag < 10 would be about 300,000: needs a binary format and a budget).
+- Universe: the 2MRS galaxies without names could still be clickable (type and redshift only);
+  galaxy groups (Tully 2015); SDSS large-scale structure beyond 2MRS is too big for the repo.
+- Solar System: every numbered asteroid above 10 km, and the 290 known moons (Horizons).
+
 ### AK. Realism pass: galaxies drawn in the Universe view
 - [x] HyperLEDA position angles (scripts/build-galaxies.mjs, VizieR VII/237 via the Harvard
       mirror): a cone search per galaxy, scored by separation over catalogued size. `pa` on 435

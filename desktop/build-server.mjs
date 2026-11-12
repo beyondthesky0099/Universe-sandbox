@@ -6,7 +6,7 @@
  */
 import { createRequire } from 'node:module';
 import { existsSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const root = new URL('../', import.meta.url);
 if (!existsSync(new URL('server/node_modules/ws', root))) {
@@ -14,7 +14,8 @@ if (!existsSync(new URL('server/node_modules/ws', root))) {
   process.exit(1);
 }
 const require = createRequire(new URL('package.json', root));
-const { build } = await import(require.resolve('rolldown'));
+// (A file:// URL: on Windows a bare absolute path like D:\\… is not an importable specifier.)
+const { build } = await import(pathToFileURL(require.resolve('rolldown')).href);
 await build({
   input: fileURLToPath(new URL('server/src/embedded.ts', root)),
   platform: 'node',

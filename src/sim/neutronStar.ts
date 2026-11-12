@@ -154,8 +154,18 @@ export const KNOWN_PULSARS: Record<string, { period: number; pdot: number; age?:
   'PSR B1913+16': { period: 0.05903, pdot: 8.62e-18, aliases: ['Hulse–Taylor pulsar', 'PSR J1915+1606'] },
 };
 
+/** Pulsars from the full catalogue that a scene has put in the Sandbox, by body name. */
+const visited = new Map<string, { period: number; pdot: number; age?: number; aliases: string[] }>();
+
+/** Record a catalogue pulsar's measured spin under a body name (the Galaxy Map's "visit"). */
+export function rememberPulsar(name: string, period: number, pdot: number): void {
+  visited.set(name, { period, pdot, aliases: [] });
+}
+
 /** A catalogued pulsar whose name (or alias) the body's name contains. */
 export function knownPulsar(name: string): (typeof KNOWN_PULSARS)[string] | undefined {
+  const exact = visited.get(name);
+  if (exact) return exact;
   const lower = name.toLowerCase();
   for (const [key, p] of Object.entries(KNOWN_PULSARS)) {
     if ([key, ...p.aliases].some((n) => lower.includes(n.toLowerCase()))) return p;
@@ -188,8 +198,10 @@ export function pulsarParams(name: string, seed: number): PulsarParams {
   const obliquity = (Math.acos(1 - rand()) / DEG);
   const known = knownPulsar(name);
   if (known) {
-    const age = known.age ?? characteristicAge(known.period, known.pdot);
-    return { period: known.period, pdot: known.pdot, field: dipoleField(known.period, known.pdot), obliquity: 45, real: true, age };
+    // (A pulsar with no measured spin-down: take it as old, a billion years.)
+    const age = known.age ?? (known.pdot > 0 ? characteristicAge(known.period, known.pdot) : 1e9);
+    const field = known.pdot > 0 ? dipoleField(known.period, known.pdot) : known.period < 0.03 ? 3e8 : 1e12;
+    return { period: known.period, pdot: known.pdot, field, obliquity: 45, real: true, age };
   }
   let period = 0;
   while (period < 0.01) period = 0.3 + 0.15 * gaussian(rand);
@@ -205,17 +217,26 @@ export function displayPeriod(periodS: number): number {
   return Math.max(periodS, 0.25);
 }
 
+/** A number in scientific notation with a superscript power: "2.8 × 10⁸ G". */
+export function sci(x: number, unit: string): string {
+  const e = Math.floor(Math.log10(x));
+  return `${(x / 10 ** e).toFixed(1)} × 10${String(e).replace(/./g, (c) => '⁰¹²³⁴⁵⁶⁷⁸⁹'[Number(c)] ?? (c === '-' ? '⁻' : c))} ${unit}`;
+}
+
+/** An age in words: "11,000 years", "350 million years", "6.7 billion years". */
+export function formatYears(yr: number): string {
+  if (yr < 1e6) return `${Math.round(yr < 1e4 ? yr : yr / 1000) * (yr < 1e4 ? 1 : 1000)} years`.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  if (yr < 1e9) return `${Math.round(yr / 1e6).toLocaleString('en-US')} million years`;
+  return `${(yr / 1e9).toFixed(1)} billion years`;
+}
+
 /** A neutron star's facts: its pulsar (catalogued or typical), and what its gravity does. */
 export function neutronFacts(body: { name: string; id: number; mass: number }): [string, string][] {
   const p = pulsarParams(body.name, body.id);
   const u = compactness(body.mass);
   const per = p.period < 1 ? `${(p.period * 1000).toPrecision(3)} ms (${Math.round(1 / p.period)} turns a second)` : `${p.period.toPrecision(3)} s`;
   const shown = displayPeriod(p.period) > p.period ? ', shown slowed to 4 a second' : '';
-  const sci = (x: number, unit: string) => {
-    const e = Math.floor(Math.log10(x));
-    return `${(x / 10 ** e).toFixed(1)} × 10${String(e).replace(/./g, (c) => '⁰¹²³⁴⁵⁶⁷⁸⁹'[Number(c)] ?? (c === '-' ? '⁻' : c))} ${unit}`;
-  };
-  const age = p.age < 1e6 ? `${Math.round(p.age).toLocaleString('en-US')} years` : p.age < 1e9 ? `${Math.round(p.age / 1e6).toLocaleString('en-US')} million years` : `${(p.age / 1e9).toFixed(1)} billion years`;
+  const age = formatYears(p.age);
   const lc = lightCylinderKm(p.period);
   return [
     ['Pulsar', p.real ? 'measured (ATNF Pulsar Catalogue)' : 'typical newborn pulsar (Faucher-Giguère & Kaspi 2006)'],

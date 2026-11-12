@@ -2,7 +2,7 @@
  * Real Milky Way pulsars from the ATNF Pulsar Catalogue (scripts/build-pulsars.mjs): 3,600 with a
  * period, a distance and a position.
  */
-import { characteristicAge, dipoleField } from './neutronStar';
+import { characteristicAge, dipoleField, formatYears, sci } from './neutronStar';
 
 export interface PulsarRecord {
   jname: string;
@@ -20,12 +20,16 @@ export interface PulsarRecord {
   rrat: boolean;
   /** The supernova remnant it sits in, if any. */
   snr?: string;
+  /** Binary orbit: period (days), eccentricity, median companion mass (M☉); 0 when unknown. */
+  pbDays: number;
+  ecc: number;
+  companionMass: number;
 }
 
-type Row = [string, string, number, number, number, number, number, string, string?];
+type Row = [string, string, number, number, number, number, number, string, number, number, number, string?];
 
 export function parsePulsars(raw: { rows: Row[] }): PulsarRecord[] {
-  return raw.rows.map(([jname, bname, period, pdot, distanceKpc, raDeg, decDeg, flags, snr]) => ({
+  return raw.rows.map(([jname, bname, period, pdot, distanceKpc, raDeg, decDeg, flags, pbDays, ecc, companionMass, snr]) => ({
     jname,
     bname: bname || undefined,
     period,
@@ -39,6 +43,9 @@ export function parsePulsars(raw: { rows: Row[] }): PulsarRecord[] {
     globular: flags.includes('g'),
     rrat: flags.includes('r'),
     snr,
+    pbDays,
+    ecc,
+    companionMass,
   }));
 }
 
@@ -59,9 +66,8 @@ export function describePulsar(p: PulsarRecord): string {
   const parts = [kind, `spins every ${per}`];
   if (p.pdot > 0) {
     const b = dipoleField(p.period, p.pdot);
-    parts.push(`field ${b.toExponential(1).replace('e+', ' × 10^')} G`);
-    const age = characteristicAge(p.period, p.pdot);
-    parts.push(age < 1e6 ? `${Math.round(age / 1000).toLocaleString('en-US')} thousand years old` : age < 1e9 ? `${Math.round(age / 1e6).toLocaleString('en-US')} million years old` : `${(age / 1e9).toFixed(1)} billion years old`);
+    parts.push(`field ${sci(b, 'G')}`);
+    parts.push(`${formatYears(characteristicAge(p.period, p.pdot))} old`);
   }
   if (p.snr) parts.push(`in the ${p.snr} remnant`);
   if (p.globular) parts.push('in a globular cluster');

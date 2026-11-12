@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { pulsarName } from '../sim/pulsars';
 import { type GalaxyTarget } from '../render/galaxyView';
 import { displayName } from '../sim/galaxies';
 import { UNITS_PER_KPC } from '../procgen/galaxy';
@@ -26,7 +27,7 @@ export class TravelUI {
   targetName(t: GalaxyTarget): string {
     if (t === 'core') return 'the Galactic Centre';
     if (t === 'sol') return 'the Sun';
-    if (typeof t === 'object') return this.app.exoMapHosts[t.exo]?.name ?? 'the star';
+    if (typeof t === 'object') return 'psr' in t ? (this.app.pulsarMapList[t.psr] ? pulsarName(this.app.pulsarMapList[t.psr]) : 'the pulsar') : (this.app.exoMapHosts[t.exo]?.name ?? 'the star');
     return this.app.galaxy.data.names[t];
   }
 

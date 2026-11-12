@@ -5,6 +5,8 @@ import { keplerToState, OrbitalElements } from './orbits';
 import type { Simulation } from './simulation';
 import { EARTH_MASS, G, JUPITER_MASS } from './units';
 import { mulberry32 } from '../procgen/rng';
+import { rememberPulsar } from './neutronStar';
+import { describePulsar, pulsarName, type PulsarRecord } from './pulsars';
 import { GAS_DISC_LIFETIME, planetesimals } from './planetFormation';
 import { julianDate, planetStates, type PlanetName } from './ephemeris';
 import { setTrueScale } from './trueScale';
@@ -538,7 +540,7 @@ const inspiral: Preset = {
  * orbits are tilted 53° and 47° to the sky and close to one plane; here all three share one.
  * Names: IAU NameExoWorlds 2015.
  */
-const pulsarPlanets: Preset = {
+export const pulsarPlanets: Preset = {
   id: 'pulsar-planets',
   name: 'Pulsar Planets (PSR B1257+12)',
   description:
@@ -561,6 +563,41 @@ const pulsarPlanets: Preset = {
     return { cameraDistance: 1.4, timeScale: 0.03, elevation: 0.9, tip: 'Click Lich and zoom in: its magnetic field, its beams, and a flash each time a beam sweeps past you.' };
   },
 };
+
+/**
+ * A pulsar from the ATNF catalogue (Galaxy Map → visit): the neutron star, with its measured spin,
+ * and for a binary its companion on the catalogued orbit (period, eccentricity, and the median
+ * companion mass for a 60° tilt). The companion is a neutron star above 1.2 M☉, a white dwarf
+ * above 0.08 M☉, and below that the stripped remnant of a star that the pulsar's wind is
+ * eating away (a "black widow"), drawn as a small gas giant. Tight binaries use real sizes.
+ */
+export function loadPulsarSystem(sim: Simulation, p: PulsarRecord): SceneSetup {
+  const name = pulsarName(p);
+  rememberPulsar(name, p.period, p.pdot);
+  const mass = 1.4;
+  const ns = sim.addBody({ name, kind: 'neutron', mass });
+  if (!p.pbDays || p.companionMass < 1e-3) {
+    sim.recenter();
+    return { cameraDistance: 0.6, timeScale: 0.05, elevation: 0.5, tip: describePulsar(p) };
+  }
+  const mc = p.companionMass;
+  const kind: Body['kind'] = mc >= 1.2 ? 'neutron' : mc >= 0.08 ? 'whitedwarf' : 'gas';
+  const years = p.pbDays / 365.25;
+  const a = Math.cbrt(years * years * (mass + mc));
+  const companion = addOrbiting(
+    sim,
+    ns,
+    { name: kind === 'neutron' ? 'Companion neutron star' : kind === 'whitedwarf' ? 'White dwarf companion' : 'Companion (being evaporated)', mass: mc, kind, color: kind === 'gas' ? 0x8a4a3a : undefined },
+    { a, e: Math.min(p.ecc, 0.95), nu: 1 },
+  );
+  // The Double Pulsar: its companion is a pulsar too (PSR J0737−3039B, 2.77 s; ATNF).
+  if (p.jname === 'J0737-3039A') rememberPulsar(companion.name, 2.773, 8.9e-16);
+  // Tighter than the enlarged bodies allow: show them at their real sizes.
+  if (a < 0.2) setTrueScale(sim, true);
+  if (kind === 'neutron') sim.relativity = true;
+  sim.recenter();
+  return { cameraDistance: Math.max(a * 4, 2e-4), timeScale: years / 5, elevation: 0.6, tip: describePulsar(p) };
+}
 
 const sunsFuture: Preset = {
   id: 'future',

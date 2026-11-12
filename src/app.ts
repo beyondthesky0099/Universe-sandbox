@@ -16,7 +16,8 @@ import { type Body } from './sim/body';
 import { GAS_PALETTE, ROCKY_PALETTE } from './sim/color';
 import { type Forecast } from './sim/forecast';
 import { SimHost } from './sim/host';
-import { galacticCore, loadSolarSystemOnDate, loadStarSystem, PRESETS } from './sim/presets';
+import { galacticCore, loadPulsarSystem, loadSolarSystemOnDate, loadStarSystem, PRESETS, pulsarPlanets } from './sim/presets';
+import { describePulsar, pulsarName, type PulsarRecord } from './sim/pulsars';
 import { PARTICLE_CULL_DISTANCE, type SimEvent } from './sim/simulation';
 import { captureState, restoreState } from './sim/state';
 import { type ExoCatalog, type ExoHost } from './sim/exoplanets';
@@ -681,6 +682,12 @@ export class App {
         scenario = { name: galacticCore.name, load: () => galacticCore.load(this.sim), presetId: galacticCore.id, origin: { kind: 'core' } };
       } else if (target === 'sol') {
         scenario = { name: 'the Solar System', load: () => loadSolarSystemOnDate(this.sim, new Date()), origin: { kind: 'sol' } };
+      } else if (typeof target === 'object' && 'psr' in target) {
+        const record = this.pulsarMapList[target.psr];
+        scenario =
+          record.bname === 'B1257+12'
+            ? { name: pulsarPlanets.name, load: () => pulsarPlanets.load(this.sim), presetId: pulsarPlanets.id, origin: { kind: 'pulsar', index: target.psr, record } }
+            : { name: pulsarName(record), description: describePulsar(record), load: () => loadPulsarSystem(this.sim, record), origin: { kind: 'pulsar', index: target.psr, record } };
       } else if (typeof target === 'object') {
         scenario = this.realDataUI.exoScenario(this.exoMapHosts[target.exo]);
       } else {
@@ -721,7 +728,17 @@ export class App {
       const origin = this.scenario.origin;
       const exoIndex = origin?.kind === 'exo' ? this.exoMapHosts.findIndex((h) => h.name === origin.host.name) : -1;
       const target: GalaxyTarget | undefined =
-        origin?.kind === 'core' ? 'core' : origin?.kind === 'star' ? origin.index : exoIndex >= 0 ? { exo: exoIndex } : origin ? 'sol' : undefined;
+        origin?.kind === 'core'
+          ? 'core'
+          : origin?.kind === 'star'
+            ? origin.index
+            : origin?.kind === 'pulsar'
+              ? { psr: origin.index }
+              : exoIndex >= 0
+                ? { exo: exoIndex }
+                : origin
+                  ? 'sol'
+                  : undefined;
       if (target !== undefined) {
         this.galaxyMapUI.selectTarget(target);
         this.galaxy.arriveFrom(target, 0.3, 12);
@@ -817,7 +834,8 @@ export class App {
     } else if (sc.origin?.kind === 'core') {
       $('origin-name').textContent = 'the galactic core';
     } else if (sc.origin) {
-      $('origin-name').textContent = sc.origin.kind === 'exo' ? sc.origin.host.name : sc.origin.kind === 'sol' ? 'home' : 'the solar neighbourhood';
+      $('origin-name').textContent =
+        sc.origin.kind === 'exo' ? sc.origin.host.name : sc.origin.kind === 'pulsar' ? pulsarName(sc.origin.record) : sc.origin.kind === 'sol' ? 'home' : 'the solar neighbourhood';
     }
     if (setup.focus) {
       const body = this.sim.bodies.find((b) => b.name === setup.focus);
@@ -833,6 +851,8 @@ export class App {
 
   /** Real exoplanet hosts on the Milky Way map, placed by their galactic coordinates. */
   exoMapHosts: ExoHost[] = [];
+  /** Real pulsars on the Galaxy Map (ATNF catalogue), in the order of GalaxyView.pulsarPositions. */
+  pulsarMapList: PulsarRecord[] = [];
 
   readonly atlasPromises = new Map<number, Promise<THREE.Texture>>();
 

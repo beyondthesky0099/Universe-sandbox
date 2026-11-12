@@ -10,6 +10,7 @@ import { loadNebulaImages, NEBULA_IMAGE_CREDIT, nebulaAtlasUrl, nebulaKey, tileR
 import type { Cloud } from '../render/nebulaClouds';
 import { gaiaPoints, loadGaiaBright } from '../sim/gaiaBright';
 import { isMillisecond, loadPulsars, pulsarName } from '../sim/pulsars';
+import { characteristicAge, dipoleField, formatYears, sci } from '../sim/neutronStar';
 import { fmt } from '../sim/units';
 import { $, escapeHtml, setFacts, toast } from '../ui/dom';
 import { LOW_POWER, sleep } from './shared';
@@ -43,9 +44,14 @@ export class GalaxyMapUI {
     if (!all || this.app.galaxySeed !== seed) return;
     // Already labelled as famous compact objects (compact-objects.json).
     const labelled = new Set(['J0835-4510', 'J0437-4715']);
+    this.app.pulsarMapList = all;
+    this.app.galaxy.pulsarPositions = all.map((p) => {
+      const [l, b] = equatorialToGalactic(p.raDeg, p.decDeg);
+      return galacticToMap(l, b, p.distanceKpc);
+    });
     this.app.galaxy.setRealLayer(
       'pulsars',
-      all.map((p) => {
+      all.map((p, index) => {
         const [l, b] = equatorialToGalactic(p.raDeg, p.decDeg);
         const named = !labelled.has(p.jname) && (p.magnetar || !!p.snr || ['B0531+21', 'B1257+12', 'B1913+16', 'B1937+21'].includes(p.bname ?? ''));
         const ly = Math.round((p.distanceKpc * 3261.6) / 10) * 10;
@@ -59,6 +65,7 @@ export class GalaxyMapUI {
           label: named ? `${pulsarName(p)}${p.snr ? ` (${p.snr})` : ''} · ${what} · ${per} · ${ly.toLocaleString('en-US')} ly` : undefined,
           labelColor: p.magnetar ? '#ff9de3' : '#b8f4ff',
           distance: 0.02,
+          target: { psr: index },
         };
       }),
     );
@@ -292,6 +299,24 @@ export class GalaxyMapUI {
         ['Age', '4.6 Gyr'],
         ['Planets', '8 (real positions today)'],
         ['Neighbours', 'Thousands of known exoplanet systems'],
+      ]);
+      bookmarkBtn.classList.add('hidden');
+      panel.classList.remove('hidden');
+      return;
+    }
+    if (typeof target === 'object' && 'psr' in target) {
+      const p = this.app.pulsarMapList[target.psr];
+      const companion = p.pbDays && p.companionMass >= 1e-3
+        ? `${p.companionMass >= 1.2 ? 'neutron star' : p.companionMass >= 0.08 ? 'white dwarf' : 'evaporating star'} (~${fmt(p.companionMass)} M☉), orbit ${p.pbDays < 2 ? `${fmt(p.pbDays * 24)} hours` : `${fmt(p.pbDays)} days`}`
+        : p.pbDays ? 'planets' : 'none';
+      $('star-name').textContent = `${pulsarName(p)}${p.snr ? ` (${p.snr})` : ''}`;
+      setFacts($('star-facts'), [
+        ['Type', p.magnetar ? 'Magnetar' : isMillisecond(p) ? 'Millisecond pulsar' : 'Pulsar'],
+        ['Spin period', p.period < 1 ? `${fmt(p.period * 1000)} ms` : `${fmt(p.period)} s`],
+        ...(p.pdot > 0 ? ([['Magnetic field', sci(dipoleField(p.period, p.pdot), 'G')], ['Characteristic age', formatYears(characteristicAge(p.period, p.pdot))]] as [string, string][]) : []),
+        ['Companion', companion],
+        ['Distance', `${fmt(p.distanceKpc * 3261.6)} light-years`],
+        ['Source', 'ATNF Pulsar Catalogue'],
       ]);
       bookmarkBtn.classList.add('hidden');
       panel.classList.remove('hidden');

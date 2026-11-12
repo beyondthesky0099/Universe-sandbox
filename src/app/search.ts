@@ -114,7 +114,10 @@ export class SearchUI {
         if (!this.app.galaxyBuilt || this.app.galaxySeed !== MILKY_WAY_SEED || this.app.galaxyOrigin !== 'Milky Way') this.app.galaxyMapUI.buildGalaxy(MILKY_WAY_SEED);
         if (this.app.view !== 'galaxy') await this.app.switchView('galaxy');
         const size = ((a.sizePc ?? 0) / 1000) * UNITS_PER_KPC;
-        this.app.travelUI.goGalaxyPoint(new THREE.Vector3(...galacticToMap(a.l, a.b, a.dKpc)), Math.max(0.3, size * 4), r.name);
+        this.app.travelUI.goGalaxyPoint(new THREE.Vector3(...galacticToMap(a.l, a.b, a.dKpc)), Math.max(a.pulsar ? 0.02 : 0.05, size * 4), r.name);
+        // A pulsar: open its panel, with the button to visit it.
+        const psr = a.pulsar ? this.app.pulsarMapList.findIndex((p) => p.jname === a.pulsar) : -1;
+        if (psr >= 0) this.app.galaxyMapUI.selectTarget({ psr });
         break;
       }
       case 'sky': {

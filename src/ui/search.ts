@@ -11,7 +11,7 @@
 
 export type SearchAction =
   /** Fly to a point in the Milky Way map: galactic l, b (degrees), distance (kpc). */
-  | { type: 'map'; l: number; b: number; dKpc: number; sizePc?: number }
+  | { type: 'map'; l: number; b: number; dKpc: number; sizePc?: number; pulsar?: string }
   /** Turn the Sky tab to an ecliptic direction (unit vector). */
   | { type: 'sky'; v: [number, number, number]; radiusDeg?: number; body?: string }
   /** A galaxy in the Universe tab, by name. */

@@ -123,7 +123,7 @@ export function pulsarEntries(list: PulsarRecord[]): SearchEntry[] {
       kind: p.magnetar ? 'Magnetar' : 'Pulsar',
       detail: `${describePulsar(p)} · ${lightYears(p.distanceKpc)} away`,
       rank: p.bname || p.snr || p.magnetar ? 45 : 20,
-      action: { type: 'map', l, b, dKpc: p.distanceKpc },
+      action: { type: 'map', l, b, dKpc: p.distanceKpc, pulsar: p.jname },
     };
   });
 }

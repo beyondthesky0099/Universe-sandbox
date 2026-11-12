@@ -22,7 +22,7 @@ import {
   visibleFraction,
 } from '../src/sim/neutronStar';
 import { describePulsar, isMillisecond, parsePulsars, pulsarName } from '../src/sim/pulsars';
-import { PRESETS } from '../src/sim/presets';
+import { loadPulsarSystem, PRESETS } from '../src/sim/presets';
 import { Simulation } from '../src/sim/simulation';
 import { EARTH_MASS } from '../src/sim/units';
 
@@ -123,7 +123,7 @@ describe('the ATNF pulsar catalogue', () => {
     const crab = pulsars.find((p) => p.bname === 'B0531+21')!;
     expect(crab.snr).toBe('Crab');
     expect(pulsarName(crab)).toBe('PSR B0531+21');
-    expect(describePulsar(crab)).toMatch(/^pulsar · spins every 33\.4 ms · .* · 1 thousand years old · in the Crab remnant/);
+    expect(describePulsar(crab)).toBe("pulsar · spins every 33.4 ms · field 3.8 × 10¹² G · 1,257 years old · in the Crab remnant");
     const j0437 = pulsars.find((p) => p.jname === 'J0437-4715')!;
     expect(isMillisecond(j0437)).toBe(true);
     expect(j0437.binary).toBe(true);
@@ -165,5 +165,42 @@ describe('tides around compact stars', () => {
     const bh = sim.addBody({ name: 'BH', kind: 'blackhole', mass: 1000 });
     const star = sim.addBody({ name: 'Star', kind: 'star', mass: 1, x: 3 });
     expect(sim.rocheLimit(bh, star)).toBeGreaterThan(bh.radius + star.radius);
+  });
+});
+
+describe('visiting a catalogue pulsar', () => {
+  const find = (j: string) => pulsars.find((p) => p.jname === j)!;
+  it('a lone pulsar spins at its catalogued rate', () => {
+    const sim = new Simulation();
+    const crab = find('J0534+2200');
+    loadPulsarSystem(sim, crab);
+    expect(sim.bodies).toHaveLength(1);
+    const p = pulsarParams(sim.bodies[0].name, sim.bodies[0].id);
+    expect(p.real).toBe(true);
+    expect(p.period).toBeCloseTo(0.033392, 6);
+  });
+
+  it('a millisecond pulsar keeps its white dwarf on the catalogued orbit, at real sizes', () => {
+    const sim = new Simulation();
+    const psr = find('J0437-4715');
+    expect(psr.pbDays).toBeCloseTo(5.741, 3);
+    loadPulsarSystem(sim, psr);
+    expect(sim.trueScale).toBe(true);
+    const [ns, wd] = sim.bodies;
+    expect(wd.kind).toBe('whitedwarf');
+    const r0 = Math.hypot(wd.x - ns.x, wd.y - ns.y, wd.z - ns.z);
+    // a = (P² M)^⅓ ≈ 0.077 AU for 5.74 days and 1.56 M☉.
+    expect(r0).toBeCloseTo(0.077, 2);
+    sim.advance((5 * psr.pbDays) / 365.25, 1e6, 1e9);
+    expect(sim.bodies).toHaveLength(2);
+    expect(Math.hypot(wd.x - ns.x, wd.y - ns.y, wd.z - ns.z)).toBeCloseTo(0.077, 2);
+  });
+
+  it('the Double Pulsar is two neutron stars, both pulsars', () => {
+    const sim = new Simulation();
+    loadPulsarSystem(sim, find('J0737-3039A'));
+    expect(sim.bodies.map((b) => b.kind)).toEqual(['neutron', 'neutron']);
+    expect(sim.relativity).toBe(true);
+    expect(pulsarParams(sim.bodies[1].name, sim.bodies[1].id).period).toBeCloseTo(2.773, 3);
   });
 });

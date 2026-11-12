@@ -6,7 +6,8 @@
  * Per pulsar: J name, B name (if any), spin period P (s), spin-down Ṗ (the intrinsic value where
  * the catalogue corrects for the pulsar's motion), distance (kpc; mostly from the dispersion
  * measure and the YMW16 electron-density model, parallaxes where measured), position (J2000
- * degrees), and flags:
+ * degrees), for binaries the orbital period (days), eccentricity and median companion mass (M☉,
+ * for a 60° inclination and a 1.35 M☉ pulsar; 0 if not a binary), and flags:
  *   m = magnetar (anomalous X-ray pulsar / soft gamma repeater), b = in a binary,
  *   h = seen at high energies (X-rays or gamma rays), g = in a globular cluster,
  *   r = rotating radio transient. `snr`: the supernova remnant it sits in, if any.
@@ -20,7 +21,7 @@ const VERSION = '2.6.1';
 const params = new URLSearchParams({
   version: VERSION,
   JName: 'JName', Name: 'Name', P0: 'P0', P1: 'P1', P1_I: 'P1_I', Dist: 'Dist', RaJD: 'RaJD', DecJD: 'DecJD',
-  Binary: 'Binary', Type: 'Type', Assoc: 'Assoc',
+  PB: 'PB', ECC: 'ECC', MinMass: 'MinMass', MedMass: 'MedMass', Binary: 'Binary', Type: 'Type', Assoc: 'Assoc',
   startUserDefined: 'true', pulsar_names: '', ephemeris: 'short', submit_table: 'Get Table', coords_unit: 'raj/decj',
   style: 'Short without errors', no_value: '*', fsize: '3', state: 'query',
 });
@@ -49,8 +50,8 @@ const rows = [];
 let skipped = 0;
 for (const line of lines) {
   const f = line.trim().split(/\s+/);
-  if (f.length !== 12) throw new Error(`unexpected row: ${line}`);
-  const [, jname, name, p0s, p1s, p1is, dists, ras, decs, binary, type, assoc] = f;
+  if (f.length !== 16) throw new Error(`unexpected row: ${line}`);
+  const [, jname, name, p0s, p1s, p1is, dists, ras, decs, pbs, eccs, , medMass, binary, type, assoc] = f;
   const p0 = num(p0s), dist = num(dists), ra = num(ras), dec = num(decs);
   if (!p0 || !dist || ra === undefined || dec === undefined || assoc.includes('EXGAL')) {
     skipped++;
@@ -64,14 +65,18 @@ for (const line of lines) {
   if (/(^|,)GC:/.test(assoc)) flags += 'g';
   if (/RRAT/.test(type)) flags += 'r';
   const snr = /(?:^|,)SNR:([^,[]+)/.exec(assoc)?.[1]?.replace(/_/g, ' ');
-  const row = [jname, name !== jname ? name : '', sig(p0, 7), p1 !== undefined && p1 > 0 ? sig(p1, 3) : 0, sig(dist, 3), Number(ra.toFixed(4)), Number(dec.toFixed(4)), flags];
+  const pb = num(pbs), ecc = num(eccs), mc = num(medMass);
+  const row = [
+    jname, name !== jname ? name : '', sig(p0, 7), p1 !== undefined && p1 > 0 ? sig(p1, 3) : 0, sig(dist, 3), Number(ra.toFixed(4)), Number(dec.toFixed(4)), flags,
+    pb ? sig(pb, 6) : 0, ecc ? sig(ecc, 4) : 0, mc ? sig(mc, 4) : 0,
+  ];
   if (snr) row.push(snr);
   rows.push(row);
 }
 
 const out = {
   source: `ATNF Pulsar Catalogue v${VERSION} (Manchester et al. 2005, AJ 129, 1993), https://www.atnf.csiro.au/research/pulsar/psrcat/`,
-  fields: ['jname', 'bname', 'period_s', 'pdot', 'distance_kpc', 'ra_deg', 'dec_deg', 'flags', 'snr'],
+  fields: ['jname', 'bname', 'period_s', 'pdot', 'distance_kpc', 'ra_deg', 'dec_deg', 'flags', 'pb_days', 'ecc', 'companion_msun', 'snr'],
   flags: { m: 'magnetar', b: 'binary', h: 'high-energy emission', g: 'in a globular cluster', r: 'rotating radio transient' },
   rows,
 };

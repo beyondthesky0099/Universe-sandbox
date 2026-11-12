@@ -726,7 +726,7 @@ export function addSaturnRings(sim: Simulation, saturn: Body, data: SolarData, c
   const wx = py * uz - pz * uy, wy = pz * ux - px * uz, wz = px * uy - py * ux;
   const mu = G * sim.gravityScale * saturn.mass;
   let added = 0;
-  for (const { r: rKm, ring } of sampleRingRadii(data.rings, count)) {
+  for (const { r: rKm, ring } of sampleRingRadii(data.rings, count, Math.random, data.ringGaps)) {
     const r = rKm / KM_PER_AU;
     const th = Math.random() * Math.PI * 2;
     const c = Math.cos(th), s = Math.sin(th);

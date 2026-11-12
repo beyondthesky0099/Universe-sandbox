@@ -8,7 +8,7 @@ import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import type { Body, BodyKind } from '../sim/body';
 import type { Climate } from '../sim/climate';
 import { EARTH_MASS } from '../sim/units';
-import { makePlanetTextures, seedFromName } from './planetTextures';
+import { makePlanetTextures, realRingTexture, seedFromName } from './planetTextures';
 import { mulberry32 } from '../procgen/rng';
 import { glowTexture } from './textures';
 import { NeutronStarVisual } from './neutronStar';
@@ -122,6 +122,8 @@ export class BodyVisual {
   /** Distance from the star when the aurora was first lit (its stellar-wind reference). */
   private auroraD0 = 0;
   private rings?: THREE.Mesh;
+  /** Saturn's real ring radii (in planet radii); other ringed planets share RINGS. */
+  private ringGeometry?: THREE.RingGeometry;
   /** A neutron star's bent-light surface, magnetic field and pulsar beams. */
   private neutron?: NeutronStarVisual;
   private readonly trailPos: Float32Array;
@@ -386,10 +388,19 @@ export class BodyVisual {
       this.aurora.visible = false;
       this.mesh.add(this.aurora);
     }
+    // Saturn: its real rings, at their real radii, with the named gaps.
+    const solar = getSolarData();
+    if (this.name === 'Saturn' && solar?.rings?.length) {
+      tex.rings?.dispose();
+      const req = 60268;
+      const inner = Math.min(...solar.rings.map((g) => g.inner)), outer = Math.max(...solar.rings.map((g) => g.outer));
+      tex.rings = realRingTexture(solar.rings, solar.ringGaps ?? [], inner, outer);
+      this.ringGeometry ??= new THREE.RingGeometry(inner / req, outer / req, 256, 1);
+    }
     if (tex.rings) {
       this.textures.push(tex.rings);
       this.rings = new THREE.Mesh(
-        RINGS,
+        this.ringGeometry ?? RINGS,
         new THREE.MeshStandardMaterial({ map: tex.rings, transparent: true, side: THREE.DoubleSide, depthWrite: false, roughness: 1 }),
       );
       this.rings.rotation.x = -Math.PI / 2;

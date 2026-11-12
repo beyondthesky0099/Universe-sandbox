@@ -250,6 +250,47 @@ function gasTextures(look: PlanetLook, width: number): PlanetTextures {
   return out;
 }
 
+/**
+ * Saturn's real rings on a square texture for a RingGeometry from `inner` to `outer` km: each
+ * radius as dense as its ring's optical depth (opacity 1 − e^(−τ/cos), seen at a slant) and as
+ * bright as its albedo, the named gaps clear (IAU/USGS). A faint fine ripple stands in for the
+ * thousands of ringlets too narrow to list.
+ */
+export function realRingTexture(rings: { inner: number; outer: number; tau?: number; albedo?: number; name: string }[], gaps: { inner: number; outer: number }[], inner: number, outer: number): THREE.CanvasTexture {
+  const size = 1024;
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext('2d')!;
+  const c = size / 2;
+  const rng = mulberry32(1257);
+  // Tints: the C ring and Cassini Division greyer, the B ring creamy, the A ring a little cooler.
+  const tint: Record<string, [number, number, number]> = {
+    'C ring': [0.78, 0.74, 0.68],
+    'B ring': [1.0, 0.92, 0.78],
+    'Cassini Division': [0.7, 0.68, 0.64],
+    'A ring': [0.94, 0.9, 0.82],
+    'F ring': [0.95, 0.93, 0.9],
+  };
+  for (let px = c * (inner / outer); px < c; px += 0.5) {
+    const km = (px / c) * outer;
+    const ring = rings.find((g) => km >= g.inner && km <= g.outer);
+    if (!ring || gaps.some((g) => km >= g.inner && km <= g.outer)) continue;
+    const ripple = 0.8 + 0.4 * rng();
+    const alpha = Math.min(0.95, (1 - Math.exp(-(ring.tau ?? 0.1) * 2.2)) * ripple);
+    const [r, g, b] = tint[ring.name] ?? [0.9, 0.88, 0.84];
+    const k = (0.55 + 0.9 * (ring.albedo ?? 0.4)) * 255;
+    ctx.strokeStyle = `rgba(${Math.round(Math.min(255, r * k))},${Math.round(Math.min(255, g * k))},${Math.round(Math.min(255, b * k))},${alpha.toFixed(3)})`;
+    ctx.lineWidth = 0.75;
+    ctx.beginPath();
+    ctx.arc(c, c, px, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 8;
+  return tex;
+}
+
 /** Concentric ring bands drawn on a square texture (RingGeometry has planar UVs). */
 function ringTexture(seed: number, base: RGB): THREE.CanvasTexture {
   const size = 512;

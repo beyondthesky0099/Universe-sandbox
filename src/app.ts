@@ -16,7 +16,8 @@ import { type Body } from './sim/body';
 import { GAS_PALETTE, ROCKY_PALETTE } from './sim/color';
 import { type Forecast } from './sim/forecast';
 import { SimHost } from './sim/host';
-import { galacticCore, hulseTaylor, loadPulsarSystem, loadSolarSystemOnDate, loadStarSystem, PRESETS, pulsarPlanets } from './sim/presets';
+import type { CompactObject } from './sim/compactObjects';
+import { galacticCore, hulseTaylor, loadBlackHoleSystem, loadPulsarSystem, loadSolarSystemOnDate, loadStarSystem, PRESETS, pulsarPlanets } from './sim/presets';
 import { describePulsar, pulsarName, type PulsarRecord } from './sim/pulsars';
 import { hulseTaylorChart } from './ui/hulseTaylorChart';
 import { PARTICLE_CULL_DISTANCE, type SimEvent } from './sim/simulation';
@@ -720,6 +721,9 @@ export class App {
         scenario = own
           ? { name: own.name, load: () => own.load(this.sim), presetId: own.id, origin: { kind: 'pulsar', index: target.psr, record } }
           : { name: pulsarName(record), description: describePulsar(record), load: () => loadPulsarSystem(this.sim, record), origin: { kind: 'pulsar', index: target.psr, record } };
+      } else if (typeof target === 'object' && 'bh' in target) {
+        const object = this.blackHoleList[target.bh];
+        scenario = { name: object.name, description: object.about, load: () => loadBlackHoleSystem(this.sim, object), origin: { kind: 'blackhole', index: target.bh, object } };
       } else if (typeof target === 'object') {
         scenario = this.realDataUI.exoScenario(this.exoMapHosts[target.exo]);
       } else {
@@ -766,6 +770,8 @@ export class App {
             ? origin.index
             : origin?.kind === 'pulsar'
               ? { psr: origin.index }
+              : origin?.kind === 'blackhole'
+                ? { bh: origin.index }
               : exoIndex >= 0
                 ? { exo: exoIndex }
                 : origin
@@ -868,7 +874,15 @@ export class App {
       $('origin-name').textContent = 'the galactic core';
     } else if (sc.origin) {
       $('origin-name').textContent =
-        sc.origin.kind === 'exo' ? sc.origin.host.name : sc.origin.kind === 'pulsar' ? pulsarName(sc.origin.record) : sc.origin.kind === 'sol' ? 'home' : 'the solar neighbourhood';
+        sc.origin.kind === 'exo'
+          ? sc.origin.host.name
+          : sc.origin.kind === 'pulsar'
+            ? pulsarName(sc.origin.record)
+            : sc.origin.kind === 'blackhole'
+              ? sc.origin.object.name
+              : sc.origin.kind === 'sol'
+                ? 'home'
+                : 'the solar neighbourhood';
     }
     if (setup.focus) {
       const body = this.sim.bodies.find((b) => b.name === setup.focus);
@@ -886,6 +900,8 @@ export class App {
   exoMapHosts: ExoHost[] = [];
   /** Real pulsars on the Galaxy Map (ATNF catalogue), in the order of GalaxyView.pulsarPositions. */
   pulsarMapList: PulsarRecord[] = [];
+  /** Real black holes on the Galaxy Map, in the order of GalaxyView.blackHolePositions. */
+  blackHoleList: CompactObject[] = [];
 
   readonly atlasPromises = new Map<number, Promise<THREE.Texture>>();
 

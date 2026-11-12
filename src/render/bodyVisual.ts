@@ -296,6 +296,9 @@ export class BodyVisual {
         break;
       case 'blackhole':
         material = new THREE.MeshBasicMaterial({ color: 0x000000 });
+        // A dormant black hole (not feeding, like the Gaia ones) has no disc or glow: only its
+        // shadow and the bending of the light behind it show.
+        if (body.tag === 'dormant') break;
         // The disc lies in the hole's equator: its normal is the spin axis (accretionDisk.ts).
         this.disk = accretionDiskMesh();
         this.disk.rotation.x = -Math.PI / 2 + 0.25;

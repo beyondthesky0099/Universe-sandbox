@@ -8,6 +8,13 @@
    "mass": 9.62,
    "arxiv": "2209.06833",
    "about": "The nearest known black hole: a dormant 9.6 M☉ black hole orbited by a Sun-like star.",
+   "companion": {
+    "mass": 0.93,
+    "periodDays": 185.6,
+    "ecc": 0.45,
+    "kind": "star",
+    "dormant": true
+   },
    "simbad": "Gaia DR3 4373465352415301632",
    "raDeg": 262.1712358858566,
    "decDeg": -0.5809787160997
@@ -19,6 +26,13 @@
    "mass": 8.9,
    "arxiv": "2302.07880",
    "about": "A dormant black hole orbited by a red giant.",
+   "companion": {
+    "mass": 1,
+    "periodDays": 1277,
+    "ecc": 0.52,
+    "kind": "giant",
+    "dormant": true
+   },
    "simbad": "Gaia DR3 5870569352746779008",
    "raDeg": 207.5697823340767,
    "decDeg": -59.23898075029
@@ -30,6 +44,14 @@
    "mass": 33,
    "arxiv": "2404.10486",
    "about": "The most massive stellar black hole known in the Milky Way.",
+   "companion": {
+    "mass": 0.76,
+    "periodDays": 4253,
+    "ecc": 0.7291,
+    "kind": "giant",
+    "dormant": true,
+    "note": "Eccentricity 0.7291 and companion mass 0.76 M☉ from Gaia Collaboration, Panuzzo et al. 2024 (A&A 686, L2), not the abstract."
+   },
    "simbad": "Gaia DR3 4318465066420528000",
    "raDeg": 294.82796478104,
    "decDeg": 14.93166971992
@@ -41,6 +63,13 @@
    "arxiv": "2102.09091",
    "distanceKpc": 2.22,
    "about": "The first black hole ever identified (1971), feeding on a blue supergiant companion.",
+   "companion": {
+    "mass": 40.6,
+    "periodDays": 5.599829,
+    "ecc": 0.0189,
+    "kind": "star",
+    "note": "Supergiant mass 40.6 M☉ from Miller-Jones et al. 2021 (Science 371, 1046); period and eccentricity from Orosz et al. 2011 (ApJ 742, 84)."
+   },
    "simbad": "Cyg X-1",
    "raDeg": 299.59031556498,
    "decDeg": 35.20160680908,
@@ -52,6 +81,14 @@
    "distanceKpc": 2.39,
    "arxiv": "0910.5253",
    "about": "An X-ray binary whose distance was the first measured to a black hole by parallax.",
+   "mass": 9,
+   "companion": {
+    "mass": 0.7,
+    "periodDays": 6.4714,
+    "ecc": 0,
+    "kind": "star",
+    "note": "Black hole 9.0 M☉ and donor 0.7 M☉ from Khargharia et al. 2010 (ApJ 716, 1105); period from Casares et al. 1992."
+   },
    "simbad": "V404 Cyg",
    "raDeg": 306.0159362655975,
    "decDeg": 33.8672114319058
@@ -63,6 +100,13 @@
    "mass": 6.6,
    "arxiv": "1001.0261",
    "about": "One of the nearest black holes, in an X-ray binary in Monoceros.",
+   "companion": {
+    "mass": 0.4,
+    "periodDays": 0.32301,
+    "ecc": 0,
+    "kind": "star",
+    "note": "Donor 0.4 M☉ (K5 V) from Cantrell et al. 2010 (ApJ 710, 1127, the body of this paper); period 7.75 h from McClintock & Remillard 1986."
+   },
    "simbad": "V* V616 Mon",
    "raDeg": 95.68559327388,
    "decDeg": -0.34563623904

@@ -101,7 +101,7 @@ function nebulaTexture(seed: number): THREE.CanvasTexture {
 }
 
 /** Selection target in the galaxy: a star index, the central black hole, or the Sun. */
-export type GalaxyTarget = number | 'core' | 'sol' | { exo: number } | { psr: number };
+export type GalaxyTarget = number | 'core' | 'sol' | { exo: number } | { psr: number } | { bh: number };
 
 /** A real exoplanet host drawn on the Milky Way map. */
 export interface ExoMarker {
@@ -209,6 +209,8 @@ export class GalaxyView {
   exoHosts: ExoMarker[] = [];
   /** Real pulsars' positions (Milky Way only; clickable while their layer shows). */
   pulsarPositions: [number, number, number][] = [];
+  /** Real black holes' positions (Milky Way only). */
+  blackHolePositions: [number, number, number][] = [];
   private exoPoints?: THREE.Points;
   /** Layers of real catalogued objects (Milky Way only: nebulae, star clusters), with labels. */
   private readonly realLayers = new Map<string, { points: THREE.Points; labels: THREE.Group }>();
@@ -411,7 +413,7 @@ export class GalaxyView {
   }
 
   targetPosition(target: GalaxyTarget): THREE.Vector3 {
-    if (typeof target === 'object') return new THREE.Vector3(...('exo' in target ? this.exoHosts[target.exo].pos : this.pulsarPositions[target.psr]));
+    if (typeof target === 'object') return new THREE.Vector3(...('exo' in target ? this.exoHosts[target.exo].pos : 'psr' in target ? this.pulsarPositions[target.psr] : this.blackHolePositions[target.bh]));
     if (target === 'core') return new THREE.Vector3();
     if (target === 'sol') return new THREE.Vector3(...this.data.sol);
     const p = this.data.stars.positions;
@@ -664,7 +666,7 @@ export class GalaxyView {
   }
 
   /** Labelled markers for real black holes and pulsars (Milky Way only). Cleared on rebuild. */
-  addCompactObjects(items: { label: string; pos: [number, number, number]; kind: 'blackhole' | 'pulsar' }[]): void {
+  addCompactObjects(items: { label: string; pos: [number, number, number]; kind: 'blackhole' | 'pulsar'; target?: GalaxyTarget }[]): void {
     for (const it of items) {
       const color = it.kind === 'blackhole' ? 0xff7ad9 : 0x9ff0ff;
       const ring = new THREE.Sprite(new THREE.SpriteMaterial({ map: ringTexture(), color, sizeAttenuation: false, depthTest: false, transparent: true }));
@@ -673,7 +675,8 @@ export class GalaxyView {
       ring.renderOrder = 11;
       const text = textSprite(it.label, it.kind === 'blackhole' ? '#ff9de3' : '#b8f4ff', 0.6);
       text.position.set(...it.pos);
-      text.userData.goto = { distance: 0.05 };
+      // Stop a little way off; zooming in from there (or Enter) opens it in the Sandbox.
+      text.userData.goto = { distance: 1, target: it.target };
       this.labelGroup.add(ring, text);
     }
   }
@@ -738,6 +741,15 @@ export class GalaxyView {
       if (score < bestScore) {
         bestScore = score;
         best = { exo: i };
+      }
+    }
+    // Real black holes win ties too.
+    for (let i = 0; i < this.blackHolePositions.length; i++) {
+      const [x, y, z] = this.blackHolePositions[i];
+      const score = test(x, y, z, maxPx) - 3;
+      if (score < bestScore) {
+        bestScore = score;
+        best = { bh: i };
       }
     }
     // So do real pulsars, while their layer shows.

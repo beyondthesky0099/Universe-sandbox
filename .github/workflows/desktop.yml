@@ -1,8 +1,9 @@
 name: Desktop app
 
-# Builds the Windows installer and portable .exe (electron-builder on a Windows runner).
-# Runs on pull requests that touch the desktop app, on demand, and on version tags (v*),
-# which also attach the files to a GitHub Release.
+# Builds the Windows installers and portable .exe files, for x64 and ARM64 (electron-builder
+# on a Windows runner). Runs on pull requests that touch the desktop app, on demand, and on
+# version tags (v*). A version tag, or a manual run with a "release" tag such as v0.2.0, also
+# publishes the files as a GitHub Release (with the gh CLI, so no Node 20 action is involved).
 on:
   pull_request:
     paths:
@@ -10,6 +11,11 @@ on:
       - 'server/**'
       - '.github/workflows/desktop.yml'
   workflow_dispatch:
+    inputs:
+      release:
+        description: 'Publish a GitHub Release with this tag (e.g. v0.2.0); leave empty to only build'
+        required: false
+        default: ''
   push:
     tags: ['v*']
 
@@ -23,8 +29,8 @@ jobs:
       # No code-signing certificate: build unsigned (Windows SmartScreen will warn on first run).
       CSC_IDENTITY_AUTO_DISCOVERY: 'false'
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
@@ -41,13 +47,26 @@ jobs:
         working-directory: desktop
       - run: npm run dist:win
         working-directory: desktop
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: Astrarium-Windows
           path: |
             desktop/release/*.exe
           if-no-files-found: error
-      - if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: desktop/release/*.exe
+      - name: Publish the release
+        if: startsWith(github.ref, 'refs/tags/v') || inputs.release != ''
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          # Passed through the environment, never pasted into the script.
+          INPUT_TAG: ${{ inputs.release }}
+          REF_TAG: ${{ github.ref_name }}
+        run: |
+          TAG="${INPUT_TAG:-$REF_TAG}"
+          if ! [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then echo "Not a version tag: $TAG"; exit 1; fi
+          NOTES="Astrarium for Windows. *-x64.exe for most laptops and PCs; *-arm64.exe for Snapdragon (ARM) laptops. Setup installs it; Portable runs without installing. Not code-signed: if SmartScreen warns, choose More info, then Run anyway."
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            gh release upload "$TAG" desktop/release/*.exe --clobber
+          else
+            gh release create "$TAG" desktop/release/*.exe --target "$GITHUB_SHA" --title "Astrarium $TAG" --notes "$NOTES"
+          fi

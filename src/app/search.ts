@@ -50,8 +50,7 @@ export class SearchUI {
       index.add(nebulaEntries(nebulae));
       index.add(clusterEntries(clusters));
       index.add(compactEntries(compact));
-      // (Vela and J0437−4715 are already in as famous compact objects.)
-      index.add(pulsarEntries(pulsars.filter((p) => p.jname !== 'J0835-4510' && p.jname !== 'J0437-4715')));
+      index.add(pulsarEntries(pulsars));
       if (catalog) index.add(exoplanetEntries(catalog));
       index.add(galaxyEntries([...local, ...named]));
       index.add(structureEntries());
@@ -114,10 +113,13 @@ export class SearchUI {
         if (!this.app.galaxyBuilt || this.app.galaxySeed !== MILKY_WAY_SEED || this.app.galaxyOrigin !== 'Milky Way') this.app.galaxyMapUI.buildGalaxy(MILKY_WAY_SEED);
         if (this.app.view !== 'galaxy') await this.app.switchView('galaxy');
         const size = ((a.sizePc ?? 0) / 1000) * UNITS_PER_KPC;
-        this.app.travelUI.goGalaxyPoint(new THREE.Vector3(...galacticToMap(a.l, a.b, a.dKpc)), Math.max(a.pulsar ? 0.02 : 0.05, size * 4), r.name);
+        // Pulsars and black holes: stop a little way off; zooming in (or Enter) opens them.
+        this.app.travelUI.goGalaxyPoint(new THREE.Vector3(...galacticToMap(a.l, a.b, a.dKpc)), a.pulsar || a.blackHole ? 1 : Math.max(0.05, size * 4), r.name);
         // A pulsar: open its panel, with the button to visit it.
         const psr = a.pulsar ? this.app.pulsarMapList.findIndex((p) => p.jname === a.pulsar) : -1;
         if (psr >= 0) this.app.galaxyMapUI.selectTarget({ psr });
+        const bh = a.blackHole ? this.app.blackHoleList.findIndex((o) => o.name === a.blackHole) : -1;
+        if (bh >= 0) this.app.galaxyMapUI.selectTarget({ bh });
         break;
       }
       case 'sky': {

@@ -644,6 +644,29 @@ export class Simulation {
     const out = this.scratch;
     tree.build(bodies);
     let minTau2 = Infinity;
+    const p = this.particles;
+    const absorbed = this.absorbed;
+    absorbed.length = 0;
+    const cull2 = this.particleCullDistance * this.particleCullDistance;
+    // On several cores (desktop app) when the scene is big enough: identical results.
+    const params = { g, eps2, theta2: tree.theta * tree.theta, cull2, absorb: this.absorbParticles };
+    if (this.parallel?.runTree(tree, bodies.length, params, p.count)) {
+      const acc = this.parallel.bodyAcc;
+      for (let i = 0; i < bodies.length; i++) {
+        const b = bodies[i];
+        b.ax = acc[i * 3];
+        b.ay = acc[i * 3 + 1];
+        b.az = acc[i * 3 + 2];
+        const a = Math.hypot(b.ax, b.ay, b.az);
+        if (a > 0) {
+          const tau2 = Math.max(b.radius, this.softening) / a;
+          if (tau2 < minTau2) minTau2 = tau2;
+        }
+      }
+      for (let i = 0; i < p.count; i++) if (p.dead[i]) absorbed.push(i);
+      this.nextDt = Number.isFinite(minTau2) ? Math.min(this.dtMax, Math.max(this.dtMin, this.etaTree * Math.sqrt(minTau2))) : this.dtMax;
+      return;
+    }
     for (let i = 0; i < bodies.length; i++) {
       const b = bodies[i];
       tree.accel(b.x, b.y, b.z, i, g, eps2, out);
@@ -658,12 +681,8 @@ export class Simulation {
       }
     }
 
-    const p = this.particles;
     const pos = p.pos;
     const acc = p.acc;
-    const absorbed = this.absorbed;
-    absorbed.length = 0;
-    const cull2 = this.particleCullDistance * this.particleCullDistance;
     for (let i = 0; i < p.count; i++) {
       const k = i * 3;
       const px = pos[k], py = pos[k + 1], pz = pos[k + 2];

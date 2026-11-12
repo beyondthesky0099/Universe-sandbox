@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { beamHalfAngleDeg, compactness, displayPeriod, polarCapAngle, pulsarParams, type PulsarParams } from '../sim/neutronStar';
+import { beamHalfAngleDeg, compactness, displayPeriod, lightCylinderKm, NS_RADIUS_KM, polarCapAngle, pulsarParams, type PulsarParams } from '../sim/neutronStar';
 
 /**
  * What a neutron star looks like up close (physics in sim/neutronStar.ts):
@@ -61,8 +61,8 @@ const SURFACE_FRAGMENT = /* glsl */ `
     float cap = 1.0 - smoothstep(uCap * 0.6, uCap * 1.4, theta);
     // A hydrogen atmosphere beams its light outwards: darker towards the limb.
     float limb = 0.45 + 0.55 * cosA;
-    vec3 col = vec3(0.38, 0.5, 0.85) * (0.2 + 0.8 * flux) * limb;
-    col = mix(col, vec3(0.95, 0.97, 1.0) * 1.6, cap);
+    vec3 col = vec3(0.62, 0.78, 1.25) * (0.3 + 0.7 * flux) * limb;
+    col = mix(col, vec3(1.0, 1.0, 1.0) * 2.2, cap);
     col *= 1.0 + uFlash * 0.8;
     gl_FragColor = vec4(col, 1.0);
     #include <tonemapping_fragment>
@@ -70,17 +70,19 @@ const SURFACE_FRAGMENT = /* glsl */ `
   }
 `;
 
+/**
+ * A beam as glowing gas: its brightness at each pixel is the light gathered along the line of
+ * sight through a Gaussian tube around the beam's axis (local y, from 0 at the star to 1 at its
+ * end), worked out at the point where the sight line passes closest to the axis. Looking down the
+ * beam the path through it is long, so it blazes. Drawn on the back faces of a hull, once a pixel.
+ */
 const BEAM_VERTEX = /* glsl */ `
   #include <common>
   #include <logdepthbuf_pars_vertex>
-  varying vec2 vUv;
-  varying float vFacing;
+  varying vec3 vLocal;
   void main() {
-    vUv = uv;
-    vec4 mv = modelViewMatrix * vec4(position, 1.0);
-    vec3 nrm = normalize(normalMatrix * normal);
-    vFacing = abs(dot(nrm, normalize(-mv.xyz)));
-    gl_Position = projectionMatrix * mv;
+    vLocal = position;
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
     #include <logdepthbuf_vertex>
   }
 `;
@@ -88,15 +90,77 @@ const BEAM_VERTEX = /* glsl */ `
 const BEAM_FRAGMENT = /* glsl */ `
   #include <common>
   #include <logdepthbuf_pars_fragment>
-  uniform float uOpacity;
-  varying vec2 vUv;
-  varying float vFacing;
+  uniform vec3 uCam;        // camera position in the beam's frame
+  uniform float uWidth;     // tan of the beam's half-angle
+  uniform float uIntensity;
+  varying vec3 vLocal;
   void main() {
     #include <logdepthbuf_fragment>
-    // Brightest near the star; a hollow cone, so brighter where we look along its wall.
-    float along = vUv.y;
-    float a = pow(1.0 - along, 1.6) * smoothstep(0.0, 0.04, along) * (0.35 + 0.65 * (1.0 - vFacing)) * uOpacity;
-    gl_FragColor = vec4(vec3(0.62, 0.82, 1.0) * a, a);
+    vec3 d = normalize(vLocal - uCam);
+    // Closest approach between the sight line (uCam + t d) and the axis (0, y, 0).
+    float b = d.y;
+    float den = max(1.0 - b * b, 1e-4);
+    float t = max((b * uCam.y - dot(d, uCam)) / den, 0.0);
+    float y = clamp(uCam.y + t * d.y, 0.0, 1.0);
+    // Axis point and the sight line's nearest point to it.
+    vec3 axisP = vec3(0.0, y, 0.0);
+    float tc = max(dot(axisP - uCam, d), 0.0);
+    float dist = length(uCam + d * tc - axisP);
+    float sinT = sqrt(den);
+    // A bright core and a wider blue halo; both widen with distance from the star.
+    float wCore = max(y * uWidth * 0.22, 0.003);
+    float wHalo = max(y * uWidth * 0.75, 0.01);
+    float along = pow(1.0 - y, 1.8) * (0.35 + 0.65 * exp(-y * 5.0)) * smoothstep(0.0, 0.01, y);
+    float path = 1.0 / max(sinT, 0.2);
+    float core = exp(-pow(dist / wCore, 2.0)) * along * path;
+    float halo = exp(-pow(dist / wHalo, 2.0)) * along * path * 0.16;
+    vec3 col = (vec3(0.85, 0.93, 1.0) * core + vec3(0.32, 0.55, 1.0) * halo) * uIntensity;
+    gl_FragColor = vec4(col, 1.0);
+  }
+`;
+
+/**
+ * Beyond the light cylinder the field can't keep up with the star and is wound into a spiral
+ * that streams away (the "striped wind"). Drawn as a disc of spiral streaks in the spin equator,
+ * turning with the star, much closer in than to scale.
+ */
+const WIND_VERTEX = /* glsl */ `
+  #include <common>
+  #include <logdepthbuf_pars_vertex>
+  varying vec2 vXY;
+  void main() {
+    vXY = position.xz;
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    #include <logdepthbuf_vertex>
+  }
+`;
+
+const WIND_FRAGMENT = /* glsl */ `
+  #include <common>
+  #include <logdepthbuf_pars_fragment>
+  uniform float uPitch;    // radii per turn of the spiral (2π × the drawn light cylinder)
+  uniform float uOpacity;
+  uniform float uSeed;
+  varying vec2 vXY;
+  float hash(float n) { return fract(sin(n) * 43758.5453); }
+  float noise1(float x) { float i = floor(x); float f = fract(x); f = f * f * (3.0 - 2.0 * f); return mix(hash(i + uSeed), hash(i + 1.0 + uSeed), f); }
+  void main() {
+    #include <logdepthbuf_fragment>
+    float r = length(vXY);
+    float phi = atan(vXY.y, vXY.x);
+    // Spiral coordinate: constant along a wound field line, φ + 2π r / pitch.
+    float s = phi + 6.2831853 * r / uPitch;
+    // Fine streaks along the spiral, with patchy brightness along them.
+    float streak = 0.0;
+    for (int k = 0; k < 2; k++) {
+      float n = float(k);
+      float f = 9.0 + n * 14.0;
+      float v = 0.5 + 0.5 * cos(f * s + 1.2 * noise1(r * 0.6 + n * 3.1));
+      streak += pow(v, 6.0 + n * 6.0) * (0.4 + 0.9 * noise1(s * 3.0 + n * 7.0)) * (1.0 - 0.4 * n);
+    }
+    float fade = smoothstep(1.1, 2.2, r) * exp(-r / (uPitch * 0.45)) * (1.0 - smoothstep(0.7, 1.0, r / (uPitch * 1.6)));
+    float a = streak * fade * uOpacity;
+    gl_FragColor = vec4(vec3(0.55, 0.72, 1.0) * a, 1.0);
   }
 `;
 
@@ -144,6 +208,9 @@ export function dipoleLines(): { positions: Float32Array; colors: Float32Array }
   return { positions: new Float32Array(pos), colors: new Float32Array(col) };
 }
 
+/** Beam length in star radii (drawn). */
+const BEAM_LENGTH = 60;
+
 export class NeutronStarVisual {
   /** Add to the body's spin group (whose y axis is the spin axis). */
   readonly root = new THREE.Group();
@@ -157,7 +224,7 @@ export class NeutronStarVisual {
   private readonly magnet = new THREE.Group();
   private readonly lines: THREE.LineSegments;
   private readonly beams: THREE.Mesh[] = [];
-  private readonly beamMaterial: THREE.ShaderMaterial;
+  private readonly wind: THREE.Mesh;
   private readonly beamAngle: number;
   private readonly tmp = new THREE.Vector3();
   private readonly tmp2 = new THREE.Vector3();
@@ -186,27 +253,45 @@ export class NeutronStarVisual {
     geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
     this.lines = new THREE.LineSegments(
       geo,
-      new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false }),
+      new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.32, blending: THREE.AdditiveBlending, depthWrite: false }),
     );
     this.magnet.add(this.lines);
-    // The beams: hollow cones along the magnetic axis, as wide as the radio beam.
-    this.beamAngle = (Math.min(40, beamHalfAngleDeg(this.params.period)) * Math.PI) / 180;
-    const cone = new THREE.CylinderGeometry(Math.tan(this.beamAngle), 0, 1, 40, 1, true).translate(0, 0.5, 0);
-    this.beamMaterial = new THREE.ShaderMaterial({
-      vertexShader: BEAM_VERTEX,
-      fragmentShader: BEAM_FRAGMENT,
-      uniforms: { uOpacity: { value: 0.45 } },
-      transparent: true,
-      depthWrite: false,
-      side: THREE.DoubleSide,
-      blending: THREE.AdditiveBlending,
-    });
+    // The beams along the magnetic axis: glowing tubes as wide as the radio beam.
+    this.beamAngle = (Math.min(25, beamHalfAngleDeg(this.params.period)) * Math.PI) / 180;
+    const tanW = Math.tan(this.beamAngle);
+    // The hull is a closed cone a little wider than the halo; the shader does the rest.
+    const hull = new THREE.CylinderGeometry(tanW * 1.6 + 0.03, 0.03, 1, 32, 1, false).translate(0, 0.5, 0);
     for (const dir of [1, -1]) {
-      const beam = new THREE.Mesh(cone, this.beamMaterial);
+      const material = new THREE.ShaderMaterial({
+        vertexShader: BEAM_VERTEX,
+        fragmentShader: BEAM_FRAGMENT,
+        uniforms: { uCam: { value: new THREE.Vector3() }, uWidth: { value: tanW }, uIntensity: { value: 0.85 } },
+        transparent: true,
+        depthWrite: false,
+        side: THREE.BackSide,
+        blending: THREE.AdditiveBlending,
+      });
+      const beam = new THREE.Mesh(hull, material);
       if (dir < 0) beam.rotation.x = Math.PI;
+      beam.frustumCulled = false;
       this.beams.push(beam);
       this.magnet.add(beam);
     }
+    // The wound field (striped wind) in the spin equator, turning with the star.
+    const pitch = THREE.MathUtils.clamp(lightCylinderKm(this.params.period) / NS_RADIUS_KM, 1.2, 2.2) * Math.PI * 2;
+    this.wind = new THREE.Mesh(
+      new THREE.RingGeometry(1.1, pitch * 1.6, 160, 24).rotateX(-Math.PI / 2),
+      new THREE.ShaderMaterial({
+        vertexShader: WIND_VERTEX,
+        fragmentShader: WIND_FRAGMENT,
+        uniforms: { uPitch: { value: pitch }, uOpacity: { value: 0.45 }, uSeed: { value: (id % 97) * 1.7 } },
+        transparent: true,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+        blending: THREE.AdditiveBlending,
+      }),
+    );
+    this.root.add(this.wind);
   }
 
   /**
@@ -218,7 +303,8 @@ export class NeutronStarVisual {
     this.root.rotation.y = this.phase;
     mesh.rotation.y = this.phase;
     this.magnet.scale.setScalar(r);
-    for (const b of this.beams) b.scale.set(30, 30, 30);
+    for (const b of this.beams) b.scale.setScalar(BEAM_LENGTH);
+    this.wind.scale.setScalar(r);
     // The camera's direction in the star's frame, for the bent-light shading.
     mesh.updateWorldMatrix(true, false);
     const local = mesh.worldToLocal(this.tmp.copy(camera)).normalize();
@@ -229,6 +315,10 @@ export class NeutronStarVisual {
     this.magnet.updateWorldMatrix(true, false);
     const axis = this.tmp2.set(0, 1, 0).transformDirection(this.magnet.matrixWorld);
     const gamma = Math.acos(Math.min(1, Math.abs(axis.dot(away))));
+    for (const b of this.beams) {
+      b.updateWorldMatrix(true, false);
+      (b.material as THREE.ShaderMaterial).uniforms.uCam.value.copy(b.worldToLocal(this.tmp2.copy(camera)));
+    }
     const width = Math.max(this.beamAngle, 0.26);
     this.flash = Math.exp(-((gamma / width) ** 2) * 2);
     this.surface.uniforms.uFlash.value = this.flash;
@@ -240,6 +330,8 @@ export class NeutronStarVisual {
     this.lines.geometry.dispose();
     (this.lines.material as THREE.Material).dispose();
     this.beams[0]?.geometry.dispose();
-    this.beamMaterial.dispose();
+    for (const b of this.beams) (b.material as THREE.Material).dispose();
+    this.wind.geometry.dispose();
+    (this.wind.material as THREE.Material).dispose();
   }
 }

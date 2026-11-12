@@ -957,7 +957,10 @@ push and pull request.
   145, 101) and the **2MASS Redshift Survey** (Huchra et al. 2012, ApJS 199, 26), retrieved
   from VizieR (CDS). Rebuild them with `node scripts/build-galaxies.mjs`. Survey distances use
   Hubble's law (H0 = 70 km/s/Mpc), so clusters appear stretched along the line of sight
-  ("fingers of God"). Cluster labels use approximate published positions.
+  ("fingers of God"). Cluster labels use approximate published positions. Each galaxy's
+  position angle on the sky comes from **HyperLEDA** (Paturel et al. 2003, A&A 412, 45;
+  VizieR VII/237), matched by position; the Universe view draws galaxies at that angle and
+  the catalogue's inclination.
 - Star data: **HYG database v4.1** by David Nash (astronexus), licensed **CC BY-SA 4.0**
   (https://codeberg.org/astronexus/hyg). The derived files `public/data/stars-near.json` and
   `public/data/stars-bright.json` are also CC BY-SA 4.0. Rebuild them with

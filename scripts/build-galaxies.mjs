@@ -12,6 +12,10 @@
  *
  * Positions are stored as galactic longitude/latitude (degrees) plus distance (Mpc).
  *
+ * Orientations on the sky come from HyperLEDA (Paturel et al. 2003, VizieR VII/237): the position
+ * angle of the major axis (degrees, north through east) and, where the Local Volume catalogue
+ * has none, the axis ratio. Each galaxy is cross-matched by position in a small cone.
+ *
  *   node scripts/build-galaxies.mjs
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -34,7 +38,8 @@ async function vizier(name, params) {
     try {
       const res = await fetch(url);
       const text = res.ok ? await res.text() : '';
-      if (res.ok && !text.includes('#INFO\tError=')) {
+      // A body with a nameless, empty RESOURCE is the mirror failing quietly, not an empty result.
+      if (res.ok && !text.includes('#INFO\tError=') && !/^#RESOURCE=\s*$/m.test(text)) {
         writeFileSync(file, text);
         return text;
       }
@@ -52,6 +57,7 @@ async function vizier(name, params) {
 /** Parse VizieR TSV: header line, units line, dashes line, then rows. */
 function parseTsv(text) {
   const lines = text.split('\n').filter((l) => l && !l.startsWith('#'));
+  if (lines.length < 4) return []; // an empty cone search has no table at all
   const header = lines[0].split('\t').map((h) => h.trim());
   return lines.slice(3).map((line) => {
     const cells = line.split('\t');
@@ -131,9 +137,105 @@ for (const r of tmrs) {
   named.push([r.CAT.replace(/_/g, ''), round(num(r.GLON), 3), round(num(r.GLAT), 3), Math.round(cz), round(kt, 2), t ? Number(t[0]) : null]);
 }
 
+// ---------------------------------------------------------------------------
+// Orientations from HyperLEDA (VII/237): a cone search around each galaxy
+
+const GAL_TO_EQ = [
+  [-0.0548755604, 0.4941094279, -0.8676661490],
+  [-0.8734370902, -0.4448296300, -0.1980763734],
+  [-0.4838350155, 0.7469822445, 0.4559837762],
+];
+/** Galactic (l, b) degrees → equatorial J2000 (RA, Dec) degrees. */
+function galacticToEquatorial(l, b) {
+  const lr = (l * Math.PI) / 180, br = (b * Math.PI) / 180;
+  const g = [Math.cos(br) * Math.cos(lr), Math.cos(br) * Math.sin(lr), Math.sin(br)];
+  const e = GAL_TO_EQ.map((row) => row[0] * g[0] + row[1] * g[1] + row[2] * g[2]);
+  let ra = (Math.atan2(e[1], e[0]) * 180) / Math.PI;
+  if (ra < 0) ra += 360;
+  return [ra, (Math.asin(Math.max(-1, Math.min(1, e[2]))) * 180) / Math.PI];
+}
+
+/**
+ * The HyperLEDA entry for a galaxy: { pa, ba, d25 } (degrees, ratio, arcmin), or undefined.
+ * `sizeArcmin` is the galaxy's known diameter, used to widen the cone and to prefer the big
+ * galaxy over small companions and knots catalogued near its centre.
+ */
+async function ledaOrientation(name, l, b, sizeArcmin) {
+  const [ra, dec] = galacticToEquatorial(l, b);
+  const radius = Math.min(600, Math.max(90, (sizeArcmin ?? 0) * 60 * 0.5)); // arcsec
+  const key = `leda-${name.replace(/[^A-Za-z0-9]+/g, '_')}`;
+  const text = await vizier(key, {
+    '-source': 'VII/237',
+    '-out': 'PGC,logD25,logR25,PA,MType',
+    '-out.add': '_r',
+    '-c': `${ra.toFixed(5)} ${dec >= 0 ? '+' : ''}${dec.toFixed(5)}`,
+    '-c.rs': String(radius),
+    '-out.max': '50',
+    '-sort': '_r',
+  });
+  let best;
+  for (const r of parseTsv(text)) {
+    const sep = num(r._r);
+    const d25 = r.logD25 ? 10 ** num(r.logD25) * 0.1 : undefined; // arcmin
+    if (!Number.isFinite(sep)) continue;
+    // Separation in units of the catalogued size: the galaxy itself scores lowest.
+    const score = sep / Math.max(30, (d25 ?? 0) * 60 * 0.5);
+    if (score > 2) continue;
+    if (!best || score < best.score) best = { score, pa: num(r.PA), ba: r.logR25 ? 10 ** -num(r.logR25) : undefined, d25 };
+  }
+  if (!best) return undefined;
+  return { pa: best.pa, ba: round(best.ba, 2), d25: round(best.d25, 2) };
+}
+
+/** Run `fn` over `items` with a few in flight at a time. */
+async function mapLimited(items, limit, fn) {
+  const out = new Array(items.length);
+  let next = 0;
+  await Promise.all(
+    Array.from({ length: limit }, async () => {
+      for (;;) {
+        const i = next++;
+        if (i >= items.length) return;
+        out[i] = await fn(items[i], i);
+      }
+    }),
+  );
+  return out;
+}
+
+let oriented = 0;
+await mapLimited(local, 6, async (g) => {
+  if (g.name === 'Milky Way') return;
+  const sizeArcmin = g.size ? ((g.size / (g.d * 1000)) * 180 * 60) / Math.PI : undefined;
+  const o = await ledaOrientation(g.name, g.l, g.b, sizeArcmin).catch((err) => {
+    console.warn(`HyperLEDA ${g.name}: ${err.message}`);
+    return undefined;
+  });
+  if (!o) return;
+  if (Number.isFinite(o.pa)) {
+    g.pa = o.pa;
+    oriented++;
+  }
+  if (g.ba === undefined && o.ba !== undefined) g.ba = o.ba;
+});
+console.log(`HyperLEDA position angles: ${oriented} of ${local.length} Local Volume galaxies`);
+
+// The named distant galaxies get [..., PA, b/a] appended (null when unknown).
+let orientedNamed = 0;
+await mapLimited(named, 6, async (row) => {
+  const [name, l, b, cz] = row;
+  const o = await ledaOrientation(`named-${name}`, l, b, undefined).catch(() => undefined);
+  const pa = o && Number.isFinite(o.pa) ? o.pa : null;
+  const ba = o?.ba ?? null;
+  if (pa !== null) orientedNamed++;
+  row.push(pa, ba);
+  void cz;
+});
+console.log(`HyperLEDA position angles: ${orientedNamed} of ${named.length} named distant galaxies`);
+
 const credit = {
   local:
-    'Updated Nearby Galaxy Catalog: Karachentsev, Makarov & Kaisina 2013, AJ 145, 101 (VizieR J/AJ/145/101). Positions in galactic coordinates; distances in Mpc.',
+    'Updated Nearby Galaxy Catalog: Karachentsev, Makarov & Kaisina 2013, AJ 145, 101 (VizieR J/AJ/145/101). Positions in galactic coordinates; distances in Mpc. Position angles (pa, degrees north through east) from HyperLEDA (Paturel et al. 2003, VizieR VII/237).',
   web: `2MASS Redshift Survey: Huchra et al. 2012, ApJS 199, 26 (VizieR J/ApJS/199/26). Distances are cz/H0 with H0 = ${H0} km/s/Mpc, cz ≤ ${MAX_CZ} km/s.`,
 };
 const out = new URL('../public/data/', import.meta.url);
@@ -144,7 +246,7 @@ writeFileSync(
 );
 writeFileSync(
   new URL('galaxies-named.json', out),
-  JSON.stringify({ source: credit.web, H0, fields: ['name', 'l_deg', 'b_deg', 'cz_kms', 'Kt_mag', 'T_type'], galaxies: named }) + '\n',
+  JSON.stringify({ source: credit.web, H0, fields: ['name', 'l_deg', 'b_deg', 'cz_kms', 'Kt_mag', 'T_type', 'PA_deg', 'b/a'], galaxies: named }) + '\n',
 );
 console.log(`Named distant galaxies: ${named.length}`);
 console.log(`Local Volume: ${local.length} galaxies (nearest: ${local.slice(0, 5).map((g) => g.name).join(', ')})`);

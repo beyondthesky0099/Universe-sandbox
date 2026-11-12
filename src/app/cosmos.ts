@@ -65,7 +65,8 @@ export class CosmosUI {
     const web = this.app.cosmos.webCount;
     $('cosmos-info').textContent =
       `${n.toLocaleString('en-US')} real galaxies of the Local Volume (out to 85 million light-years) at their measured distances and true sizes, plus ${named} bright named galaxies beyond it (M87, the Sombrero, Fornax A…) placed by redshift` +
-      (web ? `, and ${web.toLocaleString('en-US')} more tracing the cosmic web out to about 700 million light-years, placed by their redshift.` : '. Loading the cosmic web…');
+      (web ? `, and ${web.toLocaleString('en-US')} more tracing the cosmic web out to about 700 million light-years, placed by their redshift.` : '. Loading the cosmic web…') +
+      ' Up close, each galaxy is drawn at its measured tilt and position angle (HyperLEDA) with a bulge, disc, arms and dust to suit its type; the arm pattern and which edge is nearer are illustrative.';
   }
 
   selectCosmos(index: number): void {

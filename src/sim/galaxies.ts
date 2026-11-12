@@ -25,6 +25,8 @@ export interface LocalGalaxy {
   /** Axis ratio and inclination (degrees from face-on). */
   ba?: number;
   inc?: number;
+  /** Position angle of the major axis on the sky (degrees, north through east), from HyperLEDA. */
+  pa?: number;
   /** log10 Ks-band luminosity, total mass within the Holmberg radius, and HI gas mass (solar units). */
   lk?: number;
   mass?: number;
@@ -153,15 +155,15 @@ export const COSMIC_STRUCTURES: { name: string; l: number; b: number; d: number 
   { name: 'Coma Cluster', l: 58.1, b: 88.0, d: 99 },
 ];
 
-/** [name, l, b, cz (km/s), total Ks magnitude, T-type] */
-type NamedRow = [string, number, number, number, number, number | null];
+/** [name, l, b, cz (km/s), total Ks magnitude, T-type, position angle (degrees), axis ratio] */
+type NamedRow = [string, number, number, number, number, number | null, (number | null)?, (number | null)?];
 
 /**
  * The brightest galaxies beyond the Local Volume (2MRS), as clickable map entries. Distances
  * are from redshift; luminosities and sizes are estimated from the Ks magnitude.
  */
 export function namedFromSurvey(rows: NamedRow[], H0: number): LocalGalaxy[] {
-  return rows.map(([name, l, b, cz, kt, t]) => {
+  return rows.map(([name, l, b, cz, kt, t, pa, ba]) => {
     const d = cz / H0;
     const absK = kt - 5 * Math.log10(d * 1e6) + 5;
     const lk = (3.28 - absK) / 2.5; // log10 Ks luminosity, solar units
@@ -175,6 +177,8 @@ export function namedFromSurvey(rows: NamedRow[], H0: number): LocalGalaxy[] {
       size: Number((30 * Math.pow(10, (lk - 10.7) / 2.5)).toFixed(1)), // rough diameter (kpc) from luminosity
       v: cz,
       zd: true,
+      ...(pa !== null && pa !== undefined ? { pa } : {}),
+      ...(ba !== null && ba !== undefined ? { ba } : {}),
     };
   });
 }
@@ -210,4 +214,4 @@ export function loadWebGalaxies(baseUrl = import.meta.env.BASE_URL): Promise<Web
 }
 
 export const GALAXY_CREDIT =
-  'Galaxy data: Updated Nearby Galaxy Catalog (Karachentsev, Makarov & Kaisina 2013) and the 2MASS Redshift Survey (Huchra et al. 2012), via VizieR (CDS).';
+  'Galaxy data: Updated Nearby Galaxy Catalog (Karachentsev, Makarov & Kaisina 2013), the 2MASS Redshift Survey (Huchra et al. 2012) and HyperLEDA position angles (Paturel et al. 2003), via VizieR (CDS).';

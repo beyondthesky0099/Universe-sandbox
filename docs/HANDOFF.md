@@ -208,6 +208,30 @@ Plan, in priority order:
 - BodyVisual adds it in applyDetail and updates it only when the planet is more than 14 px across
   and a star is present. Tests: tests/aurora.test.ts.
 
+### AK. Realism pass: galaxies drawn in the Universe view
+- [x] HyperLEDA position angles (scripts/build-galaxies.mjs, VizieR VII/237 via the Harvard
+      mirror): a cone search per galaxy, scored by separation over catalogued size. `pa` on 435
+      of 869 Local Volume galaxies (the rest are faint dwarfs or have no PA in LEDA) and on 593
+      of 647 named distant galaxies (galaxies-named.json rows now end in PA, b/a).
+  - The mirror sometimes answers 200 with an empty, nameless `#RESOURCE=`: that is a failure to
+    retry, not an empty cone. `vizier()` checks for it.
+- [x] src/sim/galaxyLook.ts (headless): `galaxyOrientation` (disc axis and major axis in map
+      coordinates from inclination + PA; sky basis north/east from the NCP in galactic
+      coordinates; unknowns seeded by name), `galaxyLook` (bulge, arms, dust, colour and surface
+      brightness by Hubble type and gas fraction; LOOK_OVERRIDES for Cen A, the Sombrero, M82…),
+      `galaxyCentre` (the Milky Way's centre is 8.2 kpc from the origin).
+- [x] src/render/galaxyShapes.ts: one instanced billboard per galaxy, ray-marched in the galaxy's
+      frame: exponential disc with an exact per-step vertical integral (thin discs never fall
+      between samples), log-spiral arms with young blue stars and H II knots, Hernquist-like bulge
+      or spheroid, mid-plane dust that reddens and darkens what lies behind it, clumps for
+      irregulars. Interleaved-gradient jitter; Reinhard-style tonemap keeping the hue.
+  - The point sprite fades out as the shape fades in (uPxPerUnit on both materials).
+  - The CMB backdrop fades from 15% to 4% within 25 Mpc of the target so galaxies stand out.
+- Tests: tests/galaxy-look.test.ts (M31's axis at 78° to the line of sight and 35° from north).
+- Checked with Playwright screenshots (scratch script, not in the repo): M31 inclined with dust
+  lanes, NGC 253 edge-on with a lane, Cen A's spheroid, the LMC's clumps, the Milky Way's four
+  arms from above.
+
 ### AJ. Zoom in to arrive at black holes and pulsars
 - [x] compact-objects.json: black holes carry `companion` (mass, periodDays, ecc, kind,
   dormant, note).
@@ -260,7 +284,7 @@ Plan, in priority order:
   - Ocean glint via a roughness map read from the day map.
 - [x] build-planet-textures.mjs: earth-night.jpg, and the assets.science.nasa.gov mirror for
   eoimages (eoimages returned 503).
-- Not done yet: galaxies (Universe view) and black-hole discs compared against reference renders.
+- Galaxies in the Universe view: section AK. Not done yet: black-hole discs compared against reference renders.
 
 ### AG. Pulsars in depth, and the backlog
 - [x] Beams as glowing gas (render/neutronStar.ts BEAM_FRAGMENT).

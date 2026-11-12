@@ -16,6 +16,7 @@ import {
 import { labelHitDepth, textSprite } from './galaxyView';
 import { ringTexture } from './textures';
 import { relativity, RELATIVITY_PARS } from './relativity';
+import { GalaxyShapes } from './galaxyShapes';
 
 /**
  * The Universe map: real galaxies around the Milky Way, in megaparsecs. The Local Volume
@@ -29,7 +30,9 @@ const VERTEX = /* glsl */ `
   uniform float uScale;
   uniform float uMinSize;
   uniform float uMaxSize;
+  uniform float uPxPerUnit;
   varying vec3 vColor;
+  varying float vFade;
   ${RELATIVITY_PARS}
   void main() {
     vec4 mv = modelViewMatrix * vec4(position, 1.0);
@@ -37,6 +40,9 @@ const VERTEX = /* glsl */ `
     float relD = relAberrate(mv);
     vColor = relShift(color, relD);
     gl_PointSize = clamp(size * uScale / -mv.z, uMinSize, uMaxSize);
+    // Once the galaxy is more than a few pixels across its drawn shape (galaxyShapes.ts) takes over.
+    float truePx = (size / 1.6) * uPxPerUnit / max(-mv.z, 1e-9);
+    vFade = 1.0 - smoothstep(4.0, 11.0, truePx);
     gl_Position = projectionMatrix * mv;
   }
 `;
@@ -44,12 +50,13 @@ const VERTEX = /* glsl */ `
 const FRAGMENT = /* glsl */ `
   uniform float uOpacity;
   varying vec3 vColor;
+  varying float vFade;
   void main() {
     vec2 c = gl_PointCoord - 0.5;
     float d = dot(c, c) * 4.0;
     if (d > 1.0) discard;
     float a = (exp(-d * 5.0) + 0.25 * exp(-d * 1.2)) * (1.0 - smoothstep(0.6, 1.0, d));
-    gl_FragColor = vec4(vColor, a * uOpacity);
+    gl_FragColor = vec4(vColor, a * uOpacity * vFade);
   }
 `;
 
@@ -57,7 +64,7 @@ function material(opacity: number, minSize: number, maxSize: number): THREE.Shad
   return new THREE.ShaderMaterial({
     vertexShader: VERTEX,
     fragmentShader: FRAGMENT,
-    uniforms: { uScale: { value: 300 }, uOpacity: { value: opacity }, uMinSize: { value: minSize }, uMaxSize: { value: maxSize }, uBeta: relativity.uBeta },
+    uniforms: { uScale: { value: 300 }, uOpacity: { value: opacity }, uMinSize: { value: minSize }, uMaxSize: { value: maxSize }, uPxPerUnit: { value: 1000 }, uBeta: relativity.uBeta },
     transparent: true,
     depthWrite: false,
     depthTest: false,
@@ -119,9 +126,11 @@ export class CosmosView {
   private positions = new Float32Array(0);
   private localPoints?: THREE.Points;
   private webPoints?: THREE.Points;
+  private shapes?: GalaxyShapes;
   private readonly labels: Label[] = [];
   private readonly marker: THREE.Sprite;
   private pointScale = 300;
+  private pxPerUnit = 1000;
   private cmb?: THREE.Mesh;
   private cmbVisible = true;
   private anim?: { fromTarget: THREE.Vector3; toTarget: THREE.Vector3; fromPos: THREE.Vector3; toPos: THREE.Vector3; t: number; speed: number };
@@ -174,6 +183,13 @@ export class CosmosView {
     this.localPoints.frustumCulled = false;
     this.localPoints.renderOrder = 5;
     this.scene.add(this.localPoints);
+    // Each galaxy's drawn shape: an oriented disc or spheroid, shown once it is big enough on screen.
+    if (this.shapes) {
+      this.scene.remove(this.shapes.mesh);
+      this.shapes.dispose();
+    }
+    this.shapes = new GalaxyShapes(galaxies);
+    this.scene.add(this.shapes.mesh);
 
     for (const l of this.labels) this.scene.remove(l.sprite);
     this.labels.length = 0;
@@ -267,13 +283,18 @@ export class CosmosView {
     this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();
     this.pointScale = 0.45 * height * pixelRatio;
+    this.pxPerUnit = (0.5 * height * pixelRatio) / Math.tan((this.camera.fov * Math.PI) / 360);
     this.applyPointScale();
   }
 
   private applyPointScale(): void {
     for (const pts of [this.localPoints, this.webPoints]) {
-      if (pts) (pts.material as THREE.ShaderMaterial).uniforms.uScale.value = this.pointScale;
+      if (!pts) continue;
+      const u = (pts.material as THREE.ShaderMaterial).uniforms;
+      u.uScale.value = this.pointScale;
+      u.uPxPerUnit.value = this.pxPerUnit;
     }
+    this.shapes?.setPxPerUnit(this.pxPerUnit);
   }
 
   get cameraDistance(): number {
@@ -396,8 +417,10 @@ export class CosmosView {
     for (const l of this.labels) l.sprite.visible = camDist >= l.min && camDist <= l.max;
     if (this.cmb) {
       // A faint backdrop from inside; full strength once you fly out past it.
+      // Near a galaxy it fades further so the galaxy stands out against black.
       const outside = this.camera.position.length() > CMB_RADIUS_MPC;
-      (this.cmb.material as THREE.ShaderMaterial).uniforms.uOpacity.value = outside ? 1 : 0.15;
+      const near = THREE.MathUtils.smoothstep(camDist, 1, 25);
+      (this.cmb.material as THREE.ShaderMaterial).uniforms.uOpacity.value = outside ? 1 : 0.04 + 0.11 * near;
     }
   }
 }

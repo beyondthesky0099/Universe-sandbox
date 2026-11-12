@@ -12,6 +12,8 @@ import { makePlanetTextures, realRingTexture, seedFromName } from './planetTextu
 import { mulberry32 } from '../procgen/rng';
 import { glowTexture } from './textures';
 import { NeutronStarVisual } from './neutronStar';
+import { coronaMesh, StarSurface, starLook } from './starSurface';
+import { starTemperature } from '../sim/color';
 import { getSolarData, poleScene, REAL_COLORS } from '../sim/solarSystemData';
 
 const SPHERE = new THREE.SphereGeometry(1, 64, 32);
@@ -125,6 +127,9 @@ export class BodyVisual {
   private rings?: THREE.Mesh;
   /** Saturn's real ring radii (in planet radii); other ringed planets share RINGS. */
   private ringGeometry?: THREE.RingGeometry;
+  /** A star's surface (granulation, limb darkening, spots) and corona. */
+  private star?: StarSurface;
+  private corona?: THREE.Mesh;
   /** A neutron star's bent-light surface, magnetic field and pulsar beams. */
   private neutron?: NeutronStarVisual;
   private readonly trailPos: Float32Array;
@@ -271,18 +276,16 @@ export class BodyVisual {
     let material: THREE.Material;
     switch (body.kind) {
       case 'star':
-        material = new THREE.MeshBasicMaterial({ color: new THREE.Color(body.color).multiplyScalar(1.15) });
-        this.glow = this.makeGlow(body.color, 1);
-        break;
       case 'giant':
-        // Swollen, dimmer surface with a broad orange halo.
-        material = new THREE.MeshBasicMaterial({ color: new THREE.Color(body.color).multiplyScalar(0.95) });
-        this.glow = this.makeGlow(0xff8040, 0.7);
+      case 'whitedwarf': {
+        // Granulation, limb darkening, spots (starSurface.ts); a corona around ordinary stars.
+        const temperature = body.name === 'Sun' ? 5772 : body.kind === 'giant' ? 3600 : body.kind === 'whitedwarf' ? 15000 : starTemperature(body.mass);
+        this.star = new StarSurface(starLook(body.kind, temperature, body.name), seedFromName(body.name));
+        material = this.star.material;
+        this.glow = body.kind === 'giant' ? this.makeGlow(0xff8040, 0.7) : this.makeGlow(body.kind === 'whitedwarf' ? 0xcfe0ff : body.color, body.kind === 'whitedwarf' ? 0.8 : 1);
+        if (body.kind === 'star') this.corona = coronaMesh(body.color, seedFromName(body.name));
         break;
-      case 'whitedwarf':
-        material = new THREE.MeshBasicMaterial({ color: 0xf4f8ff });
-        this.glow = this.makeGlow(0xcfe0ff, 0.8);
-        break;
+      }
       case 'neutron':
         this.neutron = new NeutronStarVisual(body.name, body.id, body.mass);
         material = this.neutron.surface;
@@ -307,11 +310,12 @@ export class BodyVisual {
       this.glow = this.makeGlow(0x7fdcff, 0.8);
       this.isProbe = true;
     }
-    this.mesh = new THREE.Mesh(this.isProbe ? PROBE : this.isPlanet || this.neutron ? SPHERE : SPHERE_LOW, material);
+    this.mesh = new THREE.Mesh(this.isProbe ? PROBE : this.isPlanet || this.neutron || this.star ? SPHERE : SPHERE_LOW, material);
     this.spin.add(this.mesh);
     if (this.disk) this.group.add(this.disk);
     if (this.glow) this.group.add(this.glow);
     if (this.neutron) this.spin.add(this.neutron.root);
+    if (this.corona) this.group.add(this.corona);
     this.detailKey = '';
     this.applyClimateTint();
   }
@@ -503,6 +507,26 @@ export class BodyVisual {
       // The shaded disc gives the light; the soft glow would only be smeared into rings by the lens.
       if (this.glow) this.glow.visible = !blackHoleView.lensed;
     }
+    if (this.star) {
+      const px = r / worldPerPixel;
+      this.star.update(dt, px);
+      // Up close the glow would wash out the surface: keep it to a halo.
+      if (this.glow) {
+        const close = THREE.MathUtils.smoothstep(px, 6, 60);
+        this.glow.material.opacity = (this.kind === 'giant' ? 0.7 : this.kind === 'whitedwarf' ? 0.8 : 1) * (1 - 0.75 * close);
+        // A wide soft halo rather than a bright rim hugging the limb.
+        if (close > 0) this.glow.scale.multiplyScalar(1 + close * 1.5);
+      }
+      if (this.corona) {
+        const show = px > 12 && !!camera;
+        this.corona.visible = show;
+        if (show) {
+          this.corona.scale.setScalar(r);
+          this.corona.lookAt(camera!);
+          (this.corona.material as THREE.ShaderMaterial).uniforms.uOpacity.value = THREE.MathUtils.smoothstep(px, 12, 60);
+        }
+      }
+    }
     if (this.neutron && this.glow) {
       // The lighthouse: a flash as a beam sweeps past. Up close the glow shrinks to a halo, so
       // the surface shows.
@@ -637,7 +661,13 @@ export class BodyVisual {
       this.spin.remove(this.mesh);
       (this.mesh.material as THREE.Material).dispose();
     }
-    for (const part of [this.glow, this.disk]) if (part) this.group.remove(part);
+    for (const part of [this.glow, this.disk, this.corona]) if (part) this.group.remove(part);
+    if (this.corona) {
+      this.corona.geometry.dispose();
+      (this.corona.material as THREE.Material).dispose();
+      this.corona = undefined;
+    }
+    this.star = undefined;
     if (this.neutron) {
       this.spin.remove(this.neutron.root);
       this.neutron.dispose();

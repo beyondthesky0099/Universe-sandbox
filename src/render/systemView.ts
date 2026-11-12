@@ -34,10 +34,16 @@ export interface RenderQuality {
   trailLength: number;
 }
 
-export const QUALITY_PRESETS: Record<'low' | 'medium' | 'high', RenderQuality & { pixelRatio: number }> = {
+/**
+ * Graphics presets. `pixelRatio` caps the render resolution relative to CSS pixels; `supersample`
+ * renders above the screen's own resolution (Ultra: 1.5×, for sharper edges and fine detail).
+ * The resolution then adapts to keep the frame rate up (src/app/resolution.ts).
+ */
+export const QUALITY_PRESETS: Record<'low' | 'medium' | 'high' | 'ultra', RenderQuality & { pixelRatio: number; supersample?: number }> = {
   low: { textureWidth: 128, maxFullBodies: 80, trailLength: 250, pixelRatio: 1 },
   medium: { textureWidth: 256, maxFullBodies: 160, trailLength: 500, pixelRatio: 1.5 },
   high: { textureWidth: 512, maxFullBodies: 300, trailLength: 700, pixelRatio: 2 },
+  ultra: { textureWidth: 1024, maxFullBodies: 500, trailLength: 1000, pixelRatio: 3, supersample: 1.5 },
 };
 
 export type TrailFrame = 'absolute' | 'follow';
@@ -650,7 +656,7 @@ export class SystemView {
       tmp.set(b.x, b.y, b.z);
       const wpp = this.worldPerPixel(tmp, viewportHeight);
       const lockId = this.locks.get(b.id);
-      v.update(b, wpp, dt, lockId !== undefined ? this.sim.getBody(lockId) : undefined, sun);
+      v.update(b, wpp, dt, lockId !== undefined ? this.sim.getBody(lockId) : undefined, sun, this.camera.position);
       if (updateClimate && v.isPlanet) {
         v.setClimate(climateFor(b.kind, bodyTemperature(this.sim.bodies, b)));
         const parent = this.sim.parentOf(b);
@@ -780,7 +786,10 @@ export class SystemView {
       }
       light.position.set(s.x, s.y, s.z);
       light.color.setHex(s.color);
-      light.intensity = THREE.MathUtils.clamp(1.2 + Math.log10(luminosity(s) + 1) * 0.6, 0.8, 3.5);
+      // three.js's diffuse shading divides by π, so a light of intensity π shows a surface at its
+      // own colour (albedo) where the star is overhead: as a photograph would. Brighter stars
+      // a little more, within limits.
+      light.intensity = Math.PI * THREE.MathUtils.clamp(0.85 + Math.log10(luminosity(s) + 1) * 0.5, 0.7, 2.2);
     });
   }
 

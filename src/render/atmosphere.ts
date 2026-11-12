@@ -72,8 +72,10 @@ export const ATMOSPHERES: Record<string, Atmosphere> = {
     absorb: [0.2e-6, 1.5e-6, 4e-6], sun: 10,
   },
   // Gas and ice giants: thin limbs, coloured by methane absorbing red (Uranus, Neptune).
-  Jupiter: { top: 1500e3, radius: 69911e3, rayleigh: [0.4e-6, 0.9e-6, 2.1e-6], rayleighH: 27e3, mie: [2.5e-6, 2.3e-6, 1.9e-6], mieH: 60e3, g: 0.6, absorb: [0, 0, 0.3e-6], sun: 12 },
-  Saturn: { top: 1500e3, radius: 58232e3, rayleigh: [0.4e-6, 0.9e-6, 2.1e-6], rayleighH: 59e3, mie: [2.2e-6, 2e-6, 1.5e-6], mieH: 80e3, g: 0.6, absorb: [0, 0, 0.4e-6], sun: 12 },
+  // Jupiter's and Saturn's upper hazes absorb blue and ultraviolet (the "chromophores" that
+  // tint them cream and gold), so their limbs warm rather than turning blue.
+  Jupiter: { top: 1500e3, radius: 69911e3, rayleigh: [0.1e-6, 0.22e-6, 0.5e-6], rayleighH: 27e3, mie: [1.6e-6, 1.4e-6, 1.1e-6], mieH: 60e3, g: 0.6, absorb: [0, 0.08e-6, 0.5e-6], sun: 12 },
+  Saturn: { top: 1500e3, radius: 58232e3, rayleigh: [0.1e-6, 0.22e-6, 0.5e-6], rayleighH: 59e3, mie: [1.5e-6, 1.3e-6, 0.9e-6], mieH: 80e3, g: 0.6, absorb: [0, 0.12e-6, 0.7e-6], sun: 12 },
   Uranus: { top: 1500e3, radius: 25362e3, rayleigh: [1.2e-6, 3e-6, 6e-6], rayleighH: 28e3, mie: [0.6e-6, 0.8e-6, 0.9e-6], mieH: 40e3, g: 0.5, absorb: [3e-6, 0.5e-6, 0], sun: 12 },
   Neptune: { top: 1500e3, radius: 24622e3, rayleigh: [1.2e-6, 3e-6, 7e-6], rayleighH: 20e3, mie: [0.6e-6, 0.8e-6, 1e-6], mieH: 40e3, g: 0.5, absorb: [3.5e-6, 0.5e-6, 0], sun: 12 },
 };

@@ -13,6 +13,8 @@ export interface PlanetLook {
   earthMasses: number;
   /** Always give a gas giant rings (e.g. Saturn). */
   rings?: boolean;
+  /** The body's name (Saturn gets its polar hexagon). */
+  name?: string;
 }
 
 export interface PlanetTextures {
@@ -206,41 +208,84 @@ function makeClouds(seed: number, width: number, cover: number, tint: RGB = [1, 
   );
 }
 
+/**
+ * A gas or ice giant, after Cassini's and Juno's pictures of Jupiter and Saturn and Voyager's of
+ * Uranus and Neptune:
+ * - alternating light zones and darker belts of uneven widths (zonal jets);
+ * - turbulence drawn out along the bands by the wind shear, and wavy band edges;
+ * - a few storms: ovals whose clouds spiral round them;
+ * - ice giants nearly featureless, with a few bright methane-ice streaks and the odd dark spot;
+ * - Saturn: the hexagonal jet stream round its north pole (78°N, seen by Voyager and Cassini).
+ */
 function gasTextures(look: PlanetLook, width: number): PlanetTextures {
   const n = new Noise3D(look.seed);
   const rng = mulberry32(look.seed);
   const base = hexToRgb(look.color);
   const iceGiant = base[2] > base[0];
-  const bandCount = iceGiant ? 4 + rng() * 4 : 12 + rng() * 12;
-  const contrast = iceGiant ? 0.14 : 0.45;
-  const palette: RGB[] = Array.from({ length: 5 }, () => {
-    const f = 1 + (rng() - 0.5) * contrast * 2;
-    const hueShift = (rng() - 0.5) * 0.12;
-    return [base[0] * f + hueShift, base[1] * f, base[2] * f - hueShift] as RGB;
-  });
-  // A few storms.
-  const storms = Array.from({ length: Math.floor(rng() * 3) }, () => ({
-    lat: (rng() - 0.5) * 1.4,
+  const saturn = look.name === 'Saturn';
+  // Band profile: a few sines of latitude with random frequencies and phases.
+  const waves = Array.from({ length: 5 }, (_, k) => ({ f: (iceGiant ? 1.5 : 5) + rng() * (iceGiant ? 3 : 11) * (1 + k * 0.6), ph: rng() * 6.28, a: 1 / (1 + k * 0.7) }));
+  const norm = waves.reduce((s, w) => s + w.a, 0);
+  const band = (lat: number) => waves.reduce((s, w) => s + w.a * Math.sin(w.f * lat + w.ph), 0) / norm;
+  const contrast = iceGiant ? 0.06 : saturn ? 0.16 : 0.28;
+  const zone: RGB = [Math.min(1, base[0] * (1 + contrast) + 0.04), Math.min(1, base[1] * (1 + contrast) + 0.04), Math.min(1, base[2] * (1 + contrast * 0.6) + 0.03)];
+  const belt: RGB = iceGiant ? [base[0] * 0.92, base[1] * 0.95, base[2]] : [base[0] * (1 - contrast * 0.6), base[1] * (1 - contrast * 0.95), base[2] * (1 - contrast * 1.4)];
+  const storms = Array.from({ length: iceGiant ? (rng() < 0.5 ? 1 : 0) : 2 + Math.floor(rng() * 4) }, (_, i) => ({
+    lat: (rng() - 0.5) * (iceGiant ? 1.0 : 1.3),
     lon: rng() * Math.PI * 2,
-    size: 0.035 + rng() * 0.05,
-    color: rng() < 0.5 ? ([0.85, 0.45, 0.3] as RGB) : ([0.95, 0.93, 0.88] as RGB),
+    size: (i === 0 ? 0.07 : 0.025) + rng() * 0.03,
+    color: iceGiant ? ([base[0] * 0.55, base[1] * 0.6, base[2] * 0.75] as RGB) : rng() < 0.4 ? ([0.86, 0.5, 0.36] as RGB) : ([0.97, 0.95, 0.9] as RGB),
+    spin: rng() < 0.5 ? 2.5 : -2.5,
   }));
+  const hexLat = (78 * Math.PI) / 180;
   const out: PlanetTextures = {
-    map: paint(width, (x, y, z, lat) => {
-      const warp = n.fbm(x * 4, y * 4, z * 4, 4) * 0.12;
-      const t = (lat / Math.PI + 0.5) * bandCount + warp * 2;
-      const idx = Math.floor(t);
-      const f = t - idx;
-      const a = palette[((idx % 5) + 5) % 5];
-      const b = palette[(((idx + 1) % 5) + 5) % 5];
-      let c = mix(a, b, smoothstep(0.35, 0.65, f));
-      // Fine stripes and turbulence within each band.
-      c = shade(c, 0.9 + 0.06 * Math.sin(t * Math.PI * 3.3) + n.noise(x * 12, y * 30, z * 12) * 0.08);
-      const lon = Math.atan2(z, x);
+    map: paint(width, (x, _y, z, lat) => {
+      let lon = Math.atan2(z, x);
+      let la = lat;
+      // Storms: swirl the coordinates round each oval so the clouds spiral into it.
+      let stormMix = 0;
+      let stormColor: RGB = zone;
       for (const s of storms) {
-        const dl = Math.atan2(Math.sin(lon - s.lon), Math.cos(lon - s.lon));
-        const d = Math.hypot(dl * 0.6, lat - s.lat) / s.size;
-        if (d < 1) c = mix(c, s.color, (1 - d * d) * 0.85);
+        const dl = Math.atan2(Math.sin(lon - s.lon), Math.cos(lon - s.lon)) * Math.cos(s.lat);
+        const dy = la - s.lat;
+        const d = Math.hypot(dl * 0.55, dy) / s.size;
+        if (d < 2.2) {
+          const ang = s.spin * Math.pow(Math.max(0, 1 - d / 2.2), 2);
+          const c = Math.cos(ang), sn = Math.sin(ang);
+          const rl = dl * c - dy * sn, ry = dl * sn + dy * c;
+          lon = s.lon + rl / Math.max(0.2, Math.cos(s.lat));
+          la = s.lat + ry;
+          if (d < 1) {
+            stormMix = Math.max(stormMix, (1 - d * d) * 0.85);
+            stormColor = s.color;
+          }
+        }
+      }
+      const px = Math.cos(la) * Math.cos(lon), py = Math.sin(la), pz = Math.cos(la) * Math.sin(lon);
+      // Turbulence stretched along the bands (strong east–west shear).
+      const shear = n.fbm(px * 2.2, py * 16, pz * 2.2, 4);
+      const edge = 0.012 * Math.sin(lon * 9 + n.noise(px * 3, py * 3, pz * 3) * 4);
+      const b = band(la + shear * (iceGiant ? 0.03 : 0.05) + edge);
+      let c = mix(belt, zone, smoothstep(-0.35, 0.35, b));
+      // Fine streaks and festoons.
+      const streak = n.fbm(px * 7, py * 55, pz * 7, 3);
+      c = shade(c, 1 + streak * (iceGiant ? 0.03 : 0.1) + n.noise(px * 20, py * 20, pz * 20) * (iceGiant ? 0.01 : 0.03));
+      if (iceGiant) {
+        // Bright methane-ice clouds: thin streaks at mid-latitudes.
+        const ice = Math.max(0, n.fbm(px * 4, py * 40, pz * 4, 3) - 0.35) * 2.2 * smoothstep(0.25, 0.6, Math.abs(la));
+        c = mix(c, [0.95, 0.97, 1], Math.min(0.8, ice));
+      }
+      if (stormMix > 0) c = mix(c, stormColor, stormMix);
+      if (saturn && lat > hexLat - 0.12) {
+        // The hexagon: a jet stream tracing six straight sides round the north pole.
+        const colat = Math.PI / 2 - lat;
+        const seg = ((((lon + Math.PI) % (Math.PI / 3)) + Math.PI / 3) % (Math.PI / 3)) - Math.PI / 6;
+        const hexR = (Math.PI / 2 - hexLat) / Math.cos(seg);
+        const inside = smoothstep(hexR + 0.01, hexR - 0.01, colat);
+        // Inside: the bluer, clearer polar region of Saturn's northern summer; a dark jet at the edge.
+        c = mix(c, [0.62, 0.66, 0.68], inside * 0.7);
+        c = shade(c, 1 - 0.25 * Math.exp(-(((colat - hexR) / 0.012) ** 2)));
+        if (colat < 0.05) c = mix(c, [0.45, 0.47, 0.5], (1 - colat / 0.05) * 0.8);
       }
       return c;
     }),
@@ -248,6 +293,47 @@ function gasTextures(look: PlanetLook, width: number): PlanetTextures {
   };
   if (rng() < 0.4 || look.rings) out.rings = ringTexture(look.seed, base);
   return out;
+}
+
+/**
+ * Saturn's real rings on a square texture for a RingGeometry from `inner` to `outer` km: each
+ * radius as dense as its ring's optical depth (opacity 1 − e^(−τ/cos), seen at a slant) and as
+ * bright as its albedo, the named gaps clear (IAU/USGS). A faint fine ripple stands in for the
+ * thousands of ringlets too narrow to list.
+ */
+export function realRingTexture(rings: { inner: number; outer: number; tau?: number; albedo?: number; name: string }[], gaps: { inner: number; outer: number }[], inner: number, outer: number): THREE.CanvasTexture {
+  const size = 1024;
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext('2d')!;
+  const c = size / 2;
+  const rng = mulberry32(1257);
+  // Tints: the C ring and Cassini Division greyer, the B ring creamy, the A ring a little cooler.
+  const tint: Record<string, [number, number, number]> = {
+    'C ring': [0.78, 0.74, 0.68],
+    'B ring': [1.0, 0.92, 0.78],
+    'Cassini Division': [0.7, 0.68, 0.64],
+    'A ring': [0.94, 0.9, 0.82],
+    'F ring': [0.95, 0.93, 0.9],
+  };
+  for (let px = c * (inner / outer); px < c; px += 0.5) {
+    const km = (px / c) * outer;
+    const ring = rings.find((g) => km >= g.inner && km <= g.outer);
+    if (!ring || gaps.some((g) => km >= g.inner && km <= g.outer)) continue;
+    const ripple = 0.8 + 0.4 * rng();
+    const alpha = Math.min(0.95, (1 - Math.exp(-(ring.tau ?? 0.1) * 2.2)) * ripple);
+    const [r, g, b] = tint[ring.name] ?? [0.9, 0.88, 0.84];
+    const k = (0.55 + 0.9 * (ring.albedo ?? 0.4)) * 255;
+    ctx.strokeStyle = `rgba(${Math.round(Math.min(255, r * k))},${Math.round(Math.min(255, g * k))},${Math.round(Math.min(255, b * k))},${alpha.toFixed(3)})`;
+    ctx.lineWidth = 0.75;
+    ctx.beginPath();
+    ctx.arc(c, c, px, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 8;
+  return tex;
 }
 
 /** Concentric ring bands drawn on a square texture (RingGeometry has planar UVs). */

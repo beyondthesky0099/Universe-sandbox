@@ -1,5 +1,8 @@
 import * as THREE from 'three';
 import { playSamples } from '../audio';
+import { pulsarSamples, soundsLike } from '../sim/pulsarSound';
+import { pulsarParams } from '../sim/neutronStar';
+import { pulsarName } from '../sim/pulsars';
 import { seedFromString } from '../procgen/rng';
 import { setTrueScale } from '../sim/trueScale';
 import { loadGwEvent, loadGwEvents } from '../sim/gwEvents';
@@ -359,6 +362,7 @@ export class InputUI {
     $<HTMLInputElement>('opt-cosmic-web').addEventListener('change', (e) => this.app.cosmos.setWebVisible((e.target as HTMLInputElement).checked));
     $<HTMLInputElement>('opt-real-nebulae').addEventListener('change', (e) => this.app.galaxy.setRealLayerVisible('nebulae', (e.target as HTMLInputElement).checked));
     $<HTMLInputElement>('opt-real-clusters').addEventListener('change', (e) => this.app.galaxy.setRealLayerVisible('clusters', (e.target as HTMLInputElement).checked));
+    $<HTMLInputElement>('opt-real-pulsars').addEventListener('change', (e) => this.app.galaxy.setRealLayerVisible('pulsars', (e.target as HTMLInputElement).checked));
     $<HTMLInputElement>('opt-gaia-stars').addEventListener('change', (e) => this.app.galaxy.setGaiaVisible((e.target as HTMLInputElement).checked));
     $<HTMLInputElement>('opt-cmb').addEventListener('change', (e) => this.app.cosmos.setCmbVisible((e.target as HTMLInputElement).checked));
     $('cosmos-search').addEventListener('input', () => this.app.cosmosUI.renderCosmosSearch());
@@ -409,7 +413,23 @@ export class InputUI {
     });
     $('btn-help').addEventListener('click', () => this.app.tutorialUI.openTutorial());
     $('btn-menu').addEventListener('click', () => document.body.classList.toggle('panels-hidden'));
-    $<HTMLSelectElement>('quality').addEventListener('change', (e) => this.app.applyQuality((e.target as HTMLSelectElement).value as QualityName));
+    $<HTMLSelectElement>('quality').addEventListener('change', (e) => {
+      prefs.set('qualityChosen', true);
+      this.app.applyQuality((e.target as HTMLSelectElement).value as QualityName);
+    });
+    const autores = $<HTMLInputElement>('opt-autores');
+    autores.checked = this.app.autoResolution;
+    autores.addEventListener('change', () => {
+      this.app.autoResolution = autores.checked;
+      prefs.set('autoResolution', autores.checked);
+      // Back to full resolution when turned off.
+      if (!autores.checked) this.app.applyQuality(this.app.quality);
+    });
+    // Which graphics chip is drawing (to check a laptop uses its dedicated GPU).
+    const gl = this.app.renderer.getContext();
+    const dbg = gl.getExtension('WEBGL_debug_renderer_info');
+    const gpu = dbg ? String(gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL)) : '';
+    if (gpu) $('gpu-info').textContent = `Graphics: ${gpu.replace(/^ANGLE \((.*)\)$/, '$1')}`;
 
     // Galaxy
     const goSeed = () => this.app.galaxyMapUI.buildGalaxy(seedFromString($<HTMLInputElement>('galaxy-seed').value || '1'));
@@ -511,6 +531,21 @@ export class InputUI {
       // The next press continues the tour with the same spacecraft.
       const next = list.findIndex((x, j) => j > i && x.craft === e.craft);
       if (next >= 0) select.value = String(next);
+    });
+    // Pulsars: their pulses as sound, at the real spin rate.
+    const hearPulsar = (name: string, period: number, seed: number) => {
+      const rate = 44100;
+      playSamples(pulsarSamples(period, 5, rate, seed), rate);
+      toast(`${name}: ${soundsLike(period)}. Its radio pulses played as sound at the real spin rate (synthesized).`);
+    };
+    $('btn-pulsar-hear').addEventListener('click', () => {
+      const b = this.app.selectedBody();
+      if (b?.kind === 'neutron') hearPulsar(b.name, pulsarParams(b.name, b.id).period, b.id);
+    });
+    $('btn-star-hear').addEventListener('click', () => {
+      const t = this.app.galaxy.selected;
+      const p = typeof t === 'object' && 'psr' in t ? this.app.pulsarMapList[t.psr] : undefined;
+      if (p) hearPulsar(pulsarName(p), p.period, t !== -1 && typeof t === 'object' && 'psr' in t ? t.psr : 1);
     });
     $('btn-gw-hear').addEventListener('click', async () => {
       const events = await loadGwEvents().catch(() => []);

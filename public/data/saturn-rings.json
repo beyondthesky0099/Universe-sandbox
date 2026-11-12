@@ -1,5 +1,5 @@
 {
- "source": "NASA Saturnian Rings Fact Sheet (https://nssdc.gsfc.nasa.gov/planetary/factsheet/satringfact.html)",
+ "source": "NASA Saturnian Rings Fact Sheet (https://nssdc.gsfc.nasa.gov/planetary/factsheet/satringfact.html); gaps: IAU/USGS Gazetteer of Planetary Nomenclature (https://planetarynames.wr.usgs.gov/Page/Rings)",
  "saturnEquatorialRadiusKm": 60268,
  "rings": [
   {
@@ -40,12 +40,74 @@
  ],
  "gaps": [
   {
+   "name": "Colombo Gap",
+   "inner": 77750,
+   "outer": 77850
+  },
+  {
+   "name": "Maxwell Gap",
+   "inner": 87365,
+   "outer": 87635
+  },
+  {
+   "name": "Bond Gap",
+   "inner": 88690,
+   "outer": 88720
+  },
+  {
+   "name": "Dawes Gap",
+   "inner": 90200,
+   "outer": 90220
+  },
+  {
+   "name": "Huygens Gap",
+   "inner": 117499,
+   "outer": 117861
+  },
+  {
+   "name": "Herschel Gap",
+   "inner": 118183,
+   "outer": 118285
+  },
+  {
+   "name": "Russell Gap",
+   "inner": 118597,
+   "outer": 118630
+  },
+  {
+   "name": "Jeffreys Gap",
+   "inner": 118931,
+   "outer": 118969
+  },
+  {
+   "name": "Kuiper Gap",
+   "inner": 119403,
+   "outer": 119406
+  },
+  {
+   "name": "Laplace Gap",
+   "inner": 119848,
+   "outer": 120086
+  },
+  {
+   "name": "Bessel Gap",
+   "inner": 120236,
+   "outer": 120246
+  },
+  {
+   "name": "Barnard Gap",
+   "inner": 120305,
+   "outer": 120318
+  },
+  {
    "name": "Encke Gap",
-   "radius": 133410
+   "inner": 133408,
+   "outer": 133733
   },
   {
    "name": "Keeler Gap",
-   "radius": 136487
+   "inner": 136488,
+   "outer": 136523
   }
  ]
 }

@@ -6,6 +6,11 @@
  * Extracts the inner/outer radius (km), optical depth and albedo of the C, B and A rings, the
  * Cassini Division between B and A, and the F ring.
  *
+ * The named gaps (Encke, Keeler, Huygens, Maxwell, Colombo and the rest) come from the IAU ring
+ * nomenclature table in the USGS Gazetteer of Planetary Nomenclature
+ * (https://planetarynames.wr.usgs.gov/Page/Rings): each gap's radius or radial range, and its
+ * width. A gap given as one radius is centred there; a width given as a range uses its middle.
+ *
  *   node scripts/build-saturn-rings.mjs [path-to-saved-html]
  */
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -54,11 +59,29 @@ const rings = [
   // A narrow ring: give it a nominal 50 km width around its radius.
   { name: 'F ring', inner: km('F ring') - 25, outer: km('F ring') + 25, tau: mid(col('F ring', 2)), albedo: mid(col('F ring', 3)) },
 ];
-const gaps = [
-  { name: 'Encke Gap', radius: km('Encke gap') },
-  { name: 'Keeler Gap', radius: km('Keeler gap') },
-];
+const URL_IAU = 'https://planetarynames.wr.usgs.gov/Page/Rings';
+const iau = await (await fetch(URL_IAU)).text();
+const saturn = iau.slice(iau.indexOf('Rings of Saturn'));
+const gaps = [];
+for (const [, row] of saturn.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/g)) {
+  const cells = [...row.matchAll(/<td[^>]*>([\s\S]*?)<\/td>/g)].map((m) => decode(m[1]));
+  if (cells.length < 3 || !/Gap$/.test(cells[0])) continue;
+  const nums = (t) => t.split('-').map((x) => Number(x.replace(/,/g, '').trim())).filter(Number.isFinite);
+  const where = nums(cells[1]);
+  const widths = nums(cells[2]);
+  const width = widths.reduce((a, b) => a + b, 0) / widths.length;
+  const [inner, outer] = where.length === 2 ? where : [where[0] - width / 2, where[0] + width / 2];
+  if (!Number.isFinite(inner) || !Number.isFinite(outer)) throw new Error(`Bad gap row: ${cells.join(' | ')}`);
+  gaps.push({ name: cells[0], inner: Math.round(inner), outer: Math.round(outer) });
+}
+for (const name of ['Encke Gap', 'Keeler Gap', 'Huygens Gap']) if (!gaps.some((g) => g.name === name)) throw new Error(`${name} missing from the IAU table`);
 
-const data = { source: `NASA Saturnian Rings Fact Sheet (${URL_SHEET})`, saturnEquatorialRadiusKm: km('Saturn Equator'), rings, gaps };
+const data = {
+  source: `NASA Saturnian Rings Fact Sheet (${URL_SHEET}); gaps: IAU/USGS Gazetteer of Planetary Nomenclature (${URL_IAU})`,
+  saturnEquatorialRadiusKm: km('Saturn Equator'),
+  rings,
+  gaps,
+};
 writeFileSync(new URL('../public/data/saturn-rings.json', import.meta.url), JSON.stringify(data, null, 1) + '\n');
 console.log(rings.map((r) => `${r.name}: ${r.inner}–${r.outer} km, τ≈${r.tau}, albedo≈${r.albedo}`).join('\n'));
+console.log(gaps.map((g) => `${g.name}: ${g.inner}–${g.outer} km`).join('\n'));

@@ -27,6 +27,12 @@ const MAPS = [
     'NASA Visible Earth, "The Blue Marble: Clouds" (NASA Goddard Space Flight Center)',
   ],
   [
+    'earth-night',
+    'https://eoimages.gsfc.nasa.gov/images/imagerecords/144000/144898/BlackMarble_2016_01deg.jpg',
+    2048,
+    'NASA Earth Observatory, "Black Marble 2016" night lights (Suomi NPP VIIRS; NASA Goddard / Miguel Román)',
+  ],
+  [
     'moon',
     'https://svs.gsfc.nasa.gov/vis/a000000/a004700/a004720/lroc_color_poles_1k.jpg',
     1024,
@@ -89,6 +95,15 @@ const MAPS = [
     ['-colorspace', 'Gray'],
   ],
   [
+    // Simple cylindrical, the whole globe. USGS: the true colours are "similar but much more muted",
+    // so saturation is reduced here.
+    'io',
+    'https://astrogeology.usgs.gov/ckan/dataset/f6924861-ce9c-490d-8a4b-7812a20f2de5/resource/a9fab679-8081-4144-9f58-45848836c8f5/download/full.jpg',
+    1024,
+    'NASA Galileo SSI / Voyager colour-merged global mosaic of Io, via USGS Astrogeology (saturation reduced here: the true colours are more muted)',
+    ['-modulate', '100,60'],
+  ],
+  [
     'vesta',
     'https://astrogeology.usgs.gov/ckan/dataset/ec63e420-a8bd-4a90-9341-a5754b551574/resource/9306febf-0c7a-49ee-b7b0-a1f043297bf7/download/vesta_dawn_fc_hamo_mosaic_global_1024.jpg',
     1024,
@@ -103,10 +118,13 @@ mkdirSync(outDir, { recursive: true });
 const work = join(new URL('../node_modules/.cache/textures/', import.meta.url).pathname);
 mkdirSync(work, { recursive: true });
 
+/** NASA Earth Observatory images are mirrored here; used when eoimages.gsfc.nasa.gov is down. */
+const mirror = (url) => url.replace('https://eoimages.gsfc.nasa.gov/images/', 'https://assets.science.nasa.gov/content/dam/science/esd/eo/images/');
+
 async function download(url, dest) {
   if (existsSync(dest)) return;
   for (let attempt = 0; ; attempt++) {
-    const res = await fetch(url);
+    const res = await fetch(attempt % 2 ? mirror(url) : url);
     const type = res.headers.get('content-type') ?? '';
     if (res.ok && type.startsWith('image/')) {
       writeFileSync(dest, Buffer.from(await res.arrayBuffer()));

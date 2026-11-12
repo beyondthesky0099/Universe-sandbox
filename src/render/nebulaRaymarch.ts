@@ -220,7 +220,7 @@ const FRAGMENT = /* glsl */ `
       float e = length(q * vec3(1.0, 1.35, 1.0));
       float shell = exp(-pow((e - 0.62) / 0.09, 2.0)) * (0.6 + 0.8 * n);
       float rho = shell + exp(-pow(e / 0.45, 2.0)) * 0.25;
-      emit = mix(OIII, HALPHA, smoothstep(0.45, 0.72, e)) * rho * 2.0;
+      emit = mix(OIII, HALPHA, smoothstep(0.55, 0.8, e)) * rho * 0.9;
       sigma = 0.3 * rho;
     } else if (uShape == 3) {
       // Supernova remnant: a thin shell of filaments where the blast wave sweeps up gas.
@@ -274,6 +274,12 @@ const FRAGMENT = /* glsl */ `
       T *= a;
       if (T < 0.01) break;
       t += dt;
+    }
+    if (uShape == 2) {
+      // The planetary nebula's central star: the hot white-dwarf core that lights the shell. It is
+      // a point, so it is drawn from how close the ray passes to the centre, not by the steps.
+      float miss = length(oc - rd * dot(oc, rd)) / uRadius;
+      L += T * vec3(0.85, 0.92, 1.0) * (exp(-pow(miss / 0.01, 2.0)) * 2.0 + exp(-miss / 0.025) * 0.12);
     }
     // Premultiplied: the background is dimmed by the transmittance T.
     gl_FragColor = vec4(L * uOpacity, (1.0 - T) * uOpacity);

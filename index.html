@@ -142,6 +142,7 @@
           <p class="muted" id="galaxy-info"></p>
           <label class="check" title="HII regions (pink) and planetary nebulae (teal) with measured distances, from professional catalogues"><input id="opt-real-nebulae" type="checkbox" checked /> Real nebulae</label>
           <label class="check" title="Open clusters and moving groups from Gaia (Hunt & Reffert 2023, gold) and globular clusters (Harris, orange) at their measured distances"><input id="opt-real-clusters" type="checkbox" checked /> Real star clusters</label>
+          <label class="check" title="Every Milky Way pulsar with a distance in the ATNF Pulsar Catalogue (about 3,600): blue, millisecond pulsars white, magnetars magenta"><input id="opt-real-pulsars" type="checkbox" checked /> Real pulsars</label>
           <label class="check" title="Every star brighter than magnitude 8 with a good Gaia DR3 parallax (about 62,000), at its measured distance and in its real colour"><input id="opt-gaia-stars" type="checkbox" checked /> Real stars (Gaia)</label>
           <label class="row">
             <span>Seed</span>
@@ -186,6 +187,7 @@
         <div class="row buttons">
           <button id="btn-star-bookmark" title="Bookmark (B)">☆ Bookmark</button>
           <button id="btn-star-fly">Fly to</button>
+          <button id="btn-star-hear" class="hidden" title="Hear its radio pulses as sound, one click per turn, at its real spin rate">🔊 Hear it</button>
         </div>
         <div class="row buttons">
           <button id="btn-star-enter" class="primary">Enter system →</button>
@@ -208,6 +210,7 @@
             <button id="btn-preset-load">Load</button>
           </div>
           <p id="preset-desc" class="muted small"></p>
+          <div id="preset-extra"></div>
           <div class="row">
             <input id="solar-date" type="date" title="Load the real Solar System on this date" />
             <button id="btn-solar-date" title="Real planet positions from JPL ephemerides">Solar System</button>
@@ -341,8 +344,11 @@
               <option value="low">Low</option>
               <option value="medium">Medium</option>
               <option value="high">High</option>
+              <option value="ultra">Ultra (above screen resolution)</option>
             </select>
           </label>
+          <label class="check" title="Lower the render resolution when the frame rate drops, and raise it again when there is room, so it stays smooth on any graphics card"><input id="opt-autores" type="checkbox" checked /> Keep it smooth (adapt resolution)</label>
+          <p id="gpu-info" class="muted small"></p>
           <div class="checks">
             <label class="check" title="Bloom glow and black-hole gravitational lensing"><input id="opt-postfx" type="checkbox" checked /> Bloom & lensing</label>
           </div>
@@ -513,6 +519,9 @@
           <input id="bh-spin" type="range" min="0" max="0.998" step="0.002" value="0" />
           <output id="bh-spin-out"></output>
         </label>
+        <div id="pulsar-row" class="row buttons hidden">
+          <button id="btn-pulsar-hear" title="Hear its radio pulses as sound, one click per turn, at its real spin rate">🔊 Hear it spin</button>
+        </div>
         <div class="row buttons">
           <button id="btn-mass-down" title="Halve mass">Mass ÷2</button>
           <button id="btn-mass-up" title="Double mass">Mass ×2</button>

@@ -8,16 +8,19 @@ import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import type { Body, BodyKind } from '../sim/body';
 import type { Climate } from '../sim/climate';
 import { EARTH_MASS } from '../sim/units';
-import { makePlanetTextures, seedFromName } from './planetTextures';
+import { makePlanetTextures, realRingTexture, seedFromName } from './planetTextures';
 import { mulberry32 } from '../procgen/rng';
 import { glowTexture } from './textures';
+import { NeutronStarVisual } from './neutronStar';
+import { coronaMesh, StarSurface, starLook } from './starSurface';
+import { hookPlanet, hookRings, oceanRoughness, shadowUniforms, type ShadowUniforms } from './planetLighting';
+import { starTemperature } from '../sim/color';
 import { getSolarData, poleScene, REAL_COLORS } from '../sim/solarSystemData';
 
 const SPHERE = new THREE.SphereGeometry(1, 64, 32);
 const SPHERE_LOW = new THREE.SphereGeometry(1, 24, 12);
 const RINGS = new THREE.RingGeometry(1.35, 2.5, 128, 1);
 const PROBE = new THREE.OctahedronGeometry(1, 0);
-const BEAM = new THREE.ConeGeometry(0.05, 1, 24, 1, true).translate(0, 0.5, 0);
 
 /** Minimum on-screen radius (px) so tiny bodies stay visible when zoomed out. */
 const MIN_PIXEL_RADIUS = 2.2;
@@ -62,13 +65,14 @@ export function atmosphereMaterial(color: number, intensity: number): THREE.Shad
 }
 
 /** Real NASA surface maps (public/textures, built by scripts/build-planet-textures.mjs). */
-const REAL_MAPS: Record<string, { map: string; clouds?: string; grey?: boolean }> = {
+const REAL_MAPS: Record<string, { map: string; clouds?: string; grey?: boolean; night?: string }> = {
   Mercury: { map: 'mercury.jpg' },
-  Earth: { map: 'earth.jpg', clouds: 'earth-clouds.jpg' },
+  Earth: { map: 'earth.jpg', clouds: 'earth-clouds.jpg', night: 'earth-night.jpg' },
   Moon: { map: 'moon.jpg' },
   Mars: { map: 'mars.jpg' },
   Phobos: { map: 'phobos.jpg', grey: true },
   Jupiter: { map: 'jupiter.jpg' },
+  Io: { map: 'io.jpg' },
   Europa: { map: 'europa.jpg', grey: true },
   Ganymede: { map: 'ganymede.jpg', grey: true },
   Rhea: { map: 'rhea.jpg', grey: true },
@@ -122,7 +126,15 @@ export class BodyVisual {
   /** Distance from the star when the aurora was first lit (its stellar-wind reference). */
   private auroraD0 = 0;
   private rings?: THREE.Mesh;
-  private beams?: THREE.Group;
+  /** Ring shadows and night lights (planetLighting.ts). */
+  private shadowU?: ShadowUniforms;
+  /** Saturn's real ring radii (in planet radii); other ringed planets share RINGS. */
+  private ringGeometry?: THREE.RingGeometry;
+  /** A star's surface (granulation, limb darkening, spots) and corona. */
+  private star?: StarSurface;
+  private corona?: THREE.Mesh;
+  /** A neutron star's bent-light surface, magnetic field and pulsar beams. */
+  private neutron?: NeutronStarVisual;
   private readonly trailPos: Float32Array;
   private trailFilled = false;
   private trailRef: number | undefined;
@@ -267,38 +279,21 @@ export class BodyVisual {
     let material: THREE.Material;
     switch (body.kind) {
       case 'star':
-        material = new THREE.MeshBasicMaterial({ color: new THREE.Color(body.color).multiplyScalar(1.15) });
-        this.glow = this.makeGlow(body.color, 1);
-        break;
       case 'giant':
-        // Swollen, dimmer surface with a broad orange halo.
-        material = new THREE.MeshBasicMaterial({ color: new THREE.Color(body.color).multiplyScalar(0.95) });
-        this.glow = this.makeGlow(0xff8040, 0.7);
-        break;
-      case 'whitedwarf':
-        material = new THREE.MeshBasicMaterial({ color: 0xf4f8ff });
-        this.glow = this.makeGlow(0xcfe0ff, 0.8);
-        break;
-      case 'neutron': {
-        material = new THREE.MeshBasicMaterial({ color: 0xe8f4ff });
-        this.glow = this.makeGlow(0x9fd0ff, 0.9);
-        // Pulsar beams sweeping around the spin axis.
-        this.beams = new THREE.Group();
-        const beamMat = new THREE.MeshBasicMaterial({
-          color: 0x9fd8ff,
-          transparent: true,
-          opacity: 0.22,
-          blending: THREE.AdditiveBlending,
-          depthWrite: false,
-          side: THREE.DoubleSide,
-        });
-        const up = new THREE.Mesh(BEAM, beamMat);
-        const down = new THREE.Mesh(BEAM, beamMat);
-        down.rotation.x = Math.PI;
-        this.beams.add(up, down);
-        this.beams.rotation.z = 0.5;
+      case 'whitedwarf': {
+        // Granulation, limb darkening, spots (starSurface.ts); a corona around ordinary stars.
+        const temperature = body.name === 'Sun' ? 5772 : body.kind === 'giant' ? 3600 : body.kind === 'whitedwarf' ? 15000 : starTemperature(body.mass);
+        this.star = new StarSurface(starLook(body.kind, temperature, body.name), seedFromName(body.name));
+        material = this.star.material;
+        this.glow = body.kind === 'giant' ? this.makeGlow(0xff8040, 0.7) : this.makeGlow(body.kind === 'whitedwarf' ? 0xcfe0ff : body.color, body.kind === 'whitedwarf' ? 0.8 : 1);
+        if (body.kind === 'star') this.corona = coronaMesh(body.color, seedFromName(body.name));
         break;
       }
+      case 'neutron':
+        this.neutron = new NeutronStarVisual(body.name, body.id, body.mass);
+        material = this.neutron.surface;
+        this.glow = this.makeGlow(0x9fd0ff, 0.9);
+        break;
       case 'blackhole':
         material = new THREE.MeshBasicMaterial({ color: 0x000000 });
         // The disc lies in the hole's equator: its normal is the spin axis (accretionDisk.ts).
@@ -318,11 +313,12 @@ export class BodyVisual {
       this.glow = this.makeGlow(0x7fdcff, 0.8);
       this.isProbe = true;
     }
-    this.mesh = new THREE.Mesh(this.isProbe ? PROBE : this.isPlanet ? SPHERE : SPHERE_LOW, material);
+    this.mesh = new THREE.Mesh(this.isProbe ? PROBE : this.isPlanet || this.neutron || this.star ? SPHERE : SPHERE_LOW, material);
     this.spin.add(this.mesh);
     if (this.disk) this.group.add(this.disk);
     if (this.glow) this.group.add(this.glow);
-    if (this.beams) this.group.add(this.beams);
+    if (this.neutron) this.spin.add(this.neutron.root);
+    if (this.corona) this.group.add(this.corona);
     this.detailKey = '';
     this.applyClimateTint();
   }
@@ -360,7 +356,7 @@ export class BodyVisual {
   applyDetail(body: Body, textureWidth: number): void {
     if (!this.isPlanet) return;
     const key = this.wantedDetailKey(body);
-    const look = { kind: body.kind, color: body.color, seed: seedFromName(this.name), climate: this.climate, earthMasses: body.mass / EARTH_MASS, rings: this.name === 'Saturn' };
+    const look = { kind: body.kind, color: body.color, seed: seedFromName(this.name), climate: this.climate, earthMasses: body.mass / EARTH_MASS, rings: this.name === 'Saturn', name: this.name };
     const tex = makePlanetTextures(look, textureWidth);
     this.disposeDetail();
     const mat = this.mesh.material as THREE.MeshStandardMaterial;
@@ -400,16 +396,35 @@ export class BodyVisual {
       this.aurora.visible = false;
       this.mesh.add(this.aurora);
     }
+    // Saturn: its real rings, at their real radii, with the named gaps.
+    const solar = getSolarData();
+    if (this.name === 'Saturn' && solar?.rings?.length) {
+      tex.rings?.dispose();
+      const req = 60268;
+      const inner = Math.min(...solar.rings.map((g) => g.inner)), outer = Math.max(...solar.rings.map((g) => g.outer));
+      tex.rings = realRingTexture(solar.rings, solar.ringGaps ?? [], inner, outer);
+      this.ringGeometry ??= new THREE.RingGeometry(inner / req, outer / req, 256, 1);
+    }
     if (tex.rings) {
       this.textures.push(tex.rings);
-      this.rings = new THREE.Mesh(
-        RINGS,
-        new THREE.MeshStandardMaterial({ map: tex.rings, transparent: true, side: THREE.DoubleSide, depthWrite: false, roughness: 1 }),
-      );
+      const ringMat = new THREE.MeshStandardMaterial({ map: tex.rings, transparent: true, side: THREE.DoubleSide, depthWrite: false, roughness: 1 });
+      this.rings = new THREE.Mesh(this.ringGeometry ?? RINGS, ringMat);
       this.rings.rotation.x = -Math.PI / 2;
       this.mesh.add(this.rings);
+      // The globe shades the rings, and the rings band the globe with shadow (planetLighting.ts).
+      const geo = this.rings.geometry as THREE.RingGeometry;
+      this.shadowU = shadowUniforms();
+      this.shadowU.uRingTex.value = tex.rings;
+      this.shadowU.uRingInner.value = geo.parameters.innerRadius;
+      this.shadowU.uRingOuter.value = geo.parameters.outerRadius;
+      hookRings(ringMat, this.shadowU);
     }
     this.applyRealMaps(mat);
+    const night = REAL_MAPS[this.name]?.night && this.climate !== 'molten';
+    if (this.shadowU || night) {
+      this.shadowU ??= shadowUniforms();
+      hookPlanet(mat, this.shadowU, { rings: !!this.rings, nightLights: !!night });
+    }
     this.detailKey = key;
   }
 
@@ -425,6 +440,21 @@ export class BodyVisual {
     mat.color.copy(real.grey ? lightTint(REAL_COLORS[this.name]) : new THREE.Color(0xffffff));
     mat.emissiveMap = null;
     mat.emissive.set(0x000000);
+    if (real.night) {
+      // City lights, shown on the night side only (hookPlanet).
+      mat.emissiveMap = realTexture(real.night);
+      mat.emissive.set(0xffffff);
+      mat.emissiveIntensity = 1.3;
+    }
+    if (this.name === 'Earth') {
+      // Oceans smooth, land rough: the Sun glints off the sea.
+      oceanRoughness(mat.map, (rough) => {
+        this.textures.push(rough);
+        mat.roughnessMap = rough;
+        mat.roughness = 1;
+        mat.needsUpdate = true;
+      });
+    }
     mat.needsUpdate = true;
     if (real.clouds) {
       const clouds = realTexture(real.clouds);
@@ -450,7 +480,7 @@ export class BodyVisual {
   }
 
   /** Update transform. `worldPerPixel` is the world size of one screen pixel at the body's depth. */
-  update(body: Body, worldPerPixel: number, dt: number, lockTo?: Body, sun?: Body): void {
+  update(body: Body, worldPerPixel: number, dt: number, lockTo?: Body, sun?: Body, camera?: THREE.Vector3): void {
     this.group.position.set(body.x, body.y, body.z);
     if (this.tails) {
       if (sun) this.updateTails(body, sun);
@@ -460,7 +490,10 @@ export class BodyVisual {
     const isGalaxy = body.tag === 'galaxy';
     const r = this.isProbe ? worldPerPixel * 4 : isGalaxy ? Math.max(body.radius * 0.05, worldPerPixel * 2) : Math.max(body.radius, worldPerPixel * MIN_PIXEL_RADIUS);
     this.mesh.scale.setScalar(r);
-    if (lockTo) {
+    if (this.neutron) {
+      // Turns at its own (pulsar) rate; the field lines and beams turn with it.
+      if (camera) this.neutron.update(r, camera, dt, this.mesh);
+    } else if (lockTo) {
       // Tidally locked: always show the same face to the parent.
       this.mesh.rotation.y = Math.atan2(lockTo.x - body.x, lockTo.z - body.z) - Math.PI / 2;
     } else {
@@ -502,9 +535,45 @@ export class BodyVisual {
       // The shaded disc gives the light; the soft glow would only be smeared into rings by the lens.
       if (this.glow) this.glow.visible = !blackHoleView.lensed;
     }
-    if (this.beams) {
-      this.beams.scale.setScalar(Math.max(body.radius * 40, worldPerPixel * 90));
-      this.beams.rotation.y += dt * 6;
+    if (this.shadowU && this.detailKey) {
+      const u = this.shadowU;
+      if (sun) u.uStar.value.set(sun.x, sun.y, sun.z);
+      u.uCenter.value.set(body.x, body.y, body.z);
+      u.uRadius.value = r;
+      u.uNight.value = sun ? 1 : 0;
+      if (this.rings) {
+        this.rings.updateWorldMatrix(true, false);
+        u.uRingNormal.value.set(0, 0, 1).transformDirection(this.rings.matrixWorld);
+      }
+    }
+    if (this.star) {
+      const px = r / worldPerPixel;
+      this.star.update(dt, px);
+      // Up close the glow would wash out the surface: keep it to a halo.
+      if (this.glow) {
+        const close = THREE.MathUtils.smoothstep(px, 6, 60);
+        this.glow.material.opacity = (this.kind === 'giant' ? 0.7 : this.kind === 'whitedwarf' ? 0.8 : 1) * (1 - 0.75 * close);
+        // A wide soft halo rather than a bright rim hugging the limb.
+        if (close > 0) this.glow.scale.multiplyScalar(1 + close * 1.5);
+      }
+      if (this.corona) {
+        const show = px > 12 && !!camera;
+        this.corona.visible = show;
+        if (show) {
+          this.corona.scale.setScalar(r);
+          this.corona.lookAt(camera!);
+          (this.corona.material as THREE.ShaderMaterial).uniforms.uOpacity.value = THREE.MathUtils.smoothstep(px, 12, 60);
+        }
+      }
+    }
+    if (this.neutron && this.glow) {
+      // The lighthouse: a flash as a beam sweeps past. Up close the glow shrinks to a halo, so
+      // the surface shows.
+      const f = this.neutron.flash;
+      const close = THREE.MathUtils.smoothstep(r / worldPerPixel, 6, 40);
+      if (close > 0) this.glow.scale.setScalar(THREE.MathUtils.lerp(this.glow.scale.x, r * 2.8, close));
+      this.glow.scale.multiplyScalar(1 + f * 1.5);
+      this.glow.material.opacity = (0.6 + f * 0.4) * (1 - 0.55 * close);
     }
   }
 
@@ -623,6 +692,7 @@ export class BodyVisual {
       (m.material as THREE.Material).dispose();
     }
     this.clouds = this.atmosphere = this.aurora = this.rings = undefined;
+    this.shadowU = undefined;
   }
 
   private disposeParts(): void {
@@ -631,13 +701,22 @@ export class BodyVisual {
       this.spin.remove(this.mesh);
       (this.mesh.material as THREE.Material).dispose();
     }
-    for (const part of [this.glow, this.disk, this.beams]) if (part) this.group.remove(part);
+    for (const part of [this.glow, this.disk, this.corona]) if (part) this.group.remove(part);
+    if (this.corona) {
+      this.corona.geometry.dispose();
+      (this.corona.material as THREE.Material).dispose();
+      this.corona = undefined;
+    }
+    this.star = undefined;
+    if (this.neutron) {
+      this.spin.remove(this.neutron.root);
+      this.neutron.dispose();
+      this.neutron = undefined;
+    }
     this.glow?.material.dispose();
     if (this.disk) (this.disk.material as THREE.Material).dispose();
-    this.beams?.children.forEach((c) => ((c as THREE.Mesh).material as THREE.Material).dispose());
     this.glow = undefined;
     this.disk = undefined;
-    this.beams = undefined;
   }
 
   dispose(): void {

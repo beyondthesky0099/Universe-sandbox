@@ -9,6 +9,8 @@ import { diameterPc, loadNebulae, NEBULA_COLORS } from '../sim/nebulae';
 import { loadNebulaImages, NEBULA_IMAGE_CREDIT, nebulaAtlasUrl, nebulaKey, tileRect, type NebulaImageAtlas } from '../sim/nebulaImages';
 import type { Cloud } from '../render/nebulaClouds';
 import { gaiaPoints, loadGaiaBright } from '../sim/gaiaBright';
+import { isMillisecond, loadPulsars, pulsarName } from '../sim/pulsars';
+import { characteristicAge, dipoleField, formatYears, sci } from '../sim/neutronStar';
 import { fmt } from '../sim/units';
 import { $, escapeHtml, setFacts, toast } from '../ui/dom';
 import { LOW_POWER, sleep } from './shared';
@@ -31,6 +33,46 @@ export class GalaxyMapUI {
         return { label: `${o.name} · ${what} · ${ly.toLocaleString('en-US')} ly`, pos: galacticToMap(l, b, o.distanceKpc), kind: o.kind };
       }),
     );
+  }
+
+  /**
+   * Every Milky Way pulsar in the ATNF catalogue at its distance: young pulsars pale blue,
+   * millisecond pulsars white, magnetars magenta. The famous ones are named.
+   */
+  async showPulsarsOnMap(seed: number): Promise<void> {
+    const all = await loadPulsars().catch(() => undefined);
+    if (!all || this.app.galaxySeed !== seed) return;
+    // Already labelled as famous compact objects (compact-objects.json).
+    const labelled = new Set(['J0835-4510', 'J0437-4715']);
+    this.app.pulsarMapList = all;
+    this.app.galaxy.pulsarPositions = all.map((p) => {
+      const [l, b] = equatorialToGalactic(p.raDeg, p.decDeg);
+      return galacticToMap(l, b, p.distanceKpc);
+    });
+    this.app.galaxy.setRealLayer(
+      'pulsars',
+      all.map((p, index) => {
+        const [l, b] = equatorialToGalactic(p.raDeg, p.decDeg);
+        const named = !labelled.has(p.jname) && (p.magnetar || !!p.snr || ['B0531+21', 'B1257+12', 'B1913+16', 'B1937+21'].includes(p.bname ?? ''));
+        const ly = Math.round((p.distanceKpc * 3261.6) / 10) * 10;
+        const what = p.magnetar ? 'magnetar' : isMillisecond(p) ? 'millisecond pulsar' : 'pulsar';
+        const per = p.period < 1 ? `${(p.period * 1000).toPrecision(3)} ms` : `${p.period.toPrecision(3)} s`;
+        return {
+          pos: galacticToMap(l, b, p.distanceKpc),
+          color: (p.magnetar ? [1, 0.45, 0.9] : isMillisecond(p) ? [0.9, 0.95, 1] : [0.55, 0.85, 1]) as [number, number, number],
+          // A point source: a few pixels across from a few kiloparsecs away.
+          size: 0.08,
+          label: named ? `${pulsarName(p)}${p.snr ? ` (${p.snr})` : ''} · ${what} · ${per} · ${ly.toLocaleString('en-US')} ly` : undefined,
+          labelColor: p.magnetar ? '#ff9de3' : '#b8f4ff',
+          distance: 0.02,
+          target: { psr: index },
+        };
+      }),
+    );
+    this.app.galaxy.setRealLayerVisible('pulsars', $<HTMLInputElement>('opt-real-pulsars').checked);
+    const magnetars = all.filter((p) => p.magnetar).length;
+    const msp = all.filter((p) => isMillisecond(p)).length;
+    $('galaxy-info').textContent += ` ${all.length.toLocaleString('en-US')} real pulsars from the ATNF Pulsar Catalogue (blue; ${msp.toLocaleString('en-US')} millisecond pulsars in white, ${magnetars} magnetars in magenta) at their estimated distances, most from how much their radio pulses are smeared by free electrons on the way.`;
   }
 
   /** Real stars from Gaia DR3 around the Sun, at their measured distances (Milky Way only). */
@@ -103,21 +145,28 @@ export class GalaxyMapUI {
       const image = n.kind === 'dark' ? undefined : imageOf.get(nebulaKey(n));
       k++;
       if (image) {
-        // The image spans 2.6 catalogue radii; a soft glow in the nebula's colour gives it depth.
+        // The image spans 2.6 catalogue radii, but never less than 3 arcminutes: a small nebula
+        // fills only the middle of its picture, so the picture is drawn at its true field.
+        // A soft glow in the nebula's colour gives it depth.
         const named = image.page === 0;
         const page = images!.pages[image.page];
         const rect = tileRect(page, image.tile);
+        const fieldSize = ((n.distanceKpc! * 1000 * Math.tan((image.fieldDeg * Math.PI) / 180)) / 1000) * UNITS_PER_KPC;
+        const photoSize = Math.max(size * 1.3, fieldSize);
         // Up close it becomes a volume that looks like the photograph from Earth's direction.
+        // A nebula only a few dozen survey pixels across (most planetary nebulae) is a burnt-out
+        // blob on the plate; up close it becomes its modelled shape instead.
+        const tiny = fieldSize > size * 1.3 * 1.5;
         volumes.push({
           center: pos,
-          radius: (size * 1.3) / 2,
-          shape: 'photo',
+          radius: tiny ? size * 0.6 : photoSize / 2,
+          shape: tiny ? n.kind : 'photo',
           seed: k,
-          photo: { set: 2 + image.page, rect },
+          photo: tiny ? undefined : { set: 2 + image.page, rect },
           axes: pictureAxes(n.l, n.b, n.distanceKpc!),
           fade: [[2 + image.page, perPage[image.page].length], [1, glow.length]],
         });
-        perPage[image.page].push({ pos, size: size * 1.3, color, tile: rect, minPx: named ? 40 : 14, brightness: 1.1, rotation: 0, puff: 0 });
+        perPage[image.page].push({ pos, size: photoSize, color, tile: rect, minPx: named ? 40 : 14, brightness: 1.1, rotation: 0, puff: 0 });
         glow.push({ pos, size: size * 1.6, color, minPx: named ? 50 : 18, brightness: 0.3, rotation: k, puff: k });
       } else {
         // A few overlapping puffs spread through the nebula's volume.
@@ -207,6 +256,7 @@ export class GalaxyMapUI {
       void this.showCompactObjectsOnMap(seed);
       void this.showNebulaeOnMap(seed);
       void this.showClustersOnMap(seed);
+      void this.showPulsarsOnMap(seed);
       void this.showGaiaOnMap(seed);
     }
     $<HTMLInputElement>('galaxy-seed').value = String(seed);
@@ -235,6 +285,7 @@ export class GalaxyMapUI {
   selectTarget(target: GalaxyTarget | -1): void {
     this.app.galaxy.select(target);
     const panel = $('star-panel');
+    $('btn-star-hear').classList.toggle('hidden', !(typeof target === 'object' && 'psr' in target));
     if (target === -1) {
       panel.classList.add('hidden');
       return;
@@ -249,6 +300,24 @@ export class GalaxyMapUI {
         ['Age', '4.6 Gyr'],
         ['Planets', '8 (real positions today)'],
         ['Neighbours', 'Thousands of known exoplanet systems'],
+      ]);
+      bookmarkBtn.classList.add('hidden');
+      panel.classList.remove('hidden');
+      return;
+    }
+    if (typeof target === 'object' && 'psr' in target) {
+      const p = this.app.pulsarMapList[target.psr];
+      const companion = p.pbDays && p.companionMass >= 1e-3
+        ? `${p.companionMass >= 1.2 ? 'neutron star' : p.companionMass >= 0.08 ? 'white dwarf' : 'evaporating star'} (~${fmt(p.companionMass)} M☉), orbit ${p.pbDays < 2 ? `${fmt(p.pbDays * 24)} hours` : `${fmt(p.pbDays)} days`}`
+        : p.pbDays ? 'planets' : 'none';
+      $('star-name').textContent = `${pulsarName(p)}${p.snr ? ` (${p.snr})` : ''}`;
+      setFacts($('star-facts'), [
+        ['Type', p.magnetar ? 'Magnetar' : isMillisecond(p) ? 'Millisecond pulsar' : 'Pulsar'],
+        ['Spin period', p.period < 1 ? `${fmt(p.period * 1000)} ms` : `${fmt(p.period)} s`],
+        ...(p.pdot > 0 ? ([['Magnetic field', sci(dipoleField(p.period, p.pdot), 'G')], ['Characteristic age', formatYears(characteristicAge(p.period, p.pdot))]] as [string, string][]) : []),
+        ['Companion', companion],
+        ['Distance', `${fmt(p.distanceKpc * 3261.6)} light-years`],
+        ['Source', 'ATNF Pulsar Catalogue'],
       ]);
       bookmarkBtn.classList.add('hidden');
       panel.classList.remove('hidden');

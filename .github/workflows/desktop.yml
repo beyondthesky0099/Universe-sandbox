@@ -7,6 +7,7 @@ on:
   pull_request:
     paths:
       - 'desktop/**'
+      - 'server/**'
       - '.github/workflows/desktop.yml'
   workflow_dispatch:
   push:
@@ -30,8 +31,12 @@ jobs:
           cache-dependency-path: |
             package-lock.json
             desktop/package-lock.json
+            server/package-lock.json
       - run: npm ci
       - run: npm run build
+      # The desktop app bundles the companion server (desktop/build-server.mjs).
+      - run: npm ci
+        working-directory: server
       - run: npm ci
         working-directory: desktop
       - run: npm run dist:win

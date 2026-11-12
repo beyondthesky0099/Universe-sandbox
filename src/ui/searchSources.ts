@@ -1,6 +1,7 @@
 /**
  * Search entries (search.ts) for each of the app's catalogues. Pure functions of the loaded data.
  */
+import { describePulsar, pulsarName, type PulsarRecord } from '../sim/pulsars';
 import { equatorialToGalactic } from '../procgen/galaxy';
 import type { StarCluster } from '../sim/clusters';
 import type { Eclipse } from '../sim/eclipse';
@@ -109,6 +110,20 @@ export function compactEntries(list: { name: string; kind: 'blackhole' | 'pulsar
       detail: `${o.mass ? `${o.mass} M☉ · ` : ''}${lightYears(o.distanceKpc)} away`,
       rank: 40,
       action: { type: 'map', l, b, dKpc: o.distanceKpc },
+    };
+  });
+}
+
+/** Real pulsars (ATNF catalogue): by J and B name, and by their remnant's name. */
+export function pulsarEntries(list: PulsarRecord[]): SearchEntry[] {
+  return list.map((p) => {
+    const [l, b] = equatorialToGalactic(p.raDeg, p.decDeg);
+    return {
+      name: `${pulsarName(p)}${p.snr ? ` (${p.snr})` : ''}`,
+      kind: p.magnetar ? 'Magnetar' : 'Pulsar',
+      detail: `${describePulsar(p)} · ${lightYears(p.distanceKpc)} away`,
+      rank: p.bname || p.snr || p.magnetar ? 45 : 20,
+      action: { type: 'map', l, b, dKpc: p.distanceKpc, pulsar: p.jname },
     };
   });
 }

@@ -16,7 +16,9 @@ import { type Body } from './sim/body';
 import { GAS_PALETTE, ROCKY_PALETTE } from './sim/color';
 import { type Forecast } from './sim/forecast';
 import { SimHost } from './sim/host';
-import { galacticCore, loadSolarSystemOnDate, loadStarSystem, PRESETS } from './sim/presets';
+import { galacticCore, hulseTaylor, loadPulsarSystem, loadSolarSystemOnDate, loadStarSystem, PRESETS, pulsarPlanets } from './sim/presets';
+import { describePulsar, pulsarName, type PulsarRecord } from './sim/pulsars';
+import { hulseTaylorChart } from './ui/hulseTaylorChart';
 import { PARTICLE_CULL_DISTANCE, type SimEvent } from './sim/simulation';
 import { captureState, restoreState } from './sim/state';
 import { type ExoCatalog, type ExoHost } from './sim/exoplanets';
@@ -43,6 +45,7 @@ import { VrRig } from './render/vr';
 import { decodePlace, PlaceStore } from './ui/places';
 import { Trip } from './sim/travel';
 import { LineChart, type MetricId, type Series } from './ui/graph';
+import { AdaptiveResolution, presetPixelRatio } from './app/resolution';
 import { ViewName, Tool, QualityName, LOW_POWER, DESKTOP, SPAWN_TYPES, SpawnDrag, Scenario, AUTO_EXIT_DISTANCE, AUTO_ENTER_DISTANCE, GALAXY_EXIT_DISTANCE, sleep, kindLabel, formatFactor, formatEvolution, formatRate, describeSystem } from './app/shared';
 import { LandingUI } from './app/landing';
 import { PlacesUI } from './app/places';
@@ -193,7 +196,20 @@ export class App {
 
   scanToken = 0;
 
-  quality: QualityName = prefs.get<QualityName>('quality', DESKTOP ? (LOW_POWER ? 'medium' : 'high') : LOW_POWER ? 'low' : 'medium');
+  // The default follows the device unless the user has picked a quality themselves (so a new
+  // default, like Ultra in the desktop app, reaches existing installs too).
+  quality: QualityName = prefs.get('qualityChosen', false)
+    ? prefs.get<QualityName>('quality', 'medium')
+    : DESKTOP
+      ? LOW_POWER
+        ? 'high'
+        : 'ultra'
+      : LOW_POWER
+        ? 'low'
+        : 'medium';
+  /** Render resolution that follows the frame rate (src/app/resolution.ts). */
+  readonly adaptiveRes = new AdaptiveResolution(0.5, 1, 55);
+  autoResolution = prefs.get('autoResolution', true);
 
   catalog?: ExoCatalog;
 
@@ -337,14 +353,21 @@ export class App {
     const presetFromHash = PRESETS.find((p) => p.id === presetParam);
     if (presetFromHash) this.loadScenario({ name: presetFromHash.name, load: () => presetFromHash.load(this.sim), presetId: presetFromHash.id }, { undoable: false });
     const room = params.get('room');
-    const serverUrl = params.get('server') ?? defaultServerUrl(prefs.get<string | undefined>('serverUrl', undefined));
-    if (serverUrl) {
-      void this.onlineUI.connectServer(serverUrl, false).then(() => {
+    // The desktop app runs its own server and passes it as `localserver`; one chosen in the
+    // settings (or a share link's) wins.
+    const chosen = params.get('server') ?? defaultServerUrl(prefs.get<string | undefined>('serverUrl', undefined));
+    const local = params.get('localserver') ?? undefined;
+    if (chosen || local) {
+      void (async () => {
+        if (chosen) await this.onlineUI.connectServer(chosen, false);
+        // The desktop app's own server (a new port each launch, so never remembered); also the
+        // fallback when a chosen server can't be reached.
+        if (!this.server && local) await this.onlineUI.connectServer(local, false, false);
         if (room && this.server) {
           $<HTMLInputElement>('mp-room').value = room;
           this.onlineUI.openMultiplayer();
         }
-      });
+      })();
     }
     // The real night sky (HYG catalogue) replaces the procedural background once it loads.
     void loadBrightStars()
@@ -433,6 +456,14 @@ export class App {
     this.fpsTime += dt;
     if (this.fpsTime >= 0.5) {
       this.fps = this.frames / this.fpsTime;
+      // Keep it smooth: trade resolution for frame rate (not while taking a photo or in VR).
+      if (this.autoResolution && !this.renderer.xr.isPresenting && document.visibilityState === 'visible') {
+        const scale = this.adaptiveRes.update(this.fps);
+        if (scale !== undefined) {
+          this.renderer.setPixelRatio(presetPixelRatio(window.devicePixelRatio, QUALITY_PRESETS[this.quality]) * scale);
+          this.resize();
+        }
+      }
       this.frames = 0;
       this.fpsTime = 0;
     }
@@ -498,7 +529,7 @@ export class App {
       this.travelUI.tickTrip(dt);
       this.cosmos.update(dt);
       this.renderView(this.cosmos.scene, this.cosmos.camera, []);
-      if (this.frames % 15 === 0) $('stats').textContent = `${Math.round(this.fps)} fps`;
+      if (this.frames % 15 === 0) $('stats').textContent = `${Math.round(this.fps)} fps${this.autoResolution && this.adaptiveRes.scale < 1 ? ` · ${Math.round(this.adaptiveRes.scale * 100)}% res` : ''}`;
       const sel = this.cosmos.selected;
       if (
         !this.transitioning &&
@@ -515,7 +546,7 @@ export class App {
       this.galaxy.update(dt);
       this.renderView(this.galaxy.scene, this.galaxy.camera, []);
       if (!this.transitioning && !this.trip && !this.galaxy.animating && this.galaxy.cameraDistance > GALAXY_EXIT_DISTANCE) void this.cosmosUI.openCosmos(true);
-      if (this.frames % 15 === 0) $('stats').textContent = `${Math.round(this.fps)} fps`;
+      if (this.frames % 15 === 0) $('stats').textContent = `${Math.round(this.fps)} fps${this.autoResolution && this.adaptiveRes.scale < 1 ? ` · ${Math.round(this.adaptiveRes.scale * 100)}% res` : ''}`;
       const sel = this.galaxy.selected;
       if (
         !this.transitioning &&
@@ -621,7 +652,8 @@ export class App {
     this.quality = q;
     prefs.set('quality', q);
     const preset = QUALITY_PRESETS[q];
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, preset.pixelRatio));
+    this.adaptiveRes.reset();
+    this.renderer.setPixelRatio(presetPixelRatio(window.devicePixelRatio, preset));
     this.system.setQuality(preset);
     $<HTMLSelectElement>('quality').value = q;
     this.resize();
@@ -681,6 +713,13 @@ export class App {
         scenario = { name: galacticCore.name, load: () => galacticCore.load(this.sim), presetId: galacticCore.id, origin: { kind: 'core' } };
       } else if (target === 'sol') {
         scenario = { name: 'the Solar System', load: () => loadSolarSystemOnDate(this.sim, new Date()), origin: { kind: 'sol' } };
+      } else if (typeof target === 'object' && 'psr' in target) {
+        const record = this.pulsarMapList[target.psr];
+        // Two have their own scenes: the pulsar planets and the Hulse–Taylor binary.
+        const own = record.bname === 'B1257+12' ? pulsarPlanets : record.bname === 'B1913+16' ? hulseTaylor : undefined;
+        scenario = own
+          ? { name: own.name, load: () => own.load(this.sim), presetId: own.id, origin: { kind: 'pulsar', index: target.psr, record } }
+          : { name: pulsarName(record), description: describePulsar(record), load: () => loadPulsarSystem(this.sim, record), origin: { kind: 'pulsar', index: target.psr, record } };
       } else if (typeof target === 'object') {
         scenario = this.realDataUI.exoScenario(this.exoMapHosts[target.exo]);
       } else {
@@ -721,7 +760,17 @@ export class App {
       const origin = this.scenario.origin;
       const exoIndex = origin?.kind === 'exo' ? this.exoMapHosts.findIndex((h) => h.name === origin.host.name) : -1;
       const target: GalaxyTarget | undefined =
-        origin?.kind === 'core' ? 'core' : origin?.kind === 'star' ? origin.index : exoIndex >= 0 ? { exo: exoIndex } : origin ? 'sol' : undefined;
+        origin?.kind === 'core'
+          ? 'core'
+          : origin?.kind === 'star'
+            ? origin.index
+            : origin?.kind === 'pulsar'
+              ? { psr: origin.index }
+              : exoIndex >= 0
+                ? { exo: exoIndex }
+                : origin
+                  ? 'sol'
+                  : undefined;
       if (target !== undefined) {
         this.galaxyMapUI.selectTarget(target);
         this.galaxy.arriveFrom(target, 0.3, 12);
@@ -810,6 +859,7 @@ export class App {
     const select = $<HTMLSelectElement>('preset-select');
     select.value = sc.presetId ?? '';
     $('preset-desc').textContent = sc.presetId ? (PRESETS.find((p) => p.id === sc.presetId)?.description ?? '') : (sc.description ?? setup.tip ?? '');
+    $('preset-extra').innerHTML = sc.presetId === 'hulse-taylor' ? hulseTaylorChart() : '';
     $('origin').classList.toggle('hidden', !sc.origin);
     if (sc.origin?.kind === 'star') {
       $('origin-name').textContent = sc.origin.spec.star.name;
@@ -817,7 +867,8 @@ export class App {
     } else if (sc.origin?.kind === 'core') {
       $('origin-name').textContent = 'the galactic core';
     } else if (sc.origin) {
-      $('origin-name').textContent = sc.origin.kind === 'exo' ? sc.origin.host.name : sc.origin.kind === 'sol' ? 'home' : 'the solar neighbourhood';
+      $('origin-name').textContent =
+        sc.origin.kind === 'exo' ? sc.origin.host.name : sc.origin.kind === 'pulsar' ? pulsarName(sc.origin.record) : sc.origin.kind === 'sol' ? 'home' : 'the solar neighbourhood';
     }
     if (setup.focus) {
       const body = this.sim.bodies.find((b) => b.name === setup.focus);
@@ -833,6 +884,8 @@ export class App {
 
   /** Real exoplanet hosts on the Milky Way map, placed by their galactic coordinates. */
   exoMapHosts: ExoHost[] = [];
+  /** Real pulsars on the Galaxy Map (ATNF catalogue), in the order of GalaxyView.pulsarPositions. */
+  pulsarMapList: PulsarRecord[] = [];
 
   readonly atlasPromises = new Map<number, Promise<THREE.Texture>>();
 

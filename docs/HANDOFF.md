@@ -43,8 +43,10 @@ Still procedural:
 - every other seeded galaxy
 - the made-up scenarios (Giant Impact, Ring Maker, …), which are deliberately fictional
 
-**Suggested next steps:** remaining D2 maps (Saturn and Io from NASA Photojournal; check each one by eye); exoplanet hosts in the galaxy search and filters; carving the Encke and Keeler gaps
-(this needs published widths).
+**Suggested next steps:**
+- a global colour map of Saturn, if one turns up (Photojournal has none);
+- exoplanet hosts in the galaxy search and filters;
+- the pulsar wind nebula on the Galaxy Map up close (Sandbox only so far).
 
 Plan, in priority order:
 
@@ -72,8 +74,8 @@ Plan, in priority order:
 - [x] A6. Saturn's rings: the ring mesh follows Saturn's IAU pole, and real ring particles
       come from `scripts/build-saturn-rings.mjs` (the NASA ring fact sheet), added by
       `addSaturnRings` in `presets.ts`. There are 6,000 in the Saturn scene and 3,000 in the
-      true-scale Solar System. The Encke and Keeler gaps are in the data but not carved out,
-      because the sheet gives no widths.
+      true-scale Solar System. The 14 named gaps (Encke, Keeler, …) come from the IAU/USGS ring
+      table and are kept clear (section AG).
 - [x] A7. "Solar System (true scale)" preset with the 12 largest moons (Phobos, Deimos and the
       small moons are left out to keep the timestep reasonable). It runs at about 26% of a core
       at its default 0.73 days/s.
@@ -118,8 +120,9 @@ Plan, in priority order:
         filtering https://astrogeology.usgs.gov/search/results.
       Rejected after viewing: Callisto (missing-data stripe), Io (polar gores, not
       cylindrical), Enceladus and Triton (printed map sheets), the Venus radar maps (not what
-      the eye sees) and Titan (near-infrared). Still procedural: Venus, Saturn, Uranus,
-      Neptune, Io, Callisto, Titan and the smaller moons. Solar System Scope serves an HTML
+      the eye sees) and Titan (near-infrared). Io now uses the USGS colour-merged mosaic, which is
+      simple cylindrical (section AG). Still procedural: Venus, Saturn, Uranus,
+      Neptune, Callisto, Titan and the smaller moons. Solar System Scope serves an HTML
       page to scripted downloads, so don't automate it.
 
 ### E. Beyond the Milky Way
@@ -166,8 +169,8 @@ Plan, in priority order:
   Atomics when the page is cross-origin isolated (desktop app; dev/preview servers; not GitHub
   Pages). Identical results (tests). Node benchmark of the same kernel: 2.4× on 3 threads of a
   4-core VM; the in-browser benchmark in this container showed no gain because SwiftShader
-  software rendering saturates its 4 cores, so measure on a real machine. Next: the Barnes–Hut
-  tree path (cluster/spiral presets) is still single-threaded.
+  software rendering saturates its 4 cores, so measure on a real machine. The Barnes–Hut
+  tree path is threaded too now (section AG).
 
 ### J. Real supernovae
 - [x] `src/sim/supernovaPhysics.ts` (tests in `tests/supernova-physics.test.ts`): ejecta speeds,
@@ -204,6 +207,118 @@ Plan, in priority order:
     test.
 - BodyVisual adds it in applyDetail and updates it only when the planet is more than 14 px across
   and a star is present. Tests: tests/aurora.test.ts.
+
+### AI. Desktop: any laptop's graphics, higher resolution, speed
+- [x] Quality 'ultra' (QUALITY_PRESETS): 1.5× supersampling (pixelRatio cap 3), 1024-wide planet
+  textures, 500 full bodies. It is the desktop default; 'high' on low-power machines.
+  - The default applies unless the user picked a quality (pref 'qualityChosen').
+- [x] AdaptiveResolution (src/app/resolution.ts): scales the pixel ratio 0.5–1× of the preset to
+  hold ~55 fps (#opt-autores, pref 'autoResolution'). The fps readout shows "% res" when lowered.
+- [x] Settings shows the GPU (WEBGL_debug_renderer_info, #gpu-info).
+- [x] desktop/main.cjs adds ignore-gpu-blocklist and js-flags --max-old-space-size=4096 to
+  force_high_performance_gpu.
+- [x] Windows builds: x64 and arm64, as separate installer and portable builds (dist:win runs
+  electron-builder twice; artifact names carry ${arch}). Desktop version 0.2.0.
+- [x] Bug: connecting to the desktop's local server saved its URL, so the next launch (new port)
+  tried a dead address. connectServer(url, announce, remember) now skips that, and startup falls
+  back to the local server when a chosen one fails.
+
+### AH. Realism pass (stars, giants, planets)
+- [x] Stars: src/render/starSurface.ts (StarSurface; starLook by kind/temperature).
+  - Voronoi granulation with domain warp and per-cell brightness, faded by on-screen cell size.
+  - Per-channel limb darkening, sunspots with penumbrae, and faculae.
+  - A handful of giant cells on red giants; smooth hot stars and white dwarfs.
+  - coronaMesh: a billboard of streamers.
+- [x] Lighting: star PointLight intensity ≈ π (three.js divides diffuse by π). Before this,
+  planets showed at about 40% of their albedo.
+- [x] Jupiter's and Saturn's atmospheres: less Rayleigh, blue absorption (warm limbs).
+- [x] gasTextures: uneven zonal bands, shear turbulence, wavy edges, spiralling storms, ice-giant
+  methane streaks, and Saturn's hexagon (PlanetLook.name).
+- [x] planetLighting.ts (onBeforeCompile on MeshStandardMaterial).
+  - Ring shadow on the globe, and the globe's shadow on the rings (ShadowUniforms updated in
+    BodyVisual.update).
+  - Earth's city lights: the Black Marble 2016 map. Only the warm pixels are kept, on the night
+    side.
+  - Ocean glint via a roughness map read from the day map.
+- [x] build-planet-textures.mjs: earth-night.jpg, and the assets.science.nasa.gov mirror for
+  eoimages (eoimages returned 503).
+- Not done yet: galaxies (Universe view) and black-hole discs compared against reference renders.
+
+### AG. Pulsars in depth, and the backlog
+- [x] Beams as glowing gas (render/neutronStar.ts BEAM_FRAGMENT).
+  - Each pixel is the line-of-sight integral through a Gaussian tube around the axis, evaluated
+    analytically at the point of closest approach, with a white core and a blue halo.
+  - It is drawn on the back faces of a closed hull, once per pixel.
+- [x] The wound field (striped wind): a spiral-streak disc in the spin equator (WIND_FRAGMENT).
+  Its pitch is a clamped multiple of the light cylinder.
+- [x] Pulsar wind nebula (PWN_FRAGMENT), ray-marched in a sphere of 45 drawn radii.
+  - It has a torus, an inner ring and kinked jets, Doppler-boosted with flow β = 0.5.
+  - Only when Ė > 10²⁹ W. Counter-rotated so it doesn't spin with the star.
+- [x] pulsars.json carries pb_days, ecc and companion_msun (ATNF PB, ECC, MedMass).
+- [x] The Galaxy Map pulsar target `{ psr: index }` (GalaxyTarget). App.pulsarMapList is in the
+  order of GalaxyView.pulsarPositions.
+  - The star panel shows a pulsar's facts. Enter calls loadPulsarSystem in presets.ts.
+  - B1257+12 and B1913+16 open their own presets. Origin kind 'pulsar'.
+  - rememberPulsar(name, P, Ṗ) registers catalogue spins for pulsarParams.
+- [x] Pulsar sound (src/sim/pulsarSound.ts): playSamples. Buttons #btn-pulsar-hear (body panel)
+  and #btn-star-hear (Galaxy Map).
+- [x] Hulse–Taylor (src/sim/binaryPulsar.ts, preset 'hulse-taylor', src/ui/hulseTaylorChart.ts
+  into #preset-extra).
+  - Covers Ṗb, ω̇ and the time to merge (Peters' equations integrated, 300 Myr).
+  - A test checks that the scene precesses at the GR rate.
+- [x] Saturn: the named gaps (14, from the IAU/USGS table) are in saturn-rings.json.
+  - sampleRingRadii skips them.
+  - Saturn's ring mesh uses the real radii and realRingTexture (τ → opacity, albedo →
+    brightness).
+- [x] Io's real map (USGS colour-merged mosaic, desaturated). No NASA global cylindrical colour
+  map of Saturn was found, so Saturn stays procedural.
+- [x] Multi-core Barnes–Hut: treeKernel.ts and Octree.pack.
+  - ParallelForces.runTree uses CTRL.MODE 1/2 and shares 32,768 bodies and 131,072 nodes
+    (about 16 MB).
+  - Results are identical (tests/parallel.test.ts). Node benchmark: 3.2× on 4 threads.
+- [x] Desktop server: desktop/build-server.mjs bundles server/src/embedded.ts into
+  desktop/server.cjs. main.cjs starts it on 127.0.0.1 and passes `#localserver=`. The CI job
+  installs server deps.
+- Tests: tests/neutron-star.test.ts, tests/saturn-rings.test.ts, tests/parallel.test.ts.
+
+### AF. Pulsars and neutron stars; zooming in on small nebulae
+- [x] Galaxy Map zoom goes down to 0.0004 units (about 0.2 light-years; it stopped at 0.2 units,
+  about 100 ly).
+  - The near plane follows the camera in (GalaxyView.update).
+  - Label "go to" distances scale with the object's true size, from 0.003 units.
+- [x] Small photographed nebulae (galaxyMap.showNebulaeOnMap).
+  - The survey picture is never less than 3′ across, so a planetary nebula fills only its middle.
+    The flat picture is now drawn at its true field.
+  - Up close, a nebula whose picture is much bigger than it becomes its modelled ray-marched
+    shape, not the burnt-out photo.
+  - Planetary nebulae get their central star (nebulaRaymarch, uShape 2).
+- [x] Real pulsars: `scripts/build-pulsars.mjs` writes `public/data/pulsars.json` from the ATNF
+  Pulsar Catalogue v2.6.1.
+  - 3,632 Milky Way pulsars with a period, distance and position, plus flags (magnetar, binary,
+    high-energy, globular, RRAT) and the supernova remnant each sits in.
+  - `src/sim/pulsars.ts` loads it.
+  - It is a Galaxy Map real layer (#opt-real-pulsars) and a search source.
+- [x] `src/sim/neutronStar.ts` (headless): compactness, Beloborodov light bending, the visible
+  fraction, redshift, gravity, density, light cylinder, polar cap, Rankin beam width, spin-down
+  (B, age, Ė), and a rough cooling curve.
+  - `pulsarParams(name, id)`: catalogued values for known pulsars (KNOWN_PULSARS; a test keeps
+    them in step with pulsars.json), else a newborn pulsar from Faucher-Giguère & Kaspi 2006,
+    seeded by the body id.
+  - `neutronFacts()` feeds the body panel.
+- [x] `src/render/neutronStar.ts` (NeutronStarVisual, used by BodyVisual for kind 'neutron').
+  - A surface shader that bends light: each pixel's true surface point comes from Beloborodov.
+  - Warm magnetic poles (flux ∝ cos²θ + 0.25 sin²θ) and hot polar caps.
+  - Dipole field lines and hollow-cone beams, all on a magnetic axis tilted by the obliquity.
+  - It turns at the real period, slowed to at most 4 turns a second (displayPeriod).
+  - The glow flashes when a beam points at the camera. BodyVisual.update now takes the camera
+    position.
+- [x] Preset 'pulsar-planets': PSR B1257+12 (Lich) with Draugr, Poltergeist and Phobetor. Orbits
+  are from the ATNF timing solution.
+- [x] Bug fix: tidal disruption of planets by compact stars used the planet's game radius, so a
+  neutron star tore planets apart 0.7 AU away.
+  - It now uses (3M / 4πρ)^⅓ with the nominal density.
+  - Stars still use the old formula, so black holes shred them before contact.
+- Tests: tests/neutron-star.test.ts.
 
 ### AE. Fixes from phone testing
 - [x] Travel controls fold into a 🚀 button (#travel-toggle and #travel-close; the state is

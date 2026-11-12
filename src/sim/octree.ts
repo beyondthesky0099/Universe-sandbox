@@ -1,4 +1,5 @@
 import type { Body } from './body';
+import { NODE_FIELDS, TREE_BODY_FIELDS } from './treeKernel';
 
 const MAX_DEPTH = 32;
 
@@ -173,6 +174,37 @@ export class Octree {
       this.my[node] = this.cy[node];
       this.mz[node] = this.cz[node];
     }
+  }
+
+  /**
+   * Copy the tree into flat arrays for helper threads (treeKernel.ts): `nodes` (NODE_FIELDS per
+   * node) and `tb` (TREE_BODY_FIELDS per body). Returns false if they are too small.
+   */
+  pack(nodes: Float64Array, tb: Float64Array): boolean {
+    const n = this.bodies.length;
+    if (this.count * NODE_FIELDS > nodes.length || n * TREE_BODY_FIELDS > tb.length) return false;
+    for (let i = 0; i < this.count; i++) {
+      const o = i * NODE_FIELDS;
+      nodes[o] = this.mass[i];
+      nodes[o + 1] = this.mx[i];
+      nodes[o + 2] = this.my[i];
+      nodes[o + 3] = this.mz[i];
+      nodes[o + 4] = this.half[i];
+      nodes[o + 5] = this.leaf[i];
+      nodes[o + 6] = this.first[i];
+      for (let c = 0; c < 8; c++) nodes[o + 7 + c] = this.child[i * 8 + c];
+    }
+    for (let j = 0; j < n; j++) {
+      const b = this.bodies[j];
+      const k = j * TREE_BODY_FIELDS;
+      tb[k] = b.x;
+      tb[k + 1] = b.y;
+      tb[k + 2] = b.z;
+      tb[k + 3] = b.mass;
+      tb[k + 4] = b.radius;
+      tb[k + 5] = this.next[j];
+    }
+    return true;
   }
 
   /**

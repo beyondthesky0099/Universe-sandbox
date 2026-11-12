@@ -101,7 +101,7 @@ function nebulaTexture(seed: number): THREE.CanvasTexture {
 }
 
 /** Selection target in the galaxy: a star index, the central black hole, or the Sun. */
-export type GalaxyTarget = number | 'core' | 'sol' | { exo: number };
+export type GalaxyTarget = number | 'core' | 'sol' | { exo: number } | { psr: number };
 
 /** A real exoplanet host drawn on the Milky Way map. */
 export interface ExoMarker {
@@ -207,6 +207,8 @@ export class GalaxyView {
   private readonly nebulaGroup = new THREE.Group();
   /** Real exoplanet hosts (Milky Way only). */
   exoHosts: ExoMarker[] = [];
+  /** Real pulsars' positions (Milky Way only; clickable while their layer shows). */
+  pulsarPositions: [number, number, number][] = [];
   private exoPoints?: THREE.Points;
   /** Layers of real catalogued objects (Milky Way only: nebulae, star clusters), with labels. */
   private readonly realLayers = new Map<string, { points: THREE.Points; labels: THREE.Group }>();
@@ -242,7 +244,10 @@ export class GalaxyView {
     this.controls.enableDamping = true;
     this.controls.dampingFactor = 0.08;
     this.controls.zoomSpeed = 1.3;
-    this.controls.minDistance = 0.2;
+    // Close enough for the smallest real objects on the map: a planetary nebula like the Ghost of
+    // Jupiter is under a light-year across (0.002 units). 0.0004 units is about 0.2 light-years.
+    // The near plane follows the camera in (update), so close objects aren't clipped.
+    this.controls.minDistance = 0.0004;
     this.controls.maxDistance = 600;
 
     this.scene.add(this.starfield);
@@ -406,7 +411,7 @@ export class GalaxyView {
   }
 
   targetPosition(target: GalaxyTarget): THREE.Vector3 {
-    if (typeof target === 'object') return new THREE.Vector3(...this.exoHosts[target.exo].pos);
+    if (typeof target === 'object') return new THREE.Vector3(...('exo' in target ? this.exoHosts[target.exo].pos : this.pulsarPositions[target.psr]));
     if (target === 'core') return new THREE.Vector3();
     if (target === 'sol') return new THREE.Vector3(...this.data.sol);
     const p = this.data.stars.positions;
@@ -505,7 +510,7 @@ export class GalaxyView {
    * sized by their physical size but never smaller than a few pixels, with labels for the named
    * ones. An empty list removes the layer. Cleared on rebuild.
    */
-  setRealLayer(key: string, items: { pos: [number, number, number]; color: [number, number, number]; size: number; label?: string; labelColor?: string; distance?: number }[]): void {
+  setRealLayer(key: string, items: { pos: [number, number, number]; color: [number, number, number]; size: number; label?: string; labelColor?: string; distance?: number; target?: GalaxyTarget }[]): void {
     const old = this.realLayers.get(key);
     if (old) {
       this.scene.remove(old.points, old.labels);
@@ -530,7 +535,7 @@ export class GalaxyView {
       if (it.label) {
         const text = textSprite(it.label, it.labelColor ?? '#ffb3c8', 0.55);
         text.position.set(...it.pos);
-        text.userData.goto = { distance: it.distance ?? Math.max(0.3, it.size * 3) };
+        text.userData.goto = { distance: it.distance ?? Math.max(0.003, it.size * 3), target: it.target };
         labels.add(text);
       }
     });
@@ -638,7 +643,8 @@ export class GalaxyView {
     for (const l of labels) {
       const text = textSprite(l.label, l.color, 0.55);
       text.position.set(...l.pos);
-      text.userData.goto = { distance: Math.max(0.3, (l.size ?? 0.1) * 3) };
+      // Close enough that the nebula fills about a third of the view, however small it is.
+      text.userData.goto = { distance: Math.max(0.003, (l.size ?? 0.1) * 3) };
       group.add(text);
     }
     this.scene.add(...layers.map((l) => l.mesh), group);
@@ -667,7 +673,7 @@ export class GalaxyView {
       ring.renderOrder = 11;
       const text = textSprite(it.label, it.kind === 'blackhole' ? '#ff9de3' : '#b8f4ff', 0.6);
       text.position.set(...it.pos);
-      text.userData.goto = { distance: 0.6 };
+      text.userData.goto = { distance: 0.05 };
       this.labelGroup.add(ring, text);
     }
   }
@@ -732,6 +738,17 @@ export class GalaxyView {
       if (score < bestScore) {
         bestScore = score;
         best = { exo: i };
+      }
+    }
+    // So do real pulsars, while their layer shows.
+    if (this.realLayers.get('pulsars')?.points.visible) {
+      for (let i = 0; i < this.pulsarPositions.length; i++) {
+        const [x, y, z] = this.pulsarPositions[i];
+        const score = test(x, y, z, maxPx) - 1;
+        if (score < bestScore) {
+          bestScore = score;
+          best = { psr: i };
+        }
       }
     }
     // The core and the Sun win when the click is right on them.
@@ -813,6 +830,13 @@ export class GalaxyView {
       if (a.t >= 1) this.anim = undefined;
     }
     this.controls.update();
+    // The near plane follows the camera in, so a nebula a light-year across isn't clipped
+    // (the logarithmic depth buffer keeps the far side sharp).
+    const near = THREE.MathUtils.clamp(this.cameraDistance * 0.02, 1e-6, 0.001);
+    if (Math.abs(near - this.camera.near) > near * 0.1) {
+      this.camera.near = near;
+      this.camera.updateProjectionMatrix();
+    }
     // Fade the bright core glow when the camera is close to it.
     const dCore = this.camera.position.length();
     this.core.material.opacity = THREE.MathUtils.clamp(dCore / 300, 0.04, 0.35);

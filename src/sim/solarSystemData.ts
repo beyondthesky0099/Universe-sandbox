@@ -75,6 +75,8 @@ export interface SolarData {
   small: SmallBody[];
   /** Saturn's main rings (NASA ring fact sheet), if loaded. */
   rings?: SaturnRing[];
+  /** The named gaps in them (IAU/USGS nomenclature), km from Saturn's centre. */
+  ringGaps?: RingGap[];
   /** Real spacecraft trajectories (JPL Horizons), if loaded. */
   spacecraft?: SpacecraftData[];
 }
@@ -87,6 +89,12 @@ export interface SaturnRing {
   /** Typical normal optical depth (midpoint of the published range). */
   tau?: number;
   albedo?: number;
+}
+
+export interface RingGap {
+  name: string;
+  inner: number;
+  outer: number;
 }
 
 export const KM_PER_AU = 149597870.7;
@@ -252,9 +260,10 @@ interface RawSmall {
   bodies: [string, number, number, number, number, number, number, number, number][];
 }
 
-export function parseSolarData(solar: RawSolar, small?: RawSmall, rings?: { rings: SaturnRing[] }, craft?: { craft: SpacecraftData[] }): SolarData {
+export function parseSolarData(solar: RawSolar, small?: RawSmall, rings?: { rings: SaturnRing[]; gaps?: RingGap[] }, craft?: { craft: SpacecraftData[] }): SolarData {
   return {
     rings: rings?.rings,
+    ringGaps: rings?.gaps?.filter((g) => g.inner !== undefined && g.outer !== undefined),
     spacecraft: craft?.craft,
     epoch: solar.epoch,
     bodies: solar.bodies,
@@ -290,7 +299,7 @@ export function loadSolarData(baseUrl = import.meta.env.BASE_URL): Promise<Solar
       .then((r) => (r.ok ? (r.json() as Promise<RawSmall>) : undefined))
       .catch(() => undefined),
     fetch(`${baseUrl}data/saturn-rings.json`)
-      .then((r) => (r.ok ? (r.json() as Promise<{ rings: SaturnRing[] }>) : undefined))
+      .then((r) => (r.ok ? (r.json() as Promise<{ rings: SaturnRing[]; gaps?: RingGap[] }>) : undefined))
       .catch(() => undefined),
     fetch(`${baseUrl}data/spacecraft.json`)
       .then((r) => (r.ok ? (r.json() as Promise<{ craft: SpacecraftData[] }>) : undefined))
@@ -306,7 +315,7 @@ export function loadSolarData(baseUrl = import.meta.env.BASE_URL): Promise<Solar
  * Sample ring-particle radii (km): each ring gets particles in proportion to its optical depth
  * times its area, so the dense B ring is crowded and the Cassini Division is sparse.
  */
-export function sampleRingRadii(rings: SaturnRing[], count: number, rand: () => number = Math.random): { r: number; ring: SaturnRing }[] {
+export function sampleRingRadii(rings: SaturnRing[], count: number, rand: () => number = Math.random, gaps: RingGap[] = []): { r: number; ring: SaturnRing }[] {
   const weights = rings.map((g) => Math.max(0.02, g.tau ?? 0.1) * (g.outer * g.outer - g.inner * g.inner));
   const total = weights.reduce((a, b) => a + b, 0);
   const out: { r: number; ring: SaturnRing }[] = [];
@@ -315,8 +324,13 @@ export function sampleRingRadii(rings: SaturnRing[], count: number, rand: () => 
     let i = 0;
     while (i < rings.length - 1 && (pick -= weights[i]) > 0) i++;
     const g = rings[i];
-    // Uniform per unit area within the ring.
-    const r = Math.sqrt(g.inner * g.inner + rand() * (g.outer * g.outer - g.inner * g.inner));
+    // Uniform per unit area within the ring, and never in one of its gaps (Pan and Daphnis,
+    // and resonances, keep them clear).
+    let r = 0;
+    for (let tries = 0; tries < 20; tries++) {
+      r = Math.sqrt(g.inner * g.inner + rand() * (g.outer * g.outer - g.inner * g.inner));
+      if (!gaps.some((gap) => r >= gap.inner && r <= gap.outer)) break;
+    }
     out.push({ r, ring: g });
   }
   return out;

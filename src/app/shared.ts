@@ -1,6 +1,7 @@
 /**
  * Types, constants and small helpers shared by the App (app.ts) and its feature controllers.
  */
+import type { PulsarRecord } from '../sim/pulsars';
 import * as THREE from 'three';
 import { type StarSystemSpec } from '../procgen/starSystem';
 import { displayName, galaxyForm, LY_PER_MPC, type LocalGalaxy } from '../sim/galaxies';
@@ -81,6 +82,7 @@ export type Origin =
   | { kind: 'core' }
   | { kind: 'sol' }
   | { kind: 'exo'; host: ExoHost }
+  | { kind: 'pulsar'; index: number; record: PulsarRecord }
   | { kind: 'neighbourhood' };
 
 export interface Scenario {

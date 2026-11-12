@@ -5,6 +5,9 @@ import { keplerToState, OrbitalElements } from './orbits';
 import type { Simulation } from './simulation';
 import { EARTH_MASS, G, JUPITER_MASS } from './units';
 import { mulberry32 } from '../procgen/rng';
+import { rememberPulsar, spinDownPower } from './neutronStar';
+import { HULSE_TAYLOR } from './binaryPulsar';
+import { describePulsar, pulsarName, type PulsarRecord } from './pulsars';
 import { GAS_DISC_LIFETIME, planetesimals } from './planetFormation';
 import { julianDate, planetStates, type PlanetName } from './ephemeris';
 import { setTrueScale } from './trueScale';
@@ -529,6 +532,105 @@ const inspiral: Preset = {
   },
 };
 
+/**
+ * PSR B1257+12 (Lich) and the first planets found outside the Solar System (Wolszczan & Frail
+ * 1992). Orbits from the ATNF Pulsar Catalogue (pulse-timing fit of Konacki & Wolszczan 2003):
+ * periods 25.262, 66.5419 and 98.2114 days, eccentricities 0, 0.0186 and 0.0252, arguments of
+ * periastron 250.4° and 108.3°, masses 0.020, 4.3 and 3.9 Earth masses (6.0 × 10⁻⁸,
+ * 1.29 × 10⁻⁵ and 1.17 × 10⁻⁵ M☉). Pulsar mass 1.4 M☉ (assumed). The two big planets'
+ * orbits are tilted 53° and 47° to the sky and close to one plane; here all three share one.
+ * Names: IAU NameExoWorlds 2015.
+ */
+export const pulsarPlanets: Preset = {
+  id: 'pulsar-planets',
+  name: 'Pulsar Planets (PSR B1257+12)',
+  description:
+    'The first planets ever found beyond the Sun, in 1992, circle a dead star: the pulsar Lich, spinning 161 times a second. Its pulses arrive up to 1.3 milliseconds early or late as three planets tug it about.',
+  load(sim) {
+    const mass = 1.4;
+    const lich = sim.addBody({ name: 'Lich (PSR B1257+12)', kind: 'neutron', mass });
+    const deg = Math.PI / 180;
+    const planets = [
+      { name: 'Draugr', mEarth: 0.02, days: 25.262, e: 0, w: 0, color: 0x8a8580 },
+      { name: 'Poltergeist', mEarth: 4.3, days: 66.5419, e: 0.0186, w: 250.4, color: 0x7d6f66 },
+      { name: 'Phobetor', mEarth: 3.9, days: 98.2114, e: 0.0252, w: 108.3, color: 0x6c7480 },
+    ];
+    for (const p of planets) {
+      const years = p.days / 365.25;
+      const a = Math.cbrt(years * years * (mass + p.mEarth * EARTH_MASS));
+      addOrbiting(sim, lich, { name: p.name, mass: p.mEarth * EARTH_MASS, kind: 'rocky', color: p.color }, { a, e: p.e, argp: p.w * deg, nu: p.w * deg + 1 });
+    }
+    sim.recenter();
+    return { cameraDistance: 1.4, timeScale: 0.03, elevation: 0.9, tip: 'Click Lich and zoom in: its magnetic field, its beams, and a flash each time a beam sweeps past you.' };
+  },
+};
+
+/**
+ * A pulsar from the ATNF catalogue (Galaxy Map → visit): the neutron star, with its measured spin,
+ * and for a binary its companion on the catalogued orbit (period, eccentricity, and the median
+ * companion mass for a 60° tilt). The companion is a neutron star above 1.2 M☉, a white dwarf
+ * above 0.08 M☉, and below that the stripped remnant of a star that the pulsar's wind is
+ * eating away (a "black widow"), drawn as a small gas giant. Tight binaries use real sizes.
+ */
+export function loadPulsarSystem(sim: Simulation, p: PulsarRecord): SceneSetup {
+  const name = pulsarName(p);
+  rememberPulsar(name, p.period, p.pdot);
+  const mass = 1.4;
+  const ns = sim.addBody({ name, kind: 'neutron', mass });
+  if (!p.pbDays || p.companionMass < 1e-3) {
+    sim.recenter();
+    // A powerful young pulsar sits in its wind nebula: stand back far enough to see it.
+    const nebula = p.pdot > 0 && spinDownPower(p.period, p.pdot) > 1e29;
+    return { cameraDistance: nebula ? 2.4 : 0.6, timeScale: 0.05, elevation: nebula ? 0.35 : 0.5, tip: describePulsar(p) };
+  }
+  const mc = p.companionMass;
+  const kind: Body['kind'] = mc >= 1.2 ? 'neutron' : mc >= 0.08 ? 'whitedwarf' : 'gas';
+  const years = p.pbDays / 365.25;
+  const a = Math.cbrt(years * years * (mass + mc));
+  const companion = addOrbiting(
+    sim,
+    ns,
+    { name: kind === 'neutron' ? 'Companion neutron star' : kind === 'whitedwarf' ? 'White dwarf companion' : 'Companion (being evaporated)', mass: mc, kind, color: kind === 'gas' ? 0x8a4a3a : undefined },
+    { a, e: Math.min(p.ecc, 0.95), nu: 1 },
+  );
+  // The Double Pulsar: its companion is a pulsar too (PSR J0737−3039B, 2.77 s; ATNF).
+  if (p.jname === 'J0737-3039A') rememberPulsar(companion.name, 2.773, 8.9e-16);
+  // Tighter than the enlarged bodies allow: show them at their real sizes.
+  if (a < 0.2) setTrueScale(sim, true);
+  if (kind === 'neutron') sim.relativity = true;
+  sim.recenter();
+  return { cameraDistance: Math.max(a * 4, 2e-4), timeScale: years / 5, elevation: 0.6, tip: describePulsar(p) };
+}
+
+/**
+ * The Hulse–Taylor binary pulsar, PSR B1913+16, on its measured orbit (Weisberg & Huang 2016):
+ * period 7.75 hours, eccentricity 0.617, masses 1.438 and 1.390 M☉, at real sizes and with
+ * general relativity at the real speed of light. Its periastron advances 4.2° a year.
+ */
+export const hulseTaylor: Preset = {
+  id: 'hulse-taylor',
+  name: 'Hulse–Taylor Binary Pulsar',
+  description:
+    'Two neutron stars, 1.4 times the Sun’s mass each, whirl round each other every 7¾ hours. The orbit is shrinking, by 3.5 m a year, exactly as Einstein predicted for an orbit that radiates gravitational waves: the first evidence for them (Nobel Prize 1993). They will merge in 300 million years.',
+  load(sim) {
+    const H = HULSE_TAYLOR;
+    sim.relativity = true;
+    sim.lightSpeedScale = 1;
+    const psr = sim.addBody({ name: 'PSR B1913+16', kind: 'neutron', mass: H.mp });
+    const years = H.pbDays / 365.25;
+    const a = Math.cbrt(years * years * (H.mp + H.mc));
+    addOrbiting(sim, psr, { name: 'Companion neutron star (not seen as a pulsar)', kind: 'neutron', mass: H.mc }, { a, e: H.e, argp: (292.5 * Math.PI) / 180, nu: Math.PI });
+    setTrueScale(sim, true);
+    sim.recenter();
+    return {
+      cameraDistance: a * 3.5,
+      timeScale: years / 4,
+      elevation: 1.1,
+      tip: 'Speed time up and open the graph (Periapsis direction) to watch the orbit turn 4.2° a year.',
+    };
+  },
+};
+
 const sunsFuture: Preset = {
   id: 'future',
   name: 'The Sun\u2019s Future',
@@ -624,7 +726,7 @@ export function addSaturnRings(sim: Simulation, saturn: Body, data: SolarData, c
   const wx = py * uz - pz * uy, wy = pz * ux - px * uz, wz = px * uy - py * ux;
   const mu = G * sim.gravityScale * saturn.mass;
   let added = 0;
-  for (const { r: rKm, ring } of sampleRingRadii(data.rings, count)) {
+  for (const { r: rKm, ring } of sampleRingRadii(data.rings, count, Math.random, data.ringGaps)) {
     const r = rKm / KM_PER_AU;
     const th = Math.random() * Math.PI * 2;
     const c = Math.cos(th), s = Math.sin(th);
@@ -868,6 +970,8 @@ export const PRESETS: Preset[] = [
   sunsFuture,
   precession,
   inspiral,
+  pulsarPlanets,
+  hulseTaylor,
   galacticCore,
   starCluster,
   selfGravitatingGalaxy,

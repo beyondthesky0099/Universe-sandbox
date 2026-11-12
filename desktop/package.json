@@ -1,7 +1,7 @@
 {
   "name": "astrarium-desktop",
   "productName": "Astrarium",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Astrarium, the universe sandbox, as a desktop app that uses your full GPU.",
   "author": "beyondthesky0099",
   "license": "UNLICENSED",
@@ -10,9 +10,9 @@
   "homepage": "https://beyondthesky0099.github.io/Universe-sandbox/",
   "main": "main.cjs",
   "scripts": {
-    "web": "node copy-web.mjs",
+    "web": "node copy-web.mjs && node build-server.mjs",
     "start": "npm run web && electron .",
-    "dist:win": "npm run web && electron-builder --win --x64 --publish never",
+    "dist:win": "npm run web && electron-builder --win --x64 --publish never && electron-builder --win --arm64 --publish never",
     "dist:linux": "npm run web && electron-builder --linux dir --publish never"
   },
   "devDependencies": {
@@ -22,12 +22,12 @@
   "build": {
     "appId": "io.github.beyondthesky0099.astrarium",
     "productName": "Astrarium",
-    "files": ["main.cjs", "icon.png", "web/**/*"],
+    "files": ["main.cjs", "server.cjs", "icon.png", "web/**/*"],
     "directories": { "output": "release" },
     "win": {
       "target": [
-        { "target": "nsis", "arch": ["x64"] },
-        { "target": "portable", "arch": ["x64"] }
+        "nsis",
+        "portable"
       ],
       "icon": "icon.png"
     },
@@ -35,9 +35,9 @@
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
-      "artifactName": "Astrarium-Setup-${version}.${ext}"
+      "artifactName": "Astrarium-Setup-${version}-${arch}.${ext}"
     },
-    "portable": { "artifactName": "Astrarium-Portable-${version}.${ext}" },
+    "portable": { "artifactName": "Astrarium-Portable-${version}-${arch}.${ext}" },
     "linux": { "icon": "icon.png", "category": "Education" }
   }
 }

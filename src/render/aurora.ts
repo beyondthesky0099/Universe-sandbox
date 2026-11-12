@@ -332,7 +332,7 @@ export function auroraMesh(a: Aurora): THREE.Mesh {
       uLayers: { value: layers },
       uBrightness: { value: a.brightness },
       // Ultraviolet and infrared auroras aren't drowned by reflected sunlight.
-      uDayFloor: { value: a.falseColour ? 0.7 : 0.12 },
+      uDayFloor: { value: a.falseColour ? 0.3 : 0.12 },
     },
     transparent: true,
     depthWrite: false,

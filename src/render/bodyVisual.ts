@@ -353,7 +353,7 @@ export class BodyVisual {
   applyDetail(body: Body, textureWidth: number): void {
     if (!this.isPlanet) return;
     const key = this.wantedDetailKey(body);
-    const look = { kind: body.kind, color: body.color, seed: seedFromName(this.name), climate: this.climate, earthMasses: body.mass / EARTH_MASS, rings: this.name === 'Saturn' };
+    const look = { kind: body.kind, color: body.color, seed: seedFromName(this.name), climate: this.climate, earthMasses: body.mass / EARTH_MASS, rings: this.name === 'Saturn', name: this.name };
     const tex = makePlanetTextures(look, textureWidth);
     this.disposeDetail();
     const mat = this.mesh.material as THREE.MeshStandardMaterial;

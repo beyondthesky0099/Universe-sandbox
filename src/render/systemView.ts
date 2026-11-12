@@ -780,7 +780,10 @@ export class SystemView {
       }
       light.position.set(s.x, s.y, s.z);
       light.color.setHex(s.color);
-      light.intensity = THREE.MathUtils.clamp(1.2 + Math.log10(luminosity(s) + 1) * 0.6, 0.8, 3.5);
+      // three.js's diffuse shading divides by π, so a light of intensity π shows a surface at its
+      // own colour (albedo) where the star is overhead: as a photograph would. Brighter stars
+      // a little more, within limits.
+      light.intensity = Math.PI * THREE.MathUtils.clamp(0.85 + Math.log10(luminosity(s) + 1) * 0.5, 0.7, 2.2);
     });
   }
 

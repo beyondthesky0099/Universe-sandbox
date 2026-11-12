@@ -2,6 +2,7 @@
  * Types, constants and small helpers shared by the App (app.ts) and its feature controllers.
  */
 import type { PulsarRecord } from '../sim/pulsars';
+import type { CompactObject } from '../sim/compactObjects';
 import * as THREE from 'three';
 import { type StarSystemSpec } from '../procgen/starSystem';
 import { displayName, galaxyForm, LY_PER_MPC, type LocalGalaxy } from '../sim/galaxies';
@@ -83,6 +84,7 @@ export type Origin =
   | { kind: 'sol' }
   | { kind: 'exo'; host: ExoHost }
   | { kind: 'pulsar'; index: number; record: PulsarRecord }
+  | { kind: 'blackhole'; index: number; object: CompactObject }
   | { kind: 'neighbourhood' };
 
 export interface Scenario {

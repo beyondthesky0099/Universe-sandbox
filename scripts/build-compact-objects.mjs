@@ -4,6 +4,11 @@
  * Positions come from SIMBAD (Harvard mirror); masses and distances are transcribed from the
  * discovery papers and verified against their arXiv abstracts (a typo fails the build).
  *
+ * Black holes also carry their companion star's orbit (`companion`: mass M☉, period days,
+ * eccentricity, kind), so the Galaxy Map can open them in the Sandbox. Gaia BH1 and BH2 are
+ * verified against their abstracts; the others come from the papers named in `companion.note`
+ * (their abstracts don't give them).
+ *
  *   node scripts/build-compact-objects.mjs
  */
 import { writeFileSync } from 'node:fs';
@@ -11,17 +16,23 @@ import { writeFileSync } from 'node:fs';
 /** `simbad`: SIMBAD identifier; `quote`: strings that must appear in the arXiv abstract. */
 const OBJECTS = [
   { name: 'Gaia BH1', kind: 'blackhole', simbad: 'Gaia DR3 4373465352415301632', distanceKpc: 0.48, mass: 9.62, arxiv: '2209.06833',
-    about: 'The nearest known black hole: a dormant 9.6 M☉ black hole orbited by a Sun-like star.', quote: ['d = 480\\,\\rm pc', '9.62\\pm 0.18'] },
+    about: 'The nearest known black hole: a dormant 9.6 M☉ black hole orbited by a Sun-like star.', quote: ['d = 480\\,\\rm pc', '9.62\\pm 0.18', '$P_{\\rm orb}=185.6$ days', '($e=0.45$)', '$M=0.93\\,M_{\\odot}$'],
+    companion: { mass: 0.93, periodDays: 185.6, ecc: 0.45, kind: 'star', dormant: true } },
   { name: 'Gaia BH2', kind: 'blackhole', simbad: 'Gaia DR3 5870569352746779008', distanceKpc: 1.16, mass: 8.9, arxiv: '2302.07880',
-    about: 'A dormant black hole orbited by a red giant.', quote: ['1.16 kpc', '8.9\\pm 0.3'] },
+    about: 'A dormant black hole orbited by a red giant.', quote: ['1.16 kpc', '8.9\\pm 0.3', '$P_{\\rm orb} = 1277$ days', '($e=0.52$)', '$\\sim 1M_{\\odot}$ red giant'],
+    companion: { mass: 1.0, periodDays: 1277, ecc: 0.52, kind: 'giant', dormant: true } },
   { name: 'Gaia BH3', kind: 'blackhole', simbad: 'Gaia DR3 4318465066420528000', distanceKpc: 0.59, mass: 33, arxiv: '2404.10486',
-    about: 'The most massive stellar black hole known in the Milky Way.', quote: ['590 pc'] },
+    about: 'The most massive stellar black hole known in the Milky Way.', quote: ['590 pc', 'period of 11.6 yr'],
+    companion: { mass: 0.76, periodDays: 4253, ecc: 0.7291, kind: 'giant', dormant: true, note: 'Eccentricity 0.7291 and companion mass 0.76 M☉ from Gaia Collaboration, Panuzzo et al. 2024 (A&A 686, L2), not the abstract.' } },
   { name: 'Cygnus X-1', kind: 'blackhole', simbad: 'Cyg X-1', mass: 21.2, arxiv: '2102.09091', distanceKpc: 2.22,
-    about: 'The first black hole ever identified (1971), feeding on a blue supergiant companion.', quote: ['21.2\\pm2.2'] },
+    about: 'The first black hole ever identified (1971), feeding on a blue supergiant companion.', quote: ['21.2\\pm2.2'],
+    companion: { mass: 40.6, periodDays: 5.599829, ecc: 0.0189, kind: 'star', note: 'Supergiant mass 40.6 M☉ from Miller-Jones et al. 2021 (Science 371, 1046); period and eccentricity from Orosz et al. 2011 (ApJ 742, 84).' } },
   { name: 'V404 Cygni', kind: 'blackhole', simbad: 'V404 Cyg', distanceKpc: 2.39, arxiv: '0910.5253',
-    about: 'An X-ray binary whose distance was the first measured to a black hole by parallax.', quote: ['2.39 +/- 0.14 kpc'] },
+    about: 'An X-ray binary whose distance was the first measured to a black hole by parallax.', quote: ['2.39 +/- 0.14 kpc'], mass: 9,
+    companion: { mass: 0.7, periodDays: 6.4714, ecc: 0, kind: 'star', note: 'Black hole 9.0 M☉ and donor 0.7 M☉ from Khargharia et al. 2010 (ApJ 716, 1105); period from Casares et al. 1992.' } },
   { name: 'A0620-00', kind: 'blackhole', simbad: 'V* V616 Mon', distanceKpc: 1.06, mass: 6.6, arxiv: '1001.0261',
-    about: 'One of the nearest black holes, in an X-ray binary in Monoceros.', quote: ['6.6 plus or minus 0.25', 'd=1.06 plus or minus 0.12 kpc'] },
+    about: 'One of the nearest black holes, in an X-ray binary in Monoceros.', quote: ['6.6 plus or minus 0.25', 'd=1.06 plus or minus 0.12 kpc'],
+    companion: { mass: 0.4, periodDays: 0.32301, ecc: 0, kind: 'star', note: 'Donor 0.4 M☉ (K5 V) from Cantrell et al. 2010 (ApJ 710, 1127, the body of this paper); period 7.75 h from McClintock & Remillard 1986.' } },
   { name: 'Vela Pulsar', kind: 'pulsar', simbad: 'PSR B0833-45', distanceKpc: 0.293, arxiv: 'astro-ph/0302374',
     about: 'A young pulsar spinning 11 times a second, left by a supernova about 11,000 years ago.', quote: ['$293_{-17}^{+19}$ pc'] },
   { name: 'PSR J0437-4715', kind: 'pulsar', simbad: 'PSR J0437-4715', distanceKpc: 0.15679, mass: 1.44, arxiv: '1510.04434',

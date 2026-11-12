@@ -10,6 +10,7 @@ import { loadNebulaImages, NEBULA_IMAGE_CREDIT, nebulaAtlasUrl, nebulaKey, tileR
 import type { Cloud } from '../render/nebulaClouds';
 import { gaiaPoints, loadGaiaBright } from '../sim/gaiaBright';
 import { isMillisecond, loadPulsars, pulsarName } from '../sim/pulsars';
+import { loadCompactObjects } from '../sim/compactObjects';
 import { characteristicAge, dipoleField, formatYears, sci } from '../sim/neutronStar';
 import { fmt } from '../sim/units';
 import { $, escapeHtml, setFacts, toast } from '../ui/dom';
@@ -20,17 +21,24 @@ import type { App } from '../app';
 export class GalaxyMapUI {
   constructor(private readonly app: App) {}
 
-  /** Real black holes and pulsars (positions from SIMBAD, distances from the discovery papers). */
+  /**
+   * Real black holes (positions from SIMBAD, masses, distances and companions from the discovery
+   * papers): selectable, and zooming in (or Enter) opens one in the Sandbox. The famous pulsars
+   * are in the pulsar layer.
+   */
   async showCompactObjectsOnMap(seed: number): Promise<void> {
-    const res = await fetch(`${import.meta.env.BASE_URL}data/compact-objects.json`).catch(() => undefined);
-    if (!res?.ok || this.app.galaxySeed !== seed) return;
-    const { objects } = (await res.json()) as { objects: { name: string; kind: 'blackhole' | 'pulsar'; raDeg: number; decDeg: number; distanceKpc: number; mass?: number }[] };
+    const objects = await loadCompactObjects().catch(() => undefined);
+    if (!objects || this.app.galaxySeed !== seed) return;
+    const holes = objects.filter((o) => o.kind === 'blackhole');
+    this.app.blackHoleList = holes;
+    this.app.galaxy.blackHolePositions = holes.map((o) => {
+      const [l, b] = equatorialToGalactic(o.raDeg, o.decDeg);
+      return galacticToMap(l, b, o.distanceKpc);
+    });
     this.app.galaxy.addCompactObjects(
-      objects.map((o) => {
-        const [l, b] = equatorialToGalactic(o.raDeg, o.decDeg);
+      holes.map((o, i) => {
         const ly = Math.round((o.distanceKpc * 3261.6) / 10) * 10;
-        const what = o.kind === 'blackhole' ? `black hole${o.mass ? ` · ${o.mass} M☉` : ''}` : 'pulsar';
-        return { label: `${o.name} · ${what} · ${ly.toLocaleString('en-US')} ly`, pos: galacticToMap(l, b, o.distanceKpc), kind: o.kind };
+        return { label: `${o.name} · black hole${o.mass ? ` · ${o.mass} M☉` : ''} · ${ly.toLocaleString('en-US')} ly`, pos: this.app.galaxy.blackHolePositions[i], kind: 'blackhole' as const, target: { bh: i } };
       }),
     );
   }
@@ -42,8 +50,6 @@ export class GalaxyMapUI {
   async showPulsarsOnMap(seed: number): Promise<void> {
     const all = await loadPulsars().catch(() => undefined);
     if (!all || this.app.galaxySeed !== seed) return;
-    // Already labelled as famous compact objects (compact-objects.json).
-    const labelled = new Set(['J0835-4510', 'J0437-4715']);
     this.app.pulsarMapList = all;
     this.app.galaxy.pulsarPositions = all.map((p) => {
       const [l, b] = equatorialToGalactic(p.raDeg, p.decDeg);
@@ -53,7 +59,7 @@ export class GalaxyMapUI {
       'pulsars',
       all.map((p, index) => {
         const [l, b] = equatorialToGalactic(p.raDeg, p.decDeg);
-        const named = !labelled.has(p.jname) && (p.magnetar || !!p.snr || ['B0531+21', 'B1257+12', 'B1913+16', 'B1937+21'].includes(p.bname ?? ''));
+        const named = p.magnetar || !!p.snr || ['B0531+21', 'B1257+12', 'B1913+16', 'B1937+21'].includes(p.bname ?? '') || p.jname === 'J0437-4715';
         const ly = Math.round((p.distanceKpc * 3261.6) / 10) * 10;
         const what = p.magnetar ? 'magnetar' : isMillisecond(p) ? 'millisecond pulsar' : 'pulsar';
         const per = p.period < 1 ? `${(p.period * 1000).toPrecision(3)} ms` : `${p.period.toPrecision(3)} s`;
@@ -64,7 +70,8 @@ export class GalaxyMapUI {
           size: 0.08,
           label: named ? `${pulsarName(p)}${p.snr ? ` (${p.snr})` : ''} · ${what} · ${per} · ${ly.toLocaleString('en-US')} ly` : undefined,
           labelColor: p.magnetar ? '#ff9de3' : '#b8f4ff',
-          distance: 0.02,
+          // Stop a little way off; zooming in from there (or Enter) opens it in the Sandbox.
+          distance: 1,
           target: { psr: index },
         };
       }),
@@ -302,6 +309,21 @@ export class GalaxyMapUI {
         ['Neighbours', 'Thousands of known exoplanet systems'],
       ]);
       bookmarkBtn.classList.add('hidden');
+      panel.classList.remove('hidden');
+      return;
+    }
+    if (typeof target === 'object' && 'bh' in target) {
+      const o = this.app.blackHoleList[target.bh];
+      const c = o.companion;
+      $('star-name').textContent = o.name;
+      setFacts($('star-facts'), [
+        ['Type', c?.dormant ? 'Dormant black hole (not feeding)' : 'Black hole in an X-ray binary'],
+        ['Mass', o.mass ? `${fmt(o.mass)} M☉` : 'unknown'],
+        ...(c ? ([['Companion', `${c.kind === 'giant' ? 'giant star' : 'star'}, ${fmt(c.mass)} M☉`], ['Orbit', c.periodDays < 2 ? `${fmt(c.periodDays * 24)} hours` : c.periodDays < 1000 ? `${fmt(c.periodDays)} days` : `${fmt(c.periodDays / 365.25)} years`]] as [string, string][]) : []),
+        ['Distance', `${fmt(o.distanceKpc * 3261.6)} light-years`],
+        ['Source', o.arxiv ? `arXiv:${o.arxiv}` : 'discovery paper'],
+      ]);
+      $('btn-star-bookmark').classList.add('hidden');
       panel.classList.remove('hidden');
       return;
     }

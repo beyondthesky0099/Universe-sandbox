@@ -1,5 +1,5 @@
 import type { StarSystemSpec } from '../procgen/starSystem';
-import type { Body } from './body';
+import { mainSequenceLifetime, type Body } from './body';
 import { kelvinToRgb, starColor } from './color';
 import { keplerToState, OrbitalElements } from './orbits';
 import type { Simulation } from './simulation';
@@ -7,6 +7,7 @@ import { EARTH_MASS, G, JUPITER_MASS } from './units';
 import { mulberry32 } from '../procgen/rng';
 import { rememberPulsar, spinDownPower } from './neutronStar';
 import { HULSE_TAYLOR } from './binaryPulsar';
+import type { CompactObject } from './compactObjects';
 import { describePulsar, pulsarName, type PulsarRecord } from './pulsars';
 import { GAS_DISC_LIFETIME, planetesimals } from './planetFormation';
 import { julianDate, planetStates, type PlanetName } from './ephemeris';
@@ -630,6 +631,28 @@ export const hulseTaylor: Preset = {
     };
   },
 };
+
+/**
+ * A real black hole and its companion star (Galaxy Map → visit), on the orbit from the discovery
+ * paper (compact-objects.json): period, eccentricity, companion mass. Dormant black holes (the
+ * Gaia ones) have no accretion disc; X-ray binaries do. Tight binaries use real sizes.
+ */
+export function loadBlackHoleSystem(sim: Simulation, o: CompactObject): SceneSetup {
+  const hole = sim.addBody({ name: o.name, kind: 'blackhole', mass: o.mass ?? 10, tag: o.companion?.dormant ? 'dormant' : undefined });
+  const c = o.companion;
+  if (!c) {
+    sim.recenter();
+    return { cameraDistance: 3, timeScale: 0.1, elevation: 0.5, tip: o.about };
+  }
+  const years = c.periodDays / 365.25;
+  const a = Math.cbrt(years * years * (hole.mass + c.mass));
+  // Halfway through its life (a 40 M☉ supergiant lives a few million years, a Sun-like star ten billion).
+  const age = Math.min(4e9, 0.5 * mainSequenceLifetime(c.mass));
+  addOrbiting(sim, hole, { name: c.kind === 'giant' ? 'Companion giant star' : 'Companion star', kind: c.kind, mass: c.mass, age }, { a, e: c.ecc, nu: Math.PI * 0.6 });
+  if (a < 0.5) setTrueScale(sim, true);
+  sim.recenter();
+  return { cameraDistance: a * 3.2, timeScale: years / 6, elevation: 0.7, tip: o.about };
+}
 
 const sunsFuture: Preset = {
   id: 'future',

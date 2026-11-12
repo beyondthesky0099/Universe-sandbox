@@ -319,6 +319,11 @@ important ones stay and the rest fade out until you zoom in and there's room for
     known black hole at 1,570 light-years, plus Gaia BH2 and BH3, Cygnus X-1, V404 Cygni,
     A0620-00, the Vela Pulsar and PSR J0437-4715. Positions come from SIMBAD; masses and
     distances come from each discovery paper.
+  - **Zoom in to arrive.** Select a black hole or pulsar (click its name or dot), then zoom in or
+    press Enter, and it opens in the Sandbox.
+    - Each black hole comes with its companion star on the orbit from its paper.
+    - The Gaia black holes are dormant: no disc, only their shadow and the bending of starlight.
+    - The X-ray binaries feed from a disc.
   - **3,632 real pulsars** from the ATNF Pulsar Catalogue at their estimated distances: young
     pulsars in blue, millisecond pulsars in white, 13 magnetars in magenta. The famous ones are
     named, and every one can be found with search.

@@ -102,14 +102,15 @@ export function structureEntries(): SearchEntry[] {
 }
 
 export function compactEntries(list: { name: string; kind: 'blackhole' | 'pulsar'; raDeg: number; decDeg: number; distanceKpc: number; mass?: number }[]): SearchEntry[] {
-  return list.map((o) => {
+  // (The famous pulsars are in the pulsar catalogue's entries.)
+  return list.filter((o) => o.kind === 'blackhole').map((o) => {
     const [l, b] = equatorialToGalactic(o.raDeg, o.decDeg);
     return {
       name: o.name,
       kind: o.kind === 'blackhole' ? 'Black hole' : 'Pulsar',
       detail: `${o.mass ? `${o.mass} M☉ · ` : ''}${lightYears(o.distanceKpc)} away`,
       rank: 40,
-      action: { type: 'map', l, b, dKpc: o.distanceKpc },
+      action: { type: 'map', l, b, dKpc: o.distanceKpc, blackHole: o.name },
     };
   });
 }

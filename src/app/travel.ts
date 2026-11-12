@@ -27,6 +27,7 @@ export class TravelUI {
   targetName(t: GalaxyTarget): string {
     if (t === 'core') return 'the Galactic Centre';
     if (t === 'sol') return 'the Sun';
+    if (typeof t === 'object' && 'bh' in t) return this.app.blackHoleList[t.bh]?.name ?? 'the black hole';
     if (typeof t === 'object') return 'psr' in t ? (this.app.pulsarMapList[t.psr] ? pulsarName(this.app.pulsarMapList[t.psr]) : 'the pulsar') : (this.app.exoMapHosts[t.exo]?.name ?? 'the star');
     return this.app.galaxy.data.names[t];
   }

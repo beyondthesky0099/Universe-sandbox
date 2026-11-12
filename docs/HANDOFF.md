@@ -208,6 +208,24 @@ Plan, in priority order:
 - BodyVisual adds it in applyDetail and updates it only when the planet is more than 14 px across
   and a star is present. Tests: tests/aurora.test.ts.
 
+### AJ. Zoom in to arrive at black holes and pulsars
+- [x] compact-objects.json: black holes carry `companion` (mass, periodDays, ecc, kind,
+  dormant, note).
+  - BH1 and BH2 are verified against their abstracts; BH3's period too. The rest are noted from
+    the papers.
+  - Loader: src/sim/compactObjects.ts.
+- [x] Galaxy Map target `{ bh: index }` (App.blackHoleList, GalaxyView.blackHolePositions), with
+  pick, the panel and travel.
+  - enterTarget → loadBlackHoleSystem (presets.ts). Origin kind 'blackhole'.
+  - The companion's age is half its lifetime, so Cygnus X-1's supergiant doesn't explode on
+    load.
+- [x] tag 'dormant' → BodyVisual draws no disc or glow (the lensing still shows).
+- [x] Vela and J0437−4715 are labelled in the pulsar layer (targets), not the famous-objects
+  layer.
+  - Pulsar and black-hole labels and search fly to 1 unit, outside AUTO_ENTER_DISTANCE (0.6):
+    zooming in or Enter opens them.
+- Tests: tests/black-hole-systems.test.ts.
+
 ### AI. Desktop: any laptop's graphics, higher resolution, speed
 - [x] Quality 'ultra' (QUALITY_PRESETS): 1.5× supersampling (pixelRatio cap 3), 1024-wide planet
   textures, 500 full bodies. It is the desktop default; 'high' on low-power machines.

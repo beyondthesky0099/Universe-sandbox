@@ -2148,3 +2148,16 @@ a {
     padding: 6px 12px;
   }
 }
+
+/* Hulse–Taylor chart (preset description). */
+.ht-chart { margin: 8px 0 4px; }
+.ht-chart svg { width: 100%; height: auto; display: block; }
+.ht-chart .axis line { stroke: rgba(154, 163, 173, 0.18); stroke-width: 0.6; }
+.ht-chart .axis text { fill: var(--muted, #9aa3ad); font-size: 8px; font-family: 'IBM Plex Mono', monospace; }
+.ht-chart polyline { fill: none; stroke-width: 1.6; }
+.ht-chart .gr { stroke: #5ea7ff; }
+.ht-chart .measured { stroke: #ff6a2a; stroke-dasharray: 3 3; }
+.ht-chart .now { fill: #ff2a1a; }
+.ht-chart figcaption { font-size: 11px; color: var(--muted, #9aa3ad); margin-top: 4px; line-height: 1.5; }
+.ht-chart .key { display: inline-block; width: 14px; height: 0; border-top: 2px solid #5ea7ff; vertical-align: middle; margin: 0 4px 0 2px; }
+.ht-chart .key.measured { border-top: 2px dashed #ff6a2a; margin-left: 8px; }

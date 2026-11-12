@@ -16,8 +16,9 @@ import { type Body } from './sim/body';
 import { GAS_PALETTE, ROCKY_PALETTE } from './sim/color';
 import { type Forecast } from './sim/forecast';
 import { SimHost } from './sim/host';
-import { galacticCore, loadPulsarSystem, loadSolarSystemOnDate, loadStarSystem, PRESETS, pulsarPlanets } from './sim/presets';
+import { galacticCore, hulseTaylor, loadPulsarSystem, loadSolarSystemOnDate, loadStarSystem, PRESETS, pulsarPlanets } from './sim/presets';
 import { describePulsar, pulsarName, type PulsarRecord } from './sim/pulsars';
+import { hulseTaylorChart } from './ui/hulseTaylorChart';
 import { PARTICLE_CULL_DISTANCE, type SimEvent } from './sim/simulation';
 import { captureState, restoreState } from './sim/state';
 import { type ExoCatalog, type ExoHost } from './sim/exoplanets';
@@ -684,10 +685,11 @@ export class App {
         scenario = { name: 'the Solar System', load: () => loadSolarSystemOnDate(this.sim, new Date()), origin: { kind: 'sol' } };
       } else if (typeof target === 'object' && 'psr' in target) {
         const record = this.pulsarMapList[target.psr];
-        scenario =
-          record.bname === 'B1257+12'
-            ? { name: pulsarPlanets.name, load: () => pulsarPlanets.load(this.sim), presetId: pulsarPlanets.id, origin: { kind: 'pulsar', index: target.psr, record } }
-            : { name: pulsarName(record), description: describePulsar(record), load: () => loadPulsarSystem(this.sim, record), origin: { kind: 'pulsar', index: target.psr, record } };
+        // Two have their own scenes: the pulsar planets and the Hulse–Taylor binary.
+        const own = record.bname === 'B1257+12' ? pulsarPlanets : record.bname === 'B1913+16' ? hulseTaylor : undefined;
+        scenario = own
+          ? { name: own.name, load: () => own.load(this.sim), presetId: own.id, origin: { kind: 'pulsar', index: target.psr, record } }
+          : { name: pulsarName(record), description: describePulsar(record), load: () => loadPulsarSystem(this.sim, record), origin: { kind: 'pulsar', index: target.psr, record } };
       } else if (typeof target === 'object') {
         scenario = this.realDataUI.exoScenario(this.exoMapHosts[target.exo]);
       } else {
@@ -827,6 +829,7 @@ export class App {
     const select = $<HTMLSelectElement>('preset-select');
     select.value = sc.presetId ?? '';
     $('preset-desc').textContent = sc.presetId ? (PRESETS.find((p) => p.id === sc.presetId)?.description ?? '') : (sc.description ?? setup.tip ?? '');
+    $('preset-extra').innerHTML = sc.presetId === 'hulse-taylor' ? hulseTaylorChart() : '';
     $('origin').classList.toggle('hidden', !sc.origin);
     if (sc.origin?.kind === 'star') {
       $('origin-name').textContent = sc.origin.spec.star.name;

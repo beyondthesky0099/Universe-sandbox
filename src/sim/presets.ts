@@ -6,6 +6,7 @@ import type { Simulation } from './simulation';
 import { EARTH_MASS, G, JUPITER_MASS } from './units';
 import { mulberry32 } from '../procgen/rng';
 import { rememberPulsar } from './neutronStar';
+import { HULSE_TAYLOR } from './binaryPulsar';
 import { describePulsar, pulsarName, type PulsarRecord } from './pulsars';
 import { GAS_DISC_LIFETIME, planetesimals } from './planetFormation';
 import { julianDate, planetStates, type PlanetName } from './ephemeris';
@@ -599,6 +600,35 @@ export function loadPulsarSystem(sim: Simulation, p: PulsarRecord): SceneSetup {
   return { cameraDistance: Math.max(a * 4, 2e-4), timeScale: years / 5, elevation: 0.6, tip: describePulsar(p) };
 }
 
+/**
+ * The Hulse–Taylor binary pulsar, PSR B1913+16, on its measured orbit (Weisberg & Huang 2016):
+ * period 7.75 hours, eccentricity 0.617, masses 1.438 and 1.390 M☉, at real sizes and with
+ * general relativity at the real speed of light. Its periastron advances 4.2° a year.
+ */
+export const hulseTaylor: Preset = {
+  id: 'hulse-taylor',
+  name: 'Hulse–Taylor Binary Pulsar',
+  description:
+    'Two neutron stars, 1.4 times the Sun’s mass each, whirl round each other every 7¾ hours. The orbit is shrinking, by 3.5 m a year, exactly as Einstein predicted for an orbit that radiates gravitational waves: the first evidence for them (Nobel Prize 1993). They will merge in 300 million years.',
+  load(sim) {
+    const H = HULSE_TAYLOR;
+    sim.relativity = true;
+    sim.lightSpeedScale = 1;
+    const psr = sim.addBody({ name: 'PSR B1913+16', kind: 'neutron', mass: H.mp });
+    const years = H.pbDays / 365.25;
+    const a = Math.cbrt(years * years * (H.mp + H.mc));
+    addOrbiting(sim, psr, { name: 'Companion neutron star (not seen as a pulsar)', kind: 'neutron', mass: H.mc }, { a, e: H.e, argp: (292.5 * Math.PI) / 180, nu: Math.PI });
+    setTrueScale(sim, true);
+    sim.recenter();
+    return {
+      cameraDistance: a * 3.5,
+      timeScale: years / 4,
+      elevation: 1.1,
+      tip: 'Speed time up and open the graph (Periapsis direction) to watch the orbit turn 4.2° a year.',
+    };
+  },
+};
+
 const sunsFuture: Preset = {
   id: 'future',
   name: 'The Sun\u2019s Future',
@@ -939,6 +969,7 @@ export const PRESETS: Preset[] = [
   precession,
   inspiral,
   pulsarPlanets,
+  hulseTaylor,
   galacticCore,
   starCluster,
   selfGravitatingGalaxy,

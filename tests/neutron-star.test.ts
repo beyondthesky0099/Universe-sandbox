@@ -23,6 +23,8 @@ import {
 } from '../src/sim/neutronStar';
 import { describePulsar, isMillisecond, parsePulsars, pulsarName } from '../src/sim/pulsars';
 import { pulsarSamples, soundsLike } from '../src/sim/pulsarSound';
+import { HULSE_TAYLOR, orbitalDecay, periastronAdvance, periastronShift, timeToMerge } from '../src/sim/binaryPulsar';
+import { hulseTaylorChart } from '../src/ui/hulseTaylorChart';
 import { loadPulsarSystem, PRESETS } from '../src/sim/presets';
 import { Simulation } from '../src/sim/simulation';
 import { EARTH_MASS } from '../src/sim/units';
@@ -225,5 +227,43 @@ describe('pulsar sound', () => {
     expect(soundsLike(0.0893)).toBe('a buzz, 11 pulses a second');
     expect(soundsLike(0.00575)).toBe('a hum at 174 Hz');
     expect(soundsLike(1.2)).toBe('a tick every 1.2 s');
+  });
+});
+
+describe('the Hulse–Taylor binary pulsar', () => {
+  const H = HULSE_TAYLOR;
+  const pb = H.pbDays * 86400;
+  it('general relativity predicts its measured decay and periastron advance', () => {
+    // GR prediction −2.40263 × 10⁻¹² (Weisberg & Huang 2016); the masses here are rounded.
+    expect(orbitalDecay(pb, H.e, H.mp, H.mc) / -2.40263e-12).toBeCloseTo(1, 3);
+    expect(periastronAdvance(pb, H.e, H.mp, H.mc)).toBeCloseTo(H.omegaDot, 2);
+    // About 300 million years to merge.
+    expect(timeToMerge(pb, H.e, H.mp, H.mc) / 1e6).toBeCloseTo(300, -1);
+    // The classic plot: about −40 s by 2005.
+    expect(periastronShift(2005 - H.since, orbitalDecay(pb, H.e, H.mp, H.mc), pb)).toBeCloseTo(-40, -1);
+    expect(hulseTaylorChart(2026)).toContain('<polyline class="gr"');
+  });
+
+  it('the scene turns its periastron at the relativistic rate', () => {
+    const sim = new Simulation();
+    PRESETS.find((p) => p.id === 'hulse-taylor')!.load(sim);
+    const [a, b] = sim.bodies;
+    const periDir = () => {
+      // The direction of the eccentricity vector of the relative orbit.
+      const rx = b.x - a.x, ry = b.y - a.y, rz = b.z - a.z;
+      const vx = b.vx - a.vx, vy = b.vy - a.vy, vz = b.vz - a.vz;
+      const mu = sim.effectiveG * (a.mass + b.mass);
+      const r = Math.hypot(rx, ry, rz);
+      const rv = rx * vx + ry * vy + rz * vz;
+      const v2 = vx * vx + vy * vy + vz * vz;
+      const ex = ((v2 - mu / r) * rx - rv * vx) / mu, ez = ((v2 - mu / r) * rz - rv * vz) / mu;
+      return Math.atan2(ez, ex);
+    };
+    const w0 = periDir();
+    const years = 0.02;
+    sim.advance(years, 1e8, 1e9);
+    const turned = (Math.abs(periDir() - w0) * 180) / Math.PI;
+    expect(turned / years).toBeGreaterThan(3.6);
+    expect(turned / years).toBeLessThan(4.9);
   });
 });

@@ -59,7 +59,14 @@ with a browser tab, it:
 - is never slowed down in the background
 - starts at high graphics quality
 - works offline, with all the real data bundled
-- spreads the particle physics (asteroids, debris, galaxy stars) over all your CPU cores
+- spreads the physics over all your CPU cores: the particles (asteroids, debris, galaxy stars),
+  and in big scenes the whole Barnes–Hut gravity tree
+- runs its own companion server, so the community gallery and multiplayer rooms work with no
+  setup
+  - It listens only on this computer (127.0.0.1) and keeps the gallery in the app's data
+    folder.
+  - The Claude scene builder turns on if `ANTHROPIC_API_KEY` is set.
+  - A server you choose in the app's settings takes precedence.
 
 Download `Astrarium-Setup-<version>.exe` (installer) or `Astrarium-Portable-<version>.exe` (runs
 without installing) from the [Releases](https://github.com/beyondthesky0099/Universe-sandbox/releases)
@@ -71,6 +78,9 @@ choose *More info → Run anyway*. Press F11 for full screen.
 - **Exact results:** the threaded result is identical to the single-threaded one (tested).
 - **Measured speed-up:** in a 4-core test machine, without a renderer competing for cores, the force calculation ran 1.8× faster on 2 threads and 2.4× faster on 3.
 - **Where it matters:** that calculation is about 87% of each step in the asteroid-heavy scenarios (Solar System, Rogue star, the Sun's future).
+- **Big scenes:** scenes big enough for the Barnes–Hut tree (the spiral galaxy, the cluster, galaxy collisions) share the tree itself.
+  - The physics thread copies the tree into shared memory each step, and every core walks it for its own bodies and particles, in the same order, so the results are identical.
+  - Measured in Node with 20,000 bodies: 1.75× on 2 threads and 3.2× on 4.
 - The physics panel shows how many cores are in use. Add `#threads=0` to the address to turn this off.
 
 To build or run it yourself:
@@ -447,7 +457,7 @@ years.
 Solar System (today) · Solar System (true scale) · Milky Way meets Andromeda (real) · Earth & Moon · Mars, Jupiter, Saturn, Uranus and Neptune with their moons ·
 Pluto & Charon · Planet Formation · Giant Impact · Ring Maker · Binary Star ·
 Figure-8 Three-Body · Rogue Star Flyby · Black Hole Feast · Supernova · The Sun's Future ·
-Relativistic Precession · Black Hole Inspiral · Pulsar Planets (PSR B1257+12) · Galactic Core · Star Cluster Collapse ·
+Relativistic Precession · Black Hole Inspiral · Pulsar Planets (PSR B1257+12) · Hulse–Taylor Binary Pulsar · Galactic Core · Star Cluster Collapse ·
 Self-Gravitating Disk · Galaxy Collision · Empty Space
 
 ### Phones and tablets
@@ -573,9 +583,19 @@ Zoom in on a neutron star and you see what its gravity and magnetism do (`src/si
   at once, often both magnetic poles together (Beloborodov 2002).
 - **Hot poles.** Heat flows along the magnetic field, so the magnetic poles glow brighter than the
   equator. The polar caps, where particles rain back down, are hottest.
-- **Magnetic field and beams.** A dipole field is tilted from the spin axis. Beams run along the
-  magnetic axis, as wide as real radio beams (Rankin 1993), and sweep round like a lighthouse.
-  The star flashes when one crosses you.
+- **Magnetic field and beams.** A dipole field is tilted from the spin axis.
+  - Beams run along the magnetic axis, as wide as real radio beams (Rankin 1993), and sweep
+    round like a lighthouse.
+  - Each beam is drawn as glowing gas: a white core and a blue halo, blazing when you look down
+    it. The star flashes when one crosses you.
+  - Beyond the light cylinder the field can't keep up with the star and winds into a spiral (the
+    striped wind), drawn as spiral streaks turning with the star.
+- **Wind nebulae.** Young, powerful pulsars (the Crab, Vela and others above 10²⁹ W) sit in a
+  glowing wind nebula.
+  - It has a wispy torus in the spin equator, an inner ring of knots and jets along the spin
+    axis: the pattern Chandra shows for both.
+  - The side flowing towards you is brighter (Doppler boosting).
+  - Like the wound field, it is drawn much closer to the star than to scale.
 - **Real spin.** Known pulsars (the Crab, Vela, PSR J0437−4715, PSR B1257+12, the Hulse–Taylor
   pulsar) use their catalogued period and spin-down.
   - Other neutron stars, like those born in a supernova here, are typical newborn pulsars
@@ -584,9 +604,24 @@ Zoom in on a neutron star and you see what its gravity and magnetism do (`src/si
 - **Its panel** gives the period, magnetic field, age, temperature, spin-down power, light
   cylinder, density, gravity, escape speed and how much of the surface you can see.
 
-The **Pulsar Planets** scene is PSR B1257+12, where the first planets beyond the Sun were found
-in 1992. Its three planets, Draugr, Poltergeist and Phobetor, sit on orbits from the pulsar's
-timing.
+- **Hear it.** 🔊 plays its radio pulses as sound, one click per turn, at the real spin rate.
+  Slow pulsars tick, Vela buzzes, the Crab growls and millisecond pulsars hum a note.
+- **Visit any of 3,632 real pulsars** from the Galaxy Map or search.
+  - Click a pulsar for its catalogued period, field, age and companion. Enter opens it in the
+    Sandbox spinning at its measured rate.
+  - A binary pulsar brings its companion on the catalogued orbit: a white dwarf, a second neutron
+    star (the Double Pulsar's companion is a pulsar too) or an evaporating star.
+  - Tight binaries use real sizes.
+
+Scenes:
+- **Pulsar Planets** is PSR B1257+12, where the first planets beyond the Sun were found in 1992.
+  Its three planets, Draugr, Poltergeist and Phobetor, sit on orbits from the pulsar's timing.
+- **Hulse–Taylor Binary Pulsar** is PSR B1913+16 on its measured orbit (Weisberg & Huang 2016),
+  at real sizes and with relativity at the real speed of light.
+  - The periastron turns 4.2° a year.
+  - Its panel shows the classic chart: the orbit's measured decay against general relativity's
+    prediction (99.83 ± 0.16% of it), the first evidence for gravitational waves.
+  - The two stars will merge in 300 million years (Peters 1964).
 
 ## More about a planet
 
@@ -830,7 +865,15 @@ push and pull request.
   `node scripts/build-pulsars.mjs`. The PSR B1257+12 planets' orbits come from its timing
   solution there (Konacki & Wolszczan 2003).
 - Neutron stars: light bending from Beloborodov (2002), beam widths from Rankin (1993), the
-  newborn-pulsar population from Faucher-Giguère & Kaspi (2006).
+  newborn-pulsar population from Faucher-Giguère & Kaspi (2006). The binary orbits of visited
+  pulsars come from the ATNF catalogue too.
+- Hulse–Taylor binary pulsar: Weisberg & Huang (2016, ApJ 829, 55); orbital decay from Peters &
+  Mathews (1963) and the time to merge from Peters (1964).
+- Saturn's ring gaps: the IAU ring nomenclature table in the USGS Gazetteer of Planetary
+  Nomenclature (https://planetarynames.wr.usgs.gov/Page/Rings), rebuilt with
+  `node scripts/build-saturn-rings.mjs`.
+- Io: the USGS Galileo SSI / Voyager colour-merged global mosaic (credits in
+  `public/textures/CREDITS.md`).
 - Cosmic microwave background: the NASA WMAP 9-year ILC map from LAMBDA (public domain),
   reprojected from HEALPix by `python3 -I scripts/build-cmb.py` (needs numpy and ImageMagick).
 - Spacecraft trajectories: NASA/JPL Horizons, state vectors every 10 days (rebuild with

@@ -208,6 +208,27 @@ Plan, in priority order:
 - BodyVisual adds it in applyDetail and updates it only when the planet is more than 14 px across
   and a star is present. Tests: tests/aurora.test.ts.
 
+### AH. Realism pass (stars, giants, planets)
+- [x] Stars: src/render/starSurface.ts (StarSurface; starLook by kind/temperature).
+  - Voronoi granulation with domain warp and per-cell brightness, faded by on-screen cell size.
+  - Per-channel limb darkening, sunspots with penumbrae, and faculae.
+  - A handful of giant cells on red giants; smooth hot stars and white dwarfs.
+  - coronaMesh: a billboard of streamers.
+- [x] Lighting: star PointLight intensity ≈ π (three.js divides diffuse by π). Before this,
+  planets showed at about 40% of their albedo.
+- [x] Jupiter's and Saturn's atmospheres: less Rayleigh, blue absorption (warm limbs).
+- [x] gasTextures: uneven zonal bands, shear turbulence, wavy edges, spiralling storms, ice-giant
+  methane streaks, and Saturn's hexagon (PlanetLook.name).
+- [x] planetLighting.ts (onBeforeCompile on MeshStandardMaterial).
+  - Ring shadow on the globe, and the globe's shadow on the rings (ShadowUniforms updated in
+    BodyVisual.update).
+  - Earth's city lights: the Black Marble 2016 map. Only the warm pixels are kept, on the night
+    side.
+  - Ocean glint via a roughness map read from the day map.
+- [x] build-planet-textures.mjs: earth-night.jpg, and the assets.science.nasa.gov mirror for
+  eoimages (eoimages returned 503).
+- Not done yet: galaxies (Universe view) and black-hole discs compared against reference renders.
+
 ### AG. Pulsars in depth, and the backlog
 - [x] Beams as glowing gas (render/neutronStar.ts BEAM_FRAGMENT).
   - Each pixel is the line-of-sight integral through a Gaussian tube around the axis, evaluated

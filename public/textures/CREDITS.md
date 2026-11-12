@@ -12,6 +12,7 @@ resized and recompressed (and, where noted, converted to greyscale or desaturate
 | --- | --- | --- |
 | earth.jpg | NASA Visible Earth, "The Blue Marble: Land Surface, Shallow Water, and Shaded Topography" (NASA Goddard Space Flight Center) | https://eoimages.gsfc.nasa.gov/images/imagerecords/57000/57752/land_shallow_topo_2048.jpg |
 | earth-clouds.jpg | NASA Visible Earth, "The Blue Marble: Clouds" (NASA Goddard Space Flight Center) | https://eoimages.gsfc.nasa.gov/images/imagerecords/57000/57747/cloud_combined_2048.jpg |
+| earth-night.jpg | NASA Earth Observatory, "Black Marble 2016" night lights (Suomi NPP VIIRS; NASA Goddard / Miguel Román) | https://eoimages.gsfc.nasa.gov/images/imagerecords/144000/144898/BlackMarble_2016_01deg.jpg |
 | moon.jpg | NASA Scientific Visualization Studio, CGI Moon Kit (Lunar Reconnaissance Orbiter Camera colour map) | https://svs.gsfc.nasa.gov/vis/a000000/a004700/a004720/lroc_color_poles_1k.jpg |
 | jupiter.jpg | NASA/JPL/Space Science Institute, Cassini map of Jupiter (PIA07782) | https://assets.science.nasa.gov/content/dam/science/psd/photojournal/pia/pia07/pia07782/PIA07782.jpg |
 | mercury.jpg | NASA/JHUAPL/Carnegie Institution, MESSENGER MDIS global colour mosaic, via USGS Astrogeology (saturation reduced here: the mosaic is tinted, Mercury looks grey) | https://astrogeology.usgs.gov/ckan/dataset/b8ad92a0-5cb2-4db9-ae66-d0ef3a747bb7/resource/4f5968f1-cae7-4b6a-9967-d576c10f9475/download/mercury_messenger_clrmosaic_global_1024.jpg |

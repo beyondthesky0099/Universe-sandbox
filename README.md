@@ -574,6 +574,26 @@ It is set with a slider in the black hole's panel (`src/sim/kerr.ts`).
 - **Real values:** the galactic-core scene's hole spins at 0.94, as the Event Horizon Telescope's
   favoured Sgr A* models do.
 
+## Realistic stars and planets
+
+- **Star surfaces** (`src/render/starSurface.ts`) look as telescopes show them.
+  - Stars cooler than ~7,000 K are tiled with convection cells (granulation) that slowly
+    change, over larger supergranulation.
+  - Red giants have only a handful of huge cells, as on Betelgeuse. Hot stars and white dwarfs
+    are smooth.
+  - The disc darkens and reddens towards its edge (limb darkening, per colour).
+  - Sun-like stars have sunspots with filamentary penumbrae and bright faculae.
+  - Close up, a faint corona surrounds the star.
+- **Planets as photographed.** A planet where its star is overhead shows its map's true colour.
+  - Jupiter's and Saturn's hazes absorb blue, so their limbs stay warm.
+  - Gas giants without a real map get uneven belts and zones, turbulence sheared along them,
+    spiralling storms, and quiet ice giants with methane streaks. Saturn has its north-polar
+    hexagon.
+- **Shadows and lights.**
+  - Ringed planets shade their rings, and the rings band the planet with shadow.
+  - Earth shows its city lights on the night side (NASA Black Marble).
+  - The Sun glints off Earth's oceans.
+
 ## Neutron stars and pulsars
 
 Zoom in on a neutron star and you see what its gravity and magnetism do (`src/sim/neutronStar.ts`,
@@ -872,6 +892,8 @@ push and pull request.
 - Saturn's ring gaps: the IAU ring nomenclature table in the USGS Gazetteer of Planetary
   Nomenclature (https://planetarynames.wr.usgs.gov/Page/Rings), rebuilt with
   `node scripts/build-saturn-rings.mjs`.
+- Earth at night: NASA Earth Observatory "Black Marble 2016" (credits in
+  `public/textures/CREDITS.md`).
 - Io: the USGS Galileo SSI / Voyager colour-merged global mosaic (credits in
   `public/textures/CREDITS.md`).
 - Cosmic microwave background: the NASA WMAP 9-year ILC map from LAMBDA (public domain),

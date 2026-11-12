@@ -27,6 +27,12 @@ const MAPS = [
     'NASA Visible Earth, "The Blue Marble: Clouds" (NASA Goddard Space Flight Center)',
   ],
   [
+    'earth-night',
+    'https://eoimages.gsfc.nasa.gov/images/imagerecords/144000/144898/BlackMarble_2016_01deg.jpg',
+    2048,
+    'NASA Earth Observatory, "Black Marble 2016" night lights (Suomi NPP VIIRS; NASA Goddard / Miguel Román)',
+  ],
+  [
     'moon',
     'https://svs.gsfc.nasa.gov/vis/a000000/a004700/a004720/lroc_color_poles_1k.jpg',
     1024,
@@ -112,10 +118,13 @@ mkdirSync(outDir, { recursive: true });
 const work = join(new URL('../node_modules/.cache/textures/', import.meta.url).pathname);
 mkdirSync(work, { recursive: true });
 
+/** NASA Earth Observatory images are mirrored here; used when eoimages.gsfc.nasa.gov is down. */
+const mirror = (url) => url.replace('https://eoimages.gsfc.nasa.gov/images/', 'https://assets.science.nasa.gov/content/dam/science/esd/eo/images/');
+
 async function download(url, dest) {
   if (existsSync(dest)) return;
   for (let attempt = 0; ; attempt++) {
-    const res = await fetch(url);
+    const res = await fetch(attempt % 2 ? mirror(url) : url);
     const type = res.headers.get('content-type') ?? '';
     if (res.ok && type.startsWith('image/')) {
       writeFileSync(dest, Buffer.from(await res.arrayBuffer()));

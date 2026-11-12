@@ -13,6 +13,7 @@ import { mulberry32 } from '../procgen/rng';
 import { glowTexture } from './textures';
 import { NeutronStarVisual } from './neutronStar';
 import { coronaMesh, StarSurface, starLook } from './starSurface';
+import { hookPlanet, hookRings, oceanRoughness, shadowUniforms, type ShadowUniforms } from './planetLighting';
 import { starTemperature } from '../sim/color';
 import { getSolarData, poleScene, REAL_COLORS } from '../sim/solarSystemData';
 
@@ -64,9 +65,9 @@ export function atmosphereMaterial(color: number, intensity: number): THREE.Shad
 }
 
 /** Real NASA surface maps (public/textures, built by scripts/build-planet-textures.mjs). */
-const REAL_MAPS: Record<string, { map: string; clouds?: string; grey?: boolean }> = {
+const REAL_MAPS: Record<string, { map: string; clouds?: string; grey?: boolean; night?: string }> = {
   Mercury: { map: 'mercury.jpg' },
-  Earth: { map: 'earth.jpg', clouds: 'earth-clouds.jpg' },
+  Earth: { map: 'earth.jpg', clouds: 'earth-clouds.jpg', night: 'earth-night.jpg' },
   Moon: { map: 'moon.jpg' },
   Mars: { map: 'mars.jpg' },
   Phobos: { map: 'phobos.jpg', grey: true },
@@ -125,6 +126,8 @@ export class BodyVisual {
   /** Distance from the star when the aurora was first lit (its stellar-wind reference). */
   private auroraD0 = 0;
   private rings?: THREE.Mesh;
+  /** Ring shadows and night lights (planetLighting.ts). */
+  private shadowU?: ShadowUniforms;
   /** Saturn's real ring radii (in planet radii); other ringed planets share RINGS. */
   private ringGeometry?: THREE.RingGeometry;
   /** A star's surface (granulation, limb darkening, spots) and corona. */
@@ -404,14 +407,24 @@ export class BodyVisual {
     }
     if (tex.rings) {
       this.textures.push(tex.rings);
-      this.rings = new THREE.Mesh(
-        this.ringGeometry ?? RINGS,
-        new THREE.MeshStandardMaterial({ map: tex.rings, transparent: true, side: THREE.DoubleSide, depthWrite: false, roughness: 1 }),
-      );
+      const ringMat = new THREE.MeshStandardMaterial({ map: tex.rings, transparent: true, side: THREE.DoubleSide, depthWrite: false, roughness: 1 });
+      this.rings = new THREE.Mesh(this.ringGeometry ?? RINGS, ringMat);
       this.rings.rotation.x = -Math.PI / 2;
       this.mesh.add(this.rings);
+      // The globe shades the rings, and the rings band the globe with shadow (planetLighting.ts).
+      const geo = this.rings.geometry as THREE.RingGeometry;
+      this.shadowU = shadowUniforms();
+      this.shadowU.uRingTex.value = tex.rings;
+      this.shadowU.uRingInner.value = geo.parameters.innerRadius;
+      this.shadowU.uRingOuter.value = geo.parameters.outerRadius;
+      hookRings(ringMat, this.shadowU);
     }
     this.applyRealMaps(mat);
+    const night = REAL_MAPS[this.name]?.night && this.climate !== 'molten';
+    if (this.shadowU || night) {
+      this.shadowU ??= shadowUniforms();
+      hookPlanet(mat, this.shadowU, { rings: !!this.rings, nightLights: !!night });
+    }
     this.detailKey = key;
   }
 
@@ -427,6 +440,21 @@ export class BodyVisual {
     mat.color.copy(real.grey ? lightTint(REAL_COLORS[this.name]) : new THREE.Color(0xffffff));
     mat.emissiveMap = null;
     mat.emissive.set(0x000000);
+    if (real.night) {
+      // City lights, shown on the night side only (hookPlanet).
+      mat.emissiveMap = realTexture(real.night);
+      mat.emissive.set(0xffffff);
+      mat.emissiveIntensity = 1.3;
+    }
+    if (this.name === 'Earth') {
+      // Oceans smooth, land rough: the Sun glints off the sea.
+      oceanRoughness(mat.map, (rough) => {
+        this.textures.push(rough);
+        mat.roughnessMap = rough;
+        mat.roughness = 1;
+        mat.needsUpdate = true;
+      });
+    }
     mat.needsUpdate = true;
     if (real.clouds) {
       const clouds = realTexture(real.clouds);
@@ -506,6 +534,17 @@ export class BodyVisual {
       if (blackHoleView.lensed) this.mesh.scale.setScalar(r * (horizonRadius(body.spin ?? 0) / SHADOW_RADIUS_SCHWARZSCHILD));
       // The shaded disc gives the light; the soft glow would only be smeared into rings by the lens.
       if (this.glow) this.glow.visible = !blackHoleView.lensed;
+    }
+    if (this.shadowU && this.detailKey) {
+      const u = this.shadowU;
+      if (sun) u.uStar.value.set(sun.x, sun.y, sun.z);
+      u.uCenter.value.set(body.x, body.y, body.z);
+      u.uRadius.value = r;
+      u.uNight.value = sun ? 1 : 0;
+      if (this.rings) {
+        this.rings.updateWorldMatrix(true, false);
+        u.uRingNormal.value.set(0, 0, 1).transformDirection(this.rings.matrixWorld);
+      }
     }
     if (this.star) {
       const px = r / worldPerPixel;
@@ -653,6 +692,7 @@ export class BodyVisual {
       (m.material as THREE.Material).dispose();
     }
     this.clouds = this.atmosphere = this.aurora = this.rings = undefined;
+    this.shadowU = undefined;
   }
 
   private disposeParts(): void {

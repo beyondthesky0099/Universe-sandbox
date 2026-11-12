@@ -22,6 +22,7 @@ import {
   visibleFraction,
 } from '../src/sim/neutronStar';
 import { describePulsar, isMillisecond, parsePulsars, pulsarName } from '../src/sim/pulsars';
+import { pulsarSamples, soundsLike } from '../src/sim/pulsarSound';
 import { loadPulsarSystem, PRESETS } from '../src/sim/presets';
 import { Simulation } from '../src/sim/simulation';
 import { EARTH_MASS } from '../src/sim/units';
@@ -202,5 +203,27 @@ describe('visiting a catalogue pulsar', () => {
     expect(sim.bodies.map((b) => b.kind)).toEqual(['neutron', 'neutron']);
     expect(sim.relativity).toBe(true);
     expect(pulsarParams(sim.bodies[1].name, sim.bodies[1].id).period).toBeCloseTo(2.773, 3);
+  });
+});
+
+describe('pulsar sound', () => {
+  it('has one click per turn, at the real period', () => {
+    const rate = 8000;
+    const s = pulsarSamples(0.25, 2, rate);
+    // Count pulses: rises above a fifth of the peak, at least a tenth of a second apart.
+    let count = 0;
+    let last = -Infinity;
+    for (let i = 1; i < s.length; i++) {
+      if (s[i - 1] < 0.18 && s[i] >= 0.18 && i - last > 0.1 * rate) {
+        count++;
+        last = i;
+      }
+    }
+    expect(count).toBeGreaterThanOrEqual(6);
+    expect(count).toBeLessThanOrEqual(8);
+    expect(Math.max(...s)).toBeLessThanOrEqual(0.9001);
+    expect(soundsLike(0.0893)).toBe('a buzz, 11 pulses a second');
+    expect(soundsLike(0.00575)).toBe('a hum at 174 Hz');
+    expect(soundsLike(1.2)).toBe('a tick every 1.2 s');
   });
 });

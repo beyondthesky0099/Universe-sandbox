@@ -1,5 +1,8 @@
 import * as THREE from 'three';
 import { playSamples } from '../audio';
+import { pulsarSamples, soundsLike } from '../sim/pulsarSound';
+import { pulsarParams } from '../sim/neutronStar';
+import { pulsarName } from '../sim/pulsars';
 import { seedFromString } from '../procgen/rng';
 import { setTrueScale } from '../sim/trueScale';
 import { loadGwEvent, loadGwEvents } from '../sim/gwEvents';
@@ -512,6 +515,21 @@ export class InputUI {
       // The next press continues the tour with the same spacecraft.
       const next = list.findIndex((x, j) => j > i && x.craft === e.craft);
       if (next >= 0) select.value = String(next);
+    });
+    // Pulsars: their pulses as sound, at the real spin rate.
+    const hearPulsar = (name: string, period: number, seed: number) => {
+      const rate = 44100;
+      playSamples(pulsarSamples(period, 5, rate, seed), rate);
+      toast(`${name}: ${soundsLike(period)}. Its radio pulses played as sound at the real spin rate (synthesized).`);
+    };
+    $('btn-pulsar-hear').addEventListener('click', () => {
+      const b = this.app.selectedBody();
+      if (b?.kind === 'neutron') hearPulsar(b.name, pulsarParams(b.name, b.id).period, b.id);
+    });
+    $('btn-star-hear').addEventListener('click', () => {
+      const t = this.app.galaxy.selected;
+      const p = typeof t === 'object' && 'psr' in t ? this.app.pulsarMapList[t.psr] : undefined;
+      if (p) hearPulsar(pulsarName(p), p.period, t !== -1 && typeof t === 'object' && 'psr' in t ? t.psr : 1);
     });
     $('btn-gw-hear').addEventListener('click', async () => {
       const events = await loadGwEvents().catch(() => []);

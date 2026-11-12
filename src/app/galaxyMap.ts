@@ -285,6 +285,7 @@ export class GalaxyMapUI {
   selectTarget(target: GalaxyTarget | -1): void {
     this.app.galaxy.select(target);
     const panel = $('star-panel');
+    $('btn-star-hear').classList.toggle('hidden', !(typeof target === 'object' && 'psr' in target));
     if (target === -1) {
       panel.classList.add('hidden');
       return;

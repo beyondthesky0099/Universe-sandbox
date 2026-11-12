@@ -187,6 +187,7 @@
         <div class="row buttons">
           <button id="btn-star-bookmark" title="Bookmark (B)">☆ Bookmark</button>
           <button id="btn-star-fly">Fly to</button>
+          <button id="btn-star-hear" class="hidden" title="Hear its radio pulses as sound, one click per turn, at its real spin rate">🔊 Hear it</button>
         </div>
         <div class="row buttons">
           <button id="btn-star-enter" class="primary">Enter system →</button>
@@ -514,6 +515,9 @@
           <input id="bh-spin" type="range" min="0" max="0.998" step="0.002" value="0" />
           <output id="bh-spin-out"></output>
         </label>
+        <div id="pulsar-row" class="row buttons hidden">
+          <button id="btn-pulsar-hear" title="Hear its radio pulses as sound, one click per turn, at its real spin rate">🔊 Hear it spin</button>
+        </div>
         <div class="row buttons">
           <button id="btn-mass-down" title="Halve mass">Mass ÷2</button>
           <button id="btn-mass-up" title="Double mass">Mass ×2</button>

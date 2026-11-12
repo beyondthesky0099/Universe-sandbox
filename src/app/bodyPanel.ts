@@ -224,6 +224,7 @@ export class BodyPanelUI {
       $('bh-spin-out').textContent = a.toFixed(2);
     }
     if (body.kind === 'neutron') facts.push(...neutronFacts(body));
+    $('pulsar-row').classList.toggle('hidden', body.kind !== 'neutron');
     if (isStar && this.app.sim.canSupernova(body)) {
       alerts.push(`<div class="alert info">⭐ ${escapeHtml(describeFate(stellarFate(body.mass, z)))}</div>`);
     }

@@ -5,7 +5,7 @@ import { keplerToState, OrbitalElements } from './orbits';
 import type { Simulation } from './simulation';
 import { EARTH_MASS, G, JUPITER_MASS } from './units';
 import { mulberry32 } from '../procgen/rng';
-import { rememberPulsar } from './neutronStar';
+import { rememberPulsar, spinDownPower } from './neutronStar';
 import { HULSE_TAYLOR } from './binaryPulsar';
 import { describePulsar, pulsarName, type PulsarRecord } from './pulsars';
 import { GAS_DISC_LIFETIME, planetesimals } from './planetFormation';
@@ -579,7 +579,9 @@ export function loadPulsarSystem(sim: Simulation, p: PulsarRecord): SceneSetup {
   const ns = sim.addBody({ name, kind: 'neutron', mass });
   if (!p.pbDays || p.companionMass < 1e-3) {
     sim.recenter();
-    return { cameraDistance: 0.6, timeScale: 0.05, elevation: 0.5, tip: describePulsar(p) };
+    // A powerful young pulsar sits in its wind nebula: stand back far enough to see it.
+    const nebula = p.pdot > 0 && spinDownPower(p.period, p.pdot) > 1e29;
+    return { cameraDistance: nebula ? 2.4 : 0.6, timeScale: 0.05, elevation: nebula ? 0.35 : 0.5, tip: describePulsar(p) };
   }
   const mc = p.companionMass;
   const kind: Body['kind'] = mc >= 1.2 ? 'neutron' : mc >= 0.08 ? 'whitedwarf' : 'gas';

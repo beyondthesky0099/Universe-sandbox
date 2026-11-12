@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { beamHalfAngleDeg, compactness, displayPeriod, lightCylinderKm, NS_RADIUS_KM, polarCapAngle, pulsarParams, type PulsarParams } from '../sim/neutronStar';
+import { beamHalfAngleDeg, compactness, displayPeriod, lightCylinderKm, NS_RADIUS_KM, polarCapAngle, pulsarParams, spinDownPower, type PulsarParams } from '../sim/neutronStar';
 
 /**
  * What a neutron star looks like up close (physics in sim/neutronStar.ts):
@@ -164,6 +164,86 @@ const WIND_FRAGMENT = /* glsl */ `
   }
 `;
 
+/**
+ * A pulsar wind nebula (young, powerful pulsars such as the Crab and Vela): the wind is stopped in
+ * a shock and glows by synchrotron light. Chandra images show the same pattern in both: a torus in
+ * the spin equator, a thin inner ring of knots, and jets along the spin axis (Weisskopf et al.
+ * 2000; Helfand et al. 2001). Ray-marched in a sphere (local units: radius 1, y = spin axis). The
+ * gas flows out at about half light speed, so the side coming towards us is brighter (Doppler
+ * boosting, δ^(2+α)).
+ */
+const PWN_VERTEX = /* glsl */ `
+  #include <common>
+  #include <logdepthbuf_pars_vertex>
+  varying vec3 vLocal;
+  void main() {
+    vLocal = position;
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    #include <logdepthbuf_vertex>
+  }
+`;
+
+const PWN_FRAGMENT = /* glsl */ `
+  #include <common>
+  #include <logdepthbuf_pars_fragment>
+  uniform vec3 uCam;       // camera position in the nebula's frame
+  uniform float uBright;
+  uniform float uTime;
+  varying vec3 vLocal;
+  float hash(vec3 p) { p = fract(p * 0.3183099 + 0.1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
+  float noise(vec3 x) {
+    vec3 i = floor(x); vec3 f = fract(x); f = f * f * (3.0 - 2.0 * f);
+    return mix(mix(mix(hash(i), hash(i + vec3(1, 0, 0)), f.x), mix(hash(i + vec3(0, 1, 0)), hash(i + vec3(1, 1, 0)), f.x), f.y),
+               mix(mix(hash(i + vec3(0, 0, 1)), hash(i + vec3(1, 0, 1)), f.x), mix(hash(i + vec3(0, 1, 1)), hash(i + vec3(1, 1, 1)), f.x), f.y), f.z);
+  }
+  float emission(vec3 p, vec3 toCam) {
+    float rho = length(p.xz);
+    float ang = atan(p.z, p.x);
+    // Doppler boosting of gas flowing outwards in the equator at 0.5 c.
+    vec3 flow = rho > 1e-4 ? vec3(p.x, 0.0, p.z) / rho : vec3(0.0);
+    float beta = 0.5;
+    float delta = 1.0 / (1.1547 * (1.0 - beta * dot(flow, toCam)));
+    float boost = pow(delta, 2.6);
+    // Torus: a thick, wispy ring.
+    float torus = exp(-(pow(rho - 0.48, 2.0) + p.y * p.y * 2.2) / 0.012) * (0.55 + 0.9 * noise(vec3(ang * 3.0, p.y * 8.0, uTime * 0.05)));
+    // Inner ring of knots.
+    float ring = exp(-(pow(rho - 0.2, 2.0) + p.y * p.y * 6.0) / 0.0008) * (0.4 + 1.4 * pow(noise(vec3(ang * 9.0, 0.0, uTime * 0.1)), 3.0));
+    // Jets along the spin axis, gently kinked; the one coming towards us brighter.
+    float kink = 0.04 * sin(p.y * 9.0 + uTime * 0.3);
+    float jr = length(vec2(p.x - kink, p.z));
+    float jet = exp(-jr * jr / (0.0015 + 0.004 * abs(p.y))) * smoothstep(0.05, 0.12, abs(p.y)) * (1.0 - smoothstep(0.55, 0.95, abs(p.y)));
+    jet *= 0.8 + 0.6 * noise(vec3(0.0, p.y * 12.0 - uTime * 0.4, 0.0));
+    float jetDelta = 1.0 / (1.1547 * (1.0 - 0.5 * sign(p.y) * toCam.y));
+    // Faint synchrotron haze filling the bubble.
+    float r = length(p);
+    float haze = exp(-r * r / 0.18) * 0.12 * (0.6 + 0.8 * noise(p * 4.0));
+    return (torus * 1.2 + ring * 1.6 + haze) * boost + jet * 1.3 * pow(jetDelta, 2.6);
+  }
+  void main() {
+    #include <logdepthbuf_fragment>
+    vec3 ro = uCam;
+    vec3 rd = normalize(vLocal - uCam);
+    float b = dot(ro, rd);
+    float c = dot(ro, ro) - 1.0;
+    float disc = b * b - c;
+    if (disc <= 0.0) discard;
+    float sq = sqrt(disc);
+    float t0 = max(-b - sq, 0.0), t1 = -b + sq;
+    if (t1 <= t0) discard;
+    const int STEPS = 56;
+    float dt = (t1 - t0) / float(STEPS);
+    float jitter = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453);
+    float sum = 0.0;
+    vec3 toCam = -rd;
+    for (int i = 0; i < STEPS; i++) {
+      vec3 p = ro + rd * (t0 + (float(i) + jitter) * dt);
+      sum += emission(p, toCam) * dt;
+    }
+    vec3 col = vec3(0.7, 0.82, 1.0) * sum * uBright;
+    gl_FragColor = vec4(col, 1.0);
+  }
+`;
+
 /** Dipole field lines r = L sin²θ (in star radii), in the magnetic frame (y = magnetic axis). */
 export function dipoleLines(): { positions: Float32Array; colors: Float32Array } {
   const pos: number[] = [];
@@ -210,6 +290,8 @@ export function dipoleLines(): { positions: Float32Array; colors: Float32Array }
 
 /** Beam length in star radii (drawn). */
 const BEAM_LENGTH = 60;
+/** Wind-nebula radius in star radii (drawn). */
+const NEBULA_RADIUS = 45;
 
 export class NeutronStarVisual {
   /** Add to the body's spin group (whose y axis is the spin axis). */
@@ -225,6 +307,9 @@ export class NeutronStarVisual {
   private readonly lines: THREE.LineSegments;
   private readonly beams: THREE.Mesh[] = [];
   private readonly wind: THREE.Mesh;
+  /** The pulsar wind nebula, if it has one. Not spinning: counter-turned against the star. */
+  private nebula?: THREE.Mesh;
+  private time = 0;
   private readonly beamAngle: number;
   private readonly tmp = new THREE.Vector3();
   private readonly tmp2 = new THREE.Vector3();
@@ -292,6 +377,25 @@ export class NeutronStarVisual {
       }),
     );
     this.root.add(this.wind);
+    // A wind nebula around pulsars powerful enough to blow one (Ė > 10²⁹ W, as the Crab's
+    // 4.5 × 10³¹ W and Vela's 7 × 10²⁹ W).
+    const edot = this.params.pdot > 0 ? spinDownPower(this.params.period, this.params.pdot) : 0;
+    if (edot > 1e29) {
+      this.nebula = new THREE.Mesh(
+        new THREE.SphereGeometry(1, 32, 16),
+        new THREE.ShaderMaterial({
+          vertexShader: PWN_VERTEX,
+          fragmentShader: PWN_FRAGMENT,
+          uniforms: { uCam: { value: new THREE.Vector3() }, uBright: { value: THREE.MathUtils.clamp((Math.log10(edot) - 29) / 2.7, 0.55, 1) * 1.4 }, uTime: { value: 0 } },
+          transparent: true,
+          depthWrite: false,
+          side: THREE.BackSide,
+          blending: THREE.AdditiveBlending,
+        }),
+      );
+      this.nebula.frustumCulled = false;
+      this.root.add(this.nebula);
+    }
   }
 
   /**
@@ -305,6 +409,16 @@ export class NeutronStarVisual {
     this.magnet.scale.setScalar(r);
     for (const b of this.beams) b.scale.setScalar(BEAM_LENGTH);
     this.wind.scale.setScalar(r);
+    this.time += dt;
+    if (this.nebula) {
+      // Drawn much closer in than to scale (the Crab's torus is 10¹³ times the star's radius).
+      this.nebula.scale.setScalar(r * NEBULA_RADIUS);
+      this.nebula.rotation.y = -this.phase;
+      const m = this.nebula.material as THREE.ShaderMaterial;
+      this.nebula.updateWorldMatrix(true, false);
+      m.uniforms.uCam.value.copy(this.nebula.worldToLocal(this.tmp.copy(camera)));
+      m.uniforms.uTime.value = this.time;
+    }
     // The camera's direction in the star's frame, for the bent-light shading.
     mesh.updateWorldMatrix(true, false);
     const local = mesh.worldToLocal(this.tmp.copy(camera)).normalize();
@@ -332,6 +446,10 @@ export class NeutronStarVisual {
     this.beams[0]?.geometry.dispose();
     for (const b of this.beams) (b.material as THREE.Material).dispose();
     this.wind.geometry.dispose();
+    if (this.nebula) {
+      this.nebula.geometry.dispose();
+      (this.nebula.material as THREE.Material).dispose();
+    }
     (this.wind.material as THREE.Material).dispose();
   }
 }

@@ -89,6 +89,15 @@ const MAPS = [
     ['-colorspace', 'Gray'],
   ],
   [
+    // Simple cylindrical, the whole globe. USGS: the true colours are "similar but much more muted",
+    // so saturation is reduced here.
+    'io',
+    'https://astrogeology.usgs.gov/ckan/dataset/f6924861-ce9c-490d-8a4b-7812a20f2de5/resource/a9fab679-8081-4144-9f58-45848836c8f5/download/full.jpg',
+    1024,
+    'NASA Galileo SSI / Voyager colour-merged global mosaic of Io, via USGS Astrogeology (saturation reduced here: the true colours are more muted)',
+    ['-modulate', '100,60'],
+  ],
+  [
     'vesta',
     'https://astrogeology.usgs.gov/ckan/dataset/ec63e420-a8bd-4a90-9341-a5754b551574/resource/9306febf-0c7a-49ee-b7b0-a1f043297bf7/download/vesta_dawn_fc_hamo_mosaic_global_1024.jpg',
     1024,

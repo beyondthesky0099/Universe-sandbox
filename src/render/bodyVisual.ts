@@ -69,6 +69,7 @@ const REAL_MAPS: Record<string, { map: string; clouds?: string; grey?: boolean }
   Mars: { map: 'mars.jpg' },
   Phobos: { map: 'phobos.jpg', grey: true },
   Jupiter: { map: 'jupiter.jpg' },
+  Io: { map: 'io.jpg' },
   Europa: { map: 'europa.jpg', grey: true },
   Ganymede: { map: 'ganymede.jpg', grey: true },
   Rhea: { map: 'rhea.jpg', grey: true },

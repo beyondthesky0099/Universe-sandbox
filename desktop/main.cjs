@@ -9,12 +9,32 @@
  *
  * The built web app (../dist, copied into ./web) is served from a private app:// origin, so
  * fetch() of the bundled data and the Web Worker work exactly as on the website.
+ *
+ * It also runs the companion server (../server, bundled into ./server.cjs by build-server.mjs)
+ * on this computer, so the gallery and multiplayer rooms work without setting anything up. It
+ * listens on 127.0.0.1 only (not reachable from other computers), on a free port, and keeps its
+ * gallery in the app's user-data folder. The Claude scene builder is on when ANTHROPIC_API_KEY
+ * is set in the environment. A server chosen in the app's settings takes precedence.
  */
 const { app, BrowserWindow, net, protocol, shell } = require('electron');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 
 const WEB = path.join(__dirname, 'web');
+const ORIGIN = 'app://astrarium';
+
+/** Start the bundled companion server; resolves to its URL, or undefined if it can't run. */
+async function startServer() {
+  try {
+    const { startEmbedded } = require('./server.cjs');
+    const { server, url } = await startEmbedded({ dataDir: path.join(app.getPath('userData'), 'server'), allowedOrigins: [ORIGIN] });
+    app.on('before-quit', () => server.close());
+    return url;
+  } catch (err) {
+    console.warn('Companion server not started:', err && err.message);
+    return undefined;
+  }
+}
 
 app.commandLine.appendSwitch('force_high_performance_gpu');
 app.commandLine.appendSwitch('enable-gpu-rasterization');
@@ -24,7 +44,7 @@ protocol.registerSchemesAsPrivileged([
   { scheme: 'app', privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true, codeCache: true } },
 ]);
 
-function createWindow() {
+function createWindow(serverUrl) {
   const win = new BrowserWindow({
     width: 1440,
     height: 900,
@@ -58,11 +78,11 @@ function createWindow() {
   win.webContents.on('before-input-event', (_e, input) => {
     if (input.type === 'keyDown' && input.key === 'F11') win.setFullScreen(!win.isFullScreen());
   });
-  void win.loadURL('app://astrarium/index.html');
+  void win.loadURL(`${ORIGIN}/index.html${serverUrl ? `#localserver=${encodeURIComponent(serverUrl)}` : ''}`);
   return win;
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   protocol.handle('app', async (request) => {
     const { pathname } = new URL(request.url);
     const rel = decodeURIComponent(pathname === '/' ? '/index.html' : pathname);
@@ -78,9 +98,10 @@ app.whenReady().then(() => {
     headers.set('Cross-Origin-Embedder-Policy', 'credentialless');
     return new Response(res.body, { status: res.status, statusText: res.statusText, headers });
   });
-  createWindow();
+  const serverUrl = await startServer();
+  createWindow(serverUrl);
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    if (BrowserWindow.getAllWindows().length === 0) createWindow(serverUrl);
   });
 });
 

@@ -10,7 +10,7 @@
   "homepage": "https://beyondthesky0099.github.io/Universe-sandbox/",
   "main": "main.cjs",
   "scripts": {
-    "web": "node copy-web.mjs",
+    "web": "node copy-web.mjs && node build-server.mjs",
     "start": "npm run web && electron .",
     "dist:win": "npm run web && electron-builder --win --x64 --publish never",
     "dist:linux": "npm run web && electron-builder --linux dir --publish never"
@@ -22,7 +22,7 @@
   "build": {
     "appId": "io.github.beyondthesky0099.astrarium",
     "productName": "Astrarium",
-    "files": ["main.cjs", "icon.png", "web/**/*"],
+    "files": ["main.cjs", "server.cjs", "icon.png", "web/**/*"],
     "directories": { "output": "release" },
     "win": {
       "target": [

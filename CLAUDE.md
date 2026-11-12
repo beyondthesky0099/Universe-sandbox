@@ -44,14 +44,19 @@ Before every commit, run the typecheck, the app tests, the build and the server 
   - A side panel's `<section data-pane data-icon data-title>` blocks become rail panes
     automatically.
   - Keep element IDs stable: the controllers bind by ID.
-- Multi-core particle forces: `src/sim/particleKernel.ts` (the force loop), `parallel.ts` (splits it
-  over helper workers via SharedArrayBuffer + Atomics), `forceWorker.ts`. Only when the page is
+- Multi-core forces: `src/sim/particleKernel.ts` (the direct particle loop), `treeKernel.ts`
+  (Barnes–Hut on a packed octree), `parallel.ts` (splits them over helper workers via
+  SharedArrayBuffer + Atomics), `forceWorker.ts`. Only when the page is
   cross-origin isolated (COOP + COEP `credentialless`, sent by the desktop app and the Vite
   dev/preview servers); `#threads=0` turns it off.
 - `desktop/`: the Electron shell (`main.cjs`) that serves the built app (copied into
   `desktop/web/`) from an `app://` origin. It requests the high-performance GPU and turns off
   background throttling. The web app detects it (`DESKTOP` in `app.ts`) and starts at high
   quality. The icon comes from `icon.svg` (`node desktop/make-icon.mjs`).
+  - It also runs the companion server in-process. `desktop/build-server.mjs` bundles
+    `server/src/embedded.ts` into `desktop/server.cjs` with rolldown (needs `server/node_modules`).
+  - The server listens on 127.0.0.1 on a free port and is passed to the page as `#localserver=`.
+    A server chosen in the settings wins.
 - `server/`: Node 22.18+ runs `.ts` directly (type stripping), so use **no TS parameter
   properties or enums** (`erasableSyntaxOnly`). It provides the Claude scene builder
   (`scene.ts`, Anthropic SDK, structured output via `betaZodOutputFormat`), the gallery and

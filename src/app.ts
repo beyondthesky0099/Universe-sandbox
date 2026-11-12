@@ -339,7 +339,9 @@ export class App {
     const presetFromHash = PRESETS.find((p) => p.id === presetParam);
     if (presetFromHash) this.loadScenario({ name: presetFromHash.name, load: () => presetFromHash.load(this.sim), presetId: presetFromHash.id }, { undoable: false });
     const room = params.get('room');
-    const serverUrl = params.get('server') ?? defaultServerUrl(prefs.get<string | undefined>('serverUrl', undefined));
+    // The desktop app runs its own server and passes it as `localserver`; one chosen in the
+    // settings (or a share link's) wins.
+    const serverUrl = params.get('server') ?? defaultServerUrl(prefs.get<string | undefined>('serverUrl', undefined)) ?? params.get('localserver') ?? undefined;
     if (serverUrl) {
       void this.onlineUI.connectServer(serverUrl, false).then(() => {
         if (room && this.server) {

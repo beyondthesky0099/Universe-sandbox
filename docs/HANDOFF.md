@@ -7,7 +7,7 @@ every working session: tick boxes, add notes, and move finished items to "Done".
 and say something like *"Read CLAUDE.md and docs/HANDOFF.md, then continue with the next
 unchecked item."*
 
-- Working branch: `ccr-bd8228d3-85c4pq`, restarted from `main` after PR #1 merged. `main` is the
+- Working branch: `claude/intelligent-carson-oqrepd`, restarted from `main` after PR #13 merged. `main` is the
   default branch and deploys to Pages.
 - Project conventions and commands are in `CLAUDE.md`.
 

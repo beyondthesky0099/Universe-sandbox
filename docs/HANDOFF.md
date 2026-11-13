@@ -208,6 +208,29 @@ Plan, in priority order:
 - BodyVisual adds it in applyDetail and updates it only when the planet is more than 14 px across
   and a star is present. Tests: tests/aurora.test.ts.
 
+### AM. Every X-ray binary and Wolf–Rayet star on the Galaxy Map
+- [x] scripts/build-galactic-objects.mjs → public/data/galactic-objects.json: 107 HMXBs (Fortin+
+      2023, Gaia EDR3 distances; 4 black holes), 207 LMXBs (Fortin+ 2024; 44 black holes), 217 WR
+      stars (van der Hucht 2001, photometric distances). Milky Way only (≤ 35 kpc).
+  - Units caught in the data: LMXB GaiaDist is in pc, OtherDist in kpc; the LMXB Period column
+    says days but holds hours (Sco X-1 = 18.9). HMXB Dist is in pc, Per in days.
+  - Famous LMXBs keep their X-ray names: XRAY_NAMES maps SIMBAD variable-star names (V818 Sco →
+    Sco X-1). HMXB compact object: Mx > 3 → BH, a spin period → NS, else '?'.
+- [x] src/sim/galacticObjects.ts (headless): types, loader, xrayMasses/xrayPeriodDays defaults
+      (NS 1.4, BH 8; HMXB donor 18, LMXB donor 0.5 M☉; periods 10 d / 0.4 d, marked assumed),
+      describeObject, objectFacts, objectKindLabel.
+- [x] presets.ts: loadXrayBinary (compact object + donor on the catalogued orbit; relativity on
+      for neutron stars; the tip lists what was assumed) and loadWolfRayet (a massive evolved
+      star, mass by subtype).
+- [x] Galaxy Map: real layers 'xray' and 'wr' (#opt-real-xray, #opt-real-wr), target `{ obj }`
+      (GalaxyTarget, App.galacticObjectList, GalaxyView.objectPositions/objectLayers), pick, the
+      star panel, Enter → the Sandbox, origin kind 'object', search entries (ui/searchSources.ts).
+  - Systems within 0.05° of a famous black hole from compact-objects.json are skipped: those keep
+    their own markers with the papers' companion data (Cyg X-1, V404 Cyg, A0620-00).
+- Tests: tests/galactic-objects.test.ts (Cyg X-1 at 2.2 kpc with its 5.6-day orbit rebuilt by
+  Kepler's law; Sco X-1's 18.9-hour period; assumed values in the tip).
+- Checked in the browser: Vela X-1's panel and its neutron star orbiting the supergiant.
+
 ### AL. Every catalogued object in the Universe view
 The user asked for *"every celestial object discovered"* in the galaxy and universe views. This
 round covers the Universe view; the Galaxy Map already carries the HII regions, planetary nebulae,
@@ -242,9 +265,9 @@ and the 62,000 Gaia stars (sections F–J). Ideas for the next rounds are at the
   dedupe, JADES-GS-z14-0 inside the CMB sphere).
 
 **Next rounds for "every object":**
-- Galaxy Map: X-ray binaries (Liu et al. 2006/2007 HMXB/LMXB, VizieR J/A+A/455/1165 and
-  J/A+A/469/807), novae and cataclysmic variables with Gaia distances, Wolf–Rayet stars, masers;
-  more Gaia stars (mag < 10 would be about 300,000: needs a binary format and a budget).
+- Galaxy Map: X-ray binaries and Wolf–Rayet stars are done (section AM). Still to do: novae and
+  cataclysmic variables (Ritter & Kolb, VizieR B/cb, has no distances: cross-match Gaia), masers,
+  Cepheids; more Gaia stars (mag < 10 would be about 300,000: needs a binary format and a budget).
 - Universe: the 2MRS galaxies without names could still be clickable (type and redshift only);
   galaxy groups (Tully 2015); SDSS large-scale structure beyond 2MRS is too big for the repo.
 - Solar System: every numbered asteroid above 10 km, and the 290 known moons (Horizons).

@@ -101,7 +101,7 @@ function nebulaTexture(seed: number): THREE.CanvasTexture {
 }
 
 /** Selection target in the galaxy: a star index, the central black hole, or the Sun. */
-export type GalaxyTarget = number | 'core' | 'sol' | { exo: number } | { psr: number } | { bh: number };
+export type GalaxyTarget = number | 'core' | 'sol' | { exo: number } | { psr: number } | { bh: number } | { obj: number };
 
 /** A real exoplanet host drawn on the Milky Way map. */
 export interface ExoMarker {
@@ -211,6 +211,9 @@ export class GalaxyView {
   pulsarPositions: [number, number, number][] = [];
   /** Real black holes' positions (Milky Way only). */
   blackHolePositions: [number, number, number][] = [];
+  /** Real X-ray binaries and Wolf–Rayet stars (App.galacticObjectList), with the layer each belongs to. */
+  objectPositions: [number, number, number][] = [];
+  objectLayers: string[] = [];
   private exoPoints?: THREE.Points;
   /** Layers of real catalogued objects (Milky Way only: nebulae, star clusters), with labels. */
   private readonly realLayers = new Map<string, { points: THREE.Points; labels: THREE.Group }>();
@@ -413,7 +416,7 @@ export class GalaxyView {
   }
 
   targetPosition(target: GalaxyTarget): THREE.Vector3 {
-    if (typeof target === 'object') return new THREE.Vector3(...('exo' in target ? this.exoHosts[target.exo].pos : 'psr' in target ? this.pulsarPositions[target.psr] : this.blackHolePositions[target.bh]));
+    if (typeof target === 'object') return new THREE.Vector3(...('exo' in target ? this.exoHosts[target.exo].pos : 'psr' in target ? this.pulsarPositions[target.psr] : 'obj' in target ? this.objectPositions[target.obj] : this.blackHolePositions[target.bh]));
     if (target === 'core') return new THREE.Vector3();
     if (target === 'sol') return new THREE.Vector3(...this.data.sol);
     const p = this.data.stars.positions;
@@ -761,6 +764,16 @@ export class GalaxyView {
           bestScore = score;
           best = { psr: i };
         }
+      }
+    }
+    // X-ray binaries and Wolf–Rayet stars, while their layers show.
+    for (let i = 0; i < this.objectPositions.length; i++) {
+      if (!this.realLayers.get(this.objectLayers[i])?.points.visible) continue;
+      const [x, y, z] = this.objectPositions[i];
+      const score = test(x, y, z, maxPx) - 1;
+      if (score < bestScore) {
+        bestScore = score;
+        best = { obj: i };
       }
     }
     // The core and the Sun win when the click is right on them.

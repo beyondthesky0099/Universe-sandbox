@@ -896,6 +896,14 @@ push and pull request.
   certificate-chain error.
 - Asteroid flybys: the JPL Close-Approach Data API with JPL Horizons starting states (rebuild
   with `node scripts/build-flybys.mjs`).
+- X-ray binaries: the Galactic HMXB catalogue (Fortin, García, Chaty & Coleiro 2023, A&A 671,
+  A149; VizieR J/A+A/671/A149) with Gaia EDR3 distances (Bailer-Jones et al. 2021), and the
+  Galactic LMXB catalogue (Fortin, Kalsi, García, Simaz-Bunzel & Chaty 2024, A&A 684, A124;
+  VizieR J/A+A/684/A124). Wolf–Rayet stars: the VIIth Catalogue of Galactic Wolf–Rayet Stars
+  (van der Hucht 2001, New Astron. Rev. 45, 135; VizieR III/215), photometric distances.
+  Rebuild with `node scripts/build-galactic-objects.mjs`. Every one with a distance is on the
+  Galaxy Map, and each opens in the Sandbox as its real pair; masses or periods the catalogue
+  lacks take typical values, and the scene says so.
 - Black holes and pulsars: positions from SIMBAD; masses and distances from the discovery papers,
   verified against their arXiv abstracts by `node scripts/build-compact-objects.mjs`.
 - Pulsars: the ATNF Pulsar Catalogue v2.6.1 (Manchester, Hobbs, Teoh & Hobbs 2005, AJ 129, 1993;

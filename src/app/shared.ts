@@ -7,6 +7,7 @@ import * as THREE from 'three';
 import { type StarSystemSpec } from '../procgen/starSystem';
 import { displayName, galaxyForm, LY_PER_MPC, type LocalGalaxy } from '../sim/galaxies';
 import { ageAt, formatLookback, lookbackTime } from '../sim/cosmology';
+import type { GalacticObject } from '../sim/galacticObjects';
 import { QUALITY_PRESETS } from '../render/systemView';
 import { type Body, type BodyKind } from '../sim/body';
 import { GAS_PALETTE, ROCKY_PALETTE } from '../sim/color';
@@ -86,6 +87,7 @@ export type Origin =
   | { kind: 'exo'; host: ExoHost }
   | { kind: 'pulsar'; index: number; record: PulsarRecord }
   | { kind: 'blackhole'; index: number; object: CompactObject }
+  | { kind: 'object'; index: number; object: GalacticObject }
   | { kind: 'neighbourhood' };
 
 export interface Scenario {

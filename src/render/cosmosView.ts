@@ -3,6 +3,7 @@ import { LabelDeclutter } from './labelDeclutter';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import {
   COSMIC_STRUCTURES,
+  type CosmosKind,
   displayName,
   galacticToCosmos,
   galaxyForm,
@@ -16,6 +17,7 @@ import {
 import { labelHitDepth, textSprite } from './galaxyView';
 import { ringTexture } from './textures';
 import { relativity, RELATIVITY_PARS } from './relativity';
+import { GalaxyShapes } from './galaxyShapes';
 
 /**
  * The Universe map: real galaxies around the Milky Way, in megaparsecs. The Local Volume
@@ -29,7 +31,9 @@ const VERTEX = /* glsl */ `
   uniform float uScale;
   uniform float uMinSize;
   uniform float uMaxSize;
+  uniform float uPxPerUnit;
   varying vec3 vColor;
+  varying float vFade;
   ${RELATIVITY_PARS}
   void main() {
     vec4 mv = modelViewMatrix * vec4(position, 1.0);
@@ -37,6 +41,9 @@ const VERTEX = /* glsl */ `
     float relD = relAberrate(mv);
     vColor = relShift(color, relD);
     gl_PointSize = clamp(size * uScale / -mv.z, uMinSize, uMaxSize);
+    // Once the galaxy is more than a few pixels across its drawn shape (galaxyShapes.ts) takes over.
+    float truePx = (size / 1.6) * uPxPerUnit / max(-mv.z, 1e-9);
+    vFade = 1.0 - smoothstep(4.0, 11.0, truePx);
     gl_Position = projectionMatrix * mv;
   }
 `;
@@ -44,20 +51,36 @@ const VERTEX = /* glsl */ `
 const FRAGMENT = /* glsl */ `
   uniform float uOpacity;
   varying vec3 vColor;
+  varying float vFade;
   void main() {
     vec2 c = gl_PointCoord - 0.5;
     float d = dot(c, c) * 4.0;
     if (d > 1.0) discard;
     float a = (exp(-d * 5.0) + 0.25 * exp(-d * 1.2)) * (1.0 - smoothstep(0.6, 1.0, d));
+    gl_FragColor = vec4(vColor, a * uOpacity * vFade);
+  }
+`;
+
+/** A thin ring with a faint fill: the extent of a galaxy cluster. */
+const RING_FRAGMENT = /* glsl */ `
+  uniform float uOpacity;
+  varying vec3 vColor;
+  varying float vFade;
+  void main() {
+    vec2 c = gl_PointCoord - 0.5;
+    float d = dot(c, c) * 4.0;
+    if (d > 1.0) discard;
+    float ring = smoothstep(0.62, 0.78, d) * (1.0 - smoothstep(0.86, 1.0, d));
+    float a = 0.08 * (1.0 - d) + 0.9 * ring;
     gl_FragColor = vec4(vColor, a * uOpacity);
   }
 `;
 
-function material(opacity: number, minSize: number, maxSize: number): THREE.ShaderMaterial {
+function material(opacity: number, minSize: number, maxSize: number, ring = false): THREE.ShaderMaterial {
   return new THREE.ShaderMaterial({
     vertexShader: VERTEX,
-    fragmentShader: FRAGMENT,
-    uniforms: { uScale: { value: 300 }, uOpacity: { value: opacity }, uMinSize: { value: minSize }, uMaxSize: { value: maxSize }, uBeta: relativity.uBeta },
+    fragmentShader: ring ? RING_FRAGMENT : FRAGMENT,
+    uniforms: { uScale: { value: 300 }, uOpacity: { value: opacity }, uMinSize: { value: minSize }, uMaxSize: { value: maxSize }, uPxPerUnit: { value: 1000 }, uBeta: relativity.uBeta },
     transparent: true,
     depthWrite: false,
     depthTest: false,
@@ -106,7 +129,11 @@ interface Label {
   /** Visible while the camera distance (Mpc) is within this range. */
   min: number;
   max: number;
+  /** The layer it belongs to, when it can be switched off. */
+  kind?: CosmosKind;
 }
+
+const KIND_COLOR: Record<CosmosKind, string> = { galaxy: '#cfe3ff', cluster: '#ffb38a', quasar: '#d9b8ff' };
 
 export class CosmosView {
   readonly scene = new THREE.Scene();
@@ -117,11 +144,14 @@ export class CosmosView {
   selected = -1;
 
   private positions = new Float32Array(0);
-  private localPoints?: THREE.Points;
+  private readonly kindPoints = new Map<CosmosKind, THREE.Points>();
+  private readonly kindVisible: Record<CosmosKind, boolean> = { galaxy: true, cluster: true, quasar: true };
   private webPoints?: THREE.Points;
+  private shapes?: GalaxyShapes;
   private readonly labels: Label[] = [];
   private readonly marker: THREE.Sprite;
   private pointScale = 300;
+  private pxPerUnit = 1000;
   private cmb?: THREE.Mesh;
   private cmbVisible = true;
   private anim?: { fromTarget: THREE.Vector3; toTarget: THREE.Vector3; fromPos: THREE.Vector3; toPos: THREE.Vector3; t: number; speed: number };
@@ -149,53 +179,110 @@ export class CosmosView {
     this.controls.update();
   }
 
-  /** Build the map from the Local Volume catalogue (and, once loaded, the redshift survey). */
+  /** Build the map from the catalogues: galaxies, rich clusters and quasars (and, once loaded, the redshift survey). */
   setLocal(galaxies: LocalGalaxy[]): void {
     this.local = galaxies;
     const n = galaxies.length;
     this.positions = new Float32Array(n * 3);
-    const col = new Float32Array(n * 3);
-    const size = new Float32Array(n);
-    galaxies.forEach((g, i) => {
-      this.positions.set(localPosition(g), i * 3);
-      const [r, gr, b] = FORM_COLOR[galaxyForm(g)];
-      const bright = THREE.MathUtils.clamp(((g.lk ?? 7) - 4.5) / 6, 0.25, 1);
-      col.set([r * bright, gr * bright, b * bright], i * 3);
-      // Real diameter (kpc → Mpc); the Milky Way is about 30 kpc across.
-      size[i] = ((g.name === 'Milky Way' ? 30 : (g.size ?? 1)) / 1000) * 1.6;
-    });
-    this.localPoints?.geometry.dispose();
-    if (this.localPoints) this.scene.remove(this.localPoints);
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.BufferAttribute(this.positions, 3));
-    geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
-    geo.setAttribute('size', new THREE.BufferAttribute(size, 1));
-    this.localPoints = new THREE.Points(geo, material(1, 2.2, 90));
-    this.localPoints.frustumCulled = false;
-    this.localPoints.renderOrder = 5;
-    this.scene.add(this.localPoints);
+    galaxies.forEach((g, i) => this.positions.set(localPosition(g), i * 3));
+    for (const pts of this.kindPoints.values()) {
+      this.scene.remove(pts);
+      pts.geometry.dispose();
+    }
+    this.kindPoints.clear();
+    const kinds: CosmosKind[] = ['galaxy', 'cluster', 'quasar'];
+    for (const kind of kinds) {
+      const idx = galaxies.map((_, i) => i).filter((i) => (galaxies[i].kind ?? 'galaxy') === kind);
+      if (!idx.length) continue;
+      const pos = new Float32Array(idx.length * 3);
+      const col = new Float32Array(idx.length * 3);
+      const size = new Float32Array(idx.length);
+      idx.forEach((i, k) => {
+        const g = galaxies[i];
+        pos.set(this.positions.subarray(i * 3, i * 3 + 3), k * 3);
+        if (kind === 'galaxy') {
+          const [r, gr, b] = FORM_COLOR[galaxyForm(g)];
+          const bright = THREE.MathUtils.clamp(((g.lk ?? 7) - 4.5) / 6, 0.25, 1);
+          col.set([r * bright, gr * bright, b * bright], k * 3);
+          // Real diameter (kpc → Mpc); the Milky Way is about 30 kpc across.
+          size[k] = ((g.name === 'Milky Way' ? 30 : (g.size ?? 1)) / 1000) * 1.6;
+        } else if (kind === 'cluster') {
+          // The Abell radius is about 2 Mpc; richer clusters draw a little bolder.
+          const bold = 0.6 + 0.1 * (g.rich ?? 0);
+          col.set([1.0 * bold, 0.62 * bold, 0.35 * bold], k * 3);
+          size[k] = 4;
+        } else {
+          const record = !!g.note;
+          const bright = record ? 1 : THREE.MathUtils.clamp((18.5 - (g.vmag ?? 17)) / 6, 0.45, 1);
+          col.set([0.82 * bright, 0.66 * bright, 1.0 * bright], k * 3);
+          size[k] = record ? 1.2 : 0.5;
+        }
+      });
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+      geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+      geo.setAttribute('size', new THREE.BufferAttribute(size, 1));
+      const pts = new THREE.Points(geo, kind === 'galaxy' ? material(1, 2.2, 90) : kind === 'cluster' ? material(0.5, 5, 400, true) : material(0.9, 1.8, 7));
+      pts.frustumCulled = false;
+      pts.renderOrder = kind === 'cluster' ? 3 : 5;
+      pts.visible = this.kindVisible[kind];
+      this.kindPoints.set(kind, pts);
+      this.scene.add(pts);
+    }
+    // Each galaxy's drawn shape: an oriented disc or spheroid, shown once it is big enough on screen.
+    if (this.shapes) {
+      this.scene.remove(this.shapes.mesh);
+      this.shapes.dispose();
+    }
+    this.shapes = new GalaxyShapes(galaxies.filter((g) => (g.kind ?? 'galaxy') === 'galaxy'));
+    this.scene.add(this.shapes.mesh);
 
     for (const l of this.labels) this.scene.remove(l.sprite);
     this.labels.length = 0;
     galaxies.forEach((g, i) => {
       if (!isFamous(g)) return;
-      const sprite = textSprite(displayName(g), g.name === 'Milky Way' ? '#ffd36b' : '#cfe3ff', 0.75);
+      const kind = g.kind ?? 'galaxy';
+      const sprite = textSprite(displayName(g), g.name === 'Milky Way' ? '#ffd36b' : KIND_COLOR[kind], 0.75);
       sprite.position.set(this.positions[i * 3], this.positions[i * 3 + 1], this.positions[i * 3 + 2]);
       sprite.userData.goto = { index: i };
+      // Where labels collide, the brighter galaxy (M31 over M32, the Milky Way over its satellites)
+      // or the richer cluster keeps its name; record holders always do.
+      sprite.userData.priority = g.name === 'Milky Way' ? 80 : g.note ? 79 : kind === 'cluster' ? 77 + (g.rich ?? 0) * 0.4 : 76 + THREE.MathUtils.clamp((g.lk ?? 8) - 8, 0, 3);
+      let min = 0;
       // Nearby companions only make sense when zoomed in; big galaxies stay labelled longer.
-      const far = g.d < 0.3 ? 3 : g.d < 1.5 ? 12 : 45;
-      this.labels.push({ sprite, min: 0, max: far });
+      let far = g.d < 0.3 ? 3 : g.d < 1.5 ? 12 : 45;
+      if (kind === 'cluster') {
+        min = g.d * 0.04;
+        far = g.d * 6;
+      } else if (g.note) {
+        // Record holders: signposts once the view is out at the cosmic-web scale.
+        min = 60;
+        far = 1e9;
+      }
+      this.labels.push({ sprite, min, max: far, kind: kind === 'galaxy' ? undefined : kind });
       this.scene.add(sprite);
     });
     for (const s of COSMIC_STRUCTURES) {
       const sprite = textSprite(s.name, '#ffb38a', 0.85);
       sprite.position.set(...galacticToCosmos(s.l, s.b, s.d));
-      // The Local Group is ~3 Mpc across, a rich galaxy cluster a few Mpc: stop where it fills the view.
-      sprite.userData.goto = { distance: s.name === 'Local Group' ? 3 : 8 };
+      // The Local Group is ~3 Mpc across, a rich galaxy cluster a few Mpc, a supercluster tens.
+      sprite.userData.goto = { distance: s.name === 'Local Group' ? 3 : s.d < 30 ? 8 : s.d * 0.25 };
       this.labels.push({ sprite, min: s.d < 1 ? 1.5 : s.d * 0.25, max: s.d < 1 ? 40 : 5000 });
       this.scene.add(sprite);
     }
     this.applyPointScale();
+  }
+
+  /** Show or hide a layer: the rich clusters or the quasars. */
+  setKindVisible(kind: CosmosKind, on: boolean): void {
+    this.kindVisible[kind] = on;
+    const pts = this.kindPoints.get(kind);
+    if (pts) pts.visible = on;
+    for (const l of this.labels) if (l.kind === kind) l.sprite.visible = on && l.sprite.visible;
+  }
+
+  kindOf(index: number): CosmosKind {
+    return this.local[index]?.kind ?? 'galaxy';
   }
 
   /** Add the cosmic web: galaxies beyond the Local Volume, placed by redshift. */
@@ -267,13 +354,18 @@ export class CosmosView {
     this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();
     this.pointScale = 0.45 * height * pixelRatio;
+    this.pxPerUnit = (0.5 * height * pixelRatio) / Math.tan((this.camera.fov * Math.PI) / 360);
     this.applyPointScale();
   }
 
   private applyPointScale(): void {
-    for (const pts of [this.localPoints, this.webPoints]) {
-      if (pts) (pts.material as THREE.ShaderMaterial).uniforms.uScale.value = this.pointScale;
+    for (const pts of [...this.kindPoints.values(), this.webPoints]) {
+      if (!pts) continue;
+      const u = (pts.material as THREE.ShaderMaterial).uniforms;
+      u.uScale.value = this.pointScale;
+      u.uPxPerUnit.value = this.pxPerUnit;
     }
+    this.shapes?.setPxPerUnit(this.pxPerUnit);
   }
 
   get cameraDistance(): number {
@@ -360,6 +452,7 @@ export class CosmosView {
     let best = -1;
     let bestScore = Infinity;
     for (let i = 0; i < this.local.length; i++) {
+      if (!this.kindVisible[this.local[i].kind ?? 'galaxy']) continue;
       const x = p[i * 3], y = p[i * 3 + 1], z = p[i * 3 + 2];
       const w = e[3] * x + e[7] * y + e[11] * z + e[15];
       if (w <= 0) continue;
@@ -393,11 +486,13 @@ export class CosmosView {
     }
     this.controls.update();
     const camDist = this.cameraDistance;
-    for (const l of this.labels) l.sprite.visible = camDist >= l.min && camDist <= l.max;
+    for (const l of this.labels) l.sprite.visible = camDist >= l.min && camDist <= l.max && (!l.kind || this.kindVisible[l.kind]);
     if (this.cmb) {
       // A faint backdrop from inside; full strength once you fly out past it.
+      // Near a galaxy it fades further so the galaxy stands out against black.
       const outside = this.camera.position.length() > CMB_RADIUS_MPC;
-      (this.cmb.material as THREE.ShaderMaterial).uniforms.uOpacity.value = outside ? 1 : 0.15;
+      const near = THREE.MathUtils.smoothstep(camDist, 1, 25);
+      (this.cmb.material as THREE.ShaderMaterial).uniforms.uOpacity.value = outside ? 1 : 0.04 + 0.11 * near;
     }
   }
 }

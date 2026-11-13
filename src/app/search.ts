@@ -4,6 +4,7 @@ import { galacticToCosmos, loadLocalGalaxies, loadNamedGalaxies } from '../sim/g
 import { galacticToMap, MILKY_WAY_SEED, UNITS_PER_KPC } from '../procgen/galaxy';
 import { loadClusters } from '../sim/clusters';
 import { loadPulsars } from '../sim/pulsars';
+import { loadGalacticObjects } from '../sim/galacticObjects';
 import { loadNebulae } from '../sim/nebulae';
 import { loadGwEvents } from '../sim/gwEvents';
 import { loadFlybys } from '../sim/flybys';
@@ -14,7 +15,7 @@ import { $, escapeHtml, toast } from '../ui/dom';
 import { CHALLENGES } from '../game/challenges';
 import { LESSONS } from '../game/lessons';
 import { SearchIndex, type SearchEntry } from '../ui/search';
-import { activityEntries, clusterEntries, compactEntries, pulsarEntries, exoplanetEntries, galaxyEntries, nebulaEntries, skyBodyEntries, starEntries, structureEntries } from '../ui/searchSources';
+import { activityEntries, clusterEntries, compactEntries, galacticObjectEntries, pulsarEntries, exoplanetEntries, galaxyEntries, nebulaEntries, skyBodyEntries, starEntries, structureEntries } from '../ui/searchSources';
 import { kindLabel } from './shared';
 import type { App } from '../app';
 
@@ -26,7 +27,7 @@ export class SearchUI {
   buildSearchIndex(): Promise<SearchIndex> {
     this.app.searchIndex ??= (async () => {
       const safe = <T>(p: Promise<T>, fallback: T) => p.catch(() => fallback);
-      const [nebulae, clusters, catalog, bright, near, local, named, compact, gw, flybys, voyager, eclipses, pulsars] = await Promise.all([
+      const [nebulae, clusters, catalog, bright, near, local, named, compact, gw, flybys, voyager, eclipses, pulsars, objects] = await Promise.all([
         safe(loadNebulae(), []),
         safe(loadClusters(), []),
         safe(this.app.realDataUI.getCatalog(), undefined),
@@ -43,6 +44,7 @@ export class SearchUI {
         safe(loadVoyagerEncounters(), []),
         safe(loadEclipses(), []),
         safe(loadPulsars(), []),
+        safe(loadGalacticObjects(), []),
       ]);
       const index = new SearchIndex();
       index.add(skyBodyEntries());
@@ -51,6 +53,7 @@ export class SearchUI {
       index.add(clusterEntries(clusters));
       index.add(compactEntries(compact));
       index.add(pulsarEntries(pulsars));
+      index.add(galacticObjectEntries(objects));
       if (catalog) index.add(exoplanetEntries(catalog));
       index.add(galaxyEntries([...local, ...named]));
       index.add(structureEntries());
@@ -114,12 +117,14 @@ export class SearchUI {
         if (this.app.view !== 'galaxy') await this.app.switchView('galaxy');
         const size = ((a.sizePc ?? 0) / 1000) * UNITS_PER_KPC;
         // Pulsars and black holes: stop a little way off; zooming in (or Enter) opens them.
-        this.app.travelUI.goGalaxyPoint(new THREE.Vector3(...galacticToMap(a.l, a.b, a.dKpc)), a.pulsar || a.blackHole ? 1 : Math.max(0.05, size * 4), r.name);
+        this.app.travelUI.goGalaxyPoint(new THREE.Vector3(...galacticToMap(a.l, a.b, a.dKpc)), a.pulsar || a.blackHole || a.object ? 1 : Math.max(0.05, size * 4), r.name);
         // A pulsar: open its panel, with the button to visit it.
         const psr = a.pulsar ? this.app.pulsarMapList.findIndex((p) => p.jname === a.pulsar) : -1;
         if (psr >= 0) this.app.galaxyMapUI.selectTarget({ psr });
         const bh = a.blackHole ? this.app.blackHoleList.findIndex((o) => o.name === a.blackHole) : -1;
         if (bh >= 0) this.app.galaxyMapUI.selectTarget({ bh });
+        const obj = a.object ? this.app.galacticObjectList.findIndex((o) => o.name === a.object) : -1;
+        if (obj >= 0) this.app.galaxyMapUI.selectTarget({ obj });
         break;
       }
       case 'sky': {

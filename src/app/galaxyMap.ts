@@ -10,7 +10,8 @@ import { loadNebulaImages, NEBULA_IMAGE_CREDIT, nebulaAtlasUrl, nebulaKey, tileR
 import type { Cloud } from '../render/nebulaClouds';
 import { gaiaPoints, loadGaiaBright } from '../sim/gaiaBright';
 import { isMillisecond, loadPulsars, pulsarName } from '../sim/pulsars';
-import { loadCompactObjects } from '../sim/compactObjects';
+import { loadGalacticObjects, objectFacts, objectKindLabel, type GalacticObject } from '../sim/galacticObjects';
+import { loadCompactObjects, type CompactObject } from '../sim/compactObjects';
 import { characteristicAge, dipoleField, formatYears, sci } from '../sim/neutronStar';
 import { fmt } from '../sim/units';
 import { $, escapeHtml, setFacts, toast } from '../ui/dom';
@@ -80,6 +81,43 @@ export class GalaxyMapUI {
     const magnetars = all.filter((p) => p.magnetar).length;
     const msp = all.filter((p) => isMillisecond(p)).length;
     $('galaxy-info').textContent += ` ${all.length.toLocaleString('en-US')} real pulsars from the ATNF Pulsar Catalogue (blue; ${msp.toLocaleString('en-US')} millisecond pulsars in white, ${magnetars} magnetars in magenta) at their estimated distances, most from how much their radio pulses are smeared by free electrons on the way.`;
+  }
+
+  /**
+   * Every X-ray binary and Wolf–Rayet star with a measured distance: black-hole binaries violet,
+   * neutron-star ones cyan, Wolf–Rayet stars white-blue. Famous ones are named; all are selectable,
+   * and zooming in (or Enter) opens one in the Sandbox.
+   */
+  async showGalacticObjectsOnMap(seed: number): Promise<void> {
+    const [loaded, known] = await Promise.all([loadGalacticObjects().catch(() => undefined), loadCompactObjects().catch(() => [] as CompactObject[])]);
+    if (!loaded || this.app.galaxySeed !== seed) return;
+    // The famous black holes already have their own markers, with companions from the papers.
+    const taken = known.filter((o) => o.kind === 'blackhole').map((o) => equatorialToGalactic(o.raDeg, o.decDeg));
+    const all = loaded.filter((o) => !taken.some(([l, b]) => Math.hypot((l - o.l) * Math.cos((b * Math.PI) / 180), b - o.b) < 0.05));
+    this.app.galacticObjectList = all;
+    this.app.galaxy.objectPositions = all.map((o) => galacticToMap(o.l, o.b, o.d));
+    this.app.galaxy.objectLayers = all.map((o) => (o.kind === 'wr' ? 'wr' : 'xray'));
+    const famous = (o: GalacticObject) => (o.kind === 'wr' ? /^(WR 104|WR 140|WR 25|WR 102|WR 124|WR 134|WR 136|WR 11|Ve2-45)/.test(o.name) || ['104', '140', '25', '102', '124', '134', '136', '11'].includes(o.wr) : o.compact === 'BH' || /X-[1-9]\b|^(SS 433|Her X-1|Sco X-1|V404|GRS 1915|A0620|GX 339|4U 1820|Cir X-1|XTE J1118|GRO J1655)/.test(o.name));
+    const item = (o: GalacticObject, index: number) => {
+      const ly = Math.round((o.d * 3261.6) / 10) * 10;
+      const color: [number, number, number] = o.kind === 'wr' ? [0.8, 0.9, 1] : o.compact === 'BH' ? [0.95, 0.55, 1] : o.compact === 'NS' ? [0.5, 0.95, 1] : [0.7, 0.8, 0.95];
+      return {
+        pos: this.app.galaxy.objectPositions[index],
+        color,
+        size: 0.09,
+        label: famous(o) ? `${o.name} · ${objectKindLabel(o)} · ${ly.toLocaleString('en-US')} ly` : undefined,
+        labelColor: o.kind === 'wr' ? '#d8ecff' : o.compact === 'BH' ? '#f0b8ff' : '#b8f4ff',
+        distance: 1,
+        target: { obj: index } as GalaxyTarget,
+      };
+    };
+    this.app.galaxy.setRealLayer('xray', all.map((o, i) => ({ o, i })).filter(({ o }) => o.kind !== 'wr').map(({ o, i }) => item(o, i)));
+    this.app.galaxy.setRealLayer('wr', all.map((o, i) => ({ o, i })).filter(({ o }) => o.kind === 'wr').map(({ o, i }) => item(o, i)));
+    this.app.galaxy.setRealLayerVisible('xray', $<HTMLInputElement>('opt-real-xray').checked);
+    this.app.galaxy.setRealLayerVisible('wr', $<HTMLInputElement>('opt-real-wr').checked);
+    const xrb = all.filter((o) => o.kind !== 'wr');
+    const bh = xrb.filter((o) => o.compact === 'BH').length;
+    $('galaxy-info').textContent += ` ${xrb.length} X-ray binaries with measured distances (${bh} with black holes, in violet; neutron stars in cyan) and ${all.length - xrb.length} Wolf–Rayet stars (white-blue).`;
   }
 
   /** Real stars from Gaia DR3 around the Sun, at their measured distances (Milky Way only). */
@@ -264,6 +302,7 @@ export class GalaxyMapUI {
       void this.showNebulaeOnMap(seed);
       void this.showClustersOnMap(seed);
       void this.showPulsarsOnMap(seed);
+      void this.showGalacticObjectsOnMap(seed);
       void this.showGaiaOnMap(seed);
     }
     $<HTMLInputElement>('galaxy-seed').value = String(seed);
@@ -324,6 +363,14 @@ export class GalaxyMapUI {
         ['Source', o.arxiv ? `arXiv:${o.arxiv}` : 'discovery paper'],
       ]);
       $('btn-star-bookmark').classList.add('hidden');
+      panel.classList.remove('hidden');
+      return;
+    }
+    if (typeof target === 'object' && 'obj' in target) {
+      const o = this.app.galacticObjectList[target.obj];
+      $('star-name').textContent = o.name;
+      setFacts($('star-facts'), objectFacts(o));
+      bookmarkBtn.classList.add('hidden');
       panel.classList.remove('hidden');
       return;
     }

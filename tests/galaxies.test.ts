@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { generateGalaxy } from '../src/procgen/galaxy';
-import { COSMIC_STRUCTURES, displayName, galacticToCosmos, galaxyForm, localPosition, webPosition, type LocalGalaxy, type WebCatalog } from '../src/sim/galaxies';
+import { ABELL_NAMES, COSMIC_STRUCTURES, displayName, galacticToCosmos, galaxyForm, isFamous, localPosition, universeEntries, webPosition, type LocalGalaxy, type UniverseObjects, type WebCatalog } from '../src/sim/galaxies';
 
 const local: LocalGalaxy[] = JSON.parse(readFileSync(new URL('../public/data/galaxies-local.json', import.meta.url), 'utf8')).galaxies;
 const web: WebCatalog = JSON.parse(readFileSync(new URL('../public/data/galaxies-2mrs.json', import.meta.url), 'utf8'));
@@ -94,5 +94,56 @@ describe('the cosmic microwave background map', () => {
     const sof = jpg.indexOf(Buffer.from([0xff, 0xc0]));
     expect(jpg.readUInt16BE(sof + 5)).toBe(1024);
     expect(jpg.readUInt16BE(sof + 7)).toBe(2048);
+  });
+});
+
+describe('every named galaxy, the rich clusters and the quasars', () => {
+  const raw = JSON.parse(readFileSync(new URL('../public/data/galaxies-named.json', import.meta.url), 'utf8'));
+  const universe: UniverseObjects = JSON.parse(readFileSync(new URL('../public/data/universe-objects.json', import.meta.url), 'utf8'));
+
+  it('names thousands of NGC, IC and UGC galaxies with OpenNGC position angles', async () => {
+    const { namedFromSurvey } = await import('../src/sim/galaxies');
+    const named = namedFromSurvey(raw.galaxies, raw.H0);
+    expect(named.length).toBeGreaterThan(9000);
+    expect(named.filter((g) => g.pa !== undefined).length).toBeGreaterThan(3000);
+    const needle = named.find((g) => g.name === 'NGC4565')!;
+    expect(needle.common).toBe('Needle Galaxy');
+    expect(displayName(needle)).toBe('Needle Galaxy (NGC 4565)');
+    expect(needle.pa).toBe(135); // OpenNGC
+    expect(isFamous(needle)).toBe(true);
+    expect(displayName({ name: 'UGC07699' })).toBe('UGC 7699');
+    expect(displayName({ name: 'MRK0421' })).toBe('MRK 421');
+    // Axis ratios come with every 2MRS entry.
+    expect(named.filter((g) => g.ba !== undefined).length).toBe(named.length);
+  });
+
+  it('places the Coma Cluster about 100 Mpc away, named, with its Abell facts', () => {
+    const entries = universeEntries(universe);
+    const coma = entries.find((g) => g.name === 'Abell 1656')!;
+    expect(coma.kind).toBe('cluster');
+    expect(coma.common).toBe(ABELL_NAMES[1656]);
+    expect(coma.d).toBeGreaterThan(95);
+    expect(coma.d).toBeLessThan(105);
+    expect(coma.rich).toBe(2);
+    expect(coma.count).toBeGreaterThan(100);
+    // Near the hand-placed Coma label of old (b = 88°): same patch of sky, same distance.
+    expect(coma.b).toBeGreaterThan(85);
+    expect(entries.filter((g) => g.kind === 'cluster').length).toBeGreaterThan(600);
+  });
+
+  it('places quasars at comoving distances and keeps the record holders', () => {
+    const entries = universeEntries(universe);
+    const quasars = entries.filter((g) => g.kind === 'quasar');
+    expect(quasars.length).toBeGreaterThan(5000);
+    // 3C 273 is a hand-entered record holder, so the catalogue copy "3C 273.0" is dropped.
+    expect(entries.filter((g) => g.name.startsWith('3C 273')).length).toBe(1);
+    const q = entries.find((g) => g.name === '3C 273')!;
+    expect(q.note).toContain('first quasar');
+    expect(q.d).toBeCloseTo(652, -1);
+    const far = entries.find((g) => g.name === 'JADES-GS-z14-0')!;
+    expect(far.kind).toBe('galaxy');
+    expect(far.d).toBeGreaterThan(10000); // comoving Mpc: deep in the observable universe
+    expect(far.d).toBeLessThan(14000); // but inside the CMB sphere
+    expect(isFamous(far)).toBe(true);
   });
 });

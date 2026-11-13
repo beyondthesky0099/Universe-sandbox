@@ -360,9 +360,13 @@ export class InputUI {
       this.app.cosmos.resetCamera();
     });
     $<HTMLInputElement>('opt-cosmic-web').addEventListener('change', (e) => this.app.cosmos.setWebVisible((e.target as HTMLInputElement).checked));
+    $<HTMLInputElement>('opt-cosmos-clusters').addEventListener('change', (e) => this.app.cosmos.setKindVisible('cluster', (e.target as HTMLInputElement).checked));
+    $<HTMLInputElement>('opt-cosmos-quasars').addEventListener('change', (e) => this.app.cosmos.setKindVisible('quasar', (e.target as HTMLInputElement).checked));
     $<HTMLInputElement>('opt-real-nebulae').addEventListener('change', (e) => this.app.galaxy.setRealLayerVisible('nebulae', (e.target as HTMLInputElement).checked));
     $<HTMLInputElement>('opt-real-clusters').addEventListener('change', (e) => this.app.galaxy.setRealLayerVisible('clusters', (e.target as HTMLInputElement).checked));
     $<HTMLInputElement>('opt-real-pulsars').addEventListener('change', (e) => this.app.galaxy.setRealLayerVisible('pulsars', (e.target as HTMLInputElement).checked));
+    $<HTMLInputElement>('opt-real-xray').addEventListener('change', (e) => this.app.galaxy.setRealLayerVisible('xray', (e.target as HTMLInputElement).checked));
+    $<HTMLInputElement>('opt-real-wr').addEventListener('change', (e) => this.app.galaxy.setRealLayerVisible('wr', (e.target as HTMLInputElement).checked));
     $<HTMLInputElement>('opt-gaia-stars').addEventListener('change', (e) => this.app.galaxy.setGaiaVisible((e.target as HTMLInputElement).checked));
     $<HTMLInputElement>('opt-cmb').addEventListener('change', (e) => this.app.cosmos.setCmbVisible((e.target as HTMLInputElement).checked));
     $('cosmos-search').addEventListener('input', () => this.app.cosmosUI.renderCosmosSearch());

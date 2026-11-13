@@ -59,18 +59,20 @@
         </section>
         <section data-pane="find" data-icon="🔍" data-title="Find">
           <h3>Find a galaxy</h3>
-          <input id="cosmos-search" type="search" placeholder="Andromeda, M81, Centaurus A…" spellcheck="false" autocomplete="off" />
+          <input id="cosmos-search" type="search" placeholder="Andromeda, NGC 4565, Coma Cluster, 3C 273…" spellcheck="false" autocomplete="off" />
           <ul id="cosmos-results" class="list"></ul>
           <div class="row buttons">
             <button id="btn-cosmos-home">Back to the Milky Way</button>
           </div>
           <label class="check"><input id="opt-cosmic-web" type="checkbox" checked /> Cosmic web (2MASS redshift survey)</label>
+          <label class="check" title="Every rich galaxy cluster in the Abell catalogue with a measured redshift (683), named where the name is familiar: Coma, Perseus, Hercules…"><input id="opt-cosmos-clusters" type="checkbox" checked /> Galaxy clusters (Abell)</label>
+          <label class="check" title="The 7,000 brightest quasars and active galaxies, every quasar beyond redshift 5, and the record holders (JADES-GS-z14-0, GN-z11, J0313−1806), each at the comoving distance for its redshift"><input id="opt-cosmos-quasars" type="checkbox" checked /> Quasars and record holders</label>
           <label class="check"><input id="opt-cmb" type="checkbox" checked /> Cosmic microwave background (WMAP)</label>
         </section>
         <section data-pane="help" data-icon="❔" data-title="How to">
           <p class="muted small">
             Drag to orbit, scroll to zoom out to the cosmic web, click a galaxy to inspect it, and zoom right into it (or press Visit) to explore it.
-            Yellow: ellipticals · white-blue: spirals · blue: irregulars.
+            Yellow: ellipticals · white-blue: spirals · blue: irregulars · orange rings: galaxy clusters · violet: quasars.
           </p>
           <p class="muted small" id="cosmos-credit"></p>
         </section>
@@ -143,6 +145,8 @@
           <label class="check" title="HII regions (pink) and planetary nebulae (teal) with measured distances, from professional catalogues"><input id="opt-real-nebulae" type="checkbox" checked /> Real nebulae</label>
           <label class="check" title="Open clusters and moving groups from Gaia (Hunt & Reffert 2023, gold) and globular clusters (Harris, orange) at their measured distances"><input id="opt-real-clusters" type="checkbox" checked /> Real star clusters</label>
           <label class="check" title="Every Milky Way pulsar with a distance in the ATNF Pulsar Catalogue (about 3,600): blue, millisecond pulsars white, magnetars magenta"><input id="opt-real-pulsars" type="checkbox" checked /> Real pulsars</label>
+          <label class="check" title="Every X-ray binary with a measured distance (Fortin et al. 2023, 2024): black holes feeding on a companion in violet, neutron stars in cyan. Zoom in to see the pair"><input id="opt-real-xray" type="checkbox" checked /> Real X-ray binaries</label>
+          <label class="check" title="Every Wolf–Rayet star with a distance in van der Hucht's catalogue (218): massive stripped stars about to explode, in white-blue"><input id="opt-real-wr" type="checkbox" checked /> Real Wolf–Rayet stars</label>
           <label class="check" title="Every star brighter than magnitude 8 with a good Gaia DR3 parallax (about 62,000), at its measured distance and in its real colour"><input id="opt-gaia-stars" type="checkbox" checked /> Real stars (Gaia)</label>
           <label class="row">
             <span>Seed</span>

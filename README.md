@@ -896,6 +896,14 @@ push and pull request.
   certificate-chain error.
 - Asteroid flybys: the JPL Close-Approach Data API with JPL Horizons starting states (rebuild
   with `node scripts/build-flybys.mjs`).
+- X-ray binaries: the Galactic HMXB catalogue (Fortin, García, Chaty & Coleiro 2023, A&A 671,
+  A149; VizieR J/A+A/671/A149) with Gaia EDR3 distances (Bailer-Jones et al. 2021), and the
+  Galactic LMXB catalogue (Fortin, Kalsi, García, Simaz-Bunzel & Chaty 2024, A&A 684, A124;
+  VizieR J/A+A/684/A124). Wolf–Rayet stars: the VIIth Catalogue of Galactic Wolf–Rayet Stars
+  (van der Hucht 2001, New Astron. Rev. 45, 135; VizieR III/215), photometric distances.
+  Rebuild with `node scripts/build-galactic-objects.mjs`. Every one with a distance is on the
+  Galaxy Map, and each opens in the Sandbox as its real pair; masses or periods the catalogue
+  lacks take typical values, and the scene says so.
 - Black holes and pulsars: positions from SIMBAD; masses and distances from the discovery papers,
   verified against their arXiv abstracts by `node scripts/build-compact-objects.mjs`.
 - Pulsars: the ATNF Pulsar Catalogue v2.6.1 (Manchester, Hobbs, Teoh & Hobbs 2005, AJ 129, 1993;
@@ -957,7 +965,22 @@ push and pull request.
   145, 101) and the **2MASS Redshift Survey** (Huchra et al. 2012, ApJS 199, 26), retrieved
   from VizieR (CDS). Rebuild them with `node scripts/build-galaxies.mjs`. Survey distances use
   Hubble's law (H0 = 70 km/s/Mpc), so clusters appear stretched along the line of sight
-  ("fingers of God"). Cluster labels use approximate published positions.
+  ("fingers of God"). Cluster labels use approximate published positions. Each galaxy's
+  position angle on the sky comes from **HyperLEDA** (Paturel et al. 2003, A&A 412, 45;
+  VizieR VII/237), matched by position; the Universe view draws galaxies at that angle and
+  the catalogue's inclination. Every 2MRS galaxy with a catalogue name (NGC, IC, UGC, ESO,
+  MCG, Markarian…) is a named, clickable entry; the NGC/IC ones take their position angles,
+  optical axis ratios and common names from **OpenNGC** (Mattia Verga,
+  https://github.com/mattiaverga/OpenNGC, **CC BY-SA 4.0**).
+- Deep universe (`node scripts/build-deep-universe.mjs`): rich galaxy clusters from the
+  **Abell catalogue** (Abell, Corwin & Olowin 1989, ApJS 70, 1; VizieR VII/110A) with the
+  redshifts of Struble & Rood (1987); quasars from the **Véron-Cetty & Véron** catalogue, 13th
+  edition (2010, A&A 518, A10; VizieR VII/258), the brightest and every one beyond redshift 5;
+  and record holders (JADES-GS-z14-0, GN-z11, J0313−1806, ULAS J1120+0641, TON 618, 3C 273)
+  entered by hand from the papers cited in `public/data/universe-objects.json`. They sit at the
+  comoving distance for their redshift in a flat ΛCDM cosmology (H0 = 70 km/s/Mpc, Ωm = 0.3;
+  `src/sim/cosmology.ts`). Supercluster, wall and void labels use approximate published
+  positions.
 - Star data: **HYG database v4.1** by David Nash (astronexus), licensed **CC BY-SA 4.0**
   (https://codeberg.org/astronexus/hyg). The derived files `public/data/stars-near.json` and
   `public/data/stars-bright.json` are also CC BY-SA 4.0. Rebuild them with

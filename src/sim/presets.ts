@@ -8,6 +8,7 @@ import { mulberry32 } from '../procgen/rng';
 import { rememberPulsar, spinDownPower } from './neutronStar';
 import { HULSE_TAYLOR } from './binaryPulsar';
 import type { CompactObject } from './compactObjects';
+import { describeObject, xrayMasses, xrayPeriodDays, type WolfRayet, type XrayBinary } from './galacticObjects';
 import { describePulsar, pulsarName, type PulsarRecord } from './pulsars';
 import { GAS_DISC_LIFETIME, planetesimals } from './planetFormation';
 import { julianDate, planetStates, type PlanetName } from './ephemeris';
@@ -652,6 +653,39 @@ export function loadBlackHoleSystem(sim: Simulation, o: CompactObject): SceneSet
   if (a < 0.5) setTrueScale(sim, true);
   sim.recenter();
   return { cameraDistance: a * 3.2, timeScale: years / 6, elevation: 0.7, tip: o.about };
+}
+
+/**
+ * A real X-ray binary from the Galaxy Map: the compact object (black hole or neutron star) with its
+ * donor star on the catalogued orbit. Unknown masses and periods take typical values for the
+ * class, and the tip says so.
+ */
+export function loadXrayBinary(sim: Simulation, o: XrayBinary & { kind: 'hmxb' | 'lmxb' }): SceneSetup {
+  const { compact, companion, isBlackHole } = xrayMasses(o);
+  const period = xrayPeriodDays(o);
+  const primary = sim.addBody({ name: o.name, kind: isBlackHole ? 'blackhole' : 'neutron', mass: compact });
+  if (!isBlackHole && o.spin) rememberPulsar(o.name, o.spin, 0);
+  const years = period.days / 365.25;
+  const a = Math.cbrt(years * years * (compact + companion));
+  // A massive donor is partway through its short life; a low-mass one is old.
+  const age = o.kind === 'hmxb' ? Math.min(4e9, 0.5 * mainSequenceLifetime(companion)) : Math.min(8e9, 0.6 * mainSequenceLifetime(companion));
+  const giant = o.kind === 'lmxb' && !!o.sptype && /III/.test(o.sptype);
+  addOrbiting(sim, primary, { name: o.kind === 'hmxb' ? 'Donor supergiant' : 'Donor star', kind: giant ? 'giant' : 'star', mass: companion, age }, { a, e: Math.min(o.ecc ?? 0, 0.9), nu: Math.PI * 0.6 });
+  if (a < 0.5) setTrueScale(sim, true);
+  if (!isBlackHole) sim.relativity = true;
+  sim.recenter();
+  const assumed = [o.mx ? '' : `the ${isBlackHole ? 'black hole' : 'neutron star'} mass`, o.mo ? '' : 'the companion mass', period.assumed ? 'the orbit' : ''].filter(Boolean);
+  const tip = `${describeObject(o)}${assumed.length ? ` Not measured, so typical values are shown for ${assumed.join(', ')}.` : ''}`;
+  return { cameraDistance: Math.max(a * 3.2, 2e-4), timeScale: years / 6, elevation: 0.7, tip };
+}
+
+/** A real Wolf–Rayet star: a massive, hot, stripped star. Its mass follows its subtype (WN ~16, WC ~12, WO ~10 M☉). */
+export function loadWolfRayet(sim: Simulation, o: WolfRayet): SceneSetup {
+  const mass = o.sptype.startsWith('WO') ? 10 : o.sptype.startsWith('WC') ? 12 : 16;
+  // Almost at the end of its life: evolved far enough to be bright and hot.
+  sim.addBody({ name: o.name, kind: 'star', mass, age: 0.85 * mainSequenceLifetime(mass) });
+  sim.recenter();
+  return { cameraDistance: 1.2, timeScale: 0.05, elevation: 0.45, tip: describeObject({ kind: 'wr', ...o }) };
 }
 
 const sunsFuture: Preset = {

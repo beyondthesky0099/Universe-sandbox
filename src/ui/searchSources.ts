@@ -2,6 +2,7 @@
  * Search entries (search.ts) for each of the app's catalogues. Pure functions of the loaded data.
  */
 import { describePulsar, pulsarName, type PulsarRecord } from '../sim/pulsars';
+import { describeObject, type GalacticObject } from '../sim/galacticObjects';
 import { equatorialToGalactic } from '../procgen/galaxy';
 import type { StarCluster } from '../sim/clusters';
 import type { Eclipse } from '../sim/eclipse';
@@ -127,6 +128,17 @@ export function pulsarEntries(list: PulsarRecord[]): SearchEntry[] {
       action: { type: 'map', l, b, dKpc: p.distanceKpc, pulsar: p.jname },
     };
   });
+}
+
+/** X-ray binaries and Wolf–Rayet stars on the Galaxy Map. */
+export function galacticObjectEntries(list: GalacticObject[]): SearchEntry[] {
+  return list.map((o) => ({
+    name: o.name,
+    kind: o.kind === 'wr' ? 'Wolf–Rayet star' : o.compact === 'BH' ? 'Black hole (X-ray binary)' : 'X-ray binary',
+    detail: `${describeObject(o)} · ${lightYears(o.d)} away`,
+    rank: o.kind !== 'wr' && o.compact === 'BH' ? 45 : 25,
+    action: { type: 'map', l: o.l, b: o.b, dKpc: o.d, object: o.name },
+  }));
 }
 
 /** The Sun, Moon and planets, as they are in the sky now. */

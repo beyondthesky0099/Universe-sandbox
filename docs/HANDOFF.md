@@ -208,6 +208,94 @@ Plan, in priority order:
 - BodyVisual adds it in applyDetail and updates it only when the planet is more than 14 px across
   and a star is present. Tests: tests/aurora.test.ts.
 
+### AM. Every X-ray binary and Wolf–Rayet star on the Galaxy Map
+- [x] scripts/build-galactic-objects.mjs → public/data/galactic-objects.json: 107 HMXBs (Fortin+
+      2023, Gaia EDR3 distances; 4 black holes), 207 LMXBs (Fortin+ 2024; 44 black holes), 217 WR
+      stars (van der Hucht 2001, photometric distances). Milky Way only (≤ 35 kpc).
+  - Units caught in the data: LMXB GaiaDist is in pc, OtherDist in kpc; the LMXB Period column
+    says days but holds hours (Sco X-1 = 18.9). HMXB Dist is in pc, Per in days.
+  - Famous LMXBs keep their X-ray names: XRAY_NAMES maps SIMBAD variable-star names (V818 Sco →
+    Sco X-1). HMXB compact object: Mx > 3 → BH, a spin period → NS, else '?'.
+- [x] src/sim/galacticObjects.ts (headless): types, loader, xrayMasses/xrayPeriodDays defaults
+      (NS 1.4, BH 8; HMXB donor 18, LMXB donor 0.5 M☉; periods 10 d / 0.4 d, marked assumed),
+      describeObject, objectFacts, objectKindLabel.
+- [x] presets.ts: loadXrayBinary (compact object + donor on the catalogued orbit; relativity on
+      for neutron stars; the tip lists what was assumed) and loadWolfRayet (a massive evolved
+      star, mass by subtype).
+- [x] Galaxy Map: real layers 'xray' and 'wr' (#opt-real-xray, #opt-real-wr), target `{ obj }`
+      (GalaxyTarget, App.galacticObjectList, GalaxyView.objectPositions/objectLayers), pick, the
+      star panel, Enter → the Sandbox, origin kind 'object', search entries (ui/searchSources.ts).
+  - Systems within 0.05° of a famous black hole from compact-objects.json are skipped: those keep
+    their own markers with the papers' companion data (Cyg X-1, V404 Cyg, A0620-00).
+- Tests: tests/galactic-objects.test.ts (Cyg X-1 at 2.2 kpc with its 5.6-day orbit rebuilt by
+  Kepler's law; Sco X-1's 18.9-hour period; assumed values in the tip).
+- Checked in the browser: Vela X-1's panel and its neutron star orbiting the supergiant.
+
+### AL. Every catalogued object in the Universe view
+The user asked for *"every celestial object discovered"* in the galaxy and universe views. This
+round covers the Universe view; the Galaxy Map already carries the HII regions, planetary nebulae,
+supernova remnants, dark and reflection nebulae, clusters, pulsars, black holes, exoplanet hosts
+and the 62,000 Gaia stars (sections F–J). Ideas for the next rounds are at the end.
+- [x] Named galaxies: every 2MRS galaxy beyond 11 Mpc with a catalogue name (10,629, was 647):
+      NGC, IC, UGC, ESO, MCG, Markarian, CGCG…; anonymous "g…"/"A…" entries stay in the web.
+  - OpenNGC (scripts/build-galaxies.mjs `openNgc()`, cached as node_modules/.cache/galaxies/
+    openngc.csv) gives NGC/IC position angles (3,338), optical axis ratios and common names;
+    HyperLEDA cone searches only for the bright rest (Kt < 8.5). Rows end in PA, b/a, common.
+  - galaxies-named.json is 10,629 rows (~500 KB). `isFamous` now includes catalogue common names
+    (Needle Galaxy, Fornax A…) and record holders.
+- [x] scripts/lib/vizier.mjs: the shared VizieR fetch/cache/retry, TSV parser and coordinate
+      helpers (used by build-galaxies.mjs and build-deep-universe.mjs).
+- [x] scripts/build-deep-universe.mjs → public/data/universe-objects.json: 683 Abell clusters
+      with redshifts (VII/110A tables 3–4), 7,160 Véron quasars (V < 17.5 or z ≥ 5), 6 hand-entered
+      record holders with notes and references.
+- [x] src/sim/cosmology.ts: comoving/luminosity distance, lookback time, age (flat ΛCDM, H0 70,
+      Ωm 0.3). Lookback integrates in the scale factor so the age converges. tests/cosmology.test.ts.
+- [x] src/sim/galaxies.ts: `kind` ('galaxy' | 'cluster' | 'quasar'), `common`, `z`, cluster and
+      quasar facts, `universeEntries()` / `loadUniverseObjects()`, ABELL_NAMES, catalogueName().
+      COSMIC_STRUCTURES: the five clusters that are Abell clusters became real entries; added the
+      Local Void, Perseus–Pisces, CfA2 Great Wall, Hercules, Shapley, Boötes Void,
+      Horologium–Reticulum and the Sloan Great Wall (approximate hand-entered positions).
+- [x] CosmosView: one Points layer per kind (clusters are orange rings 4 Mpc across, quasars
+      violet points, record holders brighter), `setKindVisible`, labels with priorities (the
+      brighter galaxy keeps its label where two collide), pick() skips hidden layers.
+  - Checkboxes #opt-cosmos-clusters and #opt-cosmos-quasars (Find pane).
+  - A cluster has no Visit button and auto-visit skips it; a quasar visits its host (an
+    elliptical stand-in).
+- Tests: tests/galaxies.test.ts (named count, Needle Galaxy PA 135°, Coma at ~100 Mpc, 3C 273
+  dedupe, JADES-GS-z14-0 inside the CMB sphere).
+
+**Next rounds for "every object":**
+- Galaxy Map: X-ray binaries and Wolf–Rayet stars are done (section AM). Still to do: novae and
+  cataclysmic variables (Ritter & Kolb, VizieR B/cb, has no distances: cross-match Gaia), masers,
+  Cepheids; more Gaia stars (mag < 10 would be about 300,000: needs a binary format and a budget).
+- Universe: the 2MRS galaxies without names could still be clickable (type and redshift only);
+  galaxy groups (Tully 2015); SDSS large-scale structure beyond 2MRS is too big for the repo.
+- Solar System: every numbered asteroid above 10 km, and the 290 known moons (Horizons).
+
+### AK. Realism pass: galaxies drawn in the Universe view
+- [x] HyperLEDA position angles (scripts/build-galaxies.mjs, VizieR VII/237 via the Harvard
+      mirror): a cone search per galaxy, scored by separation over catalogued size. `pa` on 435
+      of 869 Local Volume galaxies (the rest are faint dwarfs or have no PA in LEDA) and on 593
+      of 647 named distant galaxies (galaxies-named.json rows now end in PA, b/a).
+  - The mirror sometimes answers 200 with an empty, nameless `#RESOURCE=`: that is a failure to
+    retry, not an empty cone. `vizier()` checks for it.
+- [x] src/sim/galaxyLook.ts (headless): `galaxyOrientation` (disc axis and major axis in map
+      coordinates from inclination + PA; sky basis north/east from the NCP in galactic
+      coordinates; unknowns seeded by name), `galaxyLook` (bulge, arms, dust, colour and surface
+      brightness by Hubble type and gas fraction; LOOK_OVERRIDES for Cen A, the Sombrero, M82…),
+      `galaxyCentre` (the Milky Way's centre is 8.2 kpc from the origin).
+- [x] src/render/galaxyShapes.ts: one instanced billboard per galaxy, ray-marched in the galaxy's
+      frame: exponential disc with an exact per-step vertical integral (thin discs never fall
+      between samples), log-spiral arms with young blue stars and H II knots, Hernquist-like bulge
+      or spheroid, mid-plane dust that reddens and darkens what lies behind it, clumps for
+      irregulars. Interleaved-gradient jitter; Reinhard-style tonemap keeping the hue.
+  - The point sprite fades out as the shape fades in (uPxPerUnit on both materials).
+  - The CMB backdrop fades from 15% to 4% within 25 Mpc of the target so galaxies stand out.
+- Tests: tests/galaxy-look.test.ts (M31's axis at 78° to the line of sight and 35° from north).
+- Checked with Playwright screenshots (scratch script, not in the repo): M31 inclined with dust
+  lanes, NGC 253 edge-on with a lane, Cen A's spheroid, the LMC's clumps, the Milky Way's four
+  arms from above.
+
 ### AJ. Zoom in to arrive at black holes and pulsars
 - [x] compact-objects.json: black holes carry `companion` (mass, periodDays, ecc, kind,
   dormant, note).
@@ -260,7 +348,7 @@ Plan, in priority order:
   - Ocean glint via a roughness map read from the day map.
 - [x] build-planet-textures.mjs: earth-night.jpg, and the assets.science.nasa.gov mirror for
   eoimages (eoimages returned 503).
-- Not done yet: galaxies (Universe view) and black-hole discs compared against reference renders.
+- Galaxies in the Universe view: section AK. Not done yet: black-hole discs compared against reference renders.
 
 ### AG. Pulsars in depth, and the backlog
 - [x] Beams as glowing gas (render/neutronStar.ts BEAM_FRAGMENT).

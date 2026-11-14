@@ -7,7 +7,7 @@ every working session: tick boxes, add notes, and move finished items to "Done".
 and say something like *"Read CLAUDE.md and docs/HANDOFF.md, then continue with the next
 unchecked item."*
 
-- Working branch: `ccr-bd8228d3-85c4pq`, restarted from `main` after PR #1 merged. `main` is the
+- Working branch: `ccr-a8929248-o9c40s`, restarted from `main` after PR #13 merged. `main` is the
   default branch and deploys to Pages.
 - Project conventions and commands are in `CLAUDE.md`.
 
@@ -208,6 +208,44 @@ Plan, in priority order:
 - BodyVisual adds it in applyDetail and updates it only when the planet is more than 14 px across
   and a star is present. Tests: tests/aurora.test.ts.
 
+### AN. Novae, cataclysmic variables, Cepheids and masers on the Galaxy Map
+Continues the "every object" rounds (AL, AM): four more real layers, all in galactic-objects.json
+and the same pipeline (GalacticObject kinds 'nova' | 'cv' | 'cep' | 'maser').
+- [x] scripts/build-galactic-objects.mjs now also writes:
+  - `nova`: all 402 Galactic novae from Schaefer 2022 (J/MNRAS/517/6150 table 6: best distance
+    with range, year, light-curve class, t₃, peak and absolute magnitude, spectral class, ejecta
+    speed, orbital period, bulge/disc population, property flags, Gaia flag), joined by name or
+    position (20″) to Ritter & Kolb (B/cb) for subtype codes, M₁, M₂, donor type and eclipses.
+  - `cv`: 1,601 cataclysmic variables from Canbay et al. 2023 (J/AJ/165/163; Gaia DR3 distances
+    in pc, magnetic flag, period), minus the novae above, joined to Ritter & Kolb the same way.
+    Only 243 match by name, so the position match matters. Names are tidied ("V* ", "V0592").
+  - `cep`: 2,205 classical Cepheids from Skowron et al. 2019 (J/other/Sci/365.478; GCVS names
+    are padded with underscores and use three-letter Greek, converted to "δ Cep"). 218 rows have
+    no distance and are skipped; Polaris is hand-entered at 137 pc (Bond et al. 2018).
+  - `maser`: 199 VLBI parallaxes from Reid et al. 2019 (J/ApJ/885/131): d = 1/plx, spiral arm
+    code, V_LSR; seven are red supergiants (`evolved`). Repeated region names get their G-name.
+- [x] src/sim/galacticObjects.ts: types, CV_TYPES and ARMS dictionaries, `whiteDwarfMasses`
+  (Knigge 2011 donor sequence, 1.35 M☉ white dwarfs for recurrent novae, giants for long periods),
+  `cvTypeLabel`, `novaSpeedClass`, `cepheidLuminosity` (Benedict 2007), `cepheidRadius` (Gieren
+  1998), `cepheidMass` (inverse of the sandbox's lifetime law at the catalogue age), and
+  describeObject/objectFacts/objectKindLabel for each kind.
+- [x] presets.ts: `loadWhiteDwarfBinary` (white dwarf tagged 'accreting' or 'magnetic' + donor,
+  real sizes), `loadCepheid` (a 'giant' tagged `cepheid:<days>`; one pulse ≈ 4 s), `loadMaser`
+  (20 M☉ protostar with `sim.formation` for its gas disc and six seeded young stars, or a red
+  supergiant), and `loadGalacticObject` which app.ts now calls for every kind.
+- [x] Render: BodyVisual pulses a Cepheid (7% in radius, ~1 mag via the new StarSurface `uBright`
+  uniform and the glow) from the simulation time, now passed to `update()`; a white dwarf tagged
+  'accreting' gets `accretionDiskMesh({ whiteDwarf: true })`: 1.6–30 dwarf radii, no beaming
+  (`uBeaming`), ~17,000 K inner edge.
+- [x] Galaxy Map layers 'novae' (novae orange-red, recurrent deeper red; CVs rose, magnetic pink),
+  'cepheids' (yellow), 'masers' (green): checkboxes #opt-real-novae, #opt-real-cepheids,
+  #opt-real-masers; helper functions objectLayer/objectColor/isFamousObject in galaxyMap.ts.
+  Search kinds: Nova, Recurrent nova, the CV subtype, Cepheid, Maser.
+- Tests: tests/galactic-objects.test.ts (T CrB, GK Per, SS Cyg, AM Her, δ Cep, Polaris, W49 N,
+  Orion KL, the builders and the dispatcher).
+- Checked with Playwright (scratch script): the map text and panel, SS Cyg (disc + red dwarf),
+  T CrB (disc + red giant), δ Cep pulsing, W49 N with its disc.
+
 ### AM. Every X-ray binary and Wolf–Rayet star on the Galaxy Map
 - [x] scripts/build-galactic-objects.mjs → public/data/galactic-objects.json: 107 HMXBs (Fortin+
       2023, Gaia EDR3 distances; 4 black holes), 207 LMXBs (Fortin+ 2024; 44 black holes), 217 WR
@@ -265,9 +303,10 @@ and the 62,000 Gaia stars (sections F–J). Ideas for the next rounds are at the
   dedupe, JADES-GS-z14-0 inside the CMB sphere).
 
 **Next rounds for "every object":**
-- Galaxy Map: X-ray binaries and Wolf–Rayet stars are done (section AM). Still to do: novae and
-  cataclysmic variables (Ritter & Kolb, VizieR B/cb, has no distances: cross-match Gaia), masers,
-  Cepheids; more Gaia stars (mag < 10 would be about 300,000: needs a binary format and a budget).
+- Galaxy Map: X-ray binaries, Wolf–Rayet stars (AM), novae, cataclysmic variables, Cepheids and
+  masers (AN) are done. Still to do: RR Lyrae and Mira variables (Gaia DR3), symbiotic stars,
+  Be stars, more Gaia stars (mag < 10 would be about 300,000: needs a binary format and a budget).
+- Up close: black holes and nebulae at real scale; moon and asteroid surfaces.
 - Universe: the 2MRS galaxies without names could still be clickable (type and redshift only);
   galaxy groups (Tully 2015); SDSS large-scale structure beyond 2MRS is too big for the repo.
 - Solar System: every numbered asteroid above 10 km, and the 290 known moons (Horizons).

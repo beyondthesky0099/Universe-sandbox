@@ -17,7 +17,7 @@ import { GAS_PALETTE, ROCKY_PALETTE } from './sim/color';
 import { type Forecast } from './sim/forecast';
 import { SimHost } from './sim/host';
 import type { CompactObject } from './sim/compactObjects';
-import { galacticCore, hulseTaylor, loadBlackHoleSystem, loadXrayBinary, loadWolfRayet, loadPulsarSystem, loadSolarSystemOnDate, loadStarSystem, PRESETS, pulsarPlanets } from './sim/presets';
+import { galacticCore, hulseTaylor, loadBlackHoleSystem, loadGalacticObject, loadPulsarSystem, loadSolarSystemOnDate, loadStarSystem, PRESETS, pulsarPlanets } from './sim/presets';
 import { describeObject, type GalacticObject } from './sim/galacticObjects';
 import { describePulsar, pulsarName, type PulsarRecord } from './sim/pulsars';
 import { hulseTaylorChart } from './ui/hulseTaylorChart';
@@ -731,7 +731,7 @@ export class App {
         scenario = {
           name: object.name,
           description: describeObject(object),
-          load: () => (object.kind === 'wr' ? loadWolfRayet(this.sim, object) : loadXrayBinary(this.sim, object)),
+          load: () => loadGalacticObject(this.sim, object),
           origin: { kind: 'object', index: target.obj, object },
         };
       } else if (typeof target === 'object') {
@@ -914,7 +914,7 @@ export class App {
   pulsarMapList: PulsarRecord[] = [];
   /** Real black holes on the Galaxy Map, in the order of GalaxyView.blackHolePositions. */
   blackHoleList: CompactObject[] = [];
-  /** Real X-ray binaries and Wolf–Rayet stars, in the order of GalaxyView.objectPositions. */
+  /** Real X-ray binaries, Wolf–Rayet stars, novae, cataclysmic variables, Cepheids and masers, in the order of GalaxyView.objectPositions. */
   galacticObjectList: GalacticObject[] = [];
 
   readonly atlasPromises = new Map<number, Promise<THREE.Texture>>();

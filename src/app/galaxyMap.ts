@@ -19,6 +19,83 @@ import { LOW_POWER, sleep } from './shared';
 import type { App } from '../app';
 
 /** The Galaxy Map: building galaxies, real-data layers (nebulae, clusters, Gaia stars, exoplanet hosts), bookmarks, star search and filters. */
+/** The Galaxy Map layer (checkbox) an object belongs to. */
+function objectLayer(o: GalacticObject): 'xray' | 'wr' | 'novae' | 'cepheids' | 'masers' {
+  switch (o.kind) {
+    case 'wr':
+      return 'wr';
+    case 'nova':
+    case 'cv':
+      return 'novae';
+    case 'cep':
+      return 'cepheids';
+    case 'maser':
+      return 'masers';
+    default:
+      return 'xray';
+  }
+}
+
+function objectColor(o: GalacticObject): [number, number, number] {
+  switch (o.kind) {
+    case 'wr':
+      return [0.8, 0.9, 1];
+    case 'nova':
+      return o.recurrent ? [1, 0.35, 0.15] : [1, 0.55, 0.3];
+    case 'cv':
+      return o.magnetic ? [1, 0.55, 0.75] : [0.95, 0.7, 0.72];
+    case 'cep':
+      return [1, 0.93, 0.5];
+    case 'maser':
+      return o.evolved ? [0.7, 1, 0.6] : [0.45, 1, 0.55];
+    default:
+      return o.compact === 'BH' ? [0.95, 0.55, 1] : o.compact === 'NS' ? [0.5, 0.95, 1] : [0.7, 0.8, 0.95];
+  }
+}
+
+function objectLabelColor(o: GalacticObject): string {
+  switch (o.kind) {
+    case 'wr':
+      return '#d8ecff';
+    case 'nova':
+      return '#ffc0a0';
+    case 'cv':
+      return '#ffc8d4';
+    case 'cep':
+      return '#fff0b0';
+    case 'maser':
+      return '#c0ffc8';
+    default:
+      return o.compact === 'BH' ? '#f0b8ff' : '#b8f4ff';
+  }
+}
+
+const FAMOUS_WR = /^(WR 104|WR 140|WR 25|WR 102|WR 124|WR 134|WR 136|WR 11|Ve2-45)/;
+const FAMOUS_XRB = /X-[1-9]\b|^(SS 433|Her X-1|Sco X-1|V404|GRS 1915|A0620|GX 339|4U 1820|Cir X-1|XTE J1118|GRO J1655)/;
+const FAMOUS_NOVAE = /^(V1500 Cyg|GK Per|DQ Her|V603 Aql|CP Pup|V1974 Cyg|V339 Del|V1668 Cyg|V1494 Aql|V382 Vel|V5668 Sgr|HR Del|FH Ser|V533 Her|RR Pic|CP Lac|V446 Her|QU Vul|V1324 Sco|V392 Per|V1405 Cas|V1716 Sco|V1369 Cen)$/;
+const FAMOUS_CVS = /^(SS Cyg|U Gem|AM Her|WZ Sge|AE Aqr|Z Cam|IP Peg|EX Hya|OY Car|TT Ari|V Sge|GP Com|HT Cas|VW Hyi|Z Cha|SU UMa|AR Sco|V455 And|BW Scl|GW Lib|AM CVn|HU Aqr|EF Eri|V834 Cen|RX And|SS Aur|DO Dra|V1223 Sgr|FO Aqr|TV Col|BG CMi|RW Tri|UX UMa|QZ Vir|ES Cet|HM Cnc|V407 Vul|MV Lyr|KR Aur)$/;
+const FAMOUS_CEPHEIDS = /^(η Aql|ζ Gem|RS Pup|l Car|β Dor|SU Cas|X Sgr|W Sgr|T Mon|S Nor|Y Oph|U Sgr|FF Aql|RT Aur|T Vul|Y Sgr|SV Vul|S Mus|U Aql|AW Per|V Cen|κ Pav|BG Cru|RY Sco|WZ Sgr|SZ Tau|DT Cyg|V1334 Cyg|GH Lup|ER Car|U Car|AQ Pup|VY Car|XY Car|KN Cen|V340 Ara)$/;
+const FAMOUS_MASERS = /^(W49 N|Sgr B2|Orion KL|W3\(OH\)|W51 Main|W51 IRS2|NGC 6334|NGC 7538|W75 N|VY CMa|S Per|NML Cyg|VX Sgr|W43 Main|W33 Main|DR 21A|ON 1|Sh2-252|Sh2-255|NGC 281|G009\.62\+00\.19|G023\.01-00\.41|G034\.26\+00\.15|G012\.81-00\.20|G035\.20-00\.74|Cep A|AFGL 2591|PZ Cas|V838 Mon)$/;
+
+/** Objects worth a label on the Galaxy Map (every one is still selectable and searchable). */
+function isFamousObject(o: GalacticObject): boolean {
+  switch (o.kind) {
+    case 'wr':
+      return FAMOUS_WR.test(o.name) || ['104', '140', '25', '102', '124', '134', '136', '11'].includes(o.wr);
+    case 'nova':
+      // Recurrent novae, naked-eye novae and the textbook ones.
+      return !!o.recurrent || (o.vpeak !== undefined && o.vpeak <= 2.5) || FAMOUS_NOVAE.test(o.name);
+    case 'cv':
+      return FAMOUS_CVS.test(o.name);
+    case 'cep':
+      return !!o.common || FAMOUS_CEPHEIDS.test(o.name);
+    case 'maser':
+      return FAMOUS_MASERS.test(o.name);
+    default:
+      return o.compact === 'BH' || FAMOUS_XRB.test(o.name);
+  }
+}
+
 export class GalaxyMapUI {
   constructor(private readonly app: App) {}
 
@@ -84,40 +161,39 @@ export class GalaxyMapUI {
   }
 
   /**
-   * Every X-ray binary and Wolf–Rayet star with a measured distance: black-hole binaries violet,
-   * neutron-star ones cyan, Wolf–Rayet stars white-blue. Famous ones are named; all are selectable,
-   * and zooming in (or Enter) opens one in the Sandbox.
+   * Every X-ray binary, Wolf–Rayet star, nova, cataclysmic variable, classical Cepheid and maser
+   * with a measured distance: black-hole binaries violet, neutron-star ones cyan, Wolf–Rayet stars
+   * white-blue, novae orange-red, other cataclysmic variables rose, Cepheids yellow, masers green.
+   * Famous ones are named; all are selectable, and zooming in (or Enter) opens one in the Sandbox.
    */
   async showGalacticObjectsOnMap(seed: number): Promise<void> {
     const [loaded, known] = await Promise.all([loadGalacticObjects().catch(() => undefined), loadCompactObjects().catch(() => [] as CompactObject[])]);
     if (!loaded || this.app.galaxySeed !== seed) return;
     // The famous black holes already have their own markers, with companions from the papers.
     const taken = known.filter((o) => o.kind === 'blackhole').map((o) => equatorialToGalactic(o.raDeg, o.decDeg));
-    const all = loaded.filter((o) => !taken.some(([l, b]) => Math.hypot((l - o.l) * Math.cos((b * Math.PI) / 180), b - o.b) < 0.05));
+    const all = loaded.filter((o) => (o.kind !== 'hmxb' && o.kind !== 'lmxb') || !taken.some(([l, b]) => Math.hypot((l - o.l) * Math.cos((b * Math.PI) / 180), b - o.b) < 0.05));
     this.app.galacticObjectList = all;
     this.app.galaxy.objectPositions = all.map((o) => galacticToMap(o.l, o.b, o.d));
-    this.app.galaxy.objectLayers = all.map((o) => (o.kind === 'wr' ? 'wr' : 'xray'));
-    const famous = (o: GalacticObject) => (o.kind === 'wr' ? /^(WR 104|WR 140|WR 25|WR 102|WR 124|WR 134|WR 136|WR 11|Ve2-45)/.test(o.name) || ['104', '140', '25', '102', '124', '134', '136', '11'].includes(o.wr) : o.compact === 'BH' || /X-[1-9]\b|^(SS 433|Her X-1|Sco X-1|V404|GRS 1915|A0620|GX 339|4U 1820|Cir X-1|XTE J1118|GRO J1655)/.test(o.name));
+    this.app.galaxy.objectLayers = all.map(objectLayer);
     const item = (o: GalacticObject, index: number) => {
       const ly = Math.round((o.d * 3261.6) / 10) * 10;
-      const color: [number, number, number] = o.kind === 'wr' ? [0.8, 0.9, 1] : o.compact === 'BH' ? [0.95, 0.55, 1] : o.compact === 'NS' ? [0.5, 0.95, 1] : [0.7, 0.8, 0.95];
       return {
         pos: this.app.galaxy.objectPositions[index],
-        color,
-        size: 0.09,
-        label: famous(o) ? `${o.name} · ${objectKindLabel(o)} · ${ly.toLocaleString('en-US')} ly` : undefined,
-        labelColor: o.kind === 'wr' ? '#d8ecff' : o.compact === 'BH' ? '#f0b8ff' : '#b8f4ff',
+        color: objectColor(o),
+        size: o.kind === 'cv' || o.kind === 'cep' ? 0.07 : 0.09,
+        label: isFamousObject(o) ? `${o.kind === 'cep' && o.common ? `${o.name} (${o.common})` : o.name} · ${objectKindLabel(o)} · ${ly.toLocaleString('en-US')} ly` : undefined,
+        labelColor: objectLabelColor(o),
         distance: 1,
         target: { obj: index } as GalaxyTarget,
       };
     };
-    this.app.galaxy.setRealLayer('xray', all.map((o, i) => ({ o, i })).filter(({ o }) => o.kind !== 'wr').map(({ o, i }) => item(o, i)));
-    this.app.galaxy.setRealLayer('wr', all.map((o, i) => ({ o, i })).filter(({ o }) => o.kind === 'wr').map(({ o, i }) => item(o, i)));
-    this.app.galaxy.setRealLayerVisible('xray', $<HTMLInputElement>('opt-real-xray').checked);
-    this.app.galaxy.setRealLayerVisible('wr', $<HTMLInputElement>('opt-real-wr').checked);
-    const xrb = all.filter((o) => o.kind !== 'wr');
-    const bh = xrb.filter((o) => o.compact === 'BH').length;
-    $('galaxy-info').textContent += ` ${xrb.length} X-ray binaries with measured distances (${bh} with black holes, in violet; neutron stars in cyan) and ${all.length - xrb.length} Wolf–Rayet stars (white-blue).`;
+    for (const layer of ['xray', 'wr', 'novae', 'cepheids', 'masers'] as const) {
+      this.app.galaxy.setRealLayer(layer, all.map((o, i) => ({ o, i })).filter(({ o }) => objectLayer(o) === layer).map(({ o, i }) => item(o, i)));
+      this.app.galaxy.setRealLayerVisible(layer, $<HTMLInputElement>(`opt-real-${layer}`).checked);
+    }
+    const count = (kind: GalacticObject['kind'] | GalacticObject['kind'][]) => all.filter((o) => (Array.isArray(kind) ? kind.includes(o.kind) : o.kind === kind)).length;
+    const bh = all.filter((o) => (o.kind === 'hmxb' || o.kind === 'lmxb') && o.compact === 'BH').length;
+    $('galaxy-info').textContent += ` ${count(['hmxb', 'lmxb'])} X-ray binaries with measured distances (${bh} with black holes, in violet; neutron stars in cyan) and ${count('wr')} Wolf–Rayet stars (white-blue). All ${count('nova')} known Galactic novae (orange-red, Schaefer 2022) and ${count('cv').toLocaleString('en-US')} other cataclysmic variables with Gaia distances (rose). ${count('cep').toLocaleString('en-US')} classical Cepheids (yellow) at their period–luminosity distances, and ${count('maser')} maser sources (green) with radio parallaxes, the most precise distances across the disc.`;
   }
 
   /** Real stars from Gaia DR3 around the Sun, at their measured distances (Milky Way only). */

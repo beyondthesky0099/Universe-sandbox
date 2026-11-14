@@ -324,6 +324,16 @@ important ones stay and the rest fade out until you zoom in and there's room for
     - Each black hole comes with its companion star on the orbit from its paper.
     - The Gaia black holes are dormant: no disc, only their shadow and the bending of starlight.
     - The X-ray binaries feed from a disc.
+  - **All 402 known Galactic novae and 1,601 other cataclysmic variables.** Novae (orange-red,
+    recurrent ones deeper red) sit at Schaefer's best distances; the rest have Gaia DR3 distances.
+    Zoom in to one and the white dwarf appears with its accretion disc (none for a polar, whose
+    magnetic field channels the gas onto its poles) and its donor on the catalogued orbit, at
+    real sizes. Masses the catalogue lacks take typical values, and the scene says so.
+  - **2,205 classical Cepheids** (yellow) at their period–luminosity distances, Delta Cephei and
+    Polaris among them. Visit one and it swells, shrinks and brightens at its real period.
+  - **199 maser sources** (green) with radio parallaxes from BeSSeL and VERA, the most precise
+    distances across the disc, each tagged with its spiral arm. Visiting one shows a massive
+    protostar in its gas disc with a few young neighbours (illustrative), or a red supergiant.
   - **3,632 real pulsars** from the ATNF Pulsar Catalogue at their estimated distances: young
     pulsars in blue, millisecond pulsars in white, 13 magnetars in magenta. The famous ones are
     named, and every one can be found with search.
@@ -904,6 +914,15 @@ push and pull request.
   Rebuild with `node scripts/build-galactic-objects.mjs`. Every one with a distance is on the
   Galaxy Map, and each opens in the Sandbox as its real pair; masses or periods the catalogue
   lacks take typical values, and the scene says so.
+- Novae: Schaefer 2022, MNRAS 517, 6150 (VizieR J/MNRAS/517/6150), the best distance of every known
+  Galactic nova. Cataclysmic variables: Canbay, Bilir, Özdönmez & Ak 2023, AJ 165, 163 (VizieR
+  J/AJ/165/163), Gaia DR3 distances, with subtypes, masses and eclipses from the Ritter & Kolb
+  catalogue (B/cb, 7.24). Cepheids: Skowron et al. 2019, Science 365, 478 (VizieR
+  J/other/Sci/365.478), mid-infrared period–luminosity distances; Polaris's distance from Bond et
+  al. 2018. Masers: Reid et al. 2019, ApJ 885, 131 (VizieR J/ApJ/885/131), VLBI parallaxes. Same
+  build script. Cepheid luminosities use the Benedict et al. (2007) period–luminosity relation,
+  radii the Gieren et al. (1998) period–radius relation, and donor masses the Knigge et al. (2011)
+  donor sequence.
 - Black holes and pulsars: positions from SIMBAD; masses and distances from the discovery papers,
   verified against their arXiv abstracts by `node scripts/build-compact-objects.mjs`.
 - Pulsars: the ATNF Pulsar Catalogue v2.6.1 (Manchester, Hobbs, Teoh & Hobbs 2005, AJ 129, 1993;

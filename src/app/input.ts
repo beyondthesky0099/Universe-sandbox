@@ -367,6 +367,9 @@ export class InputUI {
     $<HTMLInputElement>('opt-real-pulsars').addEventListener('change', (e) => this.app.galaxy.setRealLayerVisible('pulsars', (e.target as HTMLInputElement).checked));
     $<HTMLInputElement>('opt-real-xray').addEventListener('change', (e) => this.app.galaxy.setRealLayerVisible('xray', (e.target as HTMLInputElement).checked));
     $<HTMLInputElement>('opt-real-wr').addEventListener('change', (e) => this.app.galaxy.setRealLayerVisible('wr', (e.target as HTMLInputElement).checked));
+    $<HTMLInputElement>('opt-real-novae').addEventListener('change', (e) => this.app.galaxy.setRealLayerVisible('novae', (e.target as HTMLInputElement).checked));
+    $<HTMLInputElement>('opt-real-cepheids').addEventListener('change', (e) => this.app.galaxy.setRealLayerVisible('cepheids', (e.target as HTMLInputElement).checked));
+    $<HTMLInputElement>('opt-real-masers').addEventListener('change', (e) => this.app.galaxy.setRealLayerVisible('masers', (e.target as HTMLInputElement).checked));
     $<HTMLInputElement>('opt-gaia-stars').addEventListener('change', (e) => this.app.galaxy.setGaiaVisible((e.target as HTMLInputElement).checked));
     $<HTMLInputElement>('opt-cmb').addEventListener('change', (e) => this.app.cosmos.setCmbVisible((e.target as HTMLInputElement).checked));
     $('cosmos-search').addEventListener('input', () => this.app.cosmosUI.renderCosmosSearch());

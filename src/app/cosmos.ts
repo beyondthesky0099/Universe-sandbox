@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { seedFromString } from '../procgen/rng';
-import { displayName, GALAXY_CREDIT, galaxyForm, isActiveGalaxy, loadLocalGalaxies, loadNamedGalaxies, loadUniverseObjects, loadUniverseRaw, loadWebGalaxies, markActiveHosts } from '../sim/galaxies';
+import { agnNucleusLabel, agnTypeLabel, displayName, type LocalGalaxy, GALAXY_CREDIT, galaxyForm, isActiveGalaxy, isFamous, loadLocalGalaxies, loadNamedGalaxies, loadUniverseObjects, loadUniverseRaw, loadWebGalaxies, markActiveHosts } from '../sim/galaxies';
 import { loadActiveNucleus } from '../sim/presets';
 import { MILKY_WAY_SEED } from '../procgen/galaxy';
 import { fmt } from '../sim/units';
@@ -9,6 +9,16 @@ import { sleep, cosmosFacts } from './shared';
 import type { App } from '../app';
 
 /** The Universe map: real galaxies beyond the Milky Way. */
+/** What a Universe entry is, as searchable text without spaces: "quasaragnactivegalacticnucleus…". */
+function cosmosKindText(g: LocalGalaxy): string {
+  const kind = g.kind ?? 'galaxy';
+  const parts = [kind === 'cluster' ? 'galaxy cluster clusters abell' : kind === 'galaxy' ? `galaxy galaxies ${galaxyForm(g)}` : `${agnTypeLabel(g.cl ?? 'Q', g.sp ?? '')} agn active galactic nucleus active galaxy`];
+  if (g.agn) parts.push(`${agnNucleusLabel(g.agn)} agn active galactic nucleus active galaxy`);
+  if (g.bh) parts.push('black hole');
+  if (g.note) parts.push('record');
+  return parts.join(' ').toLowerCase().replace(/\s+/g, '');
+}
+
 export class CosmosUI {
   constructor(private readonly app: App) {}
 
@@ -149,10 +159,11 @@ export class CosmosUI {
       list.innerHTML = '';
       return;
     }
+    // A name, or a kind of object ("quasar", "seyfert", "agn", "cluster"): famous ones first, then the brightest.
     const matches = this.app.cosmos.local
-      .map((g, i) => ({ g, i, label: displayName(g) }))
-      .filter(({ g, label }) => label.toLowerCase().replace(/\s+/g, '').includes(q) || g.name.toLowerCase().replace(/\s+/g, '').includes(q))
-      .sort((a, b) => (b.g.lk ?? 0) - (a.g.lk ?? 0))
+      .map((g, i) => ({ g, i, label: displayName(g), byKind: cosmosKindText(g).includes(q) }))
+      .filter(({ g, label, byKind }) => byKind || label.toLowerCase().replace(/\s+/g, '').includes(q) || g.name.toLowerCase().replace(/\s+/g, '').includes(q))
+      .sort((a, b) => Number(b.byKind && isFamous(b.g)) - Number(a.byKind && isFamous(a.g)) || (b.g.bh ? 1 : 0) - (a.g.bh ? 1 : 0) || (b.g.lk ?? 0) - (a.g.lk ?? 0))
       .slice(0, 12);
     list.innerHTML = matches.length
       ? matches

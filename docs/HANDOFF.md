@@ -208,6 +208,21 @@ Plan, in priority order:
 - BodyVisual adds it in applyDetail and updates it only when the planet is more than 14 px across
   and a star is present. Tests: tests/aurora.test.ts.
 
+### AP. Search by kind
+The three search boxes matched names only, so "pulsars" or "agn" found nothing.
+- [x] src/ui/search.ts: each indexed entry also carries `kinds`, the words of its kind label plus
+  synonyms (KIND_SYNONYMS: "agn" for quasars/Seyferts/blazars/nuclei, "neutron star" for pulsars,
+  "cataclysmic variable" for novae and polars, plurals…). A query whose words all name a kind
+  scores 180, below any name match, so the entries' ranks order the famous ones first; "crab"
+  still gives the Crab Nebula, not a list of pulsars. `sameWord` accepts plurals both ways.
+- [x] Galaxy Map star search (galaxyMap.search): after the procedural star names, up to ten real
+  objects from the global index whose action is 'map' (Milky Way only), as `li[data-global]`;
+  input.ts sends those through `searchUI.goToSearchResult`. `mapSearchHits` keeps them.
+- [x] Universe Find box (cosmos.ts): `cosmosKindText` adds the kind, the AGN type, "agn", "black
+  hole" and "record" to what the substring match sees; famous and measured-black-hole entries first.
+- Tests: tests/search.test.ts ("search by kind"), which now indexes the pulsars, galactic objects
+  and universe objects too.
+
 ### AO. Active galactic nuclei in the Universe view (step 1 of the AGN work)
 The "quasars" layer was really all of Véron's bright objects: 55% were Seyferts. Now split.
 - [x] scripts/build-deep-universe.mjs: `agn` rows carry Véron's class (Q quasar, A Seyfert/LINER,

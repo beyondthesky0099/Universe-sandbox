@@ -7,6 +7,8 @@
  * Matching ignores case, spaces, punctuation and accents ("ngc2070" finds "NGC 2070", "eta car"
  * finds "Eta Carinae"), knows that "Messier 42" is M42, and ranks exact names, then names that
  * start with the query, then whole words, then anything containing it; famous objects first.
+ * A kind of object is a query too ("pulsars", "agn", "novae", "quasar"): it lists the famous
+ * members of that kind, ranked.
  */
 
 export type SearchAction =
@@ -75,9 +77,45 @@ function normalizeWords(s: string): string {
 
 interface Indexed {
   entry: SearchEntry;
+  /** Normalised names: the name itself first, then bracketed designations and aliases. */
   keys: string[];
   words: string[];
+  /** Words of the kind label and its synonyms ("agn" for a quasar), for searches by kind. */
+  kinds: string[];
 }
+
+/** Extra words a kind answers to, by a pattern on its label. */
+const KIND_SYNONYMS: [RegExp, string][] = [
+  [/pulsar|magnetar/i, 'pulsars neutron star psr'],
+  [/magnetar/i, 'magnetars'],
+  [/black hole/i, 'blackhole bh black holes'],
+  [/x-ray binary/i, 'xrb xray x ray binaries'],
+  [/quasar|seyfert|blazar|bl lac|liner|nucleus|active/i, 'agn active galactic nucleus active galaxy nuclei'],
+  [/quasar/i, 'quasars qso'],
+  [/blazar|bl lac/i, 'blazars'],
+  [/seyfert|liner|nucleus/i, 'seyferts'],
+  [/\bnova\b|dwarf nova|polar|cataclysmic|am cvn|nova-like|supersoft/i, 'cataclysmic variable cv cvs novae white dwarf'],
+  [/dwarf nova|polar|cataclysmic|am cvn|nova-like|supersoft/i, 'cataclysmic variables'],
+  [/cepheid/i, 'cepheids variable star variables'],
+  [/maser/i, 'masers star forming region'],
+  [/wolf/i, 'wr stars'],
+  [/nebula/i, 'nebulae'],
+  [/cluster/i, 'clusters'],
+  [/galaxy/i, 'galaxies'],
+  [/exoplanet|planetary system/i, 'exoplanets planets'],
+  [/^star$/i, 'stars'],
+  [/gravitational/i, 'gw merger'],
+  [/scenario/i, 'scenarios presets'],
+  [/lesson/i, 'lessons'],
+  [/challenge/i, 'challenges'],
+  [/eclipse/i, 'eclipses'],
+];
+function kindWords(kind: string): string[] {
+  const extra = KIND_SYNONYMS.filter(([re]) => re.test(kind)).map(([, w]) => w);
+  return [...new Set(words([kind, ...extra].join(' ')))];
+}
+/** A query word names a kind word when either starts with the other ("novae" ↔ "nova", "pulsars" ↔ "pulsar"). */
+const sameWord = (q: string, k: string) => k.startsWith(q) || (q.length >= 3 && q.startsWith(k));
 
 /** A prepared index: normalise the names once, search many times. */
 export class SearchIndex {
@@ -88,7 +126,7 @@ export class SearchIndex {
       // A designation in brackets is a name too: "Orion Nebula (M42)" is found as "M42".
       const inBrackets = [...entry.name.matchAll(/\(([^)]+)\)/g)].map((m) => m[1]);
       const names = [entry.name, ...inBrackets, ...(entry.aliases ?? [])];
-      this.items.push({ entry, keys: names.map(normalize), words: names.flatMap(words) });
+      this.items.push({ entry, keys: names.map(normalize), words: names.flatMap(words), kinds: kindWords(entry.kind) });
     }
   }
 
@@ -104,15 +142,19 @@ export class SearchIndex {
     const scored: { entry: SearchEntry; score: number }[] = [];
     const consider = (it: Indexed) => {
       let score = 0;
-      for (const k of it.keys) {
+      it.keys.forEach((k, i) => {
         // An exact name is only a little better than a name that starts with the query, so a
         // famous object ("Orion Nebula") outranks an obscure exact one (the dwarf galaxy "Orion").
-        if (k === q) score = Math.max(score, 650);
+        // An exact alias ("PSR B0531+21 (Crab)") counts a little below a name that starts with the
+        // query, so "crab" gives the famous nebula, with the pulsar just behind it.
+        if (k === q) score = Math.max(score, i === 0 ? 650 : 570);
         else if (k.startsWith(q)) score = Math.max(score, 600 - Math.min(100, k.length - q.length));
         else if (k.includes(q)) score = Math.max(score, 200 - Math.min(100, k.length - q.length));
-      }
+      });
       // Every query word starts some word of the name ("eta car" → "Eta Carinae").
       if (score < 400 && qWords.length && qWords.every((w) => it.words.some((x) => x.startsWith(w)))) score = Math.max(score, 400);
+      // Or names the kind ("pulsars", "agn", "dwarf nova"): below any name match, so the rank decides.
+      if (score < 180 && qWords.length && qWords.every((w) => it.kinds.some((k) => sameWord(w, k)))) score = Math.max(score, 180);
       if (score > 0) scored.push({ entry: it.entry, score: score + 1.5 * (it.entry.rank ?? 0) });
     };
     for (const it of this.items) consider(it);

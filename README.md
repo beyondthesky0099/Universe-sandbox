@@ -324,6 +324,9 @@ important ones stay and the rest fade out until you zoom in and there's room for
     - Each black hole comes with its companion star on the orbit from its paper.
     - The Gaia black holes are dormant: no disc, only their shadow and the bending of starlight.
     - The X-ray binaries feed from a disc.
+  - **Search by kind.** The global search (🔍), the Galaxy Map's star search and the Universe
+    pane's Find box all take a kind of object as well as a name: "pulsars", "agn", "quasars",
+    "novae", "black holes", "cepheids", "masers" list the famous ones first.
   - **Visit an active nucleus.** Every quasar, Seyfert, LINER and blazar on the Universe map,
     and every named galaxy that hosts one (M77, M87, Centaurus A…), has a *Visit the nucleus*
     button, and the core of such a galaxy's map is that nucleus. The scene is to scale: the

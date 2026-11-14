@@ -11,6 +11,7 @@ import type { Cloud } from '../render/nebulaClouds';
 import { gaiaPoints, loadGaiaBright } from '../sim/gaiaBright';
 import { isMillisecond, loadPulsars, pulsarName } from '../sim/pulsars';
 import { loadGalacticObjects, objectFacts, objectKindLabel, type GalacticObject } from '../sim/galacticObjects';
+import type { SearchEntry } from '../ui/search';
 import { loadCompactObjects, type CompactObject } from '../sim/compactObjects';
 import { characteristicAge, dipoleField, formatYears, sci } from '../sim/neutronStar';
 import { fmt } from '../sim/units';
@@ -527,11 +528,15 @@ export class GalaxyMapUI {
     if ($<HTMLSelectElement>('star-filter').value === 'bookmarked') void this.applyFilter();
   }
 
+  /** Real objects on the map that matched the last search (by name or kind), in the order shown. */
+  mapSearchHits: SearchEntry[] = [];
+
   search(query: string): void {
     const list = $('search-results');
     const q = query.trim().toLowerCase();
     if (q.length < 2 || !this.app.galaxyBuilt) {
       list.innerHTML = '';
+      this.mapSearchHits = [];
       return;
     }
     const names = this.app.galaxy.data.names;
@@ -543,11 +548,17 @@ export class GalaxyMapUI {
       else if (contains.length < 8 && n.includes(q)) contains.push(i);
     }
     const hits = [...starts, ...contains].slice(0, 8);
-    list.innerHTML = hits.length
-      ? hits
-          .map((i) => `<li tabindex="0" data-index="${i}"><span>${escapeHtml(names[i])}</span><span class="muted">${starSummary(this.app.galaxy.data.stars.seeds[i]).spectralClass}-type</span></li>`)
-          .join('')
-      : '<li class="muted">No matches</li>';
+    const starRows = hits.map((i) => `<li tabindex="0" data-index="${i}"><span>${escapeHtml(names[i])}</span><span class="muted">${starSummary(this.app.galaxy.data.stars.seeds[i]).spectralClass}-type</span></li>`);
+    list.innerHTML = starRows.join('') || '<li class="muted">No matches</li>';
+    this.mapSearchHits = [];
+    // The real objects on the Milky Way map too, by name or by kind ("pulsars", "novae", "black holes"), famous first.
+    if (this.app.galaxySeed !== MILKY_WAY_SEED) return;
+    void this.app.searchUI.buildSearchIndex().then((index) => {
+      if ($<HTMLInputElement>('star-search').value.trim().toLowerCase() !== q) return;
+      this.mapSearchHits = index.search(q, 60).filter((r) => r.action.type === 'map').slice(0, 10);
+      const realRows = this.mapSearchHits.map((r, k) => `<li tabindex="0" data-global="${k}"><span>${escapeHtml(r.name)}</span><span class="muted">${escapeHtml(r.kind)}</span></li>`);
+      list.innerHTML = [...starRows, ...realRows].join('') || '<li class="muted">No matches</li>';
+    });
   }
 
   /** Compute feature flags for every star, in chunks so the UI stays responsive. */

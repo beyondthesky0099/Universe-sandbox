@@ -9,8 +9,11 @@ import { parseNebulae } from '../src/sim/nebulae';
 import { PRESETS } from '../src/sim/presets';
 import { normalize, SearchIndex, type SearchEntry } from '../src/ui/search';
 import {
-  activityEntries, clusterEntries, compactEntries, exoplanetEntries, galaxyEntries, nebulaEntries, skyBodyEntries, starEntries, structureEntries,
+  activityEntries, clusterEntries, compactEntries, exoplanetEntries, galacticObjectEntries, galaxyEntries, nebulaEntries, pulsarEntries, skyBodyEntries, starEntries, structureEntries,
 } from '../src/ui/searchSources';
+import { flattenObjects } from '../src/sim/galacticObjects';
+import { universeEntries } from '../src/sim/galaxies';
+import { parsePulsars } from '../src/sim/pulsars';
 
 const data = (f: string) => JSON.parse(readFileSync(`public/data/${f}`, 'utf8'));
 const named = data('galaxies-named.json');
@@ -21,7 +24,9 @@ index.add(nebulaEntries(parseNebulae(data('nebulae.json'))));
 index.add(clusterEntries(parseClusters(data('clusters.json'))));
 index.add(compactEntries(data('compact-objects.json').objects));
 index.add(exoplanetEntries(parseCatalog(data('exoplanets.json'))));
-index.add(galaxyEntries([...(data('galaxies-local.json').galaxies as LocalGalaxy[]), ...namedFromSurvey(named.galaxies, named.H0)]));
+index.add(galaxyEntries([...(data('galaxies-local.json').galaxies as LocalGalaxy[]), ...namedFromSurvey(named.galaxies, named.H0), ...universeEntries(data('universe-objects.json'))]));
+index.add(pulsarEntries(parsePulsars(data('pulsars.json'))));
+index.add(galacticObjectEntries(flattenObjects(data('galactic-objects.json'))));
 index.add(structureEntries());
 index.add(
   activityEntries({
@@ -87,5 +92,37 @@ describe('search everything', () => {
     const t0 = performance.now();
     for (const q of ['o', 'or', 'ori', 'orio', 'orion']) index.search(q);
     expect((performance.now() - t0) / 5).toBeLessThan(60);
+  });
+});
+
+describe('search by kind', () => {
+  const objects = flattenObjects(data('galactic-objects.json'));
+  const names = (kinds: string[]) => new Set(objects.filter((o) => kinds.includes(o.kind)).map((o) => o.name));
+
+  it('lists the famous members of a kind, ranked, for singular and plural queries', () => {
+    const pulsars = index.search('pulsars');
+    expect(pulsars.length).toBeGreaterThan(10);
+    expect(pulsars.slice(0, 10).every((r) => /Pulsar|Magnetar/.test(r.kind))).toBe(true);
+    expect(pulsars.slice(0, 10).some((r) => /Crab|Vela|B1919|J0437/.test(r.name))).toBe(true);
+    // The singular also matches the scenarios named after pulsars; the pulsars themselves follow.
+    expect(index.search('pulsar').slice(0, 4).some((r) => /Pulsar/.test(r.kind))).toBe(true);
+    const agn = index.search('agn');
+    expect(agn.length).toBeGreaterThan(10);
+    expect(agn.slice(0, 10).every((r) => /Quasar|Seyfert|LINER|Blazar|BL Lac|nucleus/i.test(r.kind))).toBe(true);
+    expect(agn.slice(0, 10).some((r) => /3C 273|M87|M77|Centaurus A/.test(r.name))).toBe(true);
+    expect(index.search('quasars')[0].kind).toBe('Quasar');
+    expect(index.search('seyfert')[0].kind).toMatch(/Seyfert|nucleus/);
+    // "novae" and "cataclysmic variables" both give the white-dwarf binaries, famous ones first.
+    const cvs = names(['nova', 'cv']);
+    expect(index.search('novae').slice(0, 8).every((r) => cvs.has(r.name))).toBe(true);
+    expect(index.search('novae').slice(0, 8).some((r) => /T CrB|RS Oph|GK Per|SS Cyg|V1500 Cyg/.test(r.name))).toBe(true);
+    expect(index.search('cataclysmic variables').slice(0, 8).every((r) => cvs.has(r.name))).toBe(true);
+    // (The challenge "Black Hole Snack" matches by name and may lead.)
+    expect(index.search('black holes').slice(0, 6).filter((r) => /Black hole/.test(r.kind)).length).toBeGreaterThanOrEqual(4);
+    expect(index.search('cepheids')[0].kind).toBe('Cepheid');
+    expect(names(['cep']).has(index.search('cepheids')[0].name.replace(/ \(.*\)$/, ''))).toBe(true);
+    expect(index.search('masers')[0].kind).toBe('Maser');
+    // A name still beats a kind: "crab" is the nebula, not a list of pulsars.
+    expect(index.search('crab')[0].name).toBe('Crab Nebula (M1)');
   });
 });

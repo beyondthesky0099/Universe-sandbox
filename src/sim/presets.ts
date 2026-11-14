@@ -1,6 +1,6 @@
 import type { StarSystemSpec } from '../procgen/starSystem';
-import { mainSequenceLifetime, type Body } from './body';
-import { kelvinToRgb, starColor } from './color';
+import { mainSequenceLifetime, radiusFor, type Body } from './body';
+import { kelvinToRgb, rgbToHex, starColor } from './color';
 import { keplerToState, OrbitalElements } from './orbits';
 import type { Simulation } from './simulation';
 import { EARTH_MASS, G, JUPITER_MASS } from './units';
@@ -8,11 +8,13 @@ import { mulberry32 } from '../procgen/rng';
 import { rememberPulsar, spinDownPower } from './neutronStar';
 import { HULSE_TAYLOR } from './binaryPulsar';
 import type { CompactObject } from './compactObjects';
-import { describeObject, xrayMasses, xrayPeriodDays, type WolfRayet, type XrayBinary } from './galacticObjects';
+import { ARMS, cepheidMass, describeObject, whiteDwarfMasses, whiteDwarfPeriodDays, xrayMasses, xrayPeriodDays, type CataclysmicVariable, type Cepheid, type GalacticObject, type Maser, type Nova, type WolfRayet, type XrayBinary } from './galacticObjects';
 import { describePulsar, pulsarName, type PulsarRecord } from './pulsars';
 import { GAS_DISC_LIFETIME, planetesimals } from './planetFormation';
 import { julianDate, planetStates, type PlanetName } from './ephemeris';
 import { setTrueScale } from './trueScale';
+import { agnParams, describeAgn, DISC_TILT, rememberAgn } from './agn';
+import type { LocalGalaxy } from './galaxies';
 import { SPACECRAFT_COLOR, spacecraftState } from './spacecraft';
 import { loadMilkyWayAndromeda } from './localGroup';
 import { getSolarData, KM_PER_AU, poleScene, realRadiusAu, REAL_COLORS, relativeState, sampleRingRadii, smallBodyState, toScene, type SolarData } from './solarSystemData';
@@ -686,6 +688,127 @@ export function loadWolfRayet(sim: Simulation, o: WolfRayet): SceneSetup {
   sim.addBody({ name: o.name, kind: 'star', mass, age: 0.85 * mainSequenceLifetime(mass) });
   sim.recenter();
   return { cameraDistance: 1.2, timeScale: 0.05, elevation: 0.45, tip: describeObject({ kind: 'wr', ...o }) };
+}
+
+/**
+ * A real nova or cataclysmic variable from the Galaxy Map: the white dwarf, with its accretion
+ * disc unless it is magnetic, and the donor star on the catalogued orbit at real sizes. Masses
+ * the catalogue lacks take typical values (whiteDwarfMasses), and the tip says so.
+ */
+export function loadWhiteDwarfBinary(sim: Simulation, o: ({ kind: 'nova' } & Nova) | ({ kind: 'cv' } & CataclysmicVariable)): SceneSetup {
+  const { wd, donor, donorKind, assumed } = whiteDwarfMasses(o);
+  const period = whiteDwarfPeriodDays(o);
+  const magnetic = (o.kind === 'cv' && !!o.magnetic) || !!o.types?.some((t) => t === 'AM' || t === 'IP' || t === 'DQ');
+  // Polars have no disc: the field channels the gas straight onto the poles.
+  const primary = sim.addBody({ name: o.name, kind: 'whitedwarf', mass: wd, tag: magnetic && !o.types?.includes('IP') ? 'magnetic' : 'accreting' });
+  const years = period.days / 365.25;
+  const a = Math.cbrt(years * years * (wd + donor));
+  const donorName = donorKind === 'whitedwarf' ? 'Helium white dwarf donor' : donorKind === 'giant' ? 'Red giant donor' : 'Donor star';
+  // The donor is old: a red dwarf is ageless on this clock, a giant donor has left the main sequence.
+  const age = donorKind === 'giant' ? 1.02 * mainSequenceLifetime(donor) : Math.min(5e9, 0.5 * mainSequenceLifetime(donor));
+  addOrbiting(sim, primary, { name: donorName, kind: donorKind, mass: donor, age, color: donorKind === 'star' && donor < 0.6 ? rgbToHex(kelvinToRgb(3300)) : undefined }, { a, e: 0, nu: Math.PI * 0.6 });
+  setTrueScale(sim, true);
+  sim.recenter();
+  const notes = [...assumed, period.assumed ? 'the orbit' : ''].filter(Boolean);
+  const tip = `${describeObject(o)}${notes.length ? ` Not measured, so typical values are shown for ${notes.join(', ')}.` : ''}`;
+  return { cameraDistance: Math.max(a * 3.2, 2e-4), timeScale: years / 6, elevation: 0.5, tip };
+}
+
+/**
+ * A real classical Cepheid: a yellow supergiant whose mass follows its age, pulsing at its
+ * catalogued period (BodyVisual reads the `cepheid:<days>` tag). One pulse takes about four
+ * seconds at the scene's speed.
+ */
+export function loadCepheid(sim: Simulation, o: Cepheid): SceneSetup {
+  const mass = cepheidMass(o);
+  // Just past the main sequence, crossing the instability strip as a yellow (≈5,900 K) supergiant.
+  sim.addBody({ name: o.common ? `${o.name} (${o.common})` : o.name, kind: 'giant', mass, age: 1.01 * mainSequenceLifetime(mass), color: rgbToHex(kelvinToRgb(5900)), tag: `cepheid:${o.per}` });
+  sim.recenter();
+  const years = o.per / 365.25;
+  return { cameraDistance: radiusFor('giant', mass) * 7, timeScale: years / 4, elevation: 0.4, tip: describeObject({ kind: 'cep', ...o }) };
+}
+
+/**
+ * A real maser source: a massive protostar still in its gas disc, with a few young neighbours
+ * (seeded by its name; the catalogue places only the maser spots), or a red supergiant for the
+ * evolved sources. The masers themselves are smaller than the Solar System and are not drawn.
+ */
+export function loadMaser(sim: Simulation, o: Maser): SceneSetup {
+  const rand = mulberry32(o.gname.split('').reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7));
+  if (o.evolved) {
+    sim.addBody({ name: o.name, kind: 'giant', mass: 20, age: 1.05 * mainSequenceLifetime(20) });
+    sim.recenter();
+    return { cameraDistance: 12, timeScale: 0.05, elevation: 0.4, tip: describeObject({ kind: 'maser', ...o }) };
+  }
+  const star = sim.addBody({ name: `${o.name} protostar`, kind: 'star', mass: 20, age: 0 });
+  for (let i = 0; i < 6; i++) {
+    const mass = 0.4 + rand() * 3;
+    addOrbiting(sim, star, { name: `Young star ${i + 1}`, kind: 'star', mass, age: 0 }, { a: 60 + rand() * 240, e: rand() * 0.5, inc: (rand() - 0.5) * 1.2, lan: rand() * Math.PI * 2, argp: rand() * Math.PI * 2, nu: rand() * Math.PI * 2 });
+  }
+  // The protostar's gas disc stays for the whole scene.
+  sim.formation = { starId: star.id, enhancement: 10, speedup: FORMATION_SPEEDUP, gasUntil: sim.time + 1e9 };
+  sim.recenter();
+  const where = o.arm && ARMS[o.arm] ? ` in ${ARMS[o.arm]}` : '';
+  return { cameraDistance: 30, focus: star.name, timeScale: 2, elevation: 0.5, tip: `${describeObject({ kind: 'maser', ...o })} The 20 M☉ protostar, its disc and its six young neighbours${where} are illustrative, not measured.` };
+}
+
+/**
+ * An active galactic nucleus from the Universe view (sim/agn.ts): the supermassive black hole with
+ * its disc, the broad-line clouds as particles on Keplerian orbits, a nuclear star cluster, and
+ * (drawn by BodyVisual from the registered parameters) the dusty torus and the jets. Everything is
+ * to scale; the camera starts outside the torus, looking in at the angle the unified model gives
+ * this type of nucleus.
+ */
+export function loadActiveNucleus(sim: Simulation, g: Pick<LocalGalaxy, 'name' | 'kind' | 'cl' | 'sp' | 'vmag' | 'radio' | 'agn' | 'bh' | 'd' | 'z'>, name = g.name): SceneSetup {
+  const p = agnParams(g, name);
+  rememberAgn(p);
+  const rand = mulberry32(name.split('').reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 11));
+  const hole = sim.addBody({ name, kind: 'blackhole', mass: p.mass, spin: p.spin });
+  // The nuclear star cluster: stars on eccentric orbits between the broad-line region and the torus.
+  const aMin = Math.log(p.blrAu * 3), aMax = Math.log(p.torusInnerAu * 1.6);
+  for (let i = 0; i < 16; i++) {
+    const a = Math.exp(aMin + (aMax - aMin) * rand());
+    const mass = 2 + rand() * rand() * 25;
+    addOrbiting(sim, hole, { name: `Nuclear star ${i + 1}`, kind: 'star', mass, age: 0.3 * mainSequenceLifetime(mass) }, {
+      a,
+      e: rand() * 0.8,
+      inc: Math.acos(2 * rand() - 1),
+      lan: rand() * Math.PI * 2,
+      argp: rand() * Math.PI * 2,
+      nu: rand() * Math.PI * 2,
+    });
+  }
+  // The broad-line clouds: a thick ring of gas on orbits of weeks to years, in the disc's plane.
+  addParticleDisk(sim, hole, { count: 700, inner: p.blrAu * 0.5, outer: p.blrAu * 2.2, thickness: 0.3, color: [0.62, 0.78, 1], tilt: DISC_TILT, jitter: 0.45 });
+  sim.particleCullDistance = p.torusOuterAu * 4;
+  setTrueScale(sim, true);
+  sim.recenter();
+  // One orbit at the broad-line radius takes P = √(a³/M) years: a few seconds at the scene's speed.
+  const years = Math.sqrt(Math.pow(p.blrAu, 3) / p.mass);
+  return {
+    cameraDistance: p.torusOuterAu * 2.4,
+    elevation: Math.PI / 2 - DISC_TILT - p.viewAngle,
+    timeScale: Math.max(0.5, years / 8),
+    maxTimeScale: Math.max(100, years * 20),
+    tip: describeAgn(p),
+  };
+}
+
+/** A Galaxy Map object of any kind, in the Sandbox. */
+export function loadGalacticObject(sim: Simulation, o: GalacticObject): SceneSetup {
+  switch (o.kind) {
+    case 'wr':
+      return loadWolfRayet(sim, o);
+    case 'nova':
+    case 'cv':
+      return loadWhiteDwarfBinary(sim, o);
+    case 'cep':
+      return loadCepheid(sim, o);
+    case 'maser':
+      return loadMaser(sim, o);
+    default:
+      return loadXrayBinary(sim, o);
+  }
 }
 
 const sunsFuture: Preset = {

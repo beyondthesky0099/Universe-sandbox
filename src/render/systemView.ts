@@ -656,7 +656,7 @@ export class SystemView {
       tmp.set(b.x, b.y, b.z);
       const wpp = this.worldPerPixel(tmp, viewportHeight);
       const lockId = this.locks.get(b.id);
-      v.update(b, wpp, dt, lockId !== undefined ? this.sim.getBody(lockId) : undefined, sun, this.camera.position);
+      v.update(b, wpp, dt, lockId !== undefined ? this.sim.getBody(lockId) : undefined, sun, this.camera.position, this.sim.time);
       if (updateClimate && v.isPlanet) {
         v.setClimate(climateFor(b.kind, bodyTemperature(this.sim.bodies, b)));
         const parent = this.sim.parentOf(b);

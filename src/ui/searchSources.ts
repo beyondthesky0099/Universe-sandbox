@@ -2,13 +2,13 @@
  * Search entries (search.ts) for each of the app's catalogues. Pure functions of the loaded data.
  */
 import { describePulsar, pulsarName, type PulsarRecord } from '../sim/pulsars';
-import { describeObject, type GalacticObject } from '../sim/galacticObjects';
+import { cvTypeLabel, describeObject, type GalacticObject } from '../sim/galacticObjects';
 import { equatorialToGalactic } from '../procgen/galaxy';
 import type { StarCluster } from '../sim/clusters';
 import type { Eclipse } from '../sim/eclipse';
 import type { ExoCatalog } from '../sim/exoplanets';
 import type { Flyby } from '../sim/flybys';
-import { COSMIC_STRUCTURES, displayName, isFamous, type LocalGalaxy } from '../sim/galaxies';
+import { agnNucleusLabel, agnTypeLabel, COSMIC_STRUCTURES, displayName, isFamous, type LocalGalaxy } from '../sim/galaxies';
 import type { GwEvent } from '../sim/gwEvents';
 import { galacticToEcliptic, type Nebula } from '../sim/nebulae';
 import type { BrightStar, NearStar } from '../sim/stars';
@@ -87,12 +87,16 @@ export function starEntries(bright: BrightStar[], near: NearStar[]): SearchEntry
 export function galaxyEntries(list: LocalGalaxy[]): SearchEntry[] {
   return list.map((g) => {
     const shown = displayName(g);
+    const kind = g.kind ?? 'galaxy';
+    const active = kind === 'quasar' || kind === 'seyfert' || kind === 'blazar';
+    const label = kind === 'cluster' ? 'Galaxy cluster' : active ? agnTypeLabel(g.cl ?? 'Q', g.sp ?? '').split(' (')[0] : g.agn ? `Galaxy (${agnNucleusLabel(g.agn)})` : 'Galaxy';
+    const aliases = [...(shown !== g.name ? [g.name] : []), ...(g.agn && g.agn.name !== g.name ? [g.agn.name] : [])];
     return {
       name: shown,
-      aliases: shown !== g.name ? [g.name] : undefined,
-      kind: 'Galaxy',
-      detail: g.name === 'Milky Way' ? 'our galaxy' : `${lightYears(g.d * 1000)} away`,
-      rank: isFamous(g) ? 80 : Math.max(0, (g.lk ?? 8) - 8) * 5,
+      aliases: aliases.length ? aliases : undefined,
+      kind: label,
+      detail: g.name === 'Milky Way' ? 'our galaxy' : `${g.bh ? `black hole of ${g.bh.mass >= 1e9 ? `${+(g.bh.mass / 1e9).toPrecision(2)} billion` : `${+(g.bh.mass / 1e6).toPrecision(2)} million`} M☉ · ` : ''}${lightYears(g.d * 1000)} away`,
+      rank: isFamous(g) ? 80 : active ? (g.vmag !== undefined ? Math.max(0, 17.5 - g.vmag) * 4 : 5) : Math.max(0, (g.lk ?? 8) - 8) * 5,
       action: { type: 'galaxy', name: g.name },
     };
   });
@@ -130,13 +134,36 @@ export function pulsarEntries(list: PulsarRecord[]): SearchEntry[] {
   });
 }
 
-/** X-ray binaries and Wolf–Rayet stars on the Galaxy Map. */
+/** X-ray binaries, Wolf–Rayet stars, novae, cataclysmic variables, Cepheids and masers on the Galaxy Map. */
 export function galacticObjectEntries(list: GalacticObject[]): SearchEntry[] {
+  const kindOf = (o: GalacticObject): string => {
+    switch (o.kind) {
+      case 'wr':
+        return 'Wolf–Rayet star';
+      case 'nova':
+        return o.recurrent ? 'Recurrent nova' : 'Nova';
+      case 'cv':
+        return cvTypeLabel(o).split(',')[0].replace(/^./, (c) => c.toUpperCase());
+      case 'cep':
+        return 'Cepheid';
+      case 'maser':
+        return 'Maser';
+      default:
+        return o.compact === 'BH' ? 'Black hole (X-ray binary)' : 'X-ray binary';
+    }
+  };
+  const rankOf = (o: GalacticObject): number => {
+    if (o.kind === 'hmxb' || o.kind === 'lmxb') return o.compact === 'BH' ? 45 : 25;
+    if (o.kind === 'nova') return o.recurrent || (o.vpeak !== undefined && o.vpeak <= 3) ? 40 : 18;
+    if (o.kind === 'cep') return o.common ? 45 : o.survey === 'GCVS' ? 18 : 10;
+    if (o.kind === 'cv') return o.types ? 18 : 10;
+    return 22;
+  };
   return list.map((o) => ({
-    name: o.name,
-    kind: o.kind === 'wr' ? 'Wolf–Rayet star' : o.compact === 'BH' ? 'Black hole (X-ray binary)' : 'X-ray binary',
+    name: o.kind === 'cep' && o.common ? `${o.name} (${o.common})` : o.name,
+    kind: kindOf(o),
     detail: `${describeObject(o)} · ${lightYears(o.d)} away`,
-    rank: o.kind !== 'wr' && o.compact === 'BH' ? 45 : 25,
+    rank: rankOf(o),
     action: { type: 'map', l: o.l, b: o.b, dKpc: o.d, object: o.name },
   }));
 }

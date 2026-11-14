@@ -12,6 +12,8 @@ import { makePlanetTextures, realRingTexture, seedFromName } from './planetTextu
 import { mulberry32 } from '../procgen/rng';
 import { glowTexture } from './textures';
 import { NeutronStarVisual } from './neutronStar';
+import { AgnVisual } from './agn';
+import { agnFor, DISC_TILT } from '../sim/agn';
 import { coronaMesh, StarSurface, starLook } from './starSurface';
 import { hookPlanet, hookRings, oceanRoughness, shadowUniforms, type ShadowUniforms } from './planetLighting';
 import { starTemperature } from '../sim/color';
@@ -282,11 +284,19 @@ export class BodyVisual {
       case 'giant':
       case 'whitedwarf': {
         // Granulation, limb darkening, spots (starSurface.ts); a corona around ordinary stars.
-        const temperature = body.name === 'Sun' ? 5772 : body.kind === 'giant' ? 3600 : body.kind === 'whitedwarf' ? 15000 : starTemperature(body.mass);
-        this.star = new StarSurface(starLook(body.kind, temperature, body.name), seedFromName(body.name));
+        // A Cepheid (tag cepheid:<period in days>) is a yellow supergiant that pulses in update().
+        this.cepheidPeriod = body.tag?.startsWith('cepheid:') ? Number(body.tag.slice(8)) : undefined;
+        const temperature = body.name === 'Sun' ? 5772 : this.cepheidPeriod ? 5900 : body.kind === 'giant' ? 3600 : body.kind === 'whitedwarf' ? 15000 : starTemperature(body.mass);
+        // A Cepheid's surface granulates like a Sun-like star's, not like a red giant's few huge cells.
+        this.star = new StarSurface(starLook(this.cepheidPeriod ? 'star' : body.kind, temperature, body.name), seedFromName(body.name));
         material = this.star.material;
-        this.glow = body.kind === 'giant' ? this.makeGlow(0xff8040, 0.7) : this.makeGlow(body.kind === 'whitedwarf' ? 0xcfe0ff : body.color, body.kind === 'whitedwarf' ? 0.8 : 1);
+        this.glow = body.kind === 'giant' ? this.makeGlow(this.cepheidPeriod ? 0xffe6a8 : 0xff8040, 0.7) : this.makeGlow(body.kind === 'whitedwarf' ? 0xcfe0ff : body.color, body.kind === 'whitedwarf' ? 0.8 : 1);
         if (body.kind === 'star') this.corona = coronaMesh(body.color, seedFromName(body.name));
+        // A white dwarf feeding from a companion (novae, cataclysmic variables) has a disc, unless it is a polar.
+        if (body.kind === 'whitedwarf' && body.tag === 'accreting') {
+          this.disk = accretionDiskMesh({ whiteDwarf: true });
+          this.disk.rotation.x = -Math.PI / 2 + 0.3;
+        }
         break;
       }
       case 'neutron':
@@ -301,8 +311,14 @@ export class BodyVisual {
         if (body.tag === 'dormant') break;
         // The disc lies in the hole's equator: its normal is the spin axis (accretionDisk.ts).
         this.disk = accretionDiskMesh();
-        this.disk.rotation.x = -Math.PI / 2 + 0.25;
+        this.disk.rotation.x = -Math.PI / 2 + DISC_TILT;
         this.glow = this.makeGlow(0xff9a4a, 0.5);
+        // An active galactic nucleus (sim/agn.ts, registered by name): its torus and jets share the disc's axis.
+        const agn = agnFor(body.name);
+        if (agn) {
+          this.agn = new AgnVisual(agn);
+          this.agn.root.rotation.x = -Math.PI / 2 + DISC_TILT;
+        }
         break;
       case 'gas':
       case 'rocky':
@@ -319,6 +335,7 @@ export class BodyVisual {
     this.mesh = new THREE.Mesh(this.isProbe ? PROBE : this.isPlanet || this.neutron || this.star ? SPHERE : SPHERE_LOW, material);
     this.spin.add(this.mesh);
     if (this.disk) this.group.add(this.disk);
+    if (this.agn) this.group.add(this.agn.root);
     if (this.glow) this.group.add(this.glow);
     if (this.neutron) this.spin.add(this.neutron.root);
     if (this.corona) this.group.add(this.corona);
@@ -483,7 +500,12 @@ export class BodyVisual {
   }
 
   /** Update transform. `worldPerPixel` is the world size of one screen pixel at the body's depth. */
-  update(body: Body, worldPerPixel: number, dt: number, lockTo?: Body, sun?: Body, camera?: THREE.Vector3): void {
+  /** Pulsation period (days) of a Cepheid, read from its tag. */
+  private cepheidPeriod?: number;
+  /** The torus and jets of an active galactic nucleus. */
+  private agn?: AgnVisual;
+
+  update(body: Body, worldPerPixel: number, dt: number, lockTo?: Body, sun?: Body, camera?: THREE.Vector3, simTime = 0): void {
     this.group.position.set(body.x, body.y, body.z);
     if (this.tails) {
       if (sun) this.updateTails(body, sun);
@@ -493,6 +515,15 @@ export class BodyVisual {
     const isGalaxy = body.tag === 'galaxy';
     const r = this.isProbe ? worldPerPixel * 4 : isGalaxy ? Math.max(body.radius * 0.05, worldPerPixel * 2) : Math.max(body.radius, worldPerPixel * MIN_PIXEL_RADIUS);
     this.mesh.scale.setScalar(r);
+    // A Cepheid swells and shrinks by about 7% over its period, brightest while it expands
+    // through its mean size (about a magnitude between faintest and brightest).
+    let pulse = 1;
+    if (this.cepheidPeriod && this.star) {
+      const phase = (2 * Math.PI * simTime) / (this.cepheidPeriod / 365.25);
+      this.mesh.scale.multiplyScalar(1 + 0.07 * Math.sin(phase));
+      pulse = 1 + 0.5 * Math.cos(phase);
+      this.star.material.uniforms.uBright.value = 0.75 + 0.5 * Math.cos(phase);
+    }
     if (this.neutron) {
       // Turns at its own (pulsar) rate; the field lines and beams turn with it.
       if (camera) this.neutron.update(r, camera, dt, this.mesh);
@@ -527,16 +558,19 @@ export class BodyVisual {
             : this.kind === 'neutron' || this.kind === 'whitedwarf'
               ? Math.max(body.radius * 12, worldPerPixel * 22)
               : body.radius * 14;
-      this.glow.scale.setScalar(isGalaxy ? body.radius * 1.6 : big);
+      this.glow.scale.setScalar(isGalaxy ? body.radius * 1.6 : big * (0.8 + 0.2 * pulse));
     }
+    if (this.agn && camera) this.agn.update(camera, dt, worldPerPixel);
     if (this.disk) {
       this.disk.scale.setScalar(r);
       updateAccretionDisk(this.disk, body.spin ?? 0, performance.now() / 1000);
-      // With the lensing pass drawing the (spin-shaped) shadow, the black sphere is just the
-      // event horizon; without it, the sphere stands in for the shadow.
-      if (blackHoleView.lensed) this.mesh.scale.setScalar(r * (horizonRadius(body.spin ?? 0) / SHADOW_RADIUS_SCHWARZSCHILD));
-      // The shaded disc gives the light; the soft glow would only be smeared into rings by the lens.
-      if (this.glow) this.glow.visible = !blackHoleView.lensed;
+      if (this.kind === 'blackhole') {
+        // With the lensing pass drawing the (spin-shaped) shadow, the black sphere is just the
+        // event horizon; without it, the sphere stands in for the shadow.
+        if (blackHoleView.lensed) this.mesh.scale.setScalar(r * (horizonRadius(body.spin ?? 0) / SHADOW_RADIUS_SCHWARZSCHILD));
+        // The shaded disc gives the light; the soft glow would only be smeared into rings by the lens.
+        if (this.glow) this.glow.visible = !blackHoleView.lensed;
+      }
     }
     if (this.shadowU && this.detailKey) {
       const u = this.shadowU;
@@ -555,7 +589,7 @@ export class BodyVisual {
       // Up close the glow would wash out the surface: keep it to a halo.
       if (this.glow) {
         const close = THREE.MathUtils.smoothstep(px, 6, 60);
-        this.glow.material.opacity = (this.kind === 'giant' ? 0.7 : this.kind === 'whitedwarf' ? 0.8 : 1) * (1 - 0.75 * close);
+        this.glow.material.opacity = (this.kind === 'giant' ? 0.7 : this.kind === 'whitedwarf' ? 0.8 : 1) * (1 - 0.75 * close) * (0.7 + 0.3 * pulse);
         // A wide soft halo rather than a bright rim hugging the limb.
         if (close > 0) this.glow.scale.multiplyScalar(1 + close * 1.5);
       }
@@ -711,6 +745,11 @@ export class BodyVisual {
       this.corona = undefined;
     }
     this.star = undefined;
+    if (this.agn) {
+      this.group.remove(this.agn.root);
+      this.agn.dispose();
+      this.agn = undefined;
+    }
     if (this.neutron) {
       this.spin.remove(this.neutron.root);
       this.neutron.dispose();

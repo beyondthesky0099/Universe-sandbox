@@ -44,6 +44,7 @@ const FRAGMENT = /* glsl */ `
   uniform float uM;       // one M in mesh units
   uniform float uTime;
   uniform float uBrightness;
+  uniform float uBeaming;  // 1 for a black hole's relativistic disc, 0 for a white dwarf's
   varying vec3 vLocal;
   varying vec3 vCam;
 
@@ -81,12 +82,12 @@ const FRAGMENT = /* glsl */ `
     float peak0 = profile(6.0 * 49.0 / 36.0, 6.0);
     float T = 6500.0 * profile(R, uInner) / peak0;
     // Doppler and gravitational shift.
-    float beta = min(0.95, inversesqrt(R));
+    float beta = min(0.95, inversesqrt(R)) * uBeaming;
     vec3 vdir = normalize(vec3(-p.y, p.x, 0.0));
     float cosT = dot(vdir, normalize(toCam));
     float gammaInv = sqrt(1.0 - beta * beta);
     float D = gammaInv / (1.0 - beta * cosT);
-    float g = D * sqrt(max(0.05, 1.0 - 3.0 / R));
+    float g = D * mix(1.0, sqrt(max(0.05, 1.0 - 3.0 / R)), uBeaming);
     vec3 col = blackbody(T * g);
     float I = pow(T / 6500.0, 2.0) * clamp(g * g * g, 0.02, 4.0);
 
@@ -97,25 +98,35 @@ const FRAGMENT = /* glsl */ `
     float streaks = 0.55 + 0.45 * noise(vec2(R * 2.2, swirl * 5.0)) * (0.6 + 0.4 * noise(vec2(R * 9.0, swirl * 17.0)));
     // Soft outer edge, crisp inner edge.
     float edge = smoothstep(uInner, uInner * 1.06, R) * (1.0 - smoothstep(uOuter * 0.55, uOuter, R));
-    gl_FragColor = vec4(col * I * streaks * edge * uBrightness, 1.0);
+    vec3 shade = col * I * streaks * edge * uBrightness;
+    // The disc is bright where it is thick and fades out at its edges: let the dark parts show what is behind
+    // (a jet or torus seen past it), rather than painting black over them.
+    gl_FragColor = vec4(shade, clamp(length(shade) * 1.5, 0.0, 1.0));
   }
 `;
 
-/** The disc mesh (unit = the non-spinning shadow radius); tilt it as the spin axis. */
-export function accretionDiskMesh(): THREE.Mesh {
-  const geometry = new THREE.RingGeometry(0.15, 36 * M, 192, 24);
+/**
+ * The disc mesh (unit = the non-spinning shadow radius); tilt it as the spin axis. A white
+ * dwarf's disc (cataclysmic variables) is in units of the dwarf's radius instead: from 1.6 to 30
+ * radii, no relativistic beaming, and about 17,000 K at its hottest.
+ */
+export function accretionDiskMesh(opts: { whiteDwarf?: boolean } = {}): THREE.Mesh {
+  const wd = !!opts.whiteDwarf;
+  const geometry = wd ? new THREE.RingGeometry(1.2, 30, 192, 24) : new THREE.RingGeometry(0.15, 36 * M, 192, 24);
   const material = new THREE.ShaderMaterial({
     vertexShader: VERTEX,
     fragmentShader: FRAGMENT,
     uniforms: {
-      uInner: { value: 6 },
-      uOuter: { value: 36 },
-      uM: { value: M },
+      uInner: { value: wd ? 1.6 : 6 },
+      uOuter: { value: wd ? 30 : 36 },
+      uM: { value: wd ? 1 : M },
       uTime: { value: 0 },
-      uBrightness: { value: 0.6 },
+      uBrightness: { value: wd ? 0.8 : 0.6 },
+      uBeaming: { value: wd ? 0 : 1 },
     },
     transparent: true,
     depthWrite: false,
+    premultipliedAlpha: true,
     side: THREE.DoubleSide,
     blending: THREE.AdditiveBlending,
   });
@@ -128,7 +139,8 @@ export function accretionDiskMesh(): THREE.Mesh {
 /** Per frame: spin (sets the inner edge) and time. */
 export function updateAccretionDisk(mesh: THREE.Mesh, spin: number, seconds: number): void {
   const u = (mesh.material as THREE.ShaderMaterial).uniforms;
-  u.uInner.value = iscoRadius(Math.abs(spin), spin >= 0);
+  // A white dwarf's disc has a fixed inner edge; a black hole's is the ISCO of its spin.
+  if (u.uBeaming.value > 0) u.uInner.value = iscoRadius(Math.abs(spin), spin >= 0);
   u.uTime.value = seconds;
 }
 

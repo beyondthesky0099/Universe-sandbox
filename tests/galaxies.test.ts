@@ -134,7 +134,9 @@ describe('every named galaxy, the rich clusters and the quasars', () => {
   it('places quasars at comoving distances and keeps the record holders', () => {
     const entries = universeEntries(universe);
     const quasars = entries.filter((g) => g.kind === 'quasar');
-    expect(quasars.length).toBeGreaterThan(5000);
+    expect(quasars.length).toBeGreaterThan(2500);
+    // Together with the Seyferts and blazars, the whole bright Véron set is on the map.
+    expect(entries.filter((g) => g.kind === 'quasar' || g.kind === 'seyfert' || g.kind === 'blazar').length).toBeGreaterThan(6000);
     // 3C 273 is a hand-entered record holder, so the catalogue copy "3C 273.0" is dropped.
     expect(entries.filter((g) => g.name.startsWith('3C 273')).length).toBe(1);
     const q = entries.find((g) => g.name === '3C 273')!;
@@ -145,5 +147,57 @@ describe('every named galaxy, the rich clusters and the quasars', () => {
     expect(far.d).toBeGreaterThan(10000); // comoving Mpc: deep in the observable universe
     expect(far.d).toBeLessThan(14000); // but inside the CMB sphere
     expect(isFamous(far)).toBe(true);
+  });
+});
+
+describe('active galactic nuclei', () => {
+  const raw: UniverseObjects = JSON.parse(readFileSync(new URL('../public/data/universe-objects.json', import.meta.url), 'utf8'));
+  const entries = universeEntries(raw);
+
+  it('splits the Véron catalogue into quasars, Seyferts and blazars', async () => {
+    const { agnTypeLabel, agnNucleusLabel } = await import('../src/sim/galaxies');
+    expect(entries.filter((g) => g.kind === 'quasar').length).toBeGreaterThan(2500);
+    expect(entries.filter((g) => g.kind === 'seyfert').length).toBeGreaterThan(3000);
+    expect(entries.filter((g) => g.kind === 'blazar').length).toBeGreaterThan(100);
+    const bllac = entries.find((g) => g.name === 'BL LAC')!;
+    expect(bllac.kind).toBe('blazar');
+    expect(bllac.z).toBeCloseTo(0.069, 3);
+    expect(agnTypeLabel(bllac.cl!, bllac.sp!)).toBe('BL Lac object (blazar, highly polarized)');
+    const oj = entries.find((g) => g.name === 'OJ 287')!;
+    expect(oj.bh!.mass).toBe(1.8e10);
+    // 3C 273 stays the record holder, now with its black hole and class.
+    const c273 = entries.filter((g) => /^3C 273/.test(g.name));
+    expect(c273.length).toBe(1);
+    expect(c273[0].note).toBeTruthy();
+    expect(c273[0].cl).toBe('Q');
+    expect(c273[0].bh!.mass).toBe(8.9e8);
+    expect(agnTypeLabel('A', 'S1h')).toBe('Seyfert 2 with hidden broad lines (seen in polarized light)');
+    expect(agnTypeLabel('A', 'S3')).toBe('LINER');
+    expect(agnTypeLabel('A', 'S1.5')).toBe('Seyfert 1.5 galaxy');
+    expect(agnTypeLabel('Q', 'HP')).toBe('Quasar (highly polarized: a blazar)');
+    expect(agnNucleusLabel({ name: 'x', cl: 'A', sp: 'S2' })).toBe('Seyfert 2 nucleus');
+  });
+
+  it('gives named galaxies their nucleus and black hole instead of a second point', async () => {
+    const { markActiveHosts, namedFromSurvey } = await import('../src/sim/galaxies');
+    const namedRaw = JSON.parse(readFileSync(new URL('../public/data/galaxies-named.json', import.meta.url), 'utf8'));
+    const all = [...local, ...namedFromSurvey(namedRaw.galaxies, namedRaw.H0)];
+    const n = markActiveHosts(all, raw);
+    expect(n).toBeGreaterThan(400);
+    const m77 = all.find((g) => g.name === 'MESSIER077')!;
+    expect(m77.agn).toMatchObject({ name: 'NGC 1068', cl: 'A', sp: 'S1h' });
+    expect(m77.bh!.mass).toBe(1.5e7);
+    const m87 = all.find((g) => g.name === 'MESSIER087')!;
+    expect(m87.agn!.sp).toBe('S3'); // a LINER
+    expect(m87.bh!.mass).toBe(6.5e9);
+    expect(m87.agn!.radio).toBeGreaterThan(50); // Virgo A, radio-loud
+    const cenA = all.find((g) => g.name === 'NGC5128')!;
+    expect(cenA.agn!.cl).toBe('B');
+    expect(cenA.bh!.mass).toBe(5.5e7);
+    // M81 approaches us (z < 0): it is a host, not a point.
+    expect(all.find((g) => g.name === 'MESSIER081')?.agn?.name).toBe('NGC 3031');
+    expect(entries.some((g) => g.name === 'NGC 3031' || g.name === 'NGC 1068' || g.name === 'NGC 4486')).toBe(false);
+    // Hosts count as famous, so they keep a label.
+    expect(isFamous(m77)).toBe(true);
   });
 });

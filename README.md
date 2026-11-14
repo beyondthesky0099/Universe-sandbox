@@ -324,6 +324,25 @@ important ones stay and the rest fade out until you zoom in and there's room for
     - Each black hole comes with its companion star on the orbit from its paper.
     - The Gaia black holes are dormant: no disc, only their shadow and the bending of starlight.
     - The X-ray binaries feed from a disc.
+  - **Visit an active nucleus.** Every quasar, Seyfert, LINER and blazar on the Universe map,
+    and every named galaxy that hosts one (M77, M87, Centaurus A…), has a *Visit the nucleus*
+    button, and the core of such a galaxy's map is that nucleus. The scene is to scale: the
+    black hole (its measured mass where a paper has one, else one that would shine as bright as
+    the catalogue says) with its disc, the broad-line clouds orbiting light-days out, a nuclear
+    star cluster, the dusty torus a parsec out, ray-marched so that it hides the nucleus when seen
+    edge-on, and twin jets beamed towards whichever side faces you. The camera starts where the
+    unified model puts you: past the torus for a Seyfert 1 or quasar, through it for a Seyfert 2,
+    down the jet for a blazar. Zoom in ten thousand times to reach the disc.
+  - **All 402 known Galactic novae and 1,601 other cataclysmic variables.** Novae (orange-red,
+    recurrent ones deeper red) sit at Schaefer's best distances; the rest have Gaia DR3 distances.
+    Zoom in to one and the white dwarf appears with its accretion disc (none for a polar, whose
+    magnetic field channels the gas onto its poles) and its donor on the catalogued orbit, at
+    real sizes. Masses the catalogue lacks take typical values, and the scene says so.
+  - **2,205 classical Cepheids** (yellow) at their period–luminosity distances, Delta Cephei and
+    Polaris among them. Visit one and it swells, shrinks and brightens at its real period.
+  - **199 maser sources** (green) with radio parallaxes from BeSSeL and VERA, the most precise
+    distances across the disc, each tagged with its spiral arm. Visiting one shows a massive
+    protostar in its gas disc with a few young neighbours (illustrative), or a red supergiant.
   - **3,632 real pulsars** from the ATNF Pulsar Catalogue at their estimated distances: young
     pulsars in blue, millisecond pulsars in white, 13 magnetars in magenta. The famous ones are
     named, and every one can be found with search.
@@ -904,6 +923,20 @@ push and pull request.
   Rebuild with `node scripts/build-galactic-objects.mjs`. Every one with a distance is on the
   Galaxy Map, and each opens in the Sandbox as its real pair; masses or periods the catalogue
   lacks take typical values, and the scene says so.
+- Novae: Schaefer 2022, MNRAS 517, 6150 (VizieR J/MNRAS/517/6150), the best distance of every known
+  Galactic nova. Cataclysmic variables: Canbay, Bilir, Özdönmez & Ak 2023, AJ 165, 163 (VizieR
+  J/AJ/165/163), Gaia DR3 distances, with subtypes, masses and eclipses from the Ritter & Kolb
+  catalogue (B/cb, 7.24). Cepheids: Skowron et al. 2019, Science 365, 478 (VizieR
+  J/other/Sci/365.478), mid-infrared period–luminosity distances; Polaris's distance from Bond et
+  al. 2018. Masers: Reid et al. 2019, ApJ 885, 131 (VizieR J/ApJ/885/131), VLBI parallaxes. Same
+  build script. Cepheid luminosities use the Benedict et al. (2007) period–luminosity relation,
+  radii the Gieren et al. (1998) period–radius relation, and donor masses the Knigge et al. (2011)
+  donor sequence.
+- Active nuclei up close: luminosity from the V magnitude and distance with L_bol ≈ 9 λL_λ(5100 Å)
+  (Kaspi et al. 2000); broad-line radius from Bentz et al. (2013); dust sublimation radius from
+  Nenkova et al. (2008); Eddington ratios and viewing angles by type from the unified model
+  (Antonucci 1993, Urry & Padovani 1995). The torus shape, jets and nuclear cluster are
+  illustrative, and the scene says so.
 - Black holes and pulsars: positions from SIMBAD; masses and distances from the discovery papers,
   verified against their arXiv abstracts by `node scripts/build-compact-objects.mjs`.
 - Pulsars: the ATNF Pulsar Catalogue v2.6.1 (Manchester, Hobbs, Teoh & Hobbs 2005, AJ 129, 1993;
@@ -974,8 +1007,14 @@ push and pull request.
   https://github.com/mattiaverga/OpenNGC, **CC BY-SA 4.0**).
 - Deep universe (`node scripts/build-deep-universe.mjs`): rich galaxy clusters from the
   **Abell catalogue** (Abell, Corwin & Olowin 1989, ApJS 70, 1; VizieR VII/110A) with the
-  redshifts of Struble & Rood (1987); quasars from the **Véron-Cetty & Véron** catalogue, 13th
-  edition (2010, A&A 518, A10; VizieR VII/258), the brightest and every one beyond redshift 5;
+  redshifts of Struble & Rood (1987); active galactic nuclei from the **Véron-Cetty & Véron**
+  catalogue, 13th edition (2010, A&A 518, A10; VizieR VII/258), the brightest (V < 17.5) and every
+  quasar beyond redshift 5, split by its class into quasars, Seyfert galaxies and LINERs, and BL
+  Lac objects, with its spectrum codes and 5 GHz fluxes. A nucleus within 1.5′ of a named galaxy
+  becomes that galaxy's nucleus (M77, M87, Centaurus A, Circinus…). Black-hole masses of famous
+  nuclei are entered by hand from the papers named in each panel (EHT 2019, Humphreys et al.
+  2013, Greenhill et al. 1996 and 2003, Bentz et al. 2006, Peterson et al. 2004, Valtonen et al.
+  2008…);
   and record holders (JADES-GS-z14-0, GN-z11, J0313−1806, ULAS J1120+0641, TON 618, 3C 273)
   entered by hand from the papers cited in `public/data/universe-objects.json`. They sit at the
   comoving distance for their redshift in a flat ΛCDM cosmology (H0 = 70 km/s/Mpc, Ωm = 0.3;

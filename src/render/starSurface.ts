@@ -69,6 +69,7 @@ const FRAGMENT = /* glsl */ `
   uniform float uCells;
   uniform float uContrast;
   uniform float uTime;
+  uniform float uBright;
   uniform float uSeed;
   uniform float uPixels;     // the disc's radius on screen (pixels)
   uniform vec4 uSpots[8];    // direction (xyz, unit, star frame) and angular radius (w, radians)
@@ -150,7 +151,7 @@ const FRAGMENT = /* glsl */ `
     vec3 limb = vec3(1.0) - uLimb * (1.0 - mu);
     // A little richer than the pale blackbody colour, as photographs show the Sun's disc.
     vec3 base = pow(uColor, vec3(2.6));
-    vec3 col = base * brightness * limb * 1.08;
+    vec3 col = base * brightness * limb * 1.08 * uBright;
     gl_FragColor = vec4(col, 1.0);
     #include <tonemapping_fragment>
     #include <colorspace_fragment>
@@ -186,6 +187,7 @@ export class StarSurface {
         uCells: { value: look.cells },
         uContrast: { value: look.contrast },
         uTime: { value: 0 },
+        uBright: { value: 1 },
         uSeed: { value: (seed % 1000) * 0.137 },
         uPixels: { value: 10 },
         uSpots: { value: spots },

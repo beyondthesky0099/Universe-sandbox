@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { loadEclipses } from '../sim/eclipse';
-import { galacticToCosmos, loadLocalGalaxies, loadNamedGalaxies } from '../sim/galaxies';
+import { galacticToCosmos, loadLocalGalaxies, loadNamedGalaxies, loadUniverseObjects, loadUniverseRaw, markActiveHosts } from '../sim/galaxies';
 import { galacticToMap, MILKY_WAY_SEED, UNITS_PER_KPC } from '../procgen/galaxy';
 import { loadClusters } from '../sim/clusters';
 import { loadPulsars } from '../sim/pulsars';
@@ -27,7 +27,7 @@ export class SearchUI {
   buildSearchIndex(): Promise<SearchIndex> {
     this.app.searchIndex ??= (async () => {
       const safe = <T>(p: Promise<T>, fallback: T) => p.catch(() => fallback);
-      const [nebulae, clusters, catalog, bright, near, local, named, compact, gw, flybys, voyager, eclipses, pulsars, objects] = await Promise.all([
+      const [nebulae, clusters, catalog, bright, near, local, named, deep, universeRaw, compact, gw, flybys, voyager, eclipses, pulsars, objects] = await Promise.all([
         safe(loadNebulae(), []),
         safe(loadClusters(), []),
         safe(this.app.realDataUI.getCatalog(), undefined),
@@ -35,6 +35,8 @@ export class SearchUI {
         safe(loadNearStars(), []),
         safe(loadLocalGalaxies(), []),
         safe(loadNamedGalaxies(), []),
+        safe(loadUniverseObjects(), []),
+        safe(loadUniverseRaw(), { clusters: [], agn: [], hosts: [], blackHoles: [], records: [] }),
         safe(
           fetch(`${import.meta.env.BASE_URL}data/compact-objects.json`).then((r) => r.json() as Promise<{ objects: Parameters<typeof compactEntries>[0] }>).then((d) => d.objects),
           [],
@@ -55,7 +57,8 @@ export class SearchUI {
       index.add(pulsarEntries(pulsars));
       index.add(galacticObjectEntries(objects));
       if (catalog) index.add(exoplanetEntries(catalog));
-      index.add(galaxyEntries([...local, ...named]));
+      markActiveHosts([...local, ...named], universeRaw);
+      index.add(galaxyEntries([...local, ...named, ...deep]));
       index.add(structureEntries());
       index.add(activityEntries({ presets: PRESETS, lessons: LESSONS, challenges: CHALLENGES, gw, flybys, voyager, eclipses }));
       return index;

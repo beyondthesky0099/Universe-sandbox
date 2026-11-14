@@ -20,7 +20,8 @@ import { iscoRadius, SHADOW_RADIUS_SCHWARZSCHILD } from '../sim/kerr';
 export const DISK_LAYER = 2;
 
 /** Set each frame: whether the lensing pass is drawing shadows (then the black sphere shrinks to the horizon). */
-export const blackHoleView = { lensed: false };
+/** Shared view state: whether the lensing pass draws the shadow, and whether bodies are at real sizes (kerr.ts drawnShadowRadius). */
+export const blackHoleView = { lensed: false, trueScale: false };
 
 const M = 1 / SHADOW_RADIUS_SCHWARZSCHILD; // one M in mesh units
 

@@ -603,6 +603,9 @@ It is set with a slider in the black hole's panel (`src/sim/kerr.ts`).
   and 32% at a* = 0.998.
 - **The shadow changes shape:** seen from the side, it is flattened and pushed sideways, exactly
   as Bardeen (1973) calculated.
+- **The shadow is the right size:** with **Real sizes** on, the dark disc is √27 GM/c² across in
+  radius, 2.6 times the event horizon (a 10 M☉ hole: a 77 km shadow around a 30 km horizon); the
+  horizon, the disc's inner edge and the lens all follow from it.
 - **The accretion disc is shaded per pixel:**
   - Thin-disc temperatures.
   - The gas orbits at up to ~40% of light speed, so the side coming towards you is

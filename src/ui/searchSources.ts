@@ -8,7 +8,7 @@ import type { StarCluster } from '../sim/clusters';
 import type { Eclipse } from '../sim/eclipse';
 import type { ExoCatalog } from '../sim/exoplanets';
 import type { Flyby } from '../sim/flybys';
-import { COSMIC_STRUCTURES, displayName, isFamous, type LocalGalaxy } from '../sim/galaxies';
+import { agnNucleusLabel, agnTypeLabel, COSMIC_STRUCTURES, displayName, isFamous, type LocalGalaxy } from '../sim/galaxies';
 import type { GwEvent } from '../sim/gwEvents';
 import { galacticToEcliptic, type Nebula } from '../sim/nebulae';
 import type { BrightStar, NearStar } from '../sim/stars';
@@ -87,12 +87,16 @@ export function starEntries(bright: BrightStar[], near: NearStar[]): SearchEntry
 export function galaxyEntries(list: LocalGalaxy[]): SearchEntry[] {
   return list.map((g) => {
     const shown = displayName(g);
+    const kind = g.kind ?? 'galaxy';
+    const active = kind === 'quasar' || kind === 'seyfert' || kind === 'blazar';
+    const label = kind === 'cluster' ? 'Galaxy cluster' : active ? agnTypeLabel(g.cl ?? 'Q', g.sp ?? '').split(' (')[0] : g.agn ? `Galaxy (${agnNucleusLabel(g.agn)})` : 'Galaxy';
+    const aliases = [...(shown !== g.name ? [g.name] : []), ...(g.agn && g.agn.name !== g.name ? [g.agn.name] : [])];
     return {
       name: shown,
-      aliases: shown !== g.name ? [g.name] : undefined,
-      kind: 'Galaxy',
-      detail: g.name === 'Milky Way' ? 'our galaxy' : `${lightYears(g.d * 1000)} away`,
-      rank: isFamous(g) ? 80 : Math.max(0, (g.lk ?? 8) - 8) * 5,
+      aliases: aliases.length ? aliases : undefined,
+      kind: label,
+      detail: g.name === 'Milky Way' ? 'our galaxy' : `${g.bh ? `black hole of ${g.bh.mass >= 1e9 ? `${+(g.bh.mass / 1e9).toPrecision(2)} billion` : `${+(g.bh.mass / 1e6).toPrecision(2)} million`} M☉ · ` : ''}${lightYears(g.d * 1000)} away`,
+      rank: isFamous(g) ? 80 : active ? (g.vmag !== undefined ? Math.max(0, 17.5 - g.vmag) * 4 : 5) : Math.max(0, (g.lk ?? 8) - 8) * 5,
       action: { type: 'galaxy', name: g.name },
     };
   });

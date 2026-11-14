@@ -5,7 +5,7 @@ import type { PulsarRecord } from '../sim/pulsars';
 import type { CompactObject } from '../sim/compactObjects';
 import * as THREE from 'three';
 import { type StarSystemSpec } from '../procgen/starSystem';
-import { displayName, galaxyForm, LY_PER_MPC, type LocalGalaxy } from '../sim/galaxies';
+import { agnDescription, agnNucleusLabel, agnTypeLabel, displayName, galaxyForm, LY_PER_MPC, type LocalGalaxy } from '../sim/galaxies';
 import { ageAt, formatLookback, lookbackTime } from '../sim/cosmology';
 import type { GalacticObject } from '../sim/galacticObjects';
 import { QUALITY_PRESETS } from '../render/systemView';
@@ -175,13 +175,23 @@ export function sciMass(log10: number): string {
   return `${m.toFixed(1)} × 10${sup} M☉`;
 }
 
+/** "6.5 billion M☉", "40 million M☉", "360,000 M☉". */
+export function formatBlackHoleMass(mass: number): string {
+  if (mass >= 1e9) return `${+(mass / 1e9).toPrecision(2)} billion M☉`;
+  if (mass >= 1e6) return `${+(mass / 1e6).toPrecision(2)} million M☉`;
+  return `${Math.round(mass).toLocaleString('en-US')} M☉`;
+}
+
 export function cosmosFacts(g: LocalGalaxy): [string, string][] {
   const form = galaxyForm(g);
   const facts: [string, string][] = [];
   const kind = g.kind ?? 'galaxy';
+  const nucleus = g.agn ?? (g.cl ? { name: g.name, cl: g.cl, sp: g.sp ?? '' } : undefined);
   if (kind === 'cluster') facts.push(['Type', 'Rich galaxy cluster (Abell)']);
-  else if (kind === 'quasar') facts.push(['Type', 'Quasar: a galaxy with a feeding supermassive black hole']);
+  else if (kind === 'quasar' || kind === 'seyfert' || kind === 'blazar') facts.push(['Type', agnTypeLabel(g.cl ?? 'Q', g.sp ?? '')]);
+  else if (g.agn) facts.push(['Type', `${form[0].toUpperCase()}${form.slice(1)} galaxy with a ${agnNucleusLabel(g.agn)}`]);
   else facts.push(['Type', `${form[0].toUpperCase()}${form.slice(1)} galaxy`]);
+  if (nucleus) facts.push(['Active nucleus', `${agnDescription(nucleus.cl, nucleus.sp)}${g.agn && g.agn.name !== g.name ? ` Catalogued as ${g.agn.name}.` : ''}`]);
   if (g.note) facts.push(['Why it matters', g.note]);
   if (g.name === 'Milky Way') {
     facts.push(['Distance', 'You are here'], ['Diameter', 'about 100,000 light-years']);
@@ -193,14 +203,18 @@ export function cosmosFacts(g: LocalGalaxy): [string, string][] {
       facts.push(['Light left it', `${formatLookback(lookbackTime(g.z))} ago${g.z > 3 ? `, when the universe was ${formatLookback(ageAt(g.z))} old` : ''}`]);
     }
     if (g.size && !g.zd) facts.push(['Diameter', `${Math.round(g.size * 3261.6).toLocaleString('en-US')} light-years`]);
-    if (g.name === 'MESSIER087') facts.push(['Central black hole', '6.5 billion M☉: the first black hole ever imaged (Event Horizon Telescope, 2019)']);
+    if (g.bh) facts.push(['Central black hole', `${formatBlackHoleMass(g.bh.mass)} (${g.bh.method}; ${g.bh.ref})`]);
+    else if (g.name === 'MESSIER087') facts.push(['Central black hole', '6.5 billion M☉: the first black hole ever imaged (Event Horizon Telescope, 2019)']);
   }
+  const radio = g.radio ?? g.agn?.radio;
+  if (radio !== undefined && radio > 0) facts.push(['Radio (5 GHz)', `${radio >= 1 ? radio.toFixed(1) : radio.toFixed(3)} Jy${radio >= 1 ? ' (radio-loud)' : ''}`]);
   if (kind === 'cluster') {
     if (g.rich !== undefined) facts.push(['Richness class', `${g.rich} (${['poorest', 'poor', 'moderate', 'rich', 'very rich', 'richest'][g.rich] ?? ''})`]);
     if (g.count !== undefined) facts.push(['Bright members', `${g.count} galaxies within 2 magnitudes of the third brightest`]);
     if (g.bm) facts.push(['Bautz–Morgan type', g.bm]);
   }
   if (g.vmag !== undefined) facts.push(['Brightness', `magnitude ${g.vmag.toFixed(1)}`]);
+  else if (g.agn?.vmag !== undefined) facts.push(['Nucleus brightness', `magnitude ${g.agn.vmag.toFixed(1)}`]);
   if (g.mass !== undefined) facts.push(['Mass', sciMass(g.mass)]);
   if (g.hi !== undefined) facts.push(['Hydrogen gas', sciMass(g.hi)]);
   if (g.v !== undefined && g.name !== 'Milky Way' && g.z === undefined) facts.push([g.zd ? 'Recession velocity' : 'Radial velocity', `${Math.abs(g.v)} km/s ${g.v < 0 ? 'toward us' : 'away from us'}`]);
@@ -208,7 +222,7 @@ export function cosmosFacts(g: LocalGalaxy): [string, string][] {
   if (g.pa !== undefined && kind === 'galaxy') facts.push(['Position angle', `${g.pa}° (HyperLEDA / OpenNGC)`]);
   facts.push([
     'Data',
-    g.ref ?? (kind === 'cluster' ? 'Abell, Corwin & Olowin 1989' : kind === 'quasar' ? 'Véron-Cetty & Véron 2010' : g.zd ? '2MASS Redshift Survey (Huchra et al. 2012)' : 'Karachentsev et al. 2013'),
+    g.ref ?? (kind === 'cluster' ? 'Abell, Corwin & Olowin 1989' : kind === 'quasar' || kind === 'seyfert' || kind === 'blazar' ? 'Véron-Cetty & Véron 2010' : `${g.zd ? '2MASS Redshift Survey (Huchra et al. 2012)' : 'Karachentsev et al. 2013'}${g.agn ? '; nucleus: Véron-Cetty & Véron 2010' : ''}`),
   ]);
   return facts;
 }

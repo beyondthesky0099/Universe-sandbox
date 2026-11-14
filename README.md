@@ -993,8 +993,14 @@ push and pull request.
   https://github.com/mattiaverga/OpenNGC, **CC BY-SA 4.0**).
 - Deep universe (`node scripts/build-deep-universe.mjs`): rich galaxy clusters from the
   **Abell catalogue** (Abell, Corwin & Olowin 1989, ApJS 70, 1; VizieR VII/110A) with the
-  redshifts of Struble & Rood (1987); quasars from the **Véron-Cetty & Véron** catalogue, 13th
-  edition (2010, A&A 518, A10; VizieR VII/258), the brightest and every one beyond redshift 5;
+  redshifts of Struble & Rood (1987); active galactic nuclei from the **Véron-Cetty & Véron**
+  catalogue, 13th edition (2010, A&A 518, A10; VizieR VII/258), the brightest (V < 17.5) and every
+  quasar beyond redshift 5, split by its class into quasars, Seyfert galaxies and LINERs, and BL
+  Lac objects, with its spectrum codes and 5 GHz fluxes. A nucleus within 1.5′ of a named galaxy
+  becomes that galaxy's nucleus (M77, M87, Centaurus A, Circinus…). Black-hole masses of famous
+  nuclei are entered by hand from the papers named in each panel (EHT 2019, Humphreys et al.
+  2013, Greenhill et al. 1996 and 2003, Bentz et al. 2006, Peterson et al. 2004, Valtonen et al.
+  2008…);
   and record holders (JADES-GS-z14-0, GN-z11, J0313−1806, ULAS J1120+0641, TON 618, 3C 273)
   entered by hand from the papers cited in `public/data/universe-objects.json`. They sit at the
   comoving distance for their redshift in a flat ΛCDM cosmology (H0 = 70 km/s/Mpc, Ωm = 0.3;

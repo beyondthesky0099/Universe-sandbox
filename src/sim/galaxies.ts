@@ -13,7 +13,26 @@ import { comovingDistance } from './cosmology';
 export const LY_PER_MPC = 3.2616e6;
 
 /** What a Universe map entry is: a galaxy unless said otherwise. */
-export type CosmosKind = 'galaxy' | 'cluster' | 'quasar';
+export type CosmosKind = 'galaxy' | 'cluster' | 'quasar' | 'seyfert' | 'blazar';
+
+/** Véron-Cetty & Véron class: quasar, Seyfert galaxy or LINER, BL Lac object. */
+export type AgnClass = 'Q' | 'A' | 'B';
+
+/** An active nucleus: the Véron class and spectrum code, with the catalogue's magnitude and 5 GHz flux (Jy). */
+export interface ActiveNucleus {
+  name: string;
+  cl: AgnClass;
+  sp: string;
+  vmag?: number;
+  radio?: number;
+}
+
+/** A measured central black hole: mass (M☉), how it was measured, and the paper. */
+export interface BlackHoleMass {
+  mass: number;
+  method: string;
+  ref: string;
+}
 
 export interface LocalGalaxy {
   name: string;
@@ -26,8 +45,15 @@ export interface LocalGalaxy {
   rich?: number;
   count?: number;
   bm?: string;
-  /** Quasars: V magnitude. */
+  /** Quasars, Seyferts and blazars: V magnitude, Véron class and spectrum code, 5 GHz flux (Jy). */
   vmag?: number;
+  cl?: AgnClass;
+  sp?: string;
+  radio?: number;
+  /** A galaxy whose nucleus is in the Véron catalogue carries it here (markActiveHosts). */
+  agn?: ActiveNucleus;
+  /** The measured mass of its central black hole, where a paper has one. */
+  bh?: BlackHoleMass;
   /** Record holders: why they matter, and the paper. */
   note?: string;
   ref?: string;
@@ -163,8 +189,82 @@ export function displayName(g: Pick<LocalGalaxy, 'name' | 'common'>): string {
 }
 
 /** True for objects worth a permanent label on the map. */
-export function isFamous(g: Pick<LocalGalaxy, 'name' | 'common' | 'note'>): boolean {
-  return !!COMMON[g.name.trim()] || !!g.common || !!g.note;
+export function isFamous(g: Pick<LocalGalaxy, 'name' | 'common' | 'note' | 'bh'>): boolean {
+  return !!COMMON[g.name.trim()] || !!g.common || !!g.note || !!g.bh;
+}
+
+/** What Véron's spectrum codes mean (its ReadMe, note 3). */
+const SPECTRA: Record<string, string> = {
+  S1: 'Seyfert 1',
+  'S1.0': 'Seyfert 1.0',
+  'S1.2': 'Seyfert 1.2',
+  'S1.5': 'Seyfert 1.5',
+  'S1.8': 'Seyfert 1.8',
+  'S1.9': 'Seyfert 1.9',
+  S1n: 'narrow-line Seyfert 1',
+  S1h: 'Seyfert 2 with hidden broad lines (seen in polarized light)',
+  S1i: 'Seyfert with broad infrared lines',
+  S2: 'Seyfert 2',
+  'S2?': 'probable Seyfert 2',
+  S3: 'LINER',
+  S3b: 'LINER with broad lines',
+  S3h: 'LINER with hidden broad lines',
+  S: 'Seyfert',
+  'S?': 'possible Seyfert',
+  H2: 'nuclear H II region',
+  Q2: 'type-2 (obscured) quasar',
+  HP: 'highly polarized',
+  BL: 'BL Lac object',
+  'BL?': 'probable BL Lac object',
+  '?': 'questionable BL Lac object',
+};
+
+/** One line for a Véron class and spectrum code: "Seyfert 2 galaxy", "Quasar (highly polarized: a blazar)". */
+export function agnTypeLabel(cl: AgnClass, sp: string): string {
+  const code = sp.trim();
+  if (cl === 'B') return code === 'HP' ? 'BL Lac object (blazar, highly polarized)' : code && SPECTRA[code] ? `${SPECTRA[code]} (blazar)` : 'BL Lac object (blazar)';
+  if (cl === 'Q') {
+    if (code === 'HP') return 'Quasar (highly polarized: a blazar)';
+    if (code === 'Q2') return 'Type-2 (obscured) quasar';
+    if (code.startsWith('S1n')) return 'Narrow-line quasar';
+    if (code === 'S2') return 'Type-2 quasar';
+    if (code.startsWith('S3')) return `Quasar with a ${SPECTRA[code] ?? 'LINER'} spectrum`;
+    return 'Quasar';
+  }
+  const what = SPECTRA[code] ?? 'active';
+  return code === 'H2' ? 'Galaxy with a nuclear starburst (H II spectrum)' : /LINER|hidden|infrared|possible|probable/.test(what) ? `${what[0].toUpperCase()}${what.slice(1)}` : `${what[0].toUpperCase()}${what.slice(1)} galaxy`;
+}
+
+/** The short form of a spectrum code: S1h is a Seyfert 2 (its broad lines show only in polarized light), S3b a LINER. */
+function shortSpectrum(code: string): string | undefined {
+  if (code === 'S1h') return 'Seyfert 2';
+  if (code === 'S1i') return 'Seyfert 1';
+  if (code.startsWith('S3')) return 'LINER';
+  if (code === 'H2') return 'starburst';
+  return SPECTRA[code];
+}
+
+/** The nucleus of a host galaxy, in a few words: "Seyfert 2 nucleus", "LINER nucleus", "BL Lac nucleus (blazar)". */
+export function agnNucleusLabel(a: ActiveNucleus): string {
+  const code = a.sp.trim();
+  // Centaurus A is filed as a questionable BL Lac: a radio galaxy, not a jet aimed at us.
+  if (a.cl === 'B') return code === '?' || code === 'BL?' ? 'radio-loud nucleus (BL Lac candidate)' : 'BL Lac nucleus (blazar)';
+  // M81 is filed under Q by its luminosity, but its spectrum (a LINER) says what the nucleus is.
+  if (a.cl === 'Q' && !code.startsWith('S')) return 'quasar nucleus';
+  return `${shortSpectrum(code) ?? 'active'} nucleus`;
+}
+
+/** Why this kind of nucleus looks the way it does, for the panel and search. */
+export function agnDescription(cl: AgnClass, sp: string): string {
+  const code = sp.trim();
+  if (cl === 'B' && (code === '?' || code === 'BL?')) return 'A radio galaxy with jets from its central black hole; the catalogue lists it as a possible BL Lac object, though its jets are not aimed at us.';
+  if (cl === 'B') return 'A jet from the central black hole points almost straight at us, so its beamed, flickering, polarized light outshines the galaxy and shows almost no spectral lines.';
+  if (code.startsWith('S3')) return 'A low-ionization nucleus: a black hole feeding slowly, or a starved disc, lighting the gas weakly.';
+  if (cl === 'Q') return 'A supermassive black hole swallowing gas so fast that its disc outshines the whole galaxy around it.';
+  if (code === 'H2') return 'The nucleus is dominated by a burst of star formation rather than a feeding black hole.';
+  if (code === 'S2' || code === 'S1h' || code === 'S2?') return 'A feeding black hole seen through its dusty torus: only the narrow lines of distant gas show, the fast broad-line gas being hidden (polarized light reveals it in some).';
+  if (code.startsWith('S1')) return 'A feeding black hole seen past its dusty torus: broad lines from gas whirling thousands of km/s near the hole.';
+  return 'A galaxy whose nucleus is lit by gas falling onto a supermassive black hole.';
 }
 
 /**
@@ -248,19 +348,34 @@ export function loadNamedGalaxies(baseUrl = import.meta.env.BASE_URL): Promise<L
 export interface UniverseObjects {
   /** [Abell number, l, b, z, richness class, member count, Bautz–Morgan type] */
   clusters: [number, number, number, number, number | null, number | null, string | null][];
-  /** [name, l, b, z, V magnitude] */
-  quasars: [string, number, number, number, number | null][];
+  /** [name, l, b, z, V magnitude, class, spectrum code, 5 GHz flux (Jy)] */
+  agn: [string, number, number, number, number | null, AgnClass, string, number | null][];
+  /** [catalogue name of the host galaxy, Véron name, class, spectrum code, V magnitude, 5 GHz flux] */
+  hosts: [string, string, AgnClass, string, number | null, number | null][];
+  /** [Véron name, mass (M☉), method, paper] */
+  blackHoles: [string, number, string, string][];
   records: { name: string; l: number; b: number; z: number; kind: 'galaxy' | 'quasar'; note: string; ref: string }[];
 }
 
 const normName = (n: string) => n.replace(/\.0$/, '').replace(/[\s_−-]/g, '').toUpperCase();
 
+function blackHoleTable(u: UniverseObjects): Map<string, BlackHoleMass> {
+  return new Map((u.blackHoles ?? []).map(([name, mass, method, ref]) => [normName(name), { mass, method, ref }]));
+}
+
+/** The map kind of a Véron class. */
+export function agnKind(cl: AgnClass): CosmosKind {
+  return cl === 'A' ? 'seyfert' : cl === 'B' ? 'blazar' : 'quasar';
+}
+
 /**
- * Rich clusters, quasars and record holders as map entries, placed at the comoving distance for
- * their redshift. A record holder replaces a catalogue quasar of the same name.
+ * Rich clusters, active nuclei (quasars, Seyferts, blazars) and record holders as map entries,
+ * placed at the comoving distance for their redshift. A record holder replaces a catalogue
+ * quasar of the same name.
  */
 export function universeEntries(u: UniverseObjects): LocalGalaxy[] {
   const out: LocalGalaxy[] = [];
+  const holes = blackHoleTable(u);
   for (const [n, l, b, z, rich, count, bm] of u.clusters) {
     const g: LocalGalaxy = { name: `Abell ${n}`, kind: 'cluster', l, b, d: comovingDistance(z), z, zd: true, size: 4000, lk: 11.5 + (rich ?? 0) * 0.5 };
     if (rich !== null) g.rich = rich;
@@ -270,24 +385,55 @@ export function universeEntries(u: UniverseObjects): LocalGalaxy[] {
     out.push(g);
   }
   const recordNames = new Set(u.records.map((r) => normName(r.name)));
-  for (const [name, l, b, z, vmag] of u.quasars) {
+  for (const [name, l, b, z, vmag, cl, sp, radio] of u.agn ?? []) {
     if (recordNames.has(normName(name))) continue;
-    const g: LocalGalaxy = { name, kind: 'quasar', l, b, d: comovingDistance(z), z, zd: true, size: 30, t: -5, lk: vmag !== null ? 12.5 - vmag * 0.15 : 10 };
+    const kind = agnKind(cl);
+    // Seyferts live mostly in spirals, quasars and blazars mostly in ellipticals: the stand-in host follows.
+    const g: LocalGalaxy = { name, kind, cl, sp, l, b, d: comovingDistance(z), z, zd: true, size: 30, t: kind === 'seyfert' && !sp.startsWith('S3') ? 3 : -5, lk: vmag !== null ? 12.5 - vmag * 0.15 : 10 };
     if (vmag !== null) g.vmag = vmag;
+    if (radio !== null) g.radio = radio;
+    const bh = holes.get(normName(name));
+    if (bh) g.bh = bh;
     out.push(g);
   }
   for (const r of u.records) {
-    out.push({ name: r.name, kind: r.kind === 'quasar' ? 'quasar' : 'galaxy', l: r.l, b: r.b, d: comovingDistance(r.z), z: r.z, zd: true, size: r.kind === 'quasar' ? 30 : 2, t: r.kind === 'quasar' ? -5 : 9, lk: 11, note: r.note, ref: r.ref });
+    const g: LocalGalaxy = { name: r.name, kind: r.kind === 'quasar' ? 'quasar' : 'galaxy', l: r.l, b: r.b, d: comovingDistance(r.z), z: r.z, zd: true, size: r.kind === 'quasar' ? 30 : 2, t: r.kind === 'quasar' ? -5 : 9, lk: 11, note: r.note, ref: r.ref };
+    if (r.kind === 'quasar') g.cl = 'Q';
+    const bh = holes.get(normName(r.name));
+    if (bh) g.bh = bh;
+    out.push(g);
   }
   return out;
 }
 
+/** Give the named galaxies that host a catalogued active nucleus their `agn` (and black hole). */
+export function markActiveHosts(galaxies: LocalGalaxy[], u: Pick<UniverseObjects, 'hosts' | 'blackHoles'>): number {
+  const holes = blackHoleTable(u as UniverseObjects);
+  const byName = new Map(galaxies.map((g) => [g.name, g]));
+  let n = 0;
+  for (const [host, name, cl, sp, vmag, radio] of u.hosts ?? []) {
+    const g = byName.get(host);
+    if (!g) continue;
+    g.agn = { name, cl, sp, ...(vmag !== null ? { vmag } : {}), ...(radio !== null ? { radio } : {}) };
+    const bh = holes.get(normName(name)) ?? holes.get(normName(host));
+    if (bh) g.bh = bh;
+    n++;
+  }
+  return n;
+}
+
+const EMPTY_UNIVERSE: UniverseObjects = { clusters: [], agn: [], hosts: [], blackHoles: [], records: [] };
+let universeRaw: Promise<UniverseObjects> | undefined;
+export function loadUniverseRaw(baseUrl = import.meta.env.BASE_URL): Promise<UniverseObjects> {
+  universeRaw ??= fetch(`${baseUrl}data/universe-objects.json`)
+    .then((r) => (r.ok ? (r.json() as Promise<UniverseObjects>) : EMPTY_UNIVERSE))
+    .catch(() => EMPTY_UNIVERSE);
+  return universeRaw;
+}
+
 let universePromise: Promise<LocalGalaxy[]> | undefined;
 export function loadUniverseObjects(baseUrl = import.meta.env.BASE_URL): Promise<LocalGalaxy[]> {
-  universePromise ??= fetch(`${baseUrl}data/universe-objects.json`)
-    .then((r) => (r.ok ? (r.json() as Promise<UniverseObjects>) : { clusters: [], quasars: [], records: [] }))
-    .then(universeEntries)
-    .catch(() => []);
+  universePromise ??= loadUniverseRaw(baseUrl).then(universeEntries).catch(() => []);
   return universePromise;
 }
 
@@ -313,4 +459,4 @@ export function loadWebGalaxies(baseUrl = import.meta.env.BASE_URL): Promise<Web
 }
 
 export const GALAXY_CREDIT =
-  'Galaxy data: Updated Nearby Galaxy Catalog (Karachentsev, Makarov & Kaisina 2013), the 2MASS Redshift Survey (Huchra et al. 2012), HyperLEDA position angles (Paturel et al. 2003), OpenNGC (Mattia Verga, CC BY-SA 4.0), the Abell cluster catalogue (Abell, Corwin & Olowin 1989) and the Véron-Cetty & Véron quasar catalogue (2010), via VizieR (CDS).';
+  'Galaxy data: Updated Nearby Galaxy Catalog (Karachentsev, Makarov & Kaisina 2013), the 2MASS Redshift Survey (Huchra et al. 2012), HyperLEDA position angles (Paturel et al. 2003), OpenNGC (Mattia Verga, CC BY-SA 4.0), the Abell cluster catalogue (Abell, Corwin & Olowin 1989) and the Véron-Cetty & Véron catalogue of quasars and active galactic nuclei (2010), via VizieR (CDS). Black-hole masses from the papers named in each panel.';

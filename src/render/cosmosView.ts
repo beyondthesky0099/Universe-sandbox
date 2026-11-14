@@ -133,7 +133,9 @@ interface Label {
   kind?: CosmosKind;
 }
 
-const KIND_COLOR: Record<CosmosKind, string> = { galaxy: '#cfe3ff', cluster: '#ffb38a', quasar: '#d9b8ff' };
+const KIND_COLOR: Record<CosmosKind, string> = { galaxy: '#cfe3ff', cluster: '#ffb38a', quasar: '#d9b8ff', seyfert: '#ff9ad6', blazar: '#9ff5d8' };
+/** Point colours of the active nuclei: quasars violet, Seyferts and LINERs magenta, blazars mint. */
+const AGN_RGB: Partial<Record<CosmosKind, [number, number, number]>> = { quasar: [0.82, 0.66, 1.0], seyfert: [1.0, 0.55, 0.82], blazar: [0.6, 1.0, 0.85] };
 
 export class CosmosView {
   readonly scene = new THREE.Scene();
@@ -145,7 +147,7 @@ export class CosmosView {
 
   private positions = new Float32Array(0);
   private readonly kindPoints = new Map<CosmosKind, THREE.Points>();
-  private readonly kindVisible: Record<CosmosKind, boolean> = { galaxy: true, cluster: true, quasar: true };
+  private readonly kindVisible: Record<CosmosKind, boolean> = { galaxy: true, cluster: true, quasar: true, seyfert: true, blazar: true };
   private webPoints?: THREE.Points;
   private shapes?: GalaxyShapes;
   private readonly labels: Label[] = [];
@@ -179,7 +181,7 @@ export class CosmosView {
     this.controls.update();
   }
 
-  /** Build the map from the catalogues: galaxies, rich clusters and quasars (and, once loaded, the redshift survey). */
+  /** Build the map from the catalogues: galaxies, rich clusters, quasars, Seyferts and blazars (and, once loaded, the redshift survey). */
   setLocal(galaxies: LocalGalaxy[]): void {
     this.local = galaxies;
     const n = galaxies.length;
@@ -190,7 +192,7 @@ export class CosmosView {
       pts.geometry.dispose();
     }
     this.kindPoints.clear();
-    const kinds: CosmosKind[] = ['galaxy', 'cluster', 'quasar'];
+    const kinds: CosmosKind[] = ['galaxy', 'cluster', 'quasar', 'seyfert', 'blazar'];
     for (const kind of kinds) {
       const idx = galaxies.map((_, i) => i).filter((i) => (galaxies[i].kind ?? 'galaxy') === kind);
       if (!idx.length) continue;
@@ -214,8 +216,9 @@ export class CosmosView {
         } else {
           const record = !!g.note;
           const bright = record ? 1 : THREE.MathUtils.clamp((18.5 - (g.vmag ?? 17)) / 6, 0.45, 1);
-          col.set([0.82 * bright, 0.66 * bright, 1.0 * bright], k * 3);
-          size[k] = record ? 1.2 : 0.5;
+          const [cr, cg, cb] = AGN_RGB[kind] ?? AGN_RGB.quasar!;
+          col.set([cr * bright, cg * bright, cb * bright], k * 3);
+          size[k] = record ? 1.2 : g.bh ? 0.8 : 0.5;
         }
       });
       const geo = new THREE.BufferGeometry();
@@ -273,7 +276,7 @@ export class CosmosView {
     this.applyPointScale();
   }
 
-  /** Show or hide a layer: the rich clusters or the quasars. */
+  /** Show or hide a layer: the rich clusters, the quasars, the Seyferts or the blazars. */
   setKindVisible(kind: CosmosKind, on: boolean): void {
     this.kindVisible[kind] = on;
     const pts = this.kindPoints.get(kind);

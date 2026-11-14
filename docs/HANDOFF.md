@@ -208,6 +208,30 @@ Plan, in priority order:
 - BodyVisual adds it in applyDetail and updates it only when the planet is more than 14 px across
   and a star is present. Tests: tests/aurora.test.ts.
 
+### AO. Active galactic nuclei in the Universe view (step 1 of the AGN work)
+The "quasars" layer was really all of Véron's bright objects: 55% were Seyferts. Now split.
+- [x] scripts/build-deep-universe.mjs: `agn` rows carry Véron's class (Q quasar, A Seyfert/LINER,
+  B BL Lac), spectrum code and 5 GHz flux. 3,049 quasars, 3,493 Seyferts/LINERs, 151 BL Lacs.
+  - `hosts`: a nucleus within 1.5′ of a galaxy in galaxies-local/named.json (z ≤ 0.2) becomes that
+    galaxy's nucleus (467, M77/NGC 1068, M87, Cen A, Circinus, M81…) and is dropped from the
+    points. Nuclei with z ≤ 0 (M81 approaches) can only be hosts.
+  - `blackHoles`: 22 hand-entered masses with method and paper (BLACK_HOLES). Véron names are
+    exact: 'Circinus', 'MARK 509', '3C 273.0', '3C 405.0' (Cyg A), 'NGC 4486' (M87).
+- [x] src/sim/galaxies.ts: CosmosKind 'seyfert' | 'blazar'; AgnClass, ActiveNucleus, BlackHoleMass;
+  `agnTypeLabel`, `agnNucleusLabel`, `agnDescription` (SPECTRA decodes the ReadMe's note 3);
+  `agnKind`; `markActiveHosts(galaxies, raw)`; `loadUniverseRaw()` shared by the Universe view and
+  the search index. `isFamous` is true for anything with a measured black hole.
+- [x] CosmosView: point layers and KIND_COLOR for both kinds (Seyferts magenta, blazars mint;
+  points with a black-hole mass draw bigger). Checkboxes #opt-cosmos-seyferts, #opt-cosmos-blazars.
+- [x] cosmosFacts: Type from the class, an "Active nucleus" explanation, "Central black hole" with
+  method and paper (formatBlackHoleMass), "Radio (5 GHz)"; hosts say "Spiral galaxy with a Seyfert
+  2 nucleus" and "Catalogued as NGC 1068". Search: kinds Quasar/Seyfert…/Galaxy (LINER nucleus),
+  the deep objects are now in the global index, Véron names are aliases.
+- Tests: tests/galaxies.test.ts ("active galactic nuclei").
+- **Step 2 (not started):** visiting a quasar, Seyfert or blazar should open an AGN scene: a
+  10⁷–10⁹ M☉ Kerr black hole with the existing disc and lensing, a ray-marched dust torus, broad-line
+  clouds and twin jets, viewed through the torus for Seyfert 2s and down the jet for blazars.
+
 ### AN. Novae, cataclysmic variables, Cepheids and masers on the Galaxy Map
 Continues the "every object" rounds (AL, AM): four more real layers, all in galactic-objects.json
 and the same pipeline (GalacticObject kinds 'nova' | 'cv' | 'cep' | 'maser').
@@ -306,7 +330,8 @@ and the 62,000 Gaia stars (sections F–J). Ideas for the next rounds are at the
 - Galaxy Map: X-ray binaries, Wolf–Rayet stars (AM), novae, cataclysmic variables, Cepheids and
   masers (AN) are done. Still to do: RR Lyrae and Mira variables (Gaia DR3), symbiotic stars,
   Be stars, more Gaia stars (mag < 10 would be about 300,000: needs a binary format and a budget).
-- Up close: black holes and nebulae at real scale; moon and asteroid surfaces.
+- Up close: the AGN scene (AO step 2), black holes and nebulae at real scale; moon and asteroid
+  surfaces.
 - Universe: the 2MRS galaxies without names could still be clickable (type and redshift only);
   galaxy groups (Tully 2015); SDSS large-scale structure beyond 2MRS is too big for the repo.
 - Solar System: every numbered asteroid above 10 km, and the 290 known moons (Horizons).

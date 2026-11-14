@@ -228,9 +228,30 @@ The "quasars" layer was really all of Véron's bright objects: 55% were Seyferts
   2 nucleus" and "Catalogued as NGC 1068". Search: kinds Quasar/Seyfert…/Galaxy (LINER nucleus),
   the deep objects are now in the global index, Véron names are aliases.
 - Tests: tests/galaxies.test.ts ("active galactic nuclei").
-- **Step 2 (not started):** visiting a quasar, Seyfert or blazar should open an AGN scene: a
-  10⁷–10⁹ M☉ Kerr black hole with the existing disc and lensing, a ray-marched dust torus, broad-line
-  clouds and twin jets, viewed through the torus for Seyfert 2s and down the jet for blazars.
+- [x] **Step 2: the nucleus up close.** src/sim/agn.ts (headless): `agnParams(g, name)` from a
+  LocalGalaxy: type by the unified model (`agnType`: quasar / seyfert1 / seyfert2 / liner / blazar /
+  radio), mass (measured `bh`, else L / (ε L_Edd) with ε by type, one significant figure), L_bol from
+  V and distance (×5 for obscured type 2s; capped at Eddington), R_BLR (Bentz 2013), R_sub (Nenkova
+  2008) with the torus out to 5 R_sub, jet length and β (0.98 radio-loud, 0.3 else), `viewAngleFor`.
+  `rememberAgn`/`agnFor` register the scene's nucleus by body name for the renderer. `DISC_TILT`
+  (0.25) is the disc tilt BodyVisual gives every black hole; the torus, jets and clouds share it.
+  - presets.ts `loadActiveNucleus`: the hole (spin 0.9), 16 nuclear stars between 3 R_BLR and
+    1.6 R_sub (seeded by name), 700 broad-line particles (addParticleDisk, tilt DISC_TILT;
+    `particleCullDistance` raised, the default 5,000 AU would cull them), true scale; camera at
+    2.4 R_out with elevation π/2 − DISC_TILT − viewAngle; timeScale from the BLR orbital period.
+  - src/render/agn.ts `AgnVisual`: torus ray-marched in a box (44 steps, slab test from the camera,
+    premultiplied alpha, absorption κ = 1.6 per R_sub so it is opaque edge-on; inner face heated
+    ∝ 1/r², funnel walls scatter blue); jets as analytic Gaussian tubes in a cylinder hull
+    (BackSide, additive, beamed by δ^2.7 with the catalogue's β, knots drifting outwards); a glare
+    sprite for the nucleus, dimmed outside the torus's clear cone and faded out when the disc is
+    big enough to see. Hidden when the torus is under 1.5 px. BodyVisual attaches it for black
+    holes with registered parameters (`agnFor(body.name)`).
+  - Entry: Universe panel button #btn-cosmos-nucleus (`cosmosUI.visitNucleus`, Origin kind 'agn',
+    back button reads "← Universe" and exitToGalaxy returns to the Universe view and the galaxy);
+    the Galaxy Map 'core' of a stand-in galaxy whose Universe entry `isActiveGalaxy` opens the
+    nucleus instead of Sgr A*'s scene.
+  - Tests: tests/agn.test.ts (3C 273's sizes, M77 as a Seyfert 2, assumed masses, the scene).
+  - Checked with Playwright: M77 (through the torus), 3C 273, BL Lac (down the jet), M87's core.
 
 ### AN. Novae, cataclysmic variables, Cepheids and masers on the Galaxy Map
 Continues the "every object" rounds (AL, AM): four more real layers, all in galactic-objects.json
@@ -330,8 +351,8 @@ and the 62,000 Gaia stars (sections F–J). Ideas for the next rounds are at the
 - Galaxy Map: X-ray binaries, Wolf–Rayet stars (AM), novae, cataclysmic variables, Cepheids and
   masers (AN) are done. Still to do: RR Lyrae and Mira variables (Gaia DR3), symbiotic stars,
   Be stars, more Gaia stars (mag < 10 would be about 300,000: needs a binary format and a budget).
-- Up close: the AGN scene (AO step 2), black holes and nebulae at real scale; moon and asteroid
-  surfaces.
+- Up close: black holes and nebulae at real scale; moon and asteroid surfaces. AGN ideas: radio
+  lobes beyond the jets, a warped maser disc for NGC 4258, the lensed disc image when zoomed in.
 - Universe: the 2MRS galaxies without names could still be clickable (type and redshift only);
   galaxy groups (Tully 2015); SDSS large-scale structure beyond 2MRS is too big for the repo.
 - Solar System: every numbered asteroid above 10 km, and the 290 known moons (Horizons).

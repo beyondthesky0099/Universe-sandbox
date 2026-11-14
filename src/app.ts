@@ -17,7 +17,7 @@ import { GAS_PALETTE, ROCKY_PALETTE } from './sim/color';
 import { type Forecast } from './sim/forecast';
 import { SimHost } from './sim/host';
 import type { CompactObject } from './sim/compactObjects';
-import { galacticCore, hulseTaylor, loadBlackHoleSystem, loadGalacticObject, loadPulsarSystem, loadSolarSystemOnDate, loadStarSystem, PRESETS, pulsarPlanets } from './sim/presets';
+import { galacticCore, hulseTaylor, loadActiveNucleus, loadBlackHoleSystem, loadGalacticObject, loadPulsarSystem, loadSolarSystemOnDate, loadStarSystem, PRESETS, pulsarPlanets } from './sim/presets';
 import { describeObject, type GalacticObject } from './sim/galacticObjects';
 import { describePulsar, pulsarName, type PulsarRecord } from './sim/pulsars';
 import { hulseTaylorChart } from './ui/hulseTaylorChart';
@@ -32,6 +32,7 @@ import { History } from './ui/history';
 import { decodeScene, downloadJson, encodeScene, type SceneFile } from './ui/share';
 import { Tutorial } from './ui/tutorial';
 import { PostFX, type LensInfo } from './render/postfx';
+import { displayName, isActiveGalaxy } from './sim/galaxies';
 import { blackHoleView } from './render/accretionDisk';
 import { MegaSim } from './gpu/megaSim';
 import { defaultServerUrl, ServerClient } from './net/server';
@@ -712,7 +713,12 @@ export class App {
       await sleep(450);
       await this.fade(true);
       let scenario: Scenario;
-      if (target === 'core') {
+      // The core of a galaxy with a catalogued active nucleus is that nucleus; the Milky Way's (and any other) is Sgr A*'s scene.
+      const host = this.galaxyOrigin && this.galaxyOrigin !== 'Milky Way' ? this.cosmos.local.find((g) => g.name === this.galaxyOrigin) : undefined;
+      if (target === 'core' && host && isActiveGalaxy(host)) {
+        const shown = displayName(host);
+        scenario = { name: `the nucleus of ${shown}`, load: () => loadActiveNucleus(this.sim, host, shown), origin: { kind: 'core' } };
+      } else if (target === 'core') {
         scenario = { name: galacticCore.name, load: () => galacticCore.load(this.sim), presetId: galacticCore.id, origin: { kind: 'core' } };
       } else if (target === 'sol') {
         scenario = { name: 'the Solar System', load: () => loadSolarSystemOnDate(this.sim, new Date()), origin: { kind: 'sol' } };
@@ -742,7 +748,8 @@ export class App {
         this.store.markVisited(target);
         this.galaxyMapUI.refreshMarkers();
       }
-      this.loadScenario(scenario, { zoomFrom: 30 });
+      // A nucleus scene is a million AU across: zooming in from 30× would start beyond the auto-exit distance.
+      this.loadScenario(scenario, { zoomFrom: target === 'core' && host && isActiveGalaxy(host) ? 8 : 30 });
       this.setView('system');
       await sleep(60);
       await this.fade(false);
@@ -770,8 +777,20 @@ export class App {
       this.system.camera.position.copy(camTarget).add(offset);
       this.system.controls.target.copy(camTarget);
       this.system.stopCameraAnimation();
-      this.setView('galaxy');
       const origin = this.scenario.origin;
+      // A nucleus entered from the Universe view goes back there.
+      if (origin?.kind === 'agn' && this.cosmosLoaded) {
+        this.setView('cosmos');
+        const i = this.cosmos.indexOf(origin.galaxy.name);
+        if (i >= 0) {
+          this.cosmosUI.selectCosmos(i);
+          this.cosmos.arriveFrom(i);
+        }
+        await sleep(60);
+        await this.fade(false);
+        return;
+      }
+      this.setView('galaxy');
       const exoIndex = origin?.kind === 'exo' ? this.exoMapHosts.findIndex((h) => h.name === origin.host.name) : -1;
       const target: GalaxyTarget | undefined =
         origin?.kind === 'core'
@@ -879,11 +898,14 @@ export class App {
     $('preset-desc').textContent = sc.presetId ? (PRESETS.find((p) => p.id === sc.presetId)?.description ?? '') : (sc.description ?? setup.tip ?? '');
     $('preset-extra').innerHTML = sc.presetId === 'hulse-taylor' ? hulseTaylorChart() : '';
     $('origin').classList.toggle('hidden', !sc.origin);
+    $('btn-back').textContent = sc.origin?.kind === 'agn' ? '← Universe' : '← Galaxy map';
     if (sc.origin?.kind === 'star') {
       $('origin-name').textContent = sc.origin.spec.star.name;
       $('preset-desc').textContent = describeSystem(sc.origin.spec);
     } else if (sc.origin?.kind === 'core') {
       $('origin-name').textContent = 'the galactic core';
+    } else if (sc.origin?.kind === 'agn') {
+      $('origin-name').textContent = displayName(sc.origin.galaxy);
     } else if (sc.origin) {
       $('origin-name').textContent =
         sc.origin.kind === 'exo'

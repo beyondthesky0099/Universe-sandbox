@@ -324,6 +324,15 @@ important ones stay and the rest fade out until you zoom in and there's room for
     - Each black hole comes with its companion star on the orbit from its paper.
     - The Gaia black holes are dormant: no disc, only their shadow and the bending of starlight.
     - The X-ray binaries feed from a disc.
+  - **Visit an active nucleus.** Every quasar, Seyfert, LINER and blazar on the Universe map,
+    and every named galaxy that hosts one (M77, M87, Centaurus A…), has a *Visit the nucleus*
+    button, and the core of such a galaxy's map is that nucleus. The scene is to scale: the
+    black hole (its measured mass where a paper has one, else one that would shine as bright as
+    the catalogue says) with its disc, the broad-line clouds orbiting light-days out, a nuclear
+    star cluster, the dusty torus a parsec out, ray-marched so that it hides the nucleus when seen
+    edge-on, and twin jets beamed towards whichever side faces you. The camera starts where the
+    unified model puts you: past the torus for a Seyfert 1 or quasar, through it for a Seyfert 2,
+    down the jet for a blazar. Zoom in ten thousand times to reach the disc.
   - **All 402 known Galactic novae and 1,601 other cataclysmic variables.** Novae (orange-red,
     recurrent ones deeper red) sit at Schaefer's best distances; the rest have Gaia DR3 distances.
     Zoom in to one and the white dwarf appears with its accretion disc (none for a polar, whose
@@ -923,6 +932,11 @@ push and pull request.
   build script. Cepheid luminosities use the Benedict et al. (2007) period–luminosity relation,
   radii the Gieren et al. (1998) period–radius relation, and donor masses the Knigge et al. (2011)
   donor sequence.
+- Active nuclei up close: luminosity from the V magnitude and distance with L_bol ≈ 9 λL_λ(5100 Å)
+  (Kaspi et al. 2000); broad-line radius from Bentz et al. (2013); dust sublimation radius from
+  Nenkova et al. (2008); Eddington ratios and viewing angles by type from the unified model
+  (Antonucci 1993, Urry & Padovani 1995). The torus shape, jets and nuclear cluster are
+  illustrative, and the scene says so.
 - Black holes and pulsars: positions from SIMBAD; masses and distances from the discovery papers,
   verified against their arXiv abstracts by `node scripts/build-compact-objects.mjs`.
 - Pulsars: the ATNF Pulsar Catalogue v2.6.1 (Manchester, Hobbs, Teoh & Hobbs 2005, AJ 129, 1993;

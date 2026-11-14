@@ -12,6 +12,8 @@ import { makePlanetTextures, realRingTexture, seedFromName } from './planetTextu
 import { mulberry32 } from '../procgen/rng';
 import { glowTexture } from './textures';
 import { NeutronStarVisual } from './neutronStar';
+import { AgnVisual } from './agn';
+import { agnFor, DISC_TILT } from '../sim/agn';
 import { coronaMesh, StarSurface, starLook } from './starSurface';
 import { hookPlanet, hookRings, oceanRoughness, shadowUniforms, type ShadowUniforms } from './planetLighting';
 import { starTemperature } from '../sim/color';
@@ -309,8 +311,14 @@ export class BodyVisual {
         if (body.tag === 'dormant') break;
         // The disc lies in the hole's equator: its normal is the spin axis (accretionDisk.ts).
         this.disk = accretionDiskMesh();
-        this.disk.rotation.x = -Math.PI / 2 + 0.25;
+        this.disk.rotation.x = -Math.PI / 2 + DISC_TILT;
         this.glow = this.makeGlow(0xff9a4a, 0.5);
+        // An active galactic nucleus (sim/agn.ts, registered by name): its torus and jets share the disc's axis.
+        const agn = agnFor(body.name);
+        if (agn) {
+          this.agn = new AgnVisual(agn);
+          this.agn.root.rotation.x = -Math.PI / 2 + DISC_TILT;
+        }
         break;
       case 'gas':
       case 'rocky':
@@ -327,6 +335,7 @@ export class BodyVisual {
     this.mesh = new THREE.Mesh(this.isProbe ? PROBE : this.isPlanet || this.neutron || this.star ? SPHERE : SPHERE_LOW, material);
     this.spin.add(this.mesh);
     if (this.disk) this.group.add(this.disk);
+    if (this.agn) this.group.add(this.agn.root);
     if (this.glow) this.group.add(this.glow);
     if (this.neutron) this.spin.add(this.neutron.root);
     if (this.corona) this.group.add(this.corona);
@@ -493,6 +502,8 @@ export class BodyVisual {
   /** Update transform. `worldPerPixel` is the world size of one screen pixel at the body's depth. */
   /** Pulsation period (days) of a Cepheid, read from its tag. */
   private cepheidPeriod?: number;
+  /** The torus and jets of an active galactic nucleus. */
+  private agn?: AgnVisual;
 
   update(body: Body, worldPerPixel: number, dt: number, lockTo?: Body, sun?: Body, camera?: THREE.Vector3, simTime = 0): void {
     this.group.position.set(body.x, body.y, body.z);
@@ -549,6 +560,7 @@ export class BodyVisual {
               : body.radius * 14;
       this.glow.scale.setScalar(isGalaxy ? body.radius * 1.6 : big * (0.8 + 0.2 * pulse));
     }
+    if (this.agn && camera) this.agn.update(camera, dt, worldPerPixel);
     if (this.disk) {
       this.disk.scale.setScalar(r);
       updateAccretionDisk(this.disk, body.spin ?? 0, performance.now() / 1000);
@@ -733,6 +745,11 @@ export class BodyVisual {
       this.corona = undefined;
     }
     this.star = undefined;
+    if (this.agn) {
+      this.group.remove(this.agn.root);
+      this.agn.dispose();
+      this.agn = undefined;
+    }
     if (this.neutron) {
       this.spin.remove(this.neutron.root);
       this.neutron.dispose();

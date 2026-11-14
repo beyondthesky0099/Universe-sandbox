@@ -363,6 +363,11 @@ function blackHoleTable(u: UniverseObjects): Map<string, BlackHoleMass> {
   return new Map((u.blackHoles ?? []).map(([name, mass, method, ref]) => [normName(name), { mass, method, ref }]));
 }
 
+/** True when the entry has a catalogued active nucleus to visit: an AGN point, or a galaxy that hosts one. */
+export function isActiveGalaxy(g: Pick<LocalGalaxy, 'kind' | 'agn' | 'bh'>): boolean {
+  return g.kind === 'quasar' || g.kind === 'seyfert' || g.kind === 'blazar' || !!g.agn || !!g.bh;
+}
+
 /** The map kind of a Véron class. */
 export function agnKind(cl: AgnClass): CosmosKind {
   return cl === 'A' ? 'seyfert' : cl === 'B' ? 'blazar' : 'quasar';
@@ -385,8 +390,13 @@ export function universeEntries(u: UniverseObjects): LocalGalaxy[] {
     out.push(g);
   }
   const recordNames = new Set(u.records.map((r) => normName(r.name)));
+  // A record holder replaces its catalogue row but keeps the row's magnitude, class and radio flux.
+  const replaced = new Map<string, { vmag: number | null; cl: AgnClass; sp: string; radio: number | null }>();
   for (const [name, l, b, z, vmag, cl, sp, radio] of u.agn ?? []) {
-    if (recordNames.has(normName(name))) continue;
+    if (recordNames.has(normName(name))) {
+      replaced.set(normName(name), { vmag, cl, sp, radio });
+      continue;
+    }
     const kind = agnKind(cl);
     // Seyferts live mostly in spirals, quasars and blazars mostly in ellipticals: the stand-in host follows.
     const g: LocalGalaxy = { name, kind, cl, sp, l, b, d: comovingDistance(z), z, zd: true, size: 30, t: kind === 'seyfert' && !sp.startsWith('S3') ? 3 : -5, lk: vmag !== null ? 12.5 - vmag * 0.15 : 10 };
@@ -399,6 +409,13 @@ export function universeEntries(u: UniverseObjects): LocalGalaxy[] {
   for (const r of u.records) {
     const g: LocalGalaxy = { name: r.name, kind: r.kind === 'quasar' ? 'quasar' : 'galaxy', l: r.l, b: r.b, d: comovingDistance(r.z), z: r.z, zd: true, size: r.kind === 'quasar' ? 30 : 2, t: r.kind === 'quasar' ? -5 : 9, lk: 11, note: r.note, ref: r.ref };
     if (r.kind === 'quasar') g.cl = 'Q';
+    const row = replaced.get(normName(r.name));
+    if (row) {
+      g.cl = row.cl;
+      g.sp = row.sp;
+      if (row.vmag !== null) g.vmag = row.vmag;
+      if (row.radio !== null) g.radio = row.radio;
+    }
     const bh = holes.get(normName(r.name));
     if (bh) g.bh = bh;
     out.push(g);

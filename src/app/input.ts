@@ -354,6 +354,7 @@ export class InputUI {
     $('tab-cosmos').addEventListener('click', () => this.app.view !== 'cosmos' && void this.app.cosmosUI.openCosmos(this.app.view === 'galaxy'));
     $('btn-cosmos-fly').addEventListener('click', () => this.app.cosmos.selected !== -1 && this.app.travelUI.goCosmosGalaxy(this.app.cosmos.selected));
     $('btn-cosmos-visit').addEventListener('click', () => this.app.cosmos.selected !== -1 && void this.app.cosmosUI.visitCosmosGalaxy(this.app.cosmos.selected));
+    $('btn-cosmos-nucleus').addEventListener('click', () => this.app.cosmos.selected !== -1 && void this.app.cosmosUI.visitNucleus(this.app.cosmos.selected));
     $('btn-cosmos-home').addEventListener('click', () => {
       const mw = this.app.cosmos.indexOf('Milky Way');
       this.app.cosmosUI.selectCosmos(mw);

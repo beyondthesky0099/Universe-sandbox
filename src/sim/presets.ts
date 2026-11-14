@@ -13,6 +13,8 @@ import { describePulsar, pulsarName, type PulsarRecord } from './pulsars';
 import { GAS_DISC_LIFETIME, planetesimals } from './planetFormation';
 import { julianDate, planetStates, type PlanetName } from './ephemeris';
 import { setTrueScale } from './trueScale';
+import { agnParams, describeAgn, DISC_TILT, rememberAgn } from './agn';
+import type { LocalGalaxy } from './galaxies';
 import { SPACECRAFT_COLOR, spacecraftState } from './spacecraft';
 import { loadMilkyWayAndromeda } from './localGroup';
 import { getSolarData, KM_PER_AU, poleScene, realRadiusAu, REAL_COLORS, relativeState, sampleRingRadii, smallBodyState, toScene, type SolarData } from './solarSystemData';
@@ -748,6 +750,48 @@ export function loadMaser(sim: Simulation, o: Maser): SceneSetup {
   sim.recenter();
   const where = o.arm && ARMS[o.arm] ? ` in ${ARMS[o.arm]}` : '';
   return { cameraDistance: 30, focus: star.name, timeScale: 2, elevation: 0.5, tip: `${describeObject({ kind: 'maser', ...o })} The 20 M☉ protostar, its disc and its six young neighbours${where} are illustrative, not measured.` };
+}
+
+/**
+ * An active galactic nucleus from the Universe view (sim/agn.ts): the supermassive black hole with
+ * its disc, the broad-line clouds as particles on Keplerian orbits, a nuclear star cluster, and
+ * (drawn by BodyVisual from the registered parameters) the dusty torus and the jets. Everything is
+ * to scale; the camera starts outside the torus, looking in at the angle the unified model gives
+ * this type of nucleus.
+ */
+export function loadActiveNucleus(sim: Simulation, g: Pick<LocalGalaxy, 'name' | 'kind' | 'cl' | 'sp' | 'vmag' | 'radio' | 'agn' | 'bh' | 'd' | 'z'>, name = g.name): SceneSetup {
+  const p = agnParams(g, name);
+  rememberAgn(p);
+  const rand = mulberry32(name.split('').reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 11));
+  const hole = sim.addBody({ name, kind: 'blackhole', mass: p.mass, spin: p.spin });
+  // The nuclear star cluster: stars on eccentric orbits between the broad-line region and the torus.
+  const aMin = Math.log(p.blrAu * 3), aMax = Math.log(p.torusInnerAu * 1.6);
+  for (let i = 0; i < 16; i++) {
+    const a = Math.exp(aMin + (aMax - aMin) * rand());
+    const mass = 2 + rand() * rand() * 25;
+    addOrbiting(sim, hole, { name: `Nuclear star ${i + 1}`, kind: 'star', mass, age: 0.3 * mainSequenceLifetime(mass) }, {
+      a,
+      e: rand() * 0.8,
+      inc: Math.acos(2 * rand() - 1),
+      lan: rand() * Math.PI * 2,
+      argp: rand() * Math.PI * 2,
+      nu: rand() * Math.PI * 2,
+    });
+  }
+  // The broad-line clouds: a thick ring of gas on orbits of weeks to years, in the disc's plane.
+  addParticleDisk(sim, hole, { count: 700, inner: p.blrAu * 0.5, outer: p.blrAu * 2.2, thickness: 0.3, color: [0.62, 0.78, 1], tilt: DISC_TILT, jitter: 0.45 });
+  sim.particleCullDistance = p.torusOuterAu * 4;
+  setTrueScale(sim, true);
+  sim.recenter();
+  // One orbit at the broad-line radius takes P = √(a³/M) years: a few seconds at the scene's speed.
+  const years = Math.sqrt(Math.pow(p.blrAu, 3) / p.mass);
+  return {
+    cameraDistance: p.torusOuterAu * 2.4,
+    elevation: Math.PI / 2 - DISC_TILT - p.viewAngle,
+    timeScale: Math.max(0.5, years / 8),
+    maxTimeScale: Math.max(100, years * 20),
+    tip: describeAgn(p),
+  };
 }
 
 /** A Galaxy Map object of any kind, in the Sandbox. */

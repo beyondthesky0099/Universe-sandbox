@@ -88,6 +88,7 @@ export type Origin =
   | { kind: 'pulsar'; index: number; record: PulsarRecord }
   | { kind: 'blackhole'; index: number; object: CompactObject }
   | { kind: 'object'; index: number; object: GalacticObject }
+  | { kind: 'agn'; galaxy: LocalGalaxy }
   | { kind: 'neighbourhood' };
 
 export interface Scenario {

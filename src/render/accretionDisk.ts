@@ -98,7 +98,10 @@ const FRAGMENT = /* glsl */ `
     float streaks = 0.55 + 0.45 * noise(vec2(R * 2.2, swirl * 5.0)) * (0.6 + 0.4 * noise(vec2(R * 9.0, swirl * 17.0)));
     // Soft outer edge, crisp inner edge.
     float edge = smoothstep(uInner, uInner * 1.06, R) * (1.0 - smoothstep(uOuter * 0.55, uOuter, R));
-    gl_FragColor = vec4(col * I * streaks * edge * uBrightness, 1.0);
+    vec3 shade = col * I * streaks * edge * uBrightness;
+    // The disc is bright where it is thick and fades out at its edges: let the dark parts show what is behind
+    // (a jet or torus seen past it), rather than painting black over them.
+    gl_FragColor = vec4(shade, clamp(length(shade) * 1.5, 0.0, 1.0));
   }
 `;
 
@@ -123,6 +126,7 @@ export function accretionDiskMesh(opts: { whiteDwarf?: boolean } = {}): THREE.Me
     },
     transparent: true,
     depthWrite: false,
+    premultipliedAlpha: true,
     side: THREE.DoubleSide,
     blending: THREE.AdditiveBlending,
   });

@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { seedFromString } from '../procgen/rng';
-import { displayName, GALAXY_CREDIT, galaxyForm, loadLocalGalaxies, loadNamedGalaxies, loadUniverseObjects, loadUniverseRaw, loadWebGalaxies, markActiveHosts } from '../sim/galaxies';
+import { displayName, GALAXY_CREDIT, galaxyForm, isActiveGalaxy, loadLocalGalaxies, loadNamedGalaxies, loadUniverseObjects, loadUniverseRaw, loadWebGalaxies, markActiveHosts } from '../sim/galaxies';
+import { loadActiveNucleus } from '../sim/presets';
 import { MILKY_WAY_SEED } from '../procgen/galaxy';
 import { fmt } from '../sim/units';
 import { $, escapeHtml, setFacts, toast } from '../ui/dom';
@@ -95,6 +96,7 @@ export class CosmosUI {
     $('btn-cosmos-visit').textContent = g.name === 'Milky Way' ? 'Back to the Milky Way →' : g.kind === 'quasar' || g.kind === 'seyfert' || g.kind === 'blazar' ? 'Visit host galaxy →' : 'Visit galaxy →';
     // A cluster is a place to fly to, not a galaxy to enter.
     $('btn-cosmos-visit').classList.toggle('hidden', g.kind === 'cluster');
+    $('btn-cosmos-nucleus').classList.toggle('hidden', !isActiveGalaxy(g));
     panel.classList.remove('hidden');
   }
 
@@ -116,6 +118,25 @@ export class CosmosUI {
       await sleep(60);
       await this.app.fade(false);
       toast(g.name === 'Milky Way' ? 'Back home in the Milky Way' : `Arrived at ${displayName(g)}`);
+    } finally {
+      this.app.transitioning = false;
+    }
+  }
+
+  /** Into the nucleus itself: the black hole, its disc and clouds, the torus and the jets (presets.loadActiveNucleus). */
+  async visitNucleus(index: number): Promise<void> {
+    const g = this.app.cosmos.local[index];
+    if (!g || this.app.transitioning || !isActiveGalaxy(g)) return;
+    this.app.transitioning = true;
+    try {
+      this.app.cosmos.flyTo(index, this.app.cosmos.viewDistance(index) * 0.08, 1.6);
+      await sleep(420);
+      await this.app.fade(true);
+      const shown = displayName(g);
+      this.app.loadScenario({ name: `the nucleus of ${shown}`, load: () => loadActiveNucleus(this.app.sim, g, shown), origin: { kind: 'agn', galaxy: g } }, { zoomFrom: 8 }); // under the auto-exit distance (12× the scene scale)
+      this.app.setView('system');
+      await sleep(60);
+      await this.app.fade(false);
     } finally {
       this.app.transitioning = false;
     }

@@ -225,8 +225,20 @@ shadow is √27 GM/c².
   √(2 R_s / D) (held at D ≥ 3.5 R_s); `lensesOnScreen` converts it to screen heights with the
   camera's field of view and passes it per lens (`LensInfo.thetaE`, uniform `uThetaE`); the
   shader keeps it at least 1.2 shadow radii. Tests in tests/kerr.test.ts.
-- Next steps of the review (in order): the disc should be lensed (far side bent over the shadow);
-  Lense–Thirring precession.
+- [x] **Step 3: the disc is lensed.** src/sim/geodesic.ts (headless): Schwarzschild null
+  geodesics, u'' = 3u² − u in M units, leapfrog with PHI_STEP 0.03 and MAX_STEPS 260;
+  `tracePhoton(b)` (deflection, capture) and `traceDisc(hole, dir, normal, m1, rIn, rOut)` (first
+  crossing of the disc plane, with the Doppler/gravitational g for prograde circular gas). The lens
+  shader (postfx.ts `traceDisc`) runs the same integrator per pixel for each black hole whose ray's
+  impact parameter is under the disc's outer radius: positions in M relative to the camera
+  (`LensInfo.disc`: inner = ISCO, outer 36, normal, m1, holeRel; uniforms uHoleRel/uDiscN/uDiscM1/
+  uDisc, the camera frame uCamRight/Up/Forward + uTanHalf), shading shared with the flat disc via
+  `DISC_GLSL` (accretionDisk.ts `discShade`). The flat disc mesh is hidden while the lens pass is
+  on (BodyVisual); white dwarfs' discs keep the flat layer pass. Kerr: the shadow outline stays
+  Bardeen's; the disc's geodesics are Schwarzschild.
+  - Tests: tests/geodesic.test.ts (4M/b deflection to 3%, capture at √27 M, a ray aimed 7 M above
+    an edge-on disc lands on its far side at r < 12 M, opposite Doppler shifts on the two sides).
+- Next step of the review: Lense–Thirring precession.
 
 ### AP. Search by kind
 The three search boxes matched names only, so "pulsars" or "agn" found nothing.

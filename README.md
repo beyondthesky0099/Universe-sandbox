@@ -611,7 +611,10 @@ It is set with a slider in the black hole's panel (`src/sim/kerr.ts`).
   - The gas orbits at up to ~40% of light speed, so the side coming towards you is
     Doppler-boosted, bluer and brighter, and the other side is dimmed and reddened.
   - Gravitational redshift dims the inner edge.
-  - The disc is drawn after the lensing, so its near side passes in front of the shadow.
+  - With lensing on, the disc is drawn by tracing each pixel's light ray around the hole
+    (Schwarzschild null geodesics, integrated in the shader): the far side appears bent up and
+    over the shadow and again beneath it, the near side passes in front, and the Doppler
+    brightening follows the real path of the light. Without lensing, a flat disc stands in.
 - **Mergers leave spinning holes:** spin is worked out from the masses and spins (Rezzolla et al.
   2008). Two equal holes give 0.69; LIGO measured GW150914's remnant at 0.67.
 - **Real values:** the galactic-core scene's hole spins at 0.94, as the Event Horizon Telescope's
@@ -888,9 +891,11 @@ push and pull request.
   precision. The "light speed" slider exaggerates the effects on purpose.
 - **Stellar evolution** uses simple mass–lifetime and mass–luminosity relations, not stellar
   models.
-- Lensing is a screen-space effect, not ray tracing. Its Einstein radius is the point-lens
-  value for the camera's distance, θ_E = √(2 R_s / D), so the bent region grows as you back away:
-  17 shadow radii from 1,000 Schwarzschild radii out.
+- The starfield's lensing is a screen-space effect, not ray tracing: a point-lens deflection with
+  the Einstein radius for the camera's distance, θ_E = √(2 R_s / D), so the bent region grows as
+  you back away (17 shadow radii from 1,000 Schwarzschild radii out). The accretion disc, though,
+  is ray-traced: the lens pass integrates u'' = 3u² − u for each pixel's ray around the hole
+  (non-spinning geometry; the shadow's spin-shaped outline is kept).
 - JPL approximate elements are accurate to a few arcminutes for 1800–2050. Small bodies and
   moons use two-body Kepler motion from a 2026 epoch, so they drift slowly over decades.
   Moon systems leave out the Sun's pull and planetary oblateness. Exoplanet systems

@@ -18,7 +18,7 @@ import { mulberry32 } from '../procgen/rng';
 import { AU_PER_YEAR_IN_KMS } from '../sim/units';
 import { shadowProfile } from '../sim/kerr';
 import { SHADOW_BINS, type LensInfo } from './postfx';
-import { drawnShadowRadius, einsteinRadius } from '../sim/kerr';
+import { drawnShadowRadius, einsteinRadius, iscoRadius, SHADOW_RADIUS_SCHWARZSCHILD } from '../sim/kerr';
 import { blackHoleView } from './accretionDisk';
 import { DISK_LAYER } from './accretionDisk';
 import { Lander } from './lander';
@@ -372,6 +372,11 @@ export class SystemView {
       const axis = this.visuals.get(b.id)?.spinAxis();
       const spin = Math.abs(b.spin ?? 0);
       if (axis) {
+        // The disc, for the lens pass to trace: positions in M (the shadow is √27 M) relative to the camera.
+        const auPerM = shadowAu / SHADOW_RADIUS_SCHWARZSCHILD;
+        const rel = pos.clone().sub(this.camera.position).divideScalar(auPerM);
+        const m1 = new THREE.Vector3().crossVectors(axis, Math.abs(axis.y) < 0.9 ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(1, 0, 0)).normalize();
+        lens.disc = { inner: iscoRadius(spin, (b.spin ?? 0) >= 0), outer: 36, brightness: 0.6, normal: [axis.x, axis.y, axis.z], m1: [m1.x, m1.y, m1.z], holeRel: [rel.x, rel.y, rel.z] };
         const toCam = this.camera.position.clone().sub(pos).normalize();
         // The side of the disc turning towards us: points p with (axis × p) · toCam > 0.
         const approach = toCam.clone().cross(axis);

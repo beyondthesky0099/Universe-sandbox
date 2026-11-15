@@ -220,8 +220,13 @@ shadow is √27 GM/c².
   `lensesOnScreen` sizes the lens and the spin axis tip from it. `body.radius` itself stays the
   horizon, so collisions, facts and the ship's autopilot are unchanged.
 - Tests: tests/kerr.test.ts (a 10 M☉ hole: 29.5 km horizon, 76.7 km shadow).
-- Next steps of the review (in order): the Einstein radius should depend on the camera distance;
-  the disc should be lensed (far side bent over the shadow); Lense–Thirring precession.
+- [x] **Step 2: the Einstein radius follows the camera distance.** It was fixed at 2.2 shadow
+  radii, right only 17 Schwarzschild radii out. kerr.ts `einsteinRadius(shadow, distance)` =
+  √(2 R_s / D) (held at D ≥ 3.5 R_s); `lensesOnScreen` converts it to screen heights with the
+  camera's field of view and passes it per lens (`LensInfo.thetaE`, uniform `uThetaE`); the
+  shader keeps it at least 1.2 shadow radii. Tests in tests/kerr.test.ts.
+- Next steps of the review (in order): the disc should be lensed (far side bent over the shadow);
+  Lense–Thirring precession.
 
 ### AP. Search by kind
 The three search boxes matched names only, so "pulsars" or "agn" found nothing.

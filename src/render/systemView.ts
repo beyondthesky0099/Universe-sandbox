@@ -18,7 +18,7 @@ import { mulberry32 } from '../procgen/rng';
 import { AU_PER_YEAR_IN_KMS } from '../sim/units';
 import { shadowProfile } from '../sim/kerr';
 import { SHADOW_BINS, type LensInfo } from './postfx';
-import { drawnShadowRadius } from '../sim/kerr';
+import { drawnShadowRadius, einsteinRadius } from '../sim/kerr';
 import { blackHoleView } from './accretionDisk';
 import { DISK_LAYER } from './accretionDisk';
 import { Lander } from './lander';
@@ -361,9 +361,13 @@ export class SystemView {
       v.project(this.camera);
       if (v.z > 1 || Math.abs(v.x) > 1.5 || Math.abs(v.y) > 1.5) continue;
       // The shadow on screen: 2.6 Schwarzschild radii at real sizes, the body's radius at game sizes.
-      const rs = drawnShadowRadius(b.radius, this.sim.trueScale) / wpp / viewportHeight;
+      const shadowAu = drawnShadowRadius(b.radius, this.sim.trueScale);
+      const rs = shadowAu / wpp / viewportHeight;
       if (rs < 0.002) continue;
-      const lens: LensInfo = { x: (v.x + 1) / 2, y: (v.y + 1) / 2, rs };
+      // The Einstein radius for the starfield behind the hole, from this camera distance, in screen heights.
+      const screenHeightRad = 2 * Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2));
+      const thetaE = einsteinRadius(shadowAu, this.camera.position.distanceTo(pos)) / screenHeightRad;
+      const lens: LensInfo = { x: (v.x + 1) / 2, y: (v.y + 1) / 2, rs, thetaE };
       // Spinning: the shadow's shape depends on the spin and on how its axis is tilted to us.
       const axis = this.visuals.get(b.id)?.spinAxis();
       const spin = Math.abs(b.spin ?? 0);

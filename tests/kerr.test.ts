@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { Simulation } from '../src/sim/simulation';
 import { applyFrame, encodeFrame } from '../src/sim/protocol';
 import { captureState, restoreState } from '../src/sim/state';
-import { drawnShadowRadius, horizonRadius, iscoRadius, mergerSpin, photonOrbits, radiativeEfficiency, shadowOutline, shadowProfile, SHADOW_PER_SCHWARZSCHILD, SHADOW_RADIUS_SCHWARZSCHILD } from '../src/sim/kerr';
+import { drawnShadowRadius, einsteinRadius, horizonRadius, iscoRadius, mergerSpin, photonOrbits, radiativeEfficiency, shadowOutline, shadowProfile, SHADOW_PER_SCHWARZSCHILD, SHADOW_RADIUS_SCHWARZSCHILD } from '../src/sim/kerr';
 import { physicalRadius } from '../src/sim/body';
 import { C_AU_PER_YEAR, G } from '../src/sim/units';
 
@@ -59,6 +59,18 @@ describe('Kerr black holes', () => {
     // Seen from near the pole it is round again.
     const top = shadowProfile(0.998, 0.05);
     expect(Math.max(...top) - Math.min(...top)).toBeLessThan(0.05);
+  });
+
+  it('the Einstein radius grows with distance: 17 shadow radii from 1,000 Schwarzschild radii, 2.2 from 17', () => {
+    const rs = physicalRadius('blackhole', 10);
+    const shadow = drawnShadowRadius(rs, true);
+    const ratio = (d: number) => einsteinRadius(shadow, d * rs) / (shadow / (d * rs)); // θ_E over the shadow's angular radius
+    expect(ratio(1000)).toBeCloseTo(17.2, 1);
+    expect(ratio(16.9)).toBeCloseTo(2.24, 1);
+    // θ_E = √(2 R_s / D): a 10 M☉ hole 1 AU away bends the sky within 2.2 arcminutes.
+    expect(einsteinRadius(shadow, 1) * 3437.75).toBeCloseTo(2.2, 1);
+    // Never inside the photon sphere: the formula is held at 3.5 R_s.
+    expect(einsteinRadius(shadow, 0.1 * rs)).toBe(einsteinRadius(shadow, 3.5 * rs));
   });
 
   it('mergers leave spinning holes', () => {

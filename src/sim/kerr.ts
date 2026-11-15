@@ -31,6 +31,17 @@ export function drawnShadowRadius(bodyRadius: number, trueScale: boolean): numbe
   return trueScale ? bodyRadius * SHADOW_PER_SCHWARZSCHILD : bodyRadius;
 }
 
+/**
+ * The Einstein radius (radians) of a black hole seen from `distance`, for light from far behind
+ * it: θ_E = √(4GM / (c² D)) = √(2 R_s / D). The shadow is what the renderer knows, so the
+ * Schwarzschild radius is taken as shadow / 2.6. The ring is far outside the shadow from any
+ * distance: 17 shadow radii from 1,000 Schwarzschild radii away, 2.2 from 17 away.
+ */
+export function einsteinRadius(shadowRadius: number, distance: number): number {
+  const rs = shadowRadius / SHADOW_PER_SCHWARZSCHILD;
+  return Math.sqrt((2 * rs) / Math.max(distance, 3.5 * rs));
+}
+
 export function clampSpin(a: number): number {
   return Math.max(-MAX_SPIN, Math.min(MAX_SPIN, a));
 }

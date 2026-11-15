@@ -6,7 +6,7 @@ import { equatorialToGalactic, galacticToMap, MILKY_WAY_SEED, MW_CLUSTERS, pictu
 import { CLUSTER_COLORS, loadClusters } from '../sim/clusters';
 import { clusterSwarms } from '../procgen/clusterStars';
 import { diameterPc, loadNebulae, NEBULA_COLORS } from '../sim/nebulae';
-import { loadNebulaImages, NEBULA_IMAGE_CREDIT, nebulaAtlasUrl, nebulaKey, tileRect, type NebulaImageAtlas } from '../sim/nebulaImages';
+import { loadNebulaImages, NEBULA_IMAGE_CREDIT, nebulaAtlasUrl, nebulaHdUrl, nebulaKey, tileRect, type NebulaImageAtlas } from '../sim/nebulaImages';
 import type { Cloud } from '../render/nebulaClouds';
 import { gaiaPoints, loadGaiaBright } from '../sim/gaiaBright';
 import { isMillisecond, loadPulsars, pulsarName } from '../sim/pulsars';
@@ -276,16 +276,20 @@ export class GalaxyMapUI {
         const fieldSize = ((n.distanceKpc! * 1000 * Math.tan((image.fieldDeg * Math.PI) / 180)) / 1000) * UNITS_PER_KPC;
         const photoSize = Math.max(size * 1.3, fieldSize);
         // Up close it becomes a volume that looks like the photograph from Earth's direction.
-        // A nebula only a few dozen survey pixels across (most planetary nebulae) is a burnt-out
-        // blob on the plate; up close it becomes its modelled shape instead.
-        const tiny = fieldSize > size * 1.3 * 1.5;
+        // A nebula only a few dozen pixels across in its picture is a burnt-out blob; up close it
+        // becomes its modelled shape instead. A named nebula's own 512-pixel picture (desktop) is
+        // four times sharper than its atlas tile, so far fewer are too small.
+        const hdUrl = image.hd && !LOW_POWER ? nebulaHdUrl(image.hd) : undefined;
+        const pixelsAcross = ((hdUrl ? 512 : page.tile) * size * 1.3) / fieldSize;
+        const tiny = pixelsAcross < 80;
         volumes.push({
           center: pos,
           radius: tiny ? size * 0.6 : photoSize / 2,
           shape: tiny ? n.kind : 'photo',
           seed: k,
-          photo: tiny ? undefined : { set: 2 + image.page, rect },
+          photo: tiny ? undefined : { set: 2 + image.page, rect, hdUrl },
           axes: pictureAxes(n.l, n.b, n.distanceKpc!),
+          centralStar: n.kind === 'pn',
           fade: [[2 + image.page, perPage[image.page].length], [1, glow.length]],
         });
         perPage[image.page].push({ pos, size: photoSize, color, tile: rect, minPx: named ? 40 : 14, brightness: 1.1, rotation: 0, puff: 0 });
@@ -295,7 +299,22 @@ export class GalaxyMapUI {
         const puffs = n.kind === 'pn' ? 1 : 3;
         const set = n.kind === 'dark' ? 0 : 1;
         const first = (n.kind === 'dark' ? dust : glow).length;
-        volumes.push({ center: pos, radius: size * 0.6, shape: n.kind, seed: k, fade: Array.from({ length: puffs }, (_, p): [number, number] => [set, first + p]) });
+        // A dark cloud with a picture is drawn from it up close when glowing gas lies behind it
+        // (the Horsehead against IC 434): a silhouette. Otherwise it is modelled dust.
+        const darkImage = n.kind === 'dark' ? imageOf.get(nebulaKey(n)) : undefined;
+        const darkPage = darkImage ? images!.pages[darkImage.page] : undefined;
+        const darkField = darkImage ? ((n.distanceKpc! * 1000 * Math.tan((darkImage.fieldDeg * Math.PI) / 180)) / 1000) * UNITS_PER_KPC : 0;
+        volumes.push({
+          center: pos,
+          radius: darkImage ? Math.max(size * 0.6, darkField / 2) : size * 0.6,
+          shape: n.kind,
+          seed: k,
+          photo: darkImage && darkPage ? { set: 2 + darkImage.page, rect: tileRect(darkPage, darkImage.tile), hdUrl: darkImage.hd && !LOW_POWER ? nebulaHdUrl(darkImage.hd) : undefined } : undefined,
+          backlitOnly: !!darkImage,
+          axes: darkImage ? pictureAxes(n.l, n.b, n.distanceKpc!) : undefined,
+          centralStar: n.kind === 'pn',
+          fade: Array.from({ length: puffs }, (_, p): [number, number] => [set, first + p]),
+        });
         for (let p = 0; p < puffs; p++) {
           const h = Math.sin(k * 12.9898 + p * 78.233) * 43758.5453;
           const r = (h - Math.floor(h)) * 0.3 * size;

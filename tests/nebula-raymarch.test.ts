@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { galacticToMap, pictureAxes } from '../src/procgen/galaxy';
-import { makeNoiseVolume } from '../src/render/nebulaRaymarch';
+import { BACKLIT_GLOW, centralGlow, makeNoiseVolume } from '../src/render/nebulaRaymarch';
 
 const dot = (a: number[], b: number[]) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 const unitTo = (p: number[], q: number[]) => {
@@ -60,5 +60,28 @@ describe('the gas in a photograph', () => {
     expect(gas[(16 * w + 16) * 4]).toBeGreaterThan(120);
     // Colour kept: red gas stays red.
     expect(gas[(16 * w + 16) * 4]).toBeGreaterThan(2 * gas[(16 * w + 16) * 4 + 1]);
+  });
+});
+
+describe('dark clouds against glowing gas', () => {
+  const picture = (size: number, fill: (x: number, y: number) => number) => {
+    const px = new Uint8ClampedArray(size * size * 4);
+    for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+      const v = fill(x, y);
+      px.set([v, v, v, 255], (y * size + x) * 4);
+    }
+    return px;
+  };
+  it('calls a cloud backlit when glowing gas fills the picture around it (the Horsehead), not when only black sky does', () => {
+    const size = 64;
+    // A dark notch (the horse's head) cut into a glowing curtain: still backlit.
+    const horsehead = picture(size, (x, y) => (Math.hypot(x - 32, y - 28) < 8 ? 10 : x > 20 ? 90 : 5));
+    expect(centralGlow(horsehead, size)).toBeGreaterThan(BACKLIT_GLOW);
+    // A cloud in front of empty sky (Barnard 68): the stars are gone, the picture is black.
+    const b68 = picture(size, () => 6);
+    expect(centralGlow(b68, size)).toBeLessThan(BACKLIT_GLOW);
+    // Only the central disc counts: a bright frame around a black middle is not backlighting.
+    const frame = picture(size, (x, y) => (Math.hypot(x - 32, y - 32) > 24 ? 255 : 0));
+    expect(centralGlow(frame, size)).toBeLessThan(0.02);
   });
 });

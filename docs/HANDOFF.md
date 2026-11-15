@@ -208,6 +208,33 @@ Plan, in priority order:
 - BodyVisual adds it in applyDetail and updates it only when the planet is more than 14 px across
   and a star is present. Tests: tests/aurora.test.ts.
 
+### AR. Nebulae, realism pass
+Audit with Playwright screenshots of ten famous nebulae up close found: Orion a pink haze, Carina a
+red blob with streaks, the Crab a white blob, the Veil faint, the Horsehead invisible; 16 of the
+55 named nebulae with no distance (so not on the map: Lagoon, Eagle, Rosette…); search stopping
+0.05 units away, far outside small nebulae's volumes (the Ring showed a neighbour's).
+- [x] Distances (scripts/build-nebulae.mjs, after the names are attached): a named HII region,
+  reflection or dark nebula without one takes it from a non-evolved maser inside its radius
+  (galactic-objects.json), else the largest young (log age < 7.3) Hunt & Reffert cluster whose
+  centre is inside it (clusters.json), else its ionizing star's Gaia parallax (SIMBAD TAP), else
+  (dark) the nearest Zucker sightline within 3°. `ASSOCIATIONS` names the cases the automatic
+  match misses (Lagoon → NGC 6530, W51 → W51 Main, Cat's Paw → NGC 6334 maser, Flaming Star →
+  V* AE Aur, Trifid → HD 164492, B68 and B72 → Pipe B59). Rows get a trailing distance source
+  (`Nebula.distanceNote`), shown in search. 15 filled; Barnard's E stays without.
+- [x] Images (scripts/build-nebula-images.mjs): green = min(R, B) + 0.6 · max(0, B − R) for emission
+  kinds ([O III] 501 nm is teal; measured first: PNe are blue-dominant on the plates, HII regions
+  red-dominant), reflection and dark unchanged. Each named nebula also gets
+  `public/data/nebula-hd/<name>.jpg`, 512 px (`NebulaImage.hd`).
+- [x] Render (nebulaRaymarch.ts): hue-preserving tone curve (×1.3, then L·(1 − e^−peak)/peak);
+  photo volumes keep the photograph from Earth: uv warp 0.16 → 0.04, depth-only clump noise
+  (slow across the sky, fast along the line of sight); mipmapped gas texture; `setPhoto` swaps
+  in the HD picture (GalaxyView loads it once per URL when the volume is built; `hdPhotos` false
+  on phones); `backlitOnly` dark clouds use their photo only when `centralGlow` ≥ 0.1 (the
+  Horsehead); `centralStar` for every PN. galaxyMap: "tiny" now means under 80 pixels across in
+  the best picture available (HD on desktop), so most named PNs are photographed volumes.
+- [x] search.ts: fly to max(0.003, 3 × size) units (was max(0.05, 4 × size)).
+- Tests: tests/nebulae.test.ts (filled distances), tests/nebula-raymarch.test.ts (backlit rule).
+
 ### AQ. Black-hole spacetime, step 1: the shadow at real sizes
 Review of the curvature physics (orbits: 1PN + Peters damping, tested; Kerr shadow: Bardeen,
 tested; lensing: screen-space point lens; disc: not lensed; no frame dragging) found the shadow

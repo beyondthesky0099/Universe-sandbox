@@ -19,6 +19,8 @@ export interface NebulaImage {
   /** Which atlas page and which tile on it. */
   page: number;
   tile: number;
+  /** Named nebulae: a 512-pixel picture of it alone (path under data/), loaded up close. */
+  hd?: string;
   /** Which plates it was made from (DSS2, DSS2 Red + DSS1 Blue, DSS2 Red + SERC-J Blue, Mellinger). */
   source: string;
 }
@@ -65,4 +67,9 @@ export function loadNebulaImages(baseUrl = import.meta.env.BASE_URL): Promise<Ne
 
 export function nebulaAtlasUrl(page: AtlasPage, baseUrl = import.meta.env.BASE_URL): string {
   return `${baseUrl}data/${page.file}`;
+}
+
+/** URL of a nebula's own sharp picture (NebulaImage.hd). */
+export function nebulaHdUrl(file: string, baseUrl = import.meta.env.BASE_URL): string {
+  return `${baseUrl}data/${file}`;
 }

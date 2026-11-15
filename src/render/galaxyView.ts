@@ -51,6 +51,9 @@ const DUST_FRAGMENT = /* glsl */ `
   }
 `;
 
+/** Opacity of the procedural star layer (faded while a nebula volume is in view: updateVolumes). */
+const STAR_OPACITY = 0.75;
+
 function pointsMaterial(opacity: number, maxSize: number, fragment = FRAGMENT, additive = true): THREE.ShaderMaterial {
   return new THREE.ShaderMaterial({
     vertexShader: VERTEX,
@@ -116,8 +119,12 @@ export interface VolumeItem {
   radius: number;
   shape: NebulaShape;
   seed: number;
-  /** Photographed: the index of the cloud set whose atlas holds the picture, and its rectangle. */
-  photo?: { set: number; rect: [number, number, number, number] };
+  /** Photographed: the index of the cloud set whose atlas holds the picture, its rectangle, and a sharper picture of it alone to load up close. */
+  photo?: { set: number; rect: [number, number, number, number]; hdUrl?: string };
+  /** Dark clouds: use the picture only when glowing gas lies behind (NebulaRaymarch). */
+  backlitOnly?: boolean;
+  /** Planetary nebulae: draw the central star. */
+  centralStar?: boolean;
   axes?: { right: [number, number, number]; up: [number, number, number]; forward: [number, number, number] };
   /** The flat clouds standing for it from afar ([set index, cloud index]), faded out as the volume fades in. */
   fade: [number, number][];
@@ -225,6 +232,9 @@ export class GalaxyView {
   private volumeTimer = 0;
   /** How many volumes at once, and ray-march steps per pixel. */
   volumeBudget = { max: 2, steps: 72 };
+  /** Load each named nebula's own sharp picture when its volume appears (off on phones). */
+  hdPhotos = true;
+  private readonly hdTextures = new Map<string, Promise<THREE.Texture>>();
   private highlighting = false;
   /** Labels of the hand-placed showpiece nebulae, hidden once the real clouds replace them. */
   private readonly showpieceLabels: THREE.Sprite[] = [];
@@ -335,7 +345,7 @@ export class GalaxyView {
     const { stars, glow, dust, nebulae } = this.data;
     this.glow = pointCloud(glow.positions, glow.colors, glow.sizes, pointsMaterial(0.06, 36));
     this.dust = pointCloud(dust.positions, undefined, dust.sizes, pointsMaterial(0.22, 60, DUST_FRAGMENT, false));
-    this.stars = pointCloud(stars.positions, stars.colors, stars.sizes, pointsMaterial(0.75, 18));
+    this.stars = pointCloud(stars.positions, stars.colors, stars.sizes, pointsMaterial(STAR_OPACITY, 18));
     this.originalColors = stars.colors.slice();
     this.glow.renderOrder = 1;
     this.dust.renderOrder = 2;
@@ -434,10 +444,17 @@ export class GalaxyView {
     this.flyToPoint(this.targetPosition(target), distance, speed);
   }
 
-  /** Animate the camera to a point, stopping `distance` from it on the side it's looking from. */
+  /**
+   * Animate the camera to a point, stopping `distance` from it on the side it's looking from, or,
+   * for a photographed nebula, on the Sun's side: its volume reproduces the photograph as seen
+   * from Earth, so that is where to arrive (orbit to see its modelled depth).
+   */
   flyToPoint(to: THREE.Vector3, distance: number, speed = 0.9): void {
     distance = Math.max(distance, this.controls.minDistance * 1.05);
     const dir = this.camera.position.clone().sub(this.controls.target).normalize();
+    const sun = new THREE.Vector3(...this.data.sol);
+    const photographed = this.volumeItems.some((c) => c.spec.photo && Math.hypot(c.spec.center[0] - to.x, c.spec.center[1] - to.y, c.spec.center[2] - to.z) < c.spec.radius * 0.5);
+    if (photographed && sun.distanceTo(to) > distance) dir.copy(sun).sub(to).normalize();
     this.anim = {
       fromTarget: this.controls.target.clone(),
       toTarget: to,
@@ -662,7 +679,7 @@ export class GalaxyView {
       const atlas = v.photo ? sets[v.photo.set]?.atlas : undefined;
       this.volumeItems.push({
         key: `${key}:${i}`,
-        spec: { center: v.center, radius: v.radius, shape: v.shape, seed: v.seed, axes: v.axes, photo: v.photo && atlas ? { atlas, rect: v.photo.rect } : undefined },
+        spec: { center: v.center, radius: v.radius, shape: v.shape, seed: v.seed, axes: v.axes, photo: v.photo && atlas ? { atlas, rect: v.photo.rect, hdUrl: v.photo.hdUrl } : undefined, backlitOnly: v.backlitOnly, centralStar: v.centralStar },
         fade: v.fade.flatMap(([si, ci]): [NebulaClouds, number][] => (layerOf[si] ? [[layerOf[si]!, ci]] : [])),
       });
     });
@@ -820,12 +837,29 @@ export class GalaxyView {
       if (v) v.opacity = 0;
       for (const [layer, i] of c.fade) layer.setFade(i, 1);
     }
+    // While a nebula's volume fills the view, fade the procedural stand-in stars (each a whole
+    // system, drawn at a minimum size): near the plane they pile up into a white wall in front of
+    // it. The real Gaia stars stay.
+    let focus = 0;
+    for (const { d } of near) focus = Math.max(focus, THREE.MathUtils.smoothstep(10 - d, 0, 5));
+    if (this.stars) (this.stars.material as THREE.ShaderMaterial).uniforms.uOpacity.value = STAR_OPACITY * (1 - 0.85 * focus);
     for (const { c, d } of near) {
       let v = this.volumes.get(c.key);
       if (!v) {
         v = new NebulaRaymarch(c.spec, this.volumeBudget.steps);
         this.volumes.set(c.key, v);
         this.scene.add(v.mesh);
+        // The sharp picture, once it arrives (shared if the volume is rebuilt).
+        const hd = c.spec.photo?.hdUrl;
+        if (hd && this.hdPhotos) {
+          let p = this.hdTextures.get(hd);
+          if (!p) {
+            p = new THREE.TextureLoader().loadAsync(hd);
+            this.hdTextures.set(hd, p);
+          }
+          const built = v;
+          void p.then((tex) => this.volumes.get(c.key) === built && built.setPhoto(tex)).catch(() => undefined);
+        }
         // Keep a few built volumes for flying back and forth; drop the oldest beyond that.
         if (this.volumes.size > this.volumeBudget.max + 4) {
           const [oldKey, oldest] = this.volumes.entries().next().value!;

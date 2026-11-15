@@ -6,7 +6,11 @@
  *   red   = DSS2 Red  (POSS-II F / SERC-ER, ~650 nm: Hα and [N II] glow)
  *   blue  = DSS2 Blue (POSS-II J / SERC-J, ~470 nm: [O III], Hβ and scattered starlight)
  *   green = the fainter of the two at each pixel, so stars stay white and Hα-bright gas red
- *           (the plain mean of the plates turns emission nebulae orange)
+ *           (the plain mean of the plates turns emission nebulae orange); in emission nebulae
+ *           (HII regions, planetary nebulae, supernova remnants) plus 0.6 of the blue plate's
+ *           excess over the red, because there that excess is the [O III] 496/501 nm lines,
+ *           which the eye sees as teal, not blue. Reflection nebulae (scattered starlight) stay
+ *           blue.
  *
  * DSS2 Blue has gaps: there the blue plate comes from DSS1 (POSS-I O in the north; south of
  * δ = −17.5° the first-generation DSS is the SERC-J blue survey), and where none covers the field, the whole image comes from Axel Mellinger's all-sky colour mosaic (Mellinger 2009,
@@ -21,6 +25,8 @@
  *     really shows it, 128 pixels each. Many HII regions found by WISE in the infrared are hidden
  *     behind dust in visible light; their photographs show only stars and are left out (see
  *     nebulosity()), as are fields where one plate is missing over part of the image.
+ *   - one 512-pixel picture of each named nebula on its own (public/data/nebula-hd/*.jpg), loaded
+ *     only when the camera flies up to it, so the volume it becomes up close is sharp.
  * public/data/nebula-images.json indexes them.
  *
  * Usage: node scripts/build-nebula-images.mjs   (FITS downloads are cached in
@@ -39,6 +45,7 @@ mkdirSync(cache, { recursive: true });
 const PAGE_WIDTH = 2048;
 const NAMED_TILE = 256;
 const OTHER_TILE = 128;
+const HD_TILE = 512;
 const PER_PAGE = (PAGE_WIDTH / OTHER_TILE) ** 2;
 const CONCURRENCY = 6;
 /** Field of view: 2.6 catalogue radii, at least 3 arcminutes, at most 12°. */
@@ -157,8 +164,10 @@ async function picture(n, size, pixels) {
       if (Number.isNaN(B[i])) B[i] = R[i];
     }
     // Green: the fainter of the two plates. Stars (bright on both) stay white, Hα-bright gas
-    // stays red-pink rather than turning orange, and gas bright in both looks white.
-    return { R, G: R.map((r, i) => Math.min(r, B[i])), B, source };
+    // stays red-pink rather than turning orange, and gas bright in both looks white. In an
+    // emission nebula the blue plate's excess is [O III], which is teal: it adds to green too.
+    const oxygen = n.kind === 'hii' || n.kind === 'pn' || n.kind === 'snr' ? 0.6 : 0;
+    return { R, G: R.map((r, i) => Math.min(r, B[i]) + oxygen * Math.max(0, B[i] - r)), B, source };
   }
   const mel = await Promise.all(['Red', 'Green', 'Blue'].map((c) => get(`Mellinger ${c}`)));
   if (mel.some((m) => !m)) return undefined;
@@ -258,13 +267,49 @@ async function buildPages(list, pixels, firstPage) {
   }
 }
 
+/** A square picture, edges faded into space, as JPEG bytes (FITS rows run south to north: flipped). */
+function tileJpeg(pic, pixels, quality) {
+  const data = Buffer.alloc(pixels * pixels * 4);
+  for (let j = 0; j < pixels; j++) {
+    for (let i = 0; i < pixels; i++) {
+      const s = (pixels - 1 - j) * pixels + i;
+      const r = Math.hypot(i - pixels / 2 + 0.5, j - pixels / 2 + 0.5) / (pixels / 2);
+      const fade = Math.min(1, Math.max(0, (1 - r) / 0.18));
+      const k = (j * pixels + i) * 4;
+      data[k] = Math.round(255 * (pic.R[s] || 0) * fade);
+      data[k + 1] = Math.round(255 * Math.min(1, pic.G[s] || 0) * fade);
+      data[k + 2] = Math.round(255 * (pic.B[s] || 0) * fade);
+      data[k + 3] = 255;
+    }
+  }
+  return jpeg.encode({ data, width: pixels, height: pixels }, quality).data;
+}
+
 console.log(`${named.length} named nebulae, ${others.length} others with distances`);
 await buildPages(named, NAMED_TILE, 0);
 await buildPages(others, OTHER_TILE, 1);
+
+// The named nebulae again, sharp, one file each, for the volume they become up close.
+const hdDir = join(root, 'public/data/nebula-hd');
+mkdirSync(hdDir, { recursive: true });
+const slug = (name) => name.toLowerCase().replace(/['’]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+const hdPics = await pool(named, CONCURRENCY, (n) => picture(n, fieldDeg(n.radius), HD_TILE).catch((e) => (console.warn(`${n.id} (HD): ${e.message}`), undefined)));
+let hdBytes = 0;
+named.forEach((n, i) => {
+  const pic = hdPics[i];
+  const entry = index.find((e) => e.name === n.name && e.page === 0);
+  if (!pic || !entry) return;
+  const file = `nebula-hd/${slug(n.name)}.jpg`;
+  const bytes = tileJpeg(pic, HD_TILE, 85);
+  writeFileSync(join(root, 'public/data', file), bytes);
+  hdBytes += bytes.length;
+  entry.hd = file;
+});
+console.log(`HD pictures: ${index.filter((e) => e.hd).length}, ${(hdBytes / 1024 / 1024).toFixed(1)} MB`);
 writeFileSync(
   join(root, 'public/data/nebula-images.json'),
   JSON.stringify({
-    source: 'Digitized Sky Survey (DSS2 Red; DSS2, DSS1 or SERC-J Blue) via NASA SkyView: red = Red plate, blue = Blue plate, green = the fainter of the two. Where no blue plate covers the field: Mellinger (2009) all-sky colour mosaic.',
+    source: 'Digitized Sky Survey (DSS2 Red; DSS2, DSS1 or SERC-J Blue) via NASA SkyView: red = Red plate, blue = Blue plate, green = the fainter of the two, plus 0.6 of the blue excess in emission nebulae ([O III] is teal). Where no blue plate covers the field: Mellinger (2009) all-sky colour mosaic. hd: a 512-pixel picture of a named nebula on its own.',
     pages,
     images: index,
   }) + '\n',

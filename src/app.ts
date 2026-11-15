@@ -291,7 +291,10 @@ export class App {
     this.system = new SystemView(this.sim, this.canvas, QUALITY_PRESETS[this.quality]);
     this.galaxy = new GalaxyView(this.canvas);
     // Phones: one 3D nebula at a time, with fewer particles.
-    if (LOW_POWER) this.galaxy.volumeBudget = { max: 1, steps: 32 };
+    if (LOW_POWER) {
+      this.galaxy.volumeBudget = { max: 1, steps: 32 };
+      this.galaxy.hdPhotos = false;
+    }
     this.cosmos = new CosmosView(this.canvas);
     this.sky = new SkyView(this.canvas);
     this.tutorial = new Tutorial(this.tutorialUI.tutorialSteps(), (target) => this.layoutUI.reveal(target));

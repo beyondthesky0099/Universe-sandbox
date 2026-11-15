@@ -384,14 +384,19 @@ The map shows **5,676 real nebulae** from professional catalogues:
 | Dark nebulae | 1,907 | Barnard's 349 dark objects, plus the Lynds clouds Barnard didn't list; 442 at Gaia distances of their molecular clouds (Zucker et al. 2020) |
 | Reflection nebulae | 158 | van den Bergh's catalogue |
 
-**Galaxy Map:** the nebulae with measured distances sit at their true 3D positions, as glowing clouds at their true physical size: 945 HII regions, 790 planetary nebulae, 187 supernova remnants and 140 reflection nebulae. The HII regions trace the spiral arms.
+**Galaxy Map:** the nebulae with measured distances sit at their true 3D positions, as glowing clouds at their true physical size: 957 HII regions, 790 planetary nebulae, 187 supernova remnants and 140 reflection nebulae. The HII regions trace the spiral arms.
+- **Every famous nebula is on the map.** 15 named nebulae have no distance in their own catalogue (the Lagoon, Eagle, Trifid, Rosette, Cone, Soul…). They take the distance of what lights or lies inside them: a maser with a radio parallax (Reid et al. 2019), the young star cluster at their heart at its Gaia distance (Hunt & Reffert 2023), their ionizing star's Gaia parallax, or their molecular cloud (Zucker et al. 2020). Search says which. Only Barnard's E, with no measured cloud nearby, stays on the Sky tab.
 - Colours are the light each kind really emits: HII regions glow pink-red in hydrogen-alpha, planetary nebulae teal in doubly ionised oxygen, and reflection nebulae blue from scattered starlight. Each cloud is a few overlapping puffs spread through its volume, so it has depth as you orbit it. Clouds too small to see from far away are drawn at a minimum size and dimmed to match.
-- Nebulae show their **real photographs** from the Digitized Sky Survey where the plates capture them: the 55 named ones (Orion, Carina, Lagoon, Eagle, the Crab, the Helix, the Horsehead, ...) and about 200 more glowing nebulae, plus 419 dark clouds on the Sky tab. The red plate is shown in red, the blue plate in blue and the fainter of the two in green, so stars stay white and hydrogen glow stays red.
+- Nebulae show their **real photographs** from the Digitized Sky Survey where the plates capture them: the 55 named ones (Orion, Carina, Lagoon, Eagle, the Crab, the Helix, the Horsehead, ...) and about 200 more glowing nebulae, plus 419 dark clouds on the Sky tab. The red plate is shown in red, the blue plate in blue and the fainter of the two in green, so stars stay white and hydrogen glow stays red. In emission nebulae the blue plate's excess over the red is the oxygen [O III] glow at 501 nm, which looks teal, so it adds to green too: the Ring, the Helix and the Cat's Eye show their teal centres, while reflection nebulae stay blue.
+  - Each named nebula also has its own 512-pixel picture, four times sharper than its tile, loaded only when you fly up to it (desktop).
   - `node scripts/build-nebula-images.mjs` photographs every nebula with a distance that is at least 1.2′ in radius, then keeps only the fields where the plates show diffuse light.
   - Most HII regions were found by WISE in the infrared and are hidden behind dust in visible light; their photographs show only stars, so they keep their emission-colour clouds.
   - Phones load only the named nebulae's page (1 MB); desktops load all four pages (5 MB).
 - **Nebulae become true volumes up close**, ray-marched on the GPU (`src/render/nebulaRaymarch.ts`). For every pixel, a ray steps through the gas, adding the light the gas emits and losing light to what it absorbs. Dust lanes darken what lies behind them, and the cloud has depth and parallax from every side.
-  - **Photographed nebulae:** their photograph (with its stars removed) sets how much gas lies along each line of sight from Earth and what colour it is. The gas is spread in depth around a noise-warped mid-surface and broken into filaments by 3D noise, and dark lanes inside the nebula become absorbing dust. Their look from Earth is the real one; their depth is a model.
+  - **Photographed nebulae:** their photograph (with its stars removed) sets how much gas lies along each line of sight from Earth and what colour it is. The gas is spread in depth around a noise-warped mid-surface in clumps that vary along the line of sight and average out over it, so seen from Earth the volume reproduces the photograph, and dark lanes inside the nebula become absorbing dust. Their look from Earth is the real one; their depth is a model.
+  - A tone curve keeps each colour's hue as it brightens, so the cores of the Orion Nebula or the Crab roll off towards their own colour instead of burning out to white.
+  - A dark cloud with glowing gas behind it is drawn from its photograph: the Horsehead stands as a silhouette against the red curtain of IC 434. Dark clouds against plain sky stay modelled dust.
+  - Planetary nebulae show their central white dwarf, photographed or modelled.
   - **The others, by type:**
     - HII regions: clumpy gas around a cavity blown by their stars, teal oxygen inside and red hydrogen-alpha outside, with dust lanes.
     - Planetary nebulae: ellipsoidal shells.
@@ -404,7 +409,7 @@ The map shows **5,676 real nebulae** from professional catalogues:
 - Some HII distances are kinematic estimates, which can be off in the outer Galaxy.
 - The remnant catalogue puts the Crab Nebula at 3.4 kpc (−1.0/+4.0), from the Crab pulsar's Gaia DR2 parallax. The long-standing estimate is about 2 kpc.
 - Reflection nebulae are placed at the distance of the star that lights them. That's 140 of the 158, mostly from Gaia parallaxes via SIMBAD.
-- Dark nebulae have no distances in their own catalogues. A cloud takes the distance of the nearest Zucker et al. 2020 sightline within 1° of its edge; the rest (1,465) appear on the sky only.
+- Dark nebulae have no distances in their own catalogues. A cloud takes the distance of the nearest Zucker et al. 2020 sightline within 1° of its edge; Barnard 68 and the Snake take the Pipe's; the rest (1,463) appear on the sky only.
 
 **Sky tab:** every nebula is outlined at its real position and angular size, and fades out in daylight. The 55 named ones show their Digitized Sky Survey photographs on the sky, at their true size and orientation.
 

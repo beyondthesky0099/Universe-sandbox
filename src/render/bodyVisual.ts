@@ -3,7 +3,7 @@ import { orbitPath } from '../sim/orbits';
 import { aimSun, atmosphereFor, insideAware, scatteringMaterial, shellScale } from './atmosphere';
 import { auroraActivity, auroraFor, auroraMesh, updateAurora } from './aurora';
 import { accretionDiskMesh, blackHoleView, diskAxis, updateAccretionDisk } from './accretionDisk';
-import { horizonRadius, SHADOW_RADIUS_SCHWARZSCHILD } from '../sim/kerr';
+import { drawnShadowRadius, horizonRadius, SHADOW_RADIUS_SCHWARZSCHILD } from '../sim/kerr';
 import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import type { Body, BodyKind } from '../sim/body';
 import type { Climate } from '../sim/climate';
@@ -513,7 +513,9 @@ export class BodyVisual {
     }
     // A whole galaxy (galaxy-scale scenes) is drawn as a small bright nucleus: its stars are the particles.
     const isGalaxy = body.tag === 'galaxy';
-    const r = this.isProbe ? worldPerPixel * 4 : isGalaxy ? Math.max(body.radius * 0.05, worldPerPixel * 2) : Math.max(body.radius, worldPerPixel * MIN_PIXEL_RADIUS);
+    // A black hole's dark disc is its shadow, 2.6 Schwarzschild radii across at real sizes (kerr.ts).
+    const shadowRadius = this.kind === 'blackhole' ? drawnShadowRadius(body.radius, blackHoleView.trueScale) : body.radius;
+    const r = this.isProbe ? worldPerPixel * 4 : isGalaxy ? Math.max(body.radius * 0.05, worldPerPixel * 2) : Math.max(shadowRadius, worldPerPixel * MIN_PIXEL_RADIUS);
     this.mesh.scale.setScalar(r);
     // A Cepheid swells and shrinks by about 7% over its period, brightest while it expands
     // through its mean size (about a magnitude between faintest and brightest).
@@ -557,7 +559,7 @@ export class BodyVisual {
             ? Math.max(body.radius * 4, worldPerPixel * 40)
             : this.kind === 'neutron' || this.kind === 'whitedwarf'
               ? Math.max(body.radius * 12, worldPerPixel * 22)
-              : body.radius * 14;
+              : shadowRadius * 14;
       this.glow.scale.setScalar(isGalaxy ? body.radius * 1.6 : big * (0.8 + 0.2 * pulse));
     }
     if (this.agn && camera) this.agn.update(camera, dt, worldPerPixel);

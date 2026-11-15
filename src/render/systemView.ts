@@ -18,6 +18,8 @@ import { mulberry32 } from '../procgen/rng';
 import { AU_PER_YEAR_IN_KMS } from '../sim/units';
 import { shadowProfile } from '../sim/kerr';
 import { SHADOW_BINS, type LensInfo } from './postfx';
+import { drawnShadowRadius } from '../sim/kerr';
+import { blackHoleView } from './accretionDisk';
 import { DISK_LAYER } from './accretionDisk';
 import { Lander } from './lander';
 import { SNOW_LINE_AU } from '../sim/planetFormation';
@@ -358,7 +360,8 @@ export class SystemView {
       const wpp = this.worldPerPixel(v, viewportHeight);
       v.project(this.camera);
       if (v.z > 1 || Math.abs(v.x) > 1.5 || Math.abs(v.y) > 1.5) continue;
-      const rs = b.radius / wpp / viewportHeight;
+      // The shadow on screen: 2.6 Schwarzschild radii at real sizes, the body's radius at game sizes.
+      const rs = drawnShadowRadius(b.radius, this.sim.trueScale) / wpp / viewportHeight;
       if (rs < 0.002) continue;
       const lens: LensInfo = { x: (v.x + 1) / 2, y: (v.y + 1) / 2, rs };
       // Spinning: the shadow's shape depends on the spin and on how its axis is tilted to us.
@@ -371,7 +374,7 @@ export class SystemView {
         if ((b.spin ?? 0) < 0) approach.negate();
         if (approach.lengthSq() > 1e-8) {
           approach.normalize();
-          const tip = pos.clone().addScaledVector(approach, b.radius).project(this.camera);
+          const tip = pos.clone().addScaledVector(approach, drawnShadowRadius(b.radius, this.sim.trueScale)).project(this.camera);
           const dx = (tip.x - v.x) * aspect, dy = tip.y - v.y;
           const l = Math.hypot(dx, dy) || 1;
           lens.axis = [dx / l, dy / l];
@@ -650,6 +653,7 @@ export class SystemView {
     // The Sun (the heaviest star) sets comet tail directions; only in AU-scale scenes.
     let sun: Body | undefined;
     if (this.sim.units === 'au-yr') for (const b of this.sim.bodies) if (b.kind === 'star' && (!sun || b.mass > sun.mass)) sun = b;
+    blackHoleView.trueScale = this.sim.trueScale;
     for (const b of this.sim.bodies) {
       const v = this.visuals.get(b.id);
       if (!v) continue;

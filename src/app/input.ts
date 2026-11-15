@@ -453,6 +453,13 @@ export class InputUI {
     $<HTMLInputElement>('star-search').addEventListener('input', (e) => this.app.galaxyMapUI.search((e.target as HTMLInputElement).value));
     $<HTMLSelectElement>('star-filter').addEventListener('change', () => void this.app.galaxyMapUI.applyFilter());
     const pickFromList = (e: Event) => {
+      // A real object found by the search (pulsar, nova, black hole…) goes through the global search's actions.
+      const real = (e.target as HTMLElement).closest<HTMLElement>('li[data-global]');
+      if (real) {
+        const hit = this.app.galaxyMapUI.mapSearchHits[Number(real.dataset.global)];
+        if (hit) void this.app.searchUI.goToSearchResult(hit);
+        return;
+      }
       const li = (e.target as HTMLElement).closest<HTMLElement>('li[data-index]');
       if (!li) return;
       const i = Number(li.dataset.index);

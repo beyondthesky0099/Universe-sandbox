@@ -96,7 +96,7 @@ export function galaxyEntries(list: LocalGalaxy[]): SearchEntry[] {
       aliases: aliases.length ? aliases : undefined,
       kind: label,
       detail: g.name === 'Milky Way' ? 'our galaxy' : `${g.bh ? `black hole of ${g.bh.mass >= 1e9 ? `${+(g.bh.mass / 1e9).toPrecision(2)} billion` : `${+(g.bh.mass / 1e6).toPrecision(2)} million`} M☉ · ` : ''}${lightYears(g.d * 1000)} away`,
-      rank: isFamous(g) ? 80 : active ? (g.vmag !== undefined ? Math.max(0, 17.5 - g.vmag) * 4 : 5) : Math.max(0, (g.lk ?? 8) - 8) * 5,
+      rank: isFamous(g) ? 80 + (g.note ? 10 : 0) + (g.bh ? 5 : 0) : active ? (g.vmag !== undefined ? Math.max(0, 17.5 - g.vmag) * 4 : 5) : Math.max(0, (g.lk ?? 8) - 8) * 5,
       action: { type: 'galaxy', name: g.name },
     };
   });
@@ -120,6 +120,9 @@ export function compactEntries(list: { name: string; kind: 'blackhole' | 'pulsar
   });
 }
 
+/** The pulsars everyone has heard of: the Crab, Vela, the first one, the Hulse–Taylor binary, the planet host, the fastest spinners. */
+const FAMOUS_PULSARS = /^(J0534\+2200|B0531\+21|J0835-4510|B0833-45|B1919\+21|J1921\+2153|B1913\+16|J1915\+1606|B1257\+12|J1300\+1240|J0437-4715|B1937\+21|J1939\+2134|J1748-2446ad|J0737-3039A|J1614-2230|J0348\+0432|B0329\+54|J0332\+5434|B1509-58|J1513-5908|J1745-2900|J1808-2024|B0540-69)$/;
+
 /** Real pulsars (ATNF catalogue): by J and B name, and by their remnant's name. */
 export function pulsarEntries(list: PulsarRecord[]): SearchEntry[] {
   return list.map((p) => {
@@ -128,11 +131,16 @@ export function pulsarEntries(list: PulsarRecord[]): SearchEntry[] {
       name: `${pulsarName(p)}${p.snr ? ` (${p.snr})` : ''}`,
       kind: p.magnetar ? 'Magnetar' : 'Pulsar',
       detail: `${describePulsar(p)} · ${lightYears(p.distanceKpc)} away`,
-      rank: p.bname || p.snr || p.magnetar ? 45 : 20,
+      rank: FAMOUS_PULSARS.test(p.jname) || FAMOUS_PULSARS.test(p.bname ?? '') ? 65 : p.snr ? 50 : p.magnetar ? 48 : p.bname ? 40 : 20,
       action: { type: 'map', l, b, dKpc: p.distanceKpc, pulsar: p.jname },
     };
   });
 }
+
+const FAMOUS_BINARIES = /^(Cyg X-1|Sco X-1|SS 433|Her X-1|V404 Cyg|GRS 1915|A0620|GX 339|Cyg X-3|Vela X-1|Cen X-3|Cir X-1|4U 1820|XTE J1118|GRO J1655)/;
+const FAMOUS_NOVAE = /^(T CrB|RS Oph|GK Per|DQ Her|V1500 Cyg|V603 Aql|CP Pup|T Pyx|U Sco|V1974 Cyg|V339 Del|Nova Her 1934|V1324 Sco)$/;
+const FAMOUS_CVS = /^(SS Cyg|U Gem|AM Her|WZ Sge|AE Aqr|Z Cam|IP Peg|EX Hya|OY Car|TT Ari|AM CVn|AR Sco|HM Cnc|V Sge|GP Com)$/;
+const FAMOUS_MASERS = /^(W49 N|Sgr B2|Orion KL|W3\(OH\)|W51 Main|NGC 6334|NGC 7538|W75 N|VY CMa|S Per|NML Cyg|VX Sgr|Cep A|DR 21A)$/;
 
 /** X-ray binaries, Wolf–Rayet stars, novae, cataclysmic variables, Cepheids and masers on the Galaxy Map. */
 export function galacticObjectEntries(list: GalacticObject[]): SearchEntry[] {
@@ -153,10 +161,12 @@ export function galacticObjectEntries(list: GalacticObject[]): SearchEntry[] {
     }
   };
   const rankOf = (o: GalacticObject): number => {
-    if (o.kind === 'hmxb' || o.kind === 'lmxb') return o.compact === 'BH' ? 45 : 25;
-    if (o.kind === 'nova') return o.recurrent || (o.vpeak !== undefined && o.vpeak <= 3) ? 40 : 18;
+    if (o.kind === 'hmxb' || o.kind === 'lmxb') return FAMOUS_BINARIES.test(o.name) ? 60 : o.compact === 'BH' ? 45 : 25;
+    if (o.kind === 'nova') return FAMOUS_NOVAE.test(o.name) ? 60 : o.recurrent || (o.vpeak !== undefined && o.vpeak <= 3) ? 40 : 18;
     if (o.kind === 'cep') return o.common ? 45 : o.survey === 'GCVS' ? 18 : 10;
-    if (o.kind === 'cv') return o.types ? 18 : 10;
+    if (o.kind === 'cv') return FAMOUS_CVS.test(o.name) ? 50 : o.types ? 18 : 10;
+    if (o.kind === 'maser') return FAMOUS_MASERS.test(o.name) ? 50 : 22;
+    if (o.kind === 'wr') return /^(WR 104|WR 140|WR 124|WR 25|Ve2-45|WR 11|γ Vel|WR 102)/.test(o.name) ? 45 : 22;
     return 22;
   };
   return list.map((o) => ({

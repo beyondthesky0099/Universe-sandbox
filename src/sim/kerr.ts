@@ -19,6 +19,17 @@
 
 export const MAX_SPIN = 0.998;
 export const SHADOW_RADIUS_SCHWARZSCHILD = Math.sqrt(27);
+/** The shadow's radius over the Schwarzschild radius: √27 M / 2M ≈ 2.6. */
+export const SHADOW_PER_SCHWARZSCHILD = Math.sqrt(27) / 2;
+
+/**
+ * The radius to draw the shadow at. With real sizes a black hole's body radius is its
+ * Schwarzschild radius (body.ts), and the dark disc on the sky is 2.6 times wider than that;
+ * with game sizes the radius is arbitrary and stands for the shadow itself.
+ */
+export function drawnShadowRadius(bodyRadius: number, trueScale: boolean): number {
+  return trueScale ? bodyRadius * SHADOW_PER_SCHWARZSCHILD : bodyRadius;
+}
 
 export function clampSpin(a: number): number {
   return Math.max(-MAX_SPIN, Math.min(MAX_SPIN, a));

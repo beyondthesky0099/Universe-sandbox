@@ -5,7 +5,8 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { Pass } from 'three/addons/postprocessing/Pass.js';
-import { DISK_LAYER } from './accretionDisk';
+import { DISC_GLSL, DISK_LAYER } from './accretionDisk';
+import { MAX_STEPS, PHI_STEP } from '../sim/geodesic';
 
 export const MAX_LENSES = 4;
 /** Directions sampled around each shadow (kerr.ts shadowProfile). */
@@ -26,13 +27,25 @@ export interface LensInfo {
   axis?: [number, number];
   /** How lopsided the photon ring's brightness is (0 = even). */
   beam?: number;
+  /** The accretion disc to draw by tracing light around the hole (sim/geodesic.ts); lengths in M. */
+  disc?: {
+    inner: number;
+    outer: number;
+    brightness: number;
+    /** Disc normal (world), the azimuth reference in the disc plane (world), and the hole's position relative to the camera in M. */
+    normal: [number, number, number];
+    m1: [number, number, number];
+    holeRel: [number, number, number];
+  };
 }
 
 /**
  * Screen-space gravitational lensing. For each black hole on screen, background light is
  * bent toward the hole with the point-lens deflection α = θ_E² / θ, where the Einstein radius
  * θ_E = √(2 R_s / D) follows the camera's distance D (kerr.ts einsteinRadius), producing an
- * Einstein ring and a distorted starfield; inside the shadow everything is black.
+ * Einstein ring and a distorted starfield; inside the shadow everything is black. Each black
+ * hole's accretion disc is drawn here too, by tracing the pixel's ray around the hole
+ * (sim/geodesic.ts), so the far side of the disc appears bent over and under the shadow.
  */
 const LensShader = {
   uniforms: {
@@ -44,6 +57,15 @@ const LensShader = {
     uShadow: { value: new Float32Array(MAX_LENSES * SHADOW_BINS).fill(1) },
     uThetaE: { value: new Float32Array(MAX_LENSES) },
     uStrength: { value: 1 },
+    uCamRight: { value: new THREE.Vector3(1, 0, 0) },
+    uCamUp: { value: new THREE.Vector3(0, 1, 0) },
+    uCamForward: { value: new THREE.Vector3(0, 0, -1) },
+    uTanHalf: { value: 0.5 },
+    uTime: { value: 0 },
+    uHoleRel: { value: Array.from({ length: MAX_LENSES }, () => new THREE.Vector3()) },
+    uDiscN: { value: Array.from({ length: MAX_LENSES }, () => new THREE.Vector3(0, 1, 0)) },
+    uDiscM1: { value: Array.from({ length: MAX_LENSES }, () => new THREE.Vector3(1, 0, 0)) },
+    uDisc: { value: Array.from({ length: MAX_LENSES }, () => new THREE.Vector4()) },
   },
   vertexShader: /* glsl */ `
     varying vec2 vUv;
@@ -61,16 +83,92 @@ const LensShader = {
     uniform float uShadow[${MAX_LENSES * 32}]; // shadow radius / rs in 32 directions per lens
     uniform float uThetaE[${MAX_LENSES}];      // Einstein radius (screen-height units) per lens
     uniform float uStrength;
+    uniform vec3 uCamRight, uCamUp, uCamForward;
+    uniform float uTanHalf;
+    uniform float uTime;
+    uniform vec3 uHoleRel[${MAX_LENSES}];   // hole relative to the camera, in M
+    uniform vec3 uDiscN[${MAX_LENSES}];     // disc normal (world)
+    uniform vec3 uDiscM1[${MAX_LENSES}];    // azimuth reference in the disc plane (world)
+    uniform vec4 uDisc[${MAX_LENSES}];      // inner and outer radius (M), brightness, 1 when there is a disc
     varying vec2 vUv;
+    ${DISC_GLSL}
+
+    // Trace this pixel's ray back around hole i (sim/geodesic.ts: u'' = 3u² − u, u = 1/r in M) and
+    // return the disc's shading where the ray first crosses the disc, or nothing. Sets captured when
+    // the ray falls into the hole first.
+    vec4 traceDisc(int i, vec3 d, out bool captured) {
+      captured = false;
+      vec3 H = uHoleRel[i];
+      float r0 = length(H);
+      vec3 e1 = -H / r0;                      // from the hole towards the camera
+      float cosT = -dot(d, e1);
+      float sinT = sqrt(max(0.0, 1.0 - cosT * cosT));
+      float b = r0 * sinT / sqrt(max(1.0 - 2.0 / r0, 1e-3));
+      vec4 disc = uDisc[i];
+      if (b > disc.y) return vec4(0.0);      // never comes closer than b: cannot reach the disc
+      if (sinT < 1e-5) { captured = true; return vec4(0.0); }
+      vec3 e2 = normalize(d - dot(d, e1) * e1);
+      vec3 n = uDiscN[i];
+      float n1 = dot(n, e1), n2 = dot(n, e2);
+      float u = 1.0 / r0;
+      float up = (dot(d, e1) < 0.0 ? 1.0 : -1.0) * sqrt(max(1.0 / (b * b) - u * u * (1.0 - 2.0 * u), 0.0));
+      float phi = 0.0;
+      float hPrev = r0 * n1, rPrev = r0, phiPrev = 0.0;
+      const float h = ${PHI_STEP.toFixed(3)};
+      for (int k = 0; k < ${MAX_STEPS}; k++) {
+        float a0 = 3.0 * u * u - u;
+        float uHalf = up + 0.5 * h * a0;
+        float u1 = u + h * uHalf;
+        float a1 = 3.0 * u1 * u1 - u1;
+        up = uHalf + 0.5 * h * a1;
+        u = u1;
+        phi += h;
+        if (u >= 0.5) { captured = true; return vec4(0.0); }
+        if (u <= 0.0 || (up < 0.0 && u < 1.0 / (3.0 * r0) && u < 0.5 / disc.y)) return vec4(0.0);
+        float r = 1.0 / u;
+        float hh = r * (cos(phi) * n1 + sin(phi) * n2);
+        if (hh * hPrev < 0.0) {
+          float t = hPrev / (hPrev - hh);
+          float rc = mix(rPrev, r, t);
+          float phic = mix(phiPrev, phi, t);
+          if (rc >= disc.x && rc <= disc.y) {
+            vec3 P = e1 * (rc * cos(phic)) + e2 * (rc * sin(phic));
+            vec3 m2 = cross(n, uDiscM1[i]);
+            float az = atan(dot(P, m2), dot(P, uDiscM1[i]));
+            float drdphi = -up / (u * u);
+            vec3 T = e1 * (drdphi * cos(phic) - rc * sin(phic)) + e2 * (drdphi * sin(phic) + rc * cos(phic));
+            vec3 kdir = -normalize(T);
+            // Gas on a circular orbit, prograde about the normal: β = 1/√r; then gravitational redshift.
+            vec3 v = normalize(cross(n, P));
+            float beta = min(0.95, inversesqrt(rc));
+            float D = sqrt(1.0 - beta * beta) / (1.0 - beta * dot(v, kdir));
+            float g = D * sqrt(max(0.05, 1.0 - 3.0 / rc));
+            return discShade(rc, disc.x, disc.y, g, az, uTime, disc.z);
+          }
+        }
+        hPrev = hh; rPrev = r; phiPrev = phi;
+      }
+      return vec4(0.0);
+    }
+
     void main() {
       vec2 uv = vUv;
       float shadow = 0.0;
       float ring = 0.0;
+      vec3 discLight = vec3(0.0);
+      vec2 ndc = (vUv - 0.5) * 2.0;
+      vec3 ray = normalize(uCamForward + uCamRight * (ndc.x * uTanHalf * uAspect) + uCamUp * (ndc.y * uTanHalf));
       for (int i = 0; i < ${MAX_LENSES}; i++) {
         if (i >= uCount) break;
         vec3 L = uLenses[i];
         vec2 d = (vUv - L.xy) * vec2(uAspect, 1.0);
         float r = length(d);
+        // The disc, traced around the hole: it can show in front of the shadow and bent over it.
+        if (uDisc[i].w > 0.5) {
+          bool captured = false;
+          vec4 dc = traceDisc(i, ray, captured);
+          discLight += dc.rgb;
+        }
         float rs = L.z;                 // shadow radius (screen-height units)
         // The Einstein radius grows with distance from the hole (√(2 R_s / D)): never inside the shadow.
         float thetaE = max(uThetaE[i], rs * 1.2) * uStrength;
@@ -106,7 +204,9 @@ const LensShader = {
       // Clamp: additive glows exceed 1.0 in HDR and bloom would smear that energy across the sky.
       // The display clamps anyway, so this changes nothing but the bloom input.
       col.rgb = min(col.rgb, vec3(1.0));
-      gl_FragColor = mix(col, vec4(0.0, 0.0, 0.0, 1.0), shadow);
+      vec4 outc = mix(col, vec4(0.0, 0.0, 0.0, 1.0), shadow);
+      outc.rgb = min(outc.rgb + discLight, vec3(1.0));
+      gl_FragColor = outc;
     }
   `,
 };
@@ -178,11 +278,21 @@ export class PostFX {
     const axes = this.lens.uniforms.uLensAxis.value as THREE.Vector3[];
     const shadow = this.lens.uniforms.uShadow.value as Float32Array;
     const thetaE = this.lens.uniforms.uThetaE.value as Float32Array;
+    const holeRel = this.lens.uniforms.uHoleRel.value as THREE.Vector3[];
+    const discN = this.lens.uniforms.uDiscN.value as THREE.Vector3[];
+    const discM1 = this.lens.uniforms.uDiscM1.value as THREE.Vector3[];
+    const disc = this.lens.uniforms.uDisc.value as THREE.Vector4[];
     const n = Math.min(MAX_LENSES, lenses.length);
     for (let i = 0; i < n; i++) {
       const l = lenses[i];
       arr[i].set(l.x, l.y, l.rs);
       thetaE[i] = l.thetaE;
+      if (l.disc) {
+        holeRel[i].set(...l.disc.holeRel);
+        discN[i].set(...l.disc.normal);
+        discM1[i].set(...l.disc.m1);
+        disc[i].set(l.disc.inner, l.disc.outer, l.disc.brightness, 1);
+      } else disc[i].set(0, 0, 0, 0);
       axes[i].set(l.axis?.[0] ?? 1, l.axis?.[1] ?? 0, l.beam ?? 0);
       for (let k = 0; k < SHADOW_BINS; k++) shadow[i * SHADOW_BINS + k] = l.shadow?.[k] ?? 1;
     }
@@ -194,7 +304,14 @@ export class PostFX {
     this.renderPass.camera = camera;
     this.disks.scene = scene;
     this.disks.camera = camera;
-    // The discs are drawn after the lensing, over the shadow, by their own pass.
+    // The lens pass traces each pixel's ray from the camera: it needs the camera's frame.
+    const u = this.lens.uniforms;
+    (u.uCamRight.value as THREE.Vector3).set(1, 0, 0).applyQuaternion(camera.quaternion);
+    (u.uCamUp.value as THREE.Vector3).set(0, 1, 0).applyQuaternion(camera.quaternion);
+    (u.uCamForward.value as THREE.Vector3).set(0, 0, -1).applyQuaternion(camera.quaternion);
+    u.uTanHalf.value = (camera as THREE.PerspectiveCamera).isPerspectiveCamera ? Math.tan(THREE.MathUtils.degToRad((camera as THREE.PerspectiveCamera).fov / 2)) : 0.5;
+    u.uTime.value = performance.now() / 1000;
+    // White dwarfs' discs are drawn flat after the lensing by their own pass; black holes' are traced above.
     camera.layers.disable(DISK_LAYER);
     this.composer.render();
     camera.layers.enable(DISK_LAYER);

@@ -572,6 +572,8 @@ export class BodyVisual {
         if (blackHoleView.lensed) this.mesh.scale.setScalar(r * (horizonRadius(body.spin ?? 0) / SHADOW_RADIUS_SCHWARZSCHILD));
         // The shaded disc gives the light; the soft glow would only be smeared into rings by the lens.
         if (this.glow) this.glow.visible = !blackHoleView.lensed;
+        // With the lens pass on, the disc is traced around the hole there (postfx.ts); the flat mesh only stands in without it.
+        this.disk.visible = !blackHoleView.lensed;
       }
     }
     if (this.shadowU && this.detailKey) {

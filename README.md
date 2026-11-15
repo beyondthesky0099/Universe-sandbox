@@ -888,7 +888,9 @@ push and pull request.
   precision. The "light speed" slider exaggerates the effects on purpose.
 - **Stellar evolution** uses simple mass–lifetime and mass–luminosity relations, not stellar
   models.
-- Lensing is a screen-space effect, not ray tracing.
+- Lensing is a screen-space effect, not ray tracing. Its Einstein radius is the point-lens
+  value for the camera's distance, θ_E = √(2 R_s / D), so the bent region grows as you back away:
+  17 shadow radii from 1,000 Schwarzschild radii out.
 - JPL approximate elements are accurate to a few arcminutes for 1800–2050. Small bodies and
   moons use two-body Kepler motion from a 2026 epoch, so they drift slowly over decades.
   Moon systems leave out the Sun's pull and planetary oblateness. Exoplanet systems

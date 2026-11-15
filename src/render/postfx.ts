@@ -18,6 +18,8 @@ export interface LensInfo {
   y: number;
   /** Non-spinning shadow radius, in screen heights. */
   rs: number;
+  /** Einstein radius, in screen heights: how far out the starfield is bent (kerr.ts einsteinRadius). */
+  thetaE: number;
   /** Shadow radius in SHADOW_BINS directions from `axis`, relative to rs (all 1 = round). */
   shadow?: Float32Array;
   /** Screen direction of the side turning towards us (unit, aspect-corrected). */
@@ -28,8 +30,9 @@ export interface LensInfo {
 
 /**
  * Screen-space gravitational lensing. For each black hole on screen, background light is
- * bent toward the hole with the point-lens deflection α = θ_E² / θ, producing an Einstein
- * ring and a distorted starfield; inside the shadow everything is black.
+ * bent toward the hole with the point-lens deflection α = θ_E² / θ, where the Einstein radius
+ * θ_E = √(2 R_s / D) follows the camera's distance D (kerr.ts einsteinRadius), producing an
+ * Einstein ring and a distorted starfield; inside the shadow everything is black.
  */
 const LensShader = {
   uniforms: {
@@ -39,6 +42,7 @@ const LensShader = {
     uLenses: { value: Array.from({ length: MAX_LENSES }, () => new THREE.Vector3()) },
     uLensAxis: { value: Array.from({ length: MAX_LENSES }, () => new THREE.Vector3(1, 0, 0)) },
     uShadow: { value: new Float32Array(MAX_LENSES * SHADOW_BINS).fill(1) },
+    uThetaE: { value: new Float32Array(MAX_LENSES) },
     uStrength: { value: 1 },
   },
   vertexShader: /* glsl */ `
@@ -55,6 +59,7 @@ const LensShader = {
     uniform vec3 uLenses[${MAX_LENSES}];
     uniform vec3 uLensAxis[${MAX_LENSES}];   // approaching side on screen (x, y), ring beaming
     uniform float uShadow[${MAX_LENSES * 32}]; // shadow radius / rs in 32 directions per lens
+    uniform float uThetaE[${MAX_LENSES}];      // Einstein radius (screen-height units) per lens
     uniform float uStrength;
     varying vec2 vUv;
     void main() {
@@ -67,7 +72,8 @@ const LensShader = {
         vec2 d = (vUv - L.xy) * vec2(uAspect, 1.0);
         float r = length(d);
         float rs = L.z;                 // shadow radius (screen-height units)
-        float thetaE = rs * 2.2 * uStrength;
+        // The Einstein radius grows with distance from the hole (√(2 R_s / D)): never inside the shadow.
+        float thetaE = max(uThetaE[i], rs * 1.2) * uStrength;
         // A spinning hole's shadow is D-shaped (kerr.ts): look up its radius in this direction.
         vec2 u = uLensAxis[i].xy;
         vec2 dn = d / max(r, 1e-6);
@@ -171,10 +177,12 @@ export class PostFX {
     const arr = this.lens.uniforms.uLenses.value as THREE.Vector3[];
     const axes = this.lens.uniforms.uLensAxis.value as THREE.Vector3[];
     const shadow = this.lens.uniforms.uShadow.value as Float32Array;
+    const thetaE = this.lens.uniforms.uThetaE.value as Float32Array;
     const n = Math.min(MAX_LENSES, lenses.length);
     for (let i = 0; i < n; i++) {
       const l = lenses[i];
       arr[i].set(l.x, l.y, l.rs);
+      thetaE[i] = l.thetaE;
       axes[i].set(l.axis?.[0] ?? 1, l.axis?.[1] ?? 0, l.beam ?? 0);
       for (let k = 0; k < SHADOW_BINS; k++) shadow[i * SHADOW_BINS + k] = l.shadow?.[k] ?? 1;
     }

@@ -20,7 +20,7 @@ import { ParticleSet } from './particles';
 import { autopilotAccel, type Autopilot } from './spaceship';
 import { blastOnBody, ejectaLayers, L_SUN, peakLuminosity, maxEjectaSpeed, neutronStarKick, remnantInAu, thermonuclear, type Explosion } from './supernovaPhysics';
 import { stellarFate, typeIaNickel } from './stellarFate';
-import { mergerSpin } from './kerr';
+import { mergerSpin, SPIN_AXIS, spinAngularMomentum } from './kerr';
 import { accreteGas, type FormationSettings } from './planetFormation';
 import { BODY_FIELDS, particleAccelSlice } from './particleKernel';
 import type { ParallelForces } from './parallel';
@@ -118,7 +118,8 @@ export class Simulation {
   dtMax = 0.01;
   dtMin = 1e-8;
   /**
-   * General relativity: adds the first post-Newtonian correction (perihelion precession)
+   * General relativity: adds the first post-Newtonian correction (perihelion precession), the
+   * frame dragging of spinning black holes (Lense–Thirring)
    * and gravitational-wave energy loss between compact objects. Direct-summation mode only.
    */
   relativity = false;
@@ -607,6 +608,31 @@ export class Simulation {
     let ax = k * (radial * rx + 4 * rv * vx);
     let ay = k * (radial * ry + 4 * rv * vy);
     let az = k * (radial * rz + 4 * rv * vz);
+    // Frame dragging by a spinning hole (Lense–Thirring, the spin–orbit term in the test-body
+    // limit; Kidder 1995): a = 2G/(c² r³) [3 n̂ ((n̂ × v)·J) − 2 v × J + 3 ṙ n̂ × J], with n̂ from the
+    // spinning body to the other and v their relative velocity. It drags orbits round the spin
+    // axis (kerr.ts SPIN_AXIS) at Ω̇ = 2GJ/(c² a³): tiny at the real speed of light, visible when
+    // the light-speed slider is turned down.
+    for (const [spinner, sign] of [[bj, 1], [bi, -1]] as const) {
+      if (!spinner.spin) continue;
+      const J = spinAngularMomentum(spinner.spin, spinner.mass, g, c);
+      const Jx = SPIN_AXIS[0] * J, Jy = SPIN_AXIS[1] * J, Jz = SPIN_AXIS[2] * J;
+      // Position and velocity of the other body relative to the spinner.
+      const px = sign * rx, py = sign * ry, pz = sign * rz;
+      const wx = sign * vx, wy = sign * vy, wz = sign * vz;
+      const nx = px / r, ny = py / r, nz = pz / r;
+      const rdot = (px * wx + py * wy + pz * wz) / r;
+      // (n̂ × v)·J
+      const nxv_J = (ny * wz - nz * wy) * Jx + (nz * wx - nx * wz) * Jy + (nx * wy - ny * wx) * Jz;
+      // v × J and n̂ × J
+      const vxJx = wy * Jz - wz * Jy, vxJy = wz * Jx - wx * Jz, vxJz = wx * Jy - wy * Jx;
+      const nxJx = ny * Jz - nz * Jy, nxJy = nz * Jx - nx * Jz, nxJz = nx * Jy - ny * Jx;
+      const kk = (2 * g) / (c2 * r2 * r);
+      // The acceleration of the other body relative to the spinner; sign maps it onto (bi − bj).
+      ax += sign * kk * (3 * nx * nxv_J - 2 * vxJx + 3 * rdot * nxJx);
+      ay += sign * kk * (3 * ny * nxv_J - 2 * vxJy + 3 * rdot * nxJy);
+      az += sign * kk * (3 * nz * nxv_J - 2 * vxJz + 3 * rdot * nxJz);
+    }
     // The post-Newtonian expansion is only valid while the correction is small. Near a merger
     // (with an exaggerated, low speed of light) it would blow up and even turn repulsive, so cap
     // it at a fraction of Newtonian gravity.

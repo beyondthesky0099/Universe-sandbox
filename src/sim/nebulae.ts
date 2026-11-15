@@ -28,6 +28,8 @@ export interface Nebula {
   opacity?: number;
   /** Dark nebulae: the molecular cloud whose distance they take (Zucker et al. 2020). */
   cloud?: string;
+  /** Named nebulae the catalogues leave without a distance: what it was taken from ("cluster NGC 6530 (Gaia DR3)"). */
+  distanceNote?: string;
 }
 
 type Row = (string | number | null)[];
@@ -41,8 +43,8 @@ interface RawCatalog {
 
 export function parseNebulae(raw: RawCatalog): Nebula[] {
   const out: Nebula[] = [];
-  for (const [l, b, d, rad, id, name] of raw.hii as [number, number, number | null, number, string, string?][]) {
-    out.push({ kind: 'hii', l, b, distanceKpc: d ?? undefined, radiusDeg: rad / 3600, id, name });
+  for (const [l, b, d, rad, id, name, note] of raw.hii as [number, number, number | null, number, string, string?, string?][]) {
+    out.push({ kind: 'hii', l, b, distanceKpc: d ?? undefined, radiusDeg: rad / 3600, id, name, ...(note ? { distanceNote: note } : {}) });
   }
   for (const [l, b, d, rad, id, src, name] of raw.pn as [number, number, number | null, number | null, string, string | null, string?][]) {
     out.push({ kind: 'pn', l, b, distanceKpc: d ?? undefined, distanceSource: src === 'g' ? 'gaia' : src === 's' ? 'statistical' : undefined, radiusDeg: (rad ?? 0) / 3600, id, name });
@@ -50,11 +52,11 @@ export function parseNebulae(raw: RawCatalog): Nebula[] {
   for (const [l, b, maj, min, type, id, d, name] of raw.snr as [number, number, number, number, string, string, number | null, string?][]) {
     out.push({ kind: 'snr', l, b, radiusDeg: Math.sqrt(maj * min) / 2 / 60, id, name, snrType: type, distanceKpc: d ?? undefined });
   }
-  for (const [l, b, rad, id, opacity, d, cloud, name] of (raw.dark ?? []) as [number, number, number, string, number | null, number | null, string | null, string?][]) {
-    out.push({ kind: 'dark', l, b, radiusDeg: rad / 60, id, name, opacity: opacity ?? undefined, distanceKpc: d ?? undefined, cloud: cloud ?? undefined });
+  for (const [l, b, rad, id, opacity, d, cloud, name, note] of (raw.dark ?? []) as [number, number, number, string, number | null, number | null, string | null, string?, string?][]) {
+    out.push({ kind: 'dark', l, b, radiusDeg: rad / 60, id, name, opacity: opacity ?? undefined, distanceKpc: d ?? undefined, cloud: cloud ?? undefined, ...(note ? { distanceNote: note } : {}) });
   }
-  for (const [l, b, rad, id, star, d, name] of (raw.refl ?? []) as [number, number, number, string, string, number | null, string?][]) {
-    out.push({ kind: 'refl', l, b, radiusDeg: rad / 60, id, name, star, distanceKpc: d ?? undefined });
+  for (const [l, b, rad, id, star, d, name, note] of (raw.refl ?? []) as [number, number, number, string, string, number | null, string?, string?][]) {
+    out.push({ kind: 'refl', l, b, radiusDeg: rad / 60, id, name, star, distanceKpc: d ?? undefined, ...(note ? { distanceNote: note } : {}) });
   }
   return out;
 }
@@ -113,4 +115,4 @@ export const NEBULA_KIND_LABEL: Record<NebulaKind, string> = {
 };
 
 export const NEBULA_CREDIT =
-  'Nebulae: WISE Catalog of Galactic HII Regions (Anderson et al. 2014), Strasbourg-ESO catalogue of planetary nebulae (Acker et al. 1992) with Gaia EDR3 (Gonzalez-Santamaria et al. 2021) and statistical (Stanghellini & Haywood 2010) distances, Green’s catalogue of supernova remnants (2019) with distances from Ranasinghe & Leahy (2023), Lynds’ (1962) and Barnard’s (1927) dark nebulae at Zucker et al. (2020) cloud distances, and van den Bergh’s reflection nebulae (1966), via VizieR.';
+  'Nebulae: WISE Catalog of Galactic HII Regions (Anderson et al. 2014), Strasbourg-ESO catalogue of planetary nebulae (Acker et al. 1992) with Gaia EDR3 (Gonzalez-Santamaria et al. 2021) and statistical (Stanghellini & Haywood 2010) distances, Green’s catalogue of supernova remnants (2019) with distances from Ranasinghe & Leahy (2023), Lynds’ (1962) and Barnard’s (1927) dark nebulae at Zucker et al. (2020) cloud distances, and van den Bergh’s reflection nebulae (1966), via VizieR. Named nebulae without a catalogue distance take that of a maser inside them (Reid et al. 2019), of their young cluster (Hunt & Reffert 2023), of their ionizing star (Gaia DR3) or of their molecular cloud (Zucker et al. 2020).';

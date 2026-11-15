@@ -23,7 +23,7 @@ export function nebulaEntries(list: Nebula[]): SearchEntry[] {
     name: n.name ?? n.id,
     aliases: n.name ? [n.id] : undefined,
     kind: NEBULA_KIND[n.kind],
-    detail: n.distanceKpc ? `${lightYears(n.distanceKpc)} away` : 'on the sky (distance unknown)',
+    detail: n.distanceKpc ? `${lightYears(n.distanceKpc)} away${n.distanceNote ? `, the distance of its ${n.distanceNote.replace(/ \(.*$/, '')}` : ''}` : 'on the sky (distance unknown)',
     rank: n.name ? 60 : 0,
     action: n.distanceKpc
       ? { type: 'map', l: n.l, b: n.b, dKpc: n.distanceKpc, sizePc: n.radiusDeg > 0 ? n.distanceKpc * 1000 * Math.tan((n.radiusDeg * Math.PI) / 180) * 2 : undefined }

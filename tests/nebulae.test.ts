@@ -67,6 +67,33 @@ describe('real nebulae', () => {
     expect(diameterPc(helix)!).toBeLessThan(1.2);
   });
 
+  it('gives the famous nebulae the catalogues leave without a distance that of their cluster, maser, star or cloud', () => {
+    const cases: [string, number, number, RegExp][] = [
+      // [name, min kpc, max kpc, source]: literature values lie inside each range.
+      ['Lagoon Nebula (M8)', 1.1, 1.4, /cluster NGC 6530/],
+      ['Eagle Nebula (M16)', 1.6, 1.9, /cluster NGC 6611/],
+      ['Rosette Nebula', 1.3, 1.6, /cluster NGC 2244/],
+      ['Cone Nebula', 0.65, 0.8, /cluster NGC 2264/],
+      ['Trifid Nebula (M20)', 1.1, 2.0, /star HD 164492/],
+      ['Flaming Star Nebula', 0.35, 0.45, /star V\* AE Aur/],
+      ['W51', 5.0, 5.8, /maser W51 Main/],
+      ["Cat's Paw Nebula", 1.2, 1.8, /maser NGC 6334/],
+      ['M78', 0.38, 0.43, /cluster NGC 2068/],
+      ['Barnard 68', 0.12, 0.2, /cloud Pipe B59/],
+    ];
+    for (const [name, lo, hi, src] of cases) {
+      const n = byName(name);
+      expect(n.distanceKpc, name).toBeGreaterThan(lo);
+      expect(n.distanceKpc, name).toBeLessThan(hi);
+      expect(n.distanceNote, name).toMatch(src);
+    }
+    // Every named nebula but Barnard's E (no measured cloud within 14°) now has a distance.
+    const missing = nebulae.filter((n) => n.name && !n.distanceKpc).map((n) => n.name);
+    expect(missing).toEqual(["Barnard's E (B142)"]);
+    // Catalogue distances carry no note.
+    expect(byName('Orion Nebula (M42)').distanceNote).toBeUndefined();
+  });
+
   it('converts galactic positions to the sky correctly (Orion Nebula: RA 83.82°, Dec −5.39°)', () => {
     const orion = byName('Orion Nebula (M42)');
     const [x, y, z] = galacticToEcliptic(orion.l, orion.b);

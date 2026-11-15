@@ -21,6 +21,14 @@
  * - Reflection nebulae: van den Bergh 1966 (VII/21). Each is lit by a catalogued star, so its
  *   distance is that star's: the parallax from SIMBAD (TAP), which for these stars is almost
  *   always Gaia's, kept when it is measured to better than 20%.
+ * - Named nebulae the catalogues leave without a distance (the Lagoon, Eagle, Rosette…) take it
+ *   from what lights or lies inside them, in this order: a maser with a VLBI parallax inside the
+ *   nebula (Reid et al. 2019, from public/data/galactic-objects.json); the young cluster (under
+ *   20 Myr) whose centre lies inside it, at its Gaia DR3 distance (Hunt & Reffert 2023, from
+ *   public/data/clusters.json); the Gaia parallax of its ionizing star (IONIZING_STARS, via
+ *   SIMBAD); for a dark cloud, the nearest Zucker et al. 2020 sightline within 3° of its edge.
+ *   Each such row ends with where its distance came from. Run build-clusters.mjs and
+ *   build-galactic-objects.mjs first.
  *
  *   node scripts/build-nebulae.mjs
  */
@@ -294,21 +302,116 @@ FAMOUS.forEach(([, display, kind], i) => {
   else if (!best.name) best.name = display;
 });
 
+// --- Distances for named nebulae the catalogues leave without one --------------------------------
+/**
+ * Known associations the automatic search (inside the nebula's radius) misses, because the
+ * catalogue entry is one part of a larger complex: [display name, kind of source, its name].
+ * - The Lagoon's cluster NGC 6530 lies at the edge of the WISE region's 7′ radius.
+ * - The WISE "W51" entry is W51 B; the complex's masers (W51 Main) have the precise parallax.
+ * - The Cat's Paw's catalogue entry is one lobe; NGC 6334's maser is in the complex.
+ * - The Flaming Star and the Trifid are lit by single stars: AE Aurigae and HD 164492.
+ * - Barnard 68 and the Snake (B72) lie in the Pipe Nebula, whose distance Zucker et al. measured
+ *   towards B59.
+ */
+const ASSOCIATIONS = [
+  ['Lagoon Nebula (M8)', 'cluster', 'NGC 6530'],
+  ['W51', 'maser', 'W51 Main'],
+  ["Cat's Paw Nebula", 'maser', 'NGC 6334'],
+  ['Flaming Star Nebula', 'star', 'V* AE Aur'],
+  ['Trifid Nebula (M20)', 'star', 'HD 164492'],
+  ['Barnard 68', 'cloud', 'Pipe B59'],
+  ['Snake Nebula (B72)', 'cloud', 'Pipe B59'],
+];
+const IONIZING_STARS = ASSOCIATIONS.filter(([, kind]) => kind === 'star').map(([name, , id]) => [name, id]);
+const youngClusters = JSON.parse(readFileSync(new URL('../public/data/clusters.json', import.meta.url), 'utf8'))
+  .open.filter((r) => r[6] !== null && r[6] < 7.3 && !r[7])
+  .map((r) => ({ l: r[0], b: r[1], d: r[2] / 1000, members: r[5], id: r[9] ?? r[8] }));
+const clusterNamed = (id) => youngClusters.find((c) => c.id === id);
+const masers = JSON.parse(readFileSync(new URL('../public/data/galactic-objects.json', import.meta.url), 'utf8')).maser.filter((m) => !m.evolved);
+const starPlx = await (async () => {
+  const query = `SELECT i.id, b.plx_value, b.plx_err FROM ident AS i JOIN basic AS b ON i.oidref = b.oid WHERE i.id IN (${IONIZING_STARS.map(([, id]) => `'${id}'`).join(',')})`;
+  const file = join(cache, `simbad-ionizing-${createHash('sha1').update(query).digest('hex').slice(0, 10)}.csv`);
+  let text = existsSync(file) ? readFileSync(file, 'utf8') : undefined;
+  for (let attempt = 0; !text; attempt++) {
+    try {
+      const res = await fetch('https://simbad.cfa.harvard.edu/simbad/sim-tap/sync', {
+        method: 'POST',
+        body: new URLSearchParams({ request: 'doQuery', lang: 'adql', format: 'csv', query }),
+        signal: AbortSignal.timeout(120000),
+      });
+      const body = await res.text();
+      if (!res.ok || !body.startsWith('id,')) throw new Error(`HTTP ${res.status} ${body.slice(0, 200)}`);
+      writeFileSync(file, body);
+      text = body;
+    } catch (err) {
+      if (attempt >= 5) throw err;
+      await new Promise((r) => setTimeout(r, 4000 * 2 ** attempt));
+    }
+  }
+  return new Map(text.trim().split('\n').slice(1).map((line) => {
+    const [id, plx, err] = line.split(',').map((c) => c.replace(/^"|"$/g, ''));
+    return [id.replace(/\s+/g, ' ').trim(), { plx: Number(plx), err: Number(err) }];
+  }));
+})();
+const filled = [];
+for (const [kind, list] of [['hii', hii], ['refl', refl], ['dark', dark]]) {
+  for (const o of list) {
+    if (!o.name || o.d) continue;
+    const radiusDeg = kind === 'hii' ? (o.rad ?? 0) / 3600 : o.rad / 60;
+    // Inside the nebula: within its radius, and at least 3′ for the smallest.
+    const reach = Math.max(radiusDeg, 0.05);
+    const known = ASSOCIATIONS.find(([n]) => n === o.name);
+    const maser = known?.[1] === 'maser' ? masers.find((m) => m.name === known[2]) : known ? undefined : masers.map((m) => ({ m, s: sep(o.l, o.b, m.l, m.b) })).filter((x) => x.s <= reach).sort((a, b) => a.s - b.s)[0]?.m;
+    const cluster = known?.[1] === 'cluster' ? clusterNamed(known[2]) : known ? undefined : youngClusters.map((c) => ({ c, s: sep(o.l, o.b, c.l, c.b) })).filter((x) => x.s <= reach).sort((a, b) => b.c.members - a.c.members)[0]?.c;
+    const knownCloud = known?.[1] === 'cloud' ? sightlines.find((z) => z.cloud === known[2]) : undefined;
+    const starId = IONIZING_STARS.find(([n]) => n === o.name)?.[1];
+    const star = starId ? starPlx.get(starId) : undefined;
+    if (kind !== 'dark' && maser) {
+      o.d = maser.d;
+      o.dsrc = `maser ${maser.name} (VLBI parallax)`;
+    } else if (kind !== 'dark' && cluster) {
+      o.d = cluster.d;
+      o.dsrc = `cluster ${cluster.id} (Gaia DR3)`;
+    } else if (star && star.plx > 0 && star.err > 0 && star.plx / star.err >= 5) {
+      o.d = 1 / star.plx;
+      o.dsrc = `star ${starId} (Gaia parallax)`;
+    } else if (knownCloud) {
+      o.d = knownCloud.d;
+      o.cloud = knownCloud.cloud;
+      o.dsrc = `cloud ${knownCloud.cloud} (Zucker et al. 2020)`;
+    } else if (kind === 'dark') {
+      let best, bestSep = Infinity;
+      for (const z of sightlines) {
+        const d = sep(o.l, o.b, z.l, z.b);
+        if (d < bestSep) [best, bestSep] = [z, d];
+      }
+      if (best && bestSep <= radiusDeg + 3) {
+        o.d = best.d;
+        o.cloud = best.cloud;
+        o.dsrc = `cloud ${best.cloud} (Zucker et al. 2020)`;
+      }
+    }
+    if (o.d) filled.push(`${o.name}: ${o.d.toFixed(3)} kpc from ${o.dsrc}`);
+    else console.warn(`No distance found for ${o.name}`);
+  }
+}
+console.log(`Distances filled in for ${filled.length} named nebulae:\n  ${filled.join('\n  ')}`);
+
 const out = {
   source:
-    'HII: WISE Catalog of Galactic HII Regions (Anderson et al. 2014); PNe: Strasbourg-ESO catalogue (Acker et al. 1992), Gaia EDR3 distances (Gonzalez-Santamaria et al. 2021) and statistical distances (Stanghellini & Haywood 2010); SNRs: Green (2019) with distances from Ranasinghe & Leahy (2023); dark nebulae: Lynds (1962) and Barnard (1927), at the distances of their molecular clouds (Zucker et al. 2020); reflection nebulae: van den Bergh (1966), at the distances of their illuminating stars (SIMBAD parallaxes, mostly Gaia). Via VizieR (CDS). Familiar names resolved with SIMBAD.',
+    'HII: WISE Catalog of Galactic HII Regions (Anderson et al. 2014); PNe: Strasbourg-ESO catalogue (Acker et al. 1992), Gaia EDR3 distances (Gonzalez-Santamaria et al. 2021) and statistical distances (Stanghellini & Haywood 2010); SNRs: Green (2019) with distances from Ranasinghe & Leahy (2023); dark nebulae: Lynds (1962) and Barnard (1927), at the distances of their molecular clouds (Zucker et al. 2020); reflection nebulae: van den Bergh (1966), at the distances of their illuminating stars (SIMBAD parallaxes, mostly Gaia). Named nebulae without a catalogue distance take that of a maser inside them (Reid et al. 2019), of their young cluster (Hunt & Reffert 2023, Gaia DR3), of their ionizing star (Gaia), or of their molecular cloud (Zucker et al. 2020). Via VizieR (CDS). Familiar names resolved with SIMBAD.',
   fields: {
-    hii: ['l', 'b', 'distanceKpc|null', 'radiusArcsec', 'id', 'name?'],
+    hii: ['l', 'b', 'distanceKpc|null', 'radiusArcsec', 'id', 'name?', 'distance source? (named nebulae whose distance is filled in)'],
     pn: ['l', 'b', 'distanceKpc|null', 'radiusArcsec|null', 'id', 'distanceSource (g=Gaia, s=statistical, null)', 'name?'],
     snr: ['l', 'b', 'majorArcmin', 'minorArcmin', 'type (S shell, F filled, C composite)', 'id', 'distanceKpc|null', 'name?'],
-    dark: ['l', 'b', 'radiusArcmin', 'id', 'opacity 1-6 (Lynds)|null', 'distanceKpc (Zucker et al. 2020 cloud)|null', 'cloud|null', 'name?'],
-    refl: ['l', 'b', 'radiusArcmin', 'id', 'illuminating star', "distanceKpc (the star's parallax)|null", 'name?'],
+    dark: ['l', 'b', 'radiusArcmin', 'id', 'opacity 1-6 (Lynds)|null', 'distanceKpc (Zucker et al. 2020 cloud)|null', 'cloud|null', 'name?', 'distance source?'],
+    refl: ['l', 'b', 'radiusArcmin', 'id', 'illuminating star', "distanceKpc (the star's parallax)|null", 'name?', 'distance source?'],
   },
-  hii: hii.map((o) => [round(o.l, 3), round(o.b, 3), o.d ? round(o.d, 2) : null, o.rad ?? 0, o.id, ...(o.name ? [o.name] : [])]),
+  hii: hii.map((o) => [round(o.l, 3), round(o.b, 3), o.d ? round(o.d, 2) : null, o.rad ?? 0, o.id, ...(o.name ? [o.name] : []), ...(o.name && o.dsrc ? [o.dsrc] : [])]),
   pn: pn.map((o) => [round(o.l, 3), round(o.b, 3), o.d ? round(o.d, 3) : null, o.rad ? round(o.rad, 1) : null, o.id, o.src === 'gaia' ? 'g' : o.src === 'stat' ? 's' : null, ...(o.name ? [o.name] : [])]),
   snr: snr.map((o) => [round(o.l, 3), round(o.b, 3), o.maj ?? 1, o.min ?? 1, o.type, o.id, o.d ? round(o.d, 2) : null, ...(o.name ? [o.name] : [])]),
-  dark: dark.map((o) => [round(o.l, 3), round(o.b, 3), round(o.rad, 2), o.id, o.opacity ?? null, o.d ? round(o.d, 3) : null, o.cloud ?? null, ...(o.name ? [o.name] : [])]),
-  refl: refl.map((o) => [round(o.l, 3), round(o.b, 3), round(o.rad, 2), o.id, o.star, o.d ? round(o.d, 3) : null, ...(o.name ? [o.name] : [])]),
+  dark: dark.map((o) => [round(o.l, 3), round(o.b, 3), round(o.rad, 2), o.id, o.opacity ?? null, o.d ? round(o.d, 3) : null, o.cloud ?? null, ...(o.name ? [o.name] : []), ...(o.name && o.dsrc ? [o.dsrc] : [])]),
+  refl: refl.map((o) => [round(o.l, 3), round(o.b, 3), round(o.rad, 2), o.id, o.star, o.d ? round(o.d, 3) : null, ...(o.name ? [o.name] : []), ...(o.name && o.dsrc ? [o.dsrc] : [])]),
 };
 writeFileSync(new URL('../public/data/nebulae.json', import.meta.url), JSON.stringify(out) + '\n');
 const named = [...hii, ...pn, ...snr, ...dark, ...refl].filter((o) => o.name).length;

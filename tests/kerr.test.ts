@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { Simulation } from '../src/sim/simulation';
 import { applyFrame, encodeFrame } from '../src/sim/protocol';
 import { captureState, restoreState } from '../src/sim/state';
-import { drawnShadowRadius, einsteinRadius, horizonRadius, iscoRadius, mergerSpin, photonOrbits, radiativeEfficiency, shadowOutline, shadowProfile, SHADOW_PER_SCHWARZSCHILD, SHADOW_RADIUS_SCHWARZSCHILD } from '../src/sim/kerr';
+import { drawnShadowRadius, einsteinRadius, horizonRadius, lenseThirringNodeRate, SPIN_AXIS, spinAngularMomentum, iscoRadius, mergerSpin, photonOrbits, radiativeEfficiency, shadowOutline, shadowProfile, SHADOW_PER_SCHWARZSCHILD, SHADOW_RADIUS_SCHWARZSCHILD } from '../src/sim/kerr';
 import { physicalRadius } from '../src/sim/body';
 import { C_AU_PER_YEAR, G } from '../src/sim/units';
 
@@ -71,6 +71,54 @@ describe('Kerr black holes', () => {
     expect(einsteinRadius(shadow, 1) * 3437.75).toBeCloseTo(2.2, 1);
     // Never inside the photon sphere: the formula is held at 3.5 R_s.
     expect(einsteinRadius(shadow, 0.1 * rs)).toBe(einsteinRadius(shadow, 3.5 * rs));
+  });
+
+  it('drags an inclined orbit round the spin axis at the Lense–Thirring rate 2GJ/(c²a³), prograde', () => {
+    const sim = new Simulation();
+    sim.relativity = true;
+    sim.lightSpeedScale = 0.02; // c = 1,265 AU/yr: exaggerated, as the light-speed slider does
+    sim.collisions = false;
+    sim.eta = 0.004;
+    const c = C_AU_PER_YEAR * 0.02;
+    const hole = sim.addBody({ kind: 'blackhole', mass: 10, spin: 0.9 });
+    // A test body on a circular orbit 0.05 AU out, tilted 60° to the spin axis.
+    const a = 0.05;
+    const axis = { x: SPIN_AXIS[0], y: SPIN_AXIS[1], z: SPIN_AXIS[2] };
+    // Orbit frame: tilt the orbital plane by 60° about x from the equatorial plane (whose normal is the spin axis).
+    const tilt = Math.PI / 3;
+    const nOrb = { x: 0, y: Math.cos(tilt) * axis.y - Math.sin(tilt) * axis.z, z: Math.sin(tilt) * axis.y + Math.cos(tilt) * axis.z };
+    // Start the body along x (which lies in both planes), moving perpendicular to x within its plane.
+    const v = Math.sqrt((G * 10) / a);
+    const vdir = { x: 0, y: -nOrb.z, z: nOrb.y }; // nOrb × x̂
+    const body = sim.addBody({ name: 'probe', mass: 1e-12, x: a, y: 0, z: 0, vx: 0, vy: v * vdir.y, vz: v * vdir.z });
+    const nodeAngle = () => {
+      // Orbit normal h = r × v; its component perpendicular to the spin axis gives the line of nodes.
+      const rx = body.x - hole.x, ry = body.y - hole.y, rz = body.z - hole.z;
+      const vx = body.vx - hole.vx, vy = body.vy - hole.vy, vz = body.vz - hole.vz;
+      const h = { x: ry * vz - rz * vy, y: rz * vx - rx * vz, z: rx * vy - ry * vx };
+      const along = h.x * axis.x + h.y * axis.y + h.z * axis.z;
+      const p = { x: h.x - along * axis.x, y: h.y - along * axis.y, z: h.z - along * axis.z };
+      // Basis perpendicular to the axis: e1 = x̂, e2 = axis × x̂.
+      const e2 = { x: 0, y: axis.z, z: -axis.y };
+      return Math.atan2(p.x * e2.x + p.y * e2.y + p.z * e2.z, p.x);
+    };
+    const before = nodeAngle();
+    const period = 2 * Math.PI * Math.sqrt((a * a * a) / (G * 10));
+    const years = 0.6;
+    sim.advance(years, 1e7, 1e9);
+    let turned = nodeAngle() - before;
+    if (turned > Math.PI) turned -= 2 * Math.PI;
+    if (turned < -Math.PI) turned += 2 * Math.PI;
+    const J = spinAngularMomentum(0.9, 10, G, c);
+    const expected = lenseThirringNodeRate(J, a, 0, G, c) * years;
+    expect(years / period).toBeGreaterThan(100); // many orbits
+    expect(expected).toBeGreaterThan(0.3); // a clearly measurable turn
+    // Prograde: the node turns the same way as the spin, at the predicted rate.
+    expect(turned).toBeGreaterThan(expected * 0.85);
+    expect(turned).toBeLessThan(expected * 1.15);
+    // The orbit stays circular: no 1PN artefacts.
+    const r = Math.hypot(body.x - hole.x, body.y - hole.y, body.z - hole.z);
+    expect(r).toBeCloseTo(a, 2);
   });
 
   it('mergers leave spinning holes', () => {

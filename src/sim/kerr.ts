@@ -18,6 +18,27 @@
  */
 
 export const MAX_SPIN = 0.998;
+/**
+ * Tilt (rad, about x) of every black hole's spin axis, shared by the drawn disc (BodyVisual),
+ * the torus and jets of an active nucleus, and the frame dragging in the simulation: the axis is
+ * (0, cos DISC_TILT, sin DISC_TILT).
+ */
+export const DISC_TILT = 0.25;
+export const SPIN_AXIS: readonly [number, number, number] = [0, Math.cos(DISC_TILT), Math.sin(DISC_TILT)];
+
+/** Angular momentum J = a* G M² / c of a spinning hole (in the units of G, M and c given). */
+export function spinAngularMomentum(spin: number, mass: number, g: number, c: number): number {
+  return (spin * g * mass * mass) / c;
+}
+
+/**
+ * Lense–Thirring (frame-dragging) nodal precession rate of an orbit of semi-major axis a and
+ * eccentricity e around a hole of angular momentum J: Ω̇ = 2 G J / (c² a³ (1 − e²)^{3/2}),
+ * prograde about the spin, whatever the inclination.
+ */
+export function lenseThirringNodeRate(J: number, a: number, e: number, g: number, c: number): number {
+  return (2 * g * J) / (c * c * a * a * a * Math.pow(1 - e * e, 1.5));
+}
 export const SHADOW_RADIUS_SCHWARZSCHILD = Math.sqrt(27);
 /** The shadow's radius over the Schwarzschild radius: √27 M / 2M ≈ 2.6. */
 export const SHADOW_PER_SCHWARZSCHILD = Math.sqrt(27) / 2;

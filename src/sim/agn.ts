@@ -18,8 +18,7 @@
 import type { AgnClass, LocalGalaxy } from './galaxies';
 
 export const AU_PER_PC = 206264.8;
-/** Tilt (rad, about x) that BodyVisual gives every black hole's disc; the torus, jets and clouds share it. */
-export const DISC_TILT = 0.25;
+export { DISC_TILT } from './kerr';
 export const AU_PER_LIGHT_DAY = 173.14;
 /** Eddington luminosity per solar mass (erg/s). */
 export const L_EDDINGTON_PER_MSUN = 1.26e38;

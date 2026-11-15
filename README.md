@@ -208,7 +208,8 @@ important ones stay and the rest fade out until you zoom in and there's room for
 - **N-body gravity:** a kick-drift-kick leapfrog integrator with an adaptive timestep. A
   **Barnes–Hut octree** switches on above 160 bodies, and physics runs in a **Web Worker**
   (add `#worker=0` to the URL to keep it on the main thread).
-- **Relativity:** a first post-Newtonian correction gives perihelion precession, and
+- **Relativity:** a first post-Newtonian correction gives perihelion precession, spinning black
+  holes drag orbits round their axis (Lense–Thirring, at 2GJ/c²a³), and
   **gravitational-wave** emission (Peters) makes compact binaries inspiral and merge with a
   ripple. You can lower the speed of light to see these effects within seconds.
 - **Collisions:** slow impacts merge; fast rocky impacts **shatter**. **Tidal disruption**
@@ -886,7 +887,8 @@ push and pull request.
   scales (turn on **Real sizes** for true radii). Tidal limits always use nominal densities.
 - Test particles (belts, debris, gas) are massless: they feel gravity but don't exert it. Mass
   lost to tidal debris isn't tracked.
-- **Relativity** is approximate: a capped 1PN correction plus orbit-averaged gravitational-wave
+- **Relativity** is approximate: a capped 1PN correction, the Lense–Thirring spin–orbit term in
+  the test-body limit (spins fixed on one axis, no spin–spin term), plus orbit-averaged gravitational-wave
   energy loss. It reproduces precession and inspirals qualitatively, not to observational
   precision. The "light speed" slider exaggerates the effects on purpose.
 - **Stellar evolution** uses simple mass–lifetime and mass–luminosity relations, not stellar

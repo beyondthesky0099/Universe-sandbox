@@ -238,7 +238,16 @@ shadow is √27 GM/c².
   Bardeen's; the disc's geodesics are Schwarzschild.
   - Tests: tests/geodesic.test.ts (4M/b deflection to 3%, capture at √27 M, a ray aimed 7 M above
     an edge-on disc lands on its far side at r < 12 M, opposite Doppler shifts on the two sides).
-- Next step of the review: Lense–Thirring precession.
+- [x] **Step 4: frame dragging.** kerr.ts: `DISC_TILT` and `SPIN_AXIS` (0, cos 0.25, sin 0.25)
+  now live here (agn.ts re-exports the tilt), `spinAngularMomentum` (J = a* G M²/c) and
+  `lenseThirringNodeRate`. simulation.ts `relativisticPair` adds the spin–orbit term in the
+  test-body limit (Kidder 1995), a = 2G/(c² r³) [3 n̂ ((n̂ × v)·J) − 2 v × J + 3 ṙ n̂ × J], from each
+  spinning body of the pair, before the 25% cap. Only black holes have `spin`. No spin–spin term,
+  and the spin axis is the one fixed axis every hole's disc is drawn on.
+  - Test: tests/kerr.test.ts, a circular orbit tilted 60° round a 10 M☉, a* = 0.9 hole at c/50:
+    the node turns prograde at 2GJ/(c² a³) within 15% over 170 orbits, and stays circular.
+  - At the real speed of light the effect is tiny (S2 round Sgr A*: 10⁻⁷ rad/yr); the light-speed
+    slider shows it.
 
 ### AP. Search by kind
 The three search boxes matched names only, so "pulsars" or "agn" found nothing.

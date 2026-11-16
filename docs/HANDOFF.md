@@ -231,7 +231,13 @@ red blob with streaks, the Crab a white blob, the Veil faint, the Horsehead invi
   in the HD picture (GalaxyView loads it once per URL when the volume is built; `hdPhotos` false
   on phones); `backlitOnly` dark clouds use their photo only when `centralGlow` ≥ 0.1 (the
   Horsehead); `centralStar` for every PN. galaxyMap: "tiny" now means under 80 pixels across in
-  the best picture available (HD on desktop), so most named PNs are photographed volumes.
+  the best picture available (HD on desktop), or a PN under 1.5′ in radius (the Ring and the
+  Cat's Eye saturate the plates to white discs; their modelled shell is truer). The Helix and the
+  Dumbbell are photographed volumes.
+- [x] GalaxyView.flyToPoint arrives at a photographed nebula from the Sun's side (the volume
+  reproduces the photograph from Earth), and updateVolumes fades the procedural star layer
+  (`STAR_OPACITY` × (1 − 0.85 · focus)) while a volume fills the view: near the plane those
+  minimum-size stand-ins piled into a white wall in front of the Eagle and the Lagoon.
 - [x] search.ts: fly to max(0.003, 3 × size) units (was max(0.05, 4 × size)).
 - Tests: tests/nebulae.test.ts (filled distances), tests/nebula-raymarch.test.ts (backlit rule).
 

@@ -85,4 +85,40 @@ describe('nebula images (DSS via SkyView)', () => {
     const hii = atlas.images.filter((i) => i.kind === 'hii').map((i) => tileStats(i.page, i.tile).redBlue);
     expect(hii.reduce((a, b) => a + b, 0) / hii.length).toBeGreaterThan(1.1);
   });
+
+  it('draws the [O III] glow of planetary nebulae teal, and keeps reflection nebulae blue', () => {
+    /** Green over blue in a tile's gas (pixels lit on either plate, not saturated). */
+    const greenBlue = (name: string) => {
+      const im = atlas.images.find((i) => i.name === name)!;
+      const p = atlas.pages[im.page];
+      const img = pages[im.page];
+      const [u, v] = tileRect(p, im.tile);
+      const x0 = Math.round(u * img.width), y0 = Math.round((1 - v) * img.height) - p.tile;
+      let g = 0, b = 0;
+      for (let y = y0 + p.tile / 4; y < y0 + (3 * p.tile) / 4; y++) {
+        for (let x = x0 + p.tile / 4; x < x0 + (3 * p.tile) / 4; x++) {
+          const k = (y * img.width + x) * 4;
+          if (Math.max(img.data[k], img.data[k + 2]) < 40 || Math.min(img.data[k], img.data[k + 2]) > 235) continue;
+          g += img.data[k + 1];
+          b += img.data[k + 2];
+        }
+      }
+      return g / Math.max(1, b);
+    };
+    // Oxygen-bright planetary nebulae: green well above the red-blue minimum alone would give.
+    for (const name of ['Saturn Nebula', 'Ghost of Jupiter', 'Blue Snowball Nebula', "Cat's Eye Nebula"]) expect(greenBlue(name), name).toBeGreaterThan(0.6);
+    // Reflection nebulae (scattered starlight, no oxygen lines) stay blue: green is the red plate's level.
+    for (const name of ['Iris Nebula', 'Blue Horsehead Nebula']) expect(greenBlue(name), name).toBeLessThan(0.75);
+  });
+
+  it('has a sharp 512-pixel picture of every named nebula, for the volume up close', () => {
+    const named = atlas.images.filter((i) => i.page === 0);
+    for (const im of named) {
+      expect(im.hd, im.name).toMatch(/^nebula-hd\/[a-z0-9-]+\.jpg$/);
+      const img = jpeg.decode(readFileSync(`public/data/${im.hd}`), { useTArray: true });
+      expect(img.width, im.name).toBe(512);
+      expect(img.height, im.name).toBe(512);
+    }
+    expect(new Set(named.map((i) => i.hd)).size).toBe(named.length);
+  });
 });

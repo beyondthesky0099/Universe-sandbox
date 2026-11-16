@@ -281,7 +281,9 @@ export class GalaxyMapUI {
         // four times sharper than its atlas tile, so far fewer are too small.
         const hdUrl = image.hd && !LOW_POWER ? nebulaHdUrl(image.hd) : undefined;
         const pixelsAcross = ((hdUrl ? 512 : page.tile) * size * 1.3) / fieldSize;
-        const tiny = pixelsAcross < 80;
+        // A planetary nebula under 1.5′ in radius (the Ring, the Cat's Eye) burns out the plate to
+        // a white disc: its modelled shell ([O III] inside, an Hα rim, the white dwarf) is truer.
+        const tiny = pixelsAcross < 80 || (n.kind === 'pn' && n.radiusDeg < 0.025);
         volumes.push({
           center: pos,
           radius: tiny ? size * 0.6 : photoSize / 2,

@@ -208,6 +208,39 @@ Plan, in priority order:
 - BodyVisual adds it in applyDetail and updates it only when the planet is more than 14 px across
   and a star is present. Tests: tests/aurora.test.ts.
 
+### AR. Nebulae, realism pass
+Audit with Playwright screenshots of ten famous nebulae up close found: Orion a pink haze, Carina a
+red blob with streaks, the Crab a white blob, the Veil faint, the Horsehead invisible; 16 of the
+55 named nebulae with no distance (so not on the map: Lagoon, Eagle, Rosette…); search stopping
+0.05 units away, far outside small nebulae's volumes (the Ring showed a neighbour's).
+- [x] Distances (scripts/build-nebulae.mjs, after the names are attached): a named HII region,
+  reflection or dark nebula without one takes it from a non-evolved maser inside its radius
+  (galactic-objects.json), else the largest young (log age < 7.3) Hunt & Reffert cluster whose
+  centre is inside it (clusters.json), else its ionizing star's Gaia parallax (SIMBAD TAP), else
+  (dark) the nearest Zucker sightline within 3°. `ASSOCIATIONS` names the cases the automatic
+  match misses (Lagoon → NGC 6530, W51 → W51 Main, Cat's Paw → NGC 6334 maser, Flaming Star →
+  V* AE Aur, Trifid → HD 164492, B68 and B72 → Pipe B59). Rows get a trailing distance source
+  (`Nebula.distanceNote`), shown in search. 15 filled; Barnard's E stays without.
+- [x] Images (scripts/build-nebula-images.mjs): green = min(R, B) + 0.6 · max(0, B − R) for emission
+  kinds ([O III] 501 nm is teal; measured first: PNe are blue-dominant on the plates, HII regions
+  red-dominant), reflection and dark unchanged. Each named nebula also gets
+  `public/data/nebula-hd/<name>.jpg`, 512 px (`NebulaImage.hd`).
+- [x] Render (nebulaRaymarch.ts): hue-preserving tone curve (×1.3, then L·(1 − e^−peak)/peak);
+  photo volumes keep the photograph from Earth: uv warp 0.16 → 0.04, depth-only clump noise
+  (slow across the sky, fast along the line of sight); mipmapped gas texture; `setPhoto` swaps
+  in the HD picture (GalaxyView loads it once per URL when the volume is built; `hdPhotos` false
+  on phones); `backlitOnly` dark clouds use their photo only when `centralGlow` ≥ 0.1 (the
+  Horsehead); `centralStar` for every PN. galaxyMap: "tiny" now means under 80 pixels across in
+  the best picture available (HD on desktop), or a PN under 1.5′ in radius (the Ring and the
+  Cat's Eye saturate the plates to white discs; their modelled shell is truer). The Helix and the
+  Dumbbell are photographed volumes.
+- [x] GalaxyView.flyToPoint arrives at a photographed nebula from the Sun's side (the volume
+  reproduces the photograph from Earth), and updateVolumes fades the procedural star layer
+  (`STAR_OPACITY` × (1 − 0.85 · focus)) while a volume fills the view: near the plane those
+  minimum-size stand-ins piled into a white wall in front of the Eagle and the Lagoon.
+- [x] search.ts: fly to max(0.003, 3 × size) units (was max(0.05, 4 × size)).
+- Tests: tests/nebulae.test.ts (filled distances), tests/nebula-raymarch.test.ts (backlit rule).
+
 ### AQ. Black-hole spacetime, step 1: the shadow at real sizes
 Review of the curvature physics (orbits: 1PN + Peters damping, tested; Kerr shadow: Bardeen,
 tested; lensing: screen-space point lens; disc: not lensed; no frame dragging) found the shadow
@@ -465,7 +498,7 @@ and the 62,000 Gaia stars (sections F–J). Ideas for the next rounds are at the
 - [x] desktop/main.cjs adds ignore-gpu-blocklist and js-flags --max-old-space-size=4096 to
   force_high_performance_gpu.
 - [x] Windows builds: x64 and arm64, as separate installer and portable builds (dist:win runs
-  electron-builder twice; artifact names carry ${arch}). Desktop version 0.2.0.
+  electron-builder twice; artifact names carry ${arch}). Desktop version 0.3.0 (release v0.3.0: AGN, nebula realism, black-hole spacetime).
 - [x] Bug: connecting to the desktop's local server saved its URL, so the next launch (new port)
   tried a dead address. connectServer(url, announce, remember) now skips that, and startup falls
   back to the local server when a chosen one fails.

@@ -9,9 +9,13 @@ import { mulberry32 } from '../procgen/rng';
  *
  * - A photographed nebula keeps its photograph as seen from Earth: the picture sets how much gas
  *   lies along each line of sight and its colour; the gas is spread in depth through a spheroid
- *   around a noise-warped mid-surface, broken into filaments by 3D noise, and the dark parts of
- *   the picture inside the nebula become absorbing dust. Its 3D shape is a model (no telescope
- *   sees nebulae in depth), but its look from Earth is the real one.
+ *   around a noise-warped mid-surface, in clumps that vary along the line of sight and average out
+ *   over it, and the dark parts of the picture inside the nebula become absorbing dust. Its 3D
+ *   shape is a model (no telescope sees nebulae in depth), but its look from Earth is the real
+ *   one. A dark cloud is drawn from its picture when glowing gas lies behind it (the Horsehead
+ *   against IC 434), as a silhouette.
+ * - Colours go through a tone curve that keeps the hue, so a bright core rolls off towards its
+ *   own colour instead of clipping to white.
  * - The others are modelled by type, with their emission-line colours: HII regions are clumpy
  *   clouds with a cavity blown by their stars ([O III] teal inside, Hα red outside, dust lanes);
  *   planetary nebulae are ellipsoidal shells; supernova remnants thin filamentary shells; dark
@@ -111,8 +115,26 @@ export function starlessGas(pixels: Uint8ClampedArray, w: number, h: number): Ui
   return out;
 }
 
-/** The gas-only picture of one atlas tile as a texture (rows bottom-up, as WebGL samples it). */
-function gasTexture(atlas: THREE.Texture, rect: [number, number, number, number]): THREE.DataTexture | undefined {
+/** Mean brightness (0–1) of a square RGBA picture inside its central disc (70% of its width). */
+export function centralGlow(pixels: Uint8ClampedArray, size: number): number {
+  let glow = 0, n = 0;
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      if (Math.hypot(x + 0.5 - size / 2, y + 0.5 - size / 2) > size * 0.35) continue;
+      const k = (y * size + x) * 4;
+      glow += (0.3 * pixels[k] + 0.5 * pixels[k + 1] + 0.2 * pixels[k + 2]) / 255;
+      n++;
+    }
+  }
+  return glow / Math.max(1, n);
+}
+
+/**
+ * The gas-only picture of one atlas tile as a texture (rows bottom-up, as WebGL samples it), and
+ * how bright the gas is on average inside the central disc (0–1): a dark cloud seen against
+ * glowing gas (the Horsehead) has a bright picture; one seen against stars alone a black one.
+ */
+function gasTexture(atlas: THREE.Texture, rect: [number, number, number, number]): { tex: THREE.DataTexture; glow: number } | undefined {
   const image = atlas.image as (CanvasImageSource & { width: number; height: number }) | undefined;
   if (!image?.width) return undefined;
   const W = image.width, H = image.height;
@@ -124,14 +146,16 @@ function gasTexture(atlas: THREE.Texture, rect: [number, number, number, number]
   if (!ctx) return undefined;
   ctx.drawImage(image, x0, y0, size, size, 0, 0, size, size);
   const gas = starlessGas(ctx.getImageData(0, 0, size, size).data, size, size);
+  const glow = centralGlow(gas, size);
   // Flip rows: image rows run top-down, texture rows bottom-up.
   const flipped = new Uint8Array(gas.length);
   for (let y = 0; y < size; y++) flipped.set(gas.subarray((size - 1 - y) * size * 4, (size - y) * size * 4), y * size * 4);
   const tex = new THREE.DataTexture(flipped, size, size, THREE.RGBAFormat);
-  tex.minFilter = THREE.LinearFilter;
+  tex.minFilter = THREE.LinearMipmapLinearFilter;
   tex.magFilter = THREE.LinearFilter;
+  tex.generateMipmaps = true;
   tex.needsUpdate = true;
-  return tex;
+  return { tex, glow };
 }
 
 let noiseTexture: THREE.Data3DTexture | undefined;
@@ -169,6 +193,7 @@ const FRAGMENT = /* glsl */ `
   uniform vec3 uSeed;
   uniform float uOpacity;
   uniform float uSteps;
+  uniform float uStar;      // 1: draw a central star (planetary nebulae, photographed or modelled)
   varying vec3 vWorld;
 
   const vec3 OIII = vec3(0.30, 0.95, 0.82);
@@ -191,18 +216,24 @@ const FRAGMENT = /* glsl */ `
     float rg = r3(pw * 1.4);
     float edge = 1.0 - smoothstep(0.7, 1.0, r);
     if (uShape == 0) {
-      // The photograph (stars removed) sets the gas along each line of sight, as seen from Earth.
-      // Where it is read shifts with depth (3D noise), so its features don't stretch into columns.
-      vec2 uv = q.xy * 0.5 + 0.5 + w.xy * 0.16 * clamp(abs(q.z) * 2.0, 0.0, 1.0);
+      // The photograph (stars removed) sets the gas along each line of sight, as seen from Earth,
+      // and the volume reproduces it from there: the gas is spread in depth with a profile whose
+      // integral along the line of sight is the picture's brightness. Where it is read shifts a
+      // little with depth, so seen from the side its features don't stretch into columns.
+      vec2 uv = q.xy * 0.5 + 0.5 + w.xy * 0.04 * clamp(abs(q.z) * 2.0, 0.0, 1.0);
       vec3 ph = texture2D(uPhoto, uv).rgb;
       float lum = dot(ph, vec3(0.3, 0.5, 0.2));
-      float gas = max(0.0, lum - 0.06);
+      float gas = max(0.0, lum - 0.04);
       float rxy = length(q.xy);
       float h = sqrt(max(0.0, 1.0 - rxy * rxy)) * (0.3 + 0.5 * gas) + 0.03;
       float mid = (n3(vec3(q.xy * 0.4, 0.5) + uSeed) - 0.5) * 1.2 * h;
       float dz = (q.z - mid) / h;
       float prof = exp(-dz * dz * 2.5);
-      float detail = 0.3 + 1.4 * n * n + 0.8 * rg * rg;
+      // Clumps in depth only: slow across the sky (where the picture already has the detail),
+      // fast along the line of sight, so they average out over it and the view from Earth stays
+      // the photograph.
+      float depthNoise = n3(vec3(q.xy * 0.12, q.z * 1.6) + uSeed);
+      float detail = 0.35 + 1.3 * depthNoise;
       float rho = gas * prof * detail / (0.56 * h);
       emit = ph / max(lum, 0.03) * rho;
       // Dark lanes within the nebula: absorbing dust where the picture is dark between bright gas.
@@ -275,12 +306,19 @@ const FRAGMENT = /* glsl */ `
       if (T < 0.01) break;
       t += dt;
     }
-    if (uShape == 2) {
+    if (uShape == 2 || uStar > 0.5) {
       // The planetary nebula's central star: the hot white-dwarf core that lights the shell. It is
       // a point, so it is drawn from how close the ray passes to the centre, not by the steps.
+      // (A photographed nebula has its stars removed, so it is drawn here too.)
       float miss = length(oc - rd * dot(oc, rd)) / uRadius;
-      L += T * vec3(0.85, 0.92, 1.0) * (exp(-pow(miss / 0.01, 2.0)) * 2.0 + exp(-miss / 0.025) * 0.12);
+      float core = uShape == 2 ? 0.01 : 0.004;
+      L += T * vec3(0.85, 0.92, 1.0) * (exp(-pow(miss / core, 2.0)) * 2.0 + exp(-miss / (core * 2.5)) * 0.12);
     }
+    // Tone curve that keeps the hue: bright cores roll off towards their own colour instead of
+    // clipping to white, as a photograph's highlights do.
+    L *= 1.3;
+    float peak = max(max(L.r, L.g), L.b);
+    if (peak > 1e-4) L *= (1.0 - exp(-peak)) / peak;
     // Premultiplied: the background is dimmed by the transmittance T.
     gl_FragColor = vec4(L * uOpacity, (1.0 - T) * uOpacity);
   }
@@ -295,17 +333,27 @@ export interface NebulaVolumeSpec {
   /** Photographed nebulae: the atlas, the picture's rectangle in it (texture space), and its axes
    * (right, up as seen from Earth; forward away from Earth). The picture spans the volume's width;
    * its stars are removed before use (starlessGas). */
-  photo?: { atlas: THREE.Texture; rect: [number, number, number, number] };
+  photo?: { atlas: THREE.Texture; rect: [number, number, number, number]; hdUrl?: string };
   axes?: { right: [number, number, number]; up: [number, number, number]; forward: [number, number, number] };
+  /** A dark cloud with a picture: drawn from the picture only when glowing gas lies behind it (the Horsehead). */
+  backlitOnly?: boolean;
+  /** Draw the central star (planetary nebulae). */
+  centralStar?: boolean;
 }
+
+/** Gas brighter than this on average in the central disc of a dark cloud's picture: it is backlit. */
+export const BACKLIT_GLOW = 0.1;
 
 export class NebulaRaymarch {
   readonly mesh: THREE.Mesh;
   private readonly material: THREE.ShaderMaterial;
-  private readonly gas?: THREE.DataTexture;
+  private gas?: THREE.DataTexture;
+  private readonly spec: NebulaVolumeSpec;
 
   constructor(spec: NebulaVolumeSpec, steps: number) {
-    this.gas = spec.photo ? gasTexture(spec.photo.atlas, spec.photo.rect) : undefined;
+    this.spec = spec;
+    const picture = spec.photo ? gasTexture(spec.photo.atlas, spec.photo.rect) : undefined;
+    this.gas = picture && (!spec.backlitOnly || picture.glow >= BACKLIT_GLOW) ? picture.tex : (picture?.tex.dispose(), undefined);
     const rand = mulberry32(spec.seed);
     const ax = spec.axes ?? { right: [1, 0, 0], up: [0, 1, 0], forward: [0, 0, 1] };
     this.material = new THREE.ShaderMaterial({
@@ -323,6 +371,7 @@ export class NebulaRaymarch {
         uSeed: { value: new THREE.Vector3(rand(), rand(), rand()) },
         uOpacity: { value: 0 },
         uSteps: { value: steps },
+        uStar: { value: spec.centralStar ? 1 : 0 },
       },
       side: THREE.BackSide,
       transparent: true,
@@ -343,6 +392,22 @@ export class NebulaRaymarch {
   set opacity(v: number) {
     this.material.uniforms.uOpacity.value = v;
     this.mesh.visible = v > 0.002;
+  }
+
+  /** Swap in a sharper picture (the nebula's own 512-pixel image) once it has loaded. */
+  setPhoto(image: THREE.Texture, rect: [number, number, number, number] = [0, 0, 1, 1]): void {
+    const picture = gasTexture(image, rect);
+    if (!picture) return;
+    if (this.spec.backlitOnly && picture.glow < BACKLIT_GLOW) {
+      picture.tex.dispose();
+      return;
+    }
+    this.gas?.dispose();
+    this.gas = picture.tex;
+    const u = this.material.uniforms;
+    u.uPhoto.value = picture.tex;
+    u.uHasPhoto.value = 1;
+    u.uShape.value = SHAPE_ID.photo;
   }
 
   dispose(): void {

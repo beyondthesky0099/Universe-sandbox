@@ -1,7 +1,7 @@
 {
   "name": "astrarium-desktop",
   "productName": "Astrarium",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Astrarium, the universe sandbox, as a desktop app that uses your full GPU.",
   "author": "beyondthesky0099",
   "license": "UNLICENSED",

@@ -498,7 +498,7 @@ and the 62,000 Gaia stars (sections F–J). Ideas for the next rounds are at the
 - [x] desktop/main.cjs adds ignore-gpu-blocklist and js-flags --max-old-space-size=4096 to
   force_high_performance_gpu.
 - [x] Windows builds: x64 and arm64, as separate installer and portable builds (dist:win runs
-  electron-builder twice; artifact names carry ${arch}). Desktop version 0.2.0.
+  electron-builder twice; artifact names carry ${arch}). Desktop version 0.3.0 (release v0.3.0: AGN, nebula realism, black-hole spacetime).
 - [x] Bug: connecting to the desktop's local server saved its URL, so the next launch (new port)
   tried a dead address. connectServer(url, announce, remember) now skips that, and startup falls
   back to the local server when a chosen one fails.

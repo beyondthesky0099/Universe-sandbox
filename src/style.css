@@ -1958,7 +1958,7 @@ a {
   color: #5ea7ff;
 }
 
-/* Brand mark: the eclipse-ring infinity logo, with the app name in the display face. */
+/* The app name, in the display face. */
 .brand {
   display: flex;
   align-items: center;
@@ -1967,102 +1967,18 @@ a {
   font-weight: 600;
   letter-spacing: 0.02em;
 }
-.brand img {
-  width: 26px;
-  height: 26px;
-  display: block;
-}
-.brand .brand-by {
-  font-family: var(--font-mono);
-  font-size: 9.5px;
-  font-weight: 400;
-  letter-spacing: 0.14em;
-  color: var(--muted);
-  text-transform: uppercase;
-}
-@media (max-width: 1100px) {
-  .brand .brand-by {
-    display: none;
-  }
-}
 
 .facts dd {
   font-variant-numeric: tabular-nums;
 }
 
-/* Brand: the animated Beyond The Sky wordmark (src/ui/wordmark.ts). */
-.brand {
-  gap: 10px;
-}
-.wordmark {
-  display: block;
-  height: 34px;
-}
-.wordmark svg {
-  height: 100%;
-  width: auto;
-  display: block;
-  overflow: visible;
-}
-.brand .brand-mark {
-  display: none;
-}
+/* The app name in the top bar. */
 .brand .brand-app {
-  font-family: var(--font-mono);
-  font-size: 10.5px;
-  font-weight: 500;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: var(--muted);
-  padding-left: 10px;
-  border-left: 1px solid var(--panel-border);
-}
-@media (max-width: 1100px) {
-  .brand .brand-app {
-    display: none;
-  }
-}
-@media (max-width: 760px) {
-  .wordmark {
-    display: none;
-  }
-  .brand .brand-mark {
-    display: block;
-  }
-}
-
-#splash {
-  position: fixed;
-  inset: 0;
-  z-index: 200;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 18px;
-  background: radial-gradient(ellipse at center, rgba(3, 4, 5, 0.86), #030405 75%);
-  pointer-events: none;
-  transition: opacity 0.8s ease;
-}
-#splash.out {
-  opacity: 0;
-}
-.splash-mark {
-  width: min(86vw, 900px);
-}
-.splash-mark svg {
-  width: 100%;
-  height: auto;
-  display: block;
-  overflow: visible;
-}
-.splash-app {
-  margin: 0;
-  font-family: var(--font-mono);
-  font-size: 12px;
-  letter-spacing: 0.4em;
-  text-transform: uppercase;
-  color: var(--muted);
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--text);
 }
 
 /* Travel controls fold into a small button until wanted. */

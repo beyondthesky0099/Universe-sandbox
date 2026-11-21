@@ -615,7 +615,14 @@ and the 62,000 Gaia stars (sections F–J). Ideas for the next rounds are at the
     Tapping toggles the full text; an opened toast stays until tapped again.
   - Phones: toasts sit at the top, at most 2 at a time.
 
-### AD. Animated wordmark and label declutter
+### AS. Logo removed from the app
+- [x] The user asked to remove the Beyond The Sky logo from the app and from startup: the top bar
+  now shows only the name (`.brand .brand-app`, display face), the #splash is gone, and
+  src/ui/wordmark.ts (the animated wordmark, AD) is deleted with its styles. The favicon and the
+  desktop icon (public/brand-mark.svg, desktop/icon.svg) still use the eclipse-ring mark; the
+  brand kit's colours and fonts (AC) are unchanged.
+
+### AD. Animated wordmark and label declutter (wordmark removed in AS)
 - [x] `src/ui/wordmark.ts`: the brand site's BrandWordmark.jsx ported to plain DOM.
   - DEFS and ARTWORK are copied verbatim (by script) from the JSX; the motion is the same.
   - mountWordmark(container, segments) returns a stop function. It pauses off screen and when
@@ -632,7 +639,7 @@ and the 62,000 Gaia stars (sections F–J). Ideas for the next rounds are at the
 ### AC. Beyond The Sky brand kit
 - [x] Brand kit from beyondthesky0099/beyondthesky_new (horizons-export/apps/web:
   tailwind.config.js, src/index.css, public/favicon.svg).
-- `public/brand-mark.svg` (the favicon mark) is used in the top bar and as the favicon;
+- `public/brand-mark.svg` (the favicon mark) is the favicon (it was in the top bar until AS);
   desktop/icon.svg is the same mark at 512 px (icon.png regenerated with make-icon.mjs).
 - Fonts are Space Grotesk, Inter and IBM Plex Mono, loaded from Google Fonts in index.html with
   system fallbacks.

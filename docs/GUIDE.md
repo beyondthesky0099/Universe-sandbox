@@ -138,6 +138,11 @@ The real sky from anywhere on Earth at any date: the Sun, the Moon with its phas
 longitude, then run time. The **eclipses** list has the 18 solar eclipses of 2024–2035: press
 **Watch** to stand in the path of totality.
 
+On a phone or tablet, **📱 Point at the sky** makes the view follow the phone: hold it up and the
+screen shows what is in that part of the sky, now, from where you are. If the stars are a little
+off (the compass is easily disturbed by metal nearby), drag sideways to line them up. Press
+**✋ Stop pointing** to look around by dragging again.
+
 ---
 
 ## 4. Things to try
@@ -407,6 +412,10 @@ with Claude also needs the server to have an Anthropic API key.
 
 **Windows says the app is from an unknown publisher.** The files aren't code-signed. Choose
 **More info → Run anyway**.
+
+**Point at the sky: the stars don't match the real ones.** Drag sideways until a star you know
+lines up; the compass is often a few degrees off, more near metal or with a magnetic case. On an
+iPhone, allow motion access when asked (or in Settings → Safari → Motion & Orientation Access).
 
 **"Use my location" doesn't work in the desktop app.** Type your latitude and longitude instead.
 

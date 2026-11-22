@@ -3,6 +3,8 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { julianDate } from '../src/sim/ephemeris';
 import { loadSolarSystemOnDate, loadSolarSystemTrueScale } from '../src/sim/presets';
 import { Simulation } from '../src/sim/simulation';
+import { contactDistance, physicalRadius } from '../src/sim/body';
+import { EARTH_MASS } from '../src/sim/units';
 import { parseSolarData, setSolarData } from '../src/sim/solarSystemData';
 import { spacecraftState, type SpacecraftData } from '../src/sim/spacecraft';
 
@@ -55,4 +57,36 @@ describe('real spacecraft (JPL Horizons)', () => {
     expect(names).toContain('Cassini');
     expect(names).not.toContain('New Horizons'); // launched 2006
   });
+});
+
+describe('spacecraft touch real surfaces only', () => {
+  it('meets a planet at its real radius, not its enlarged drawing', () => {
+    const earth = { kind: 'rocky' as const, mass: EARTH_MASS, radius: 0.02, tag: undefined };
+    const probe = { kind: 'rocky' as const, mass: 1e-20, radius: 0.001, tag: 'probe' };
+    // 0.02 AU drawn, but contact at Earth's real radius (about 6,400 km).
+    expect(contactDistance(earth, probe) * 1.496e8).toBeCloseTo(physicalRadius('rocky', EARTH_MASS) * 1.496e8, 6);
+    expect(contactDistance(earth, probe) * 1.496e8).toBeLessThan(7000);
+    // Two ordinary bodies still touch at their drawn radii.
+    expect(contactDistance(earth, { ...probe, tag: undefined })).toBeCloseTo(0.021, 12);
+  });
+
+  it('flies JUICE past Earth in January 2029 without a crash', () => {
+    const sim = new Simulation();
+    loadSolarSystemOnDate(sim, new Date('2026-11-22T00:00:00Z'));
+    sim.particles.clear(); // the asteroids don't matter here, and slow the test
+    const juice = () => sim.bodies.find((b) => b.name === 'JUICE');
+    const earth = () => sim.bodies.find((b) => b.name === 'Earth')!;
+    expect(juice()).toBeDefined();
+    let closest = Infinity;
+    // To March 2029, past the flyby.
+    for (let t = 0; t < 2.3; t += 0.002) {
+      sim.advance(0.002, 100000, 1e9);
+      const j = juice();
+      if (!j) break;
+      closest = Math.min(closest, Math.hypot(j.x - earth().x, j.y - earth().y, j.z - earth().z));
+    }
+    expect(juice()).toBeDefined();
+    // It really does pass close: well inside the Moon's orbit's scale, a few Earth radii up.
+    expect(closest).toBeLessThan(0.01);
+  }, 120_000);
 });

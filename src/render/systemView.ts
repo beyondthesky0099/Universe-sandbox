@@ -342,6 +342,15 @@ export class SystemView {
     this.sync();
   }
 
+  /** Brightness (L☉) of the scene's mass-transferring binary as seen from the camera, if there is one. */
+  binaryLuminosity(): number | undefined {
+    for (const v of this.visuals.values()) {
+      const l = v.binaryLuminosity;
+      if (l !== undefined) return l;
+    }
+    return undefined;
+  }
+
   /** The other star of a mass-transferring binary (sim/massTransfer.ts), if `b` is in one. */
   private transferPartner(b: Body): Body | undefined {
     const t = transferForAccretor(b.name) ?? transferForDonor(b.name);

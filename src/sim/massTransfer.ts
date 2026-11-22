@@ -28,6 +28,7 @@
  * Bondi–Hoyle capture of a typical supergiant wind (Frank, King & Raine, Accretion Power, §4.6).
  */
 import { mulberry32 } from '../procgen/rng';
+import type { DwarfNovaCycle, NovaEruption } from './binaryCycles';
 
 export type Vec3 = [number, number, number];
 export type FeedMode = 'roche' | 'wind' | 'be';
@@ -72,6 +73,11 @@ export interface TransferParams {
   rate: number;
   driver: string;
   luminosity: number;
+  /** A dwarf nova's outburst cycle, or a nova's eruption (sim/binaryCycles.ts). */
+  dwarfNova?: DwarfNovaCycle;
+  nova?: NovaEruption;
+  /** Inclination to Earth's line of sight (degrees), where known or eclipsing. */
+  inclination?: number;
 }
 
 // --- Roche geometry -------------------------------------------------------------------------

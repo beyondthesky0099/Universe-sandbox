@@ -16,6 +16,7 @@ import { setTrueScale } from './trueScale';
 import { agnLocalToScene, agnParams, describeAgn, DISC_TILT, rememberAgn } from './agn';
 import { auPerMas, earthDirection, skyPosition, skyToLocal, skyVelocity, type MaserDisc } from './maserDisc';
 import { binaryTransfer, describeTransfer, rememberTransfer } from './massTransfer';
+import { describeDwarfNova, describeNovaEruption, dwarfNovaCycle, dwarfNovaKind, novaEruption } from './binaryCycles';
 import type { LocalGalaxy } from './galaxies';
 import { SPACECRAFT_COLOR, spacecraftState } from './spacecraft';
 import { loadMilkyWayAndromeda } from './localGroup';
@@ -751,11 +752,24 @@ export function loadWhiteDwarfBinary(sim: Simulation, o: ({ kind: 'nova' } & Nov
     magnetic: magnetic ? (intermediate ? 'ip' : 'polar') : undefined,
   });
   donorBody.radius = transfer.lobe * a;
-  rememberTransfer(transfer);
+  // How it changes: a nova replays its eruption half an orbit in; a dwarf nova's next outburst
+  // starts one orbit in (an orbit takes 6 s at the scene's speed). Polars have no disc to flare.
+  const dnKind = o.kind === 'cv' && transfer.magnetic !== 'polar' ? dwarfNovaKind(o.types, o.per) : undefined;
+  const cycle = dnKind ? dwarfNovaCycle(dnKind, transfer.rate, years) : undefined;
+  const eruption = o.kind === 'nova' ? novaEruption(o, wd, transfer.rate, years / 2) : undefined;
+  // Eclipsing systems are seen from Earth close to edge-on: at the catalogued inclination, else 82°.
+  const eclipsing = (o.kind === 'cv' && !!o.eclipsing) || (o.kind === 'nova' && /\bEcl\b/.test(o.prop ?? ''));
+  const inclination = o.incl ?? (eclipsing ? 82 : undefined);
+  rememberTransfer({ ...transfer, dwarfNova: cycle, nova: eruption, inclination });
   sim.recenter();
   const notes = [...assumed, period.assumed ? 'the orbit' : ''].filter(Boolean);
-  const tip = `${describeObject(o)} ${describeTransfer(transfer)}${notes.length ? ` Not measured, so typical values are shown for ${notes.join(', ')}.` : ''}`;
-  return { cameraDistance: Math.max(a * 3.2, 2e-4), timeScale: years / 6, elevation: 0.5, tip };
+  const changes = cycle ? ` ${describeDwarfNova(cycle)}` : eruption ? ` ${describeNovaEruption(eruption)}` : '';
+  const view =
+    inclination !== undefined
+      ? ` The camera starts where Earth sees it, ${Math.round(inclination)}° from face-on${eclipsing ? `${o.incl === undefined ? ' (typical for an eclipsing system)' : ''}: once an orbit the donor passes in front of the white dwarf and its disc, and the live graph's Brightness shows the eclipse` : ''}.`
+      : '';
+  const tip = `${describeObject(o)} ${describeTransfer(transfer)}${changes}${view}${notes.length ? ` Not measured, so typical values are shown for ${notes.join(', ')}.` : ''}`;
+  return { cameraDistance: Math.max(a * 3.2, 2e-4), timeScale: years / 6, elevation: inclination !== undefined ? Math.PI / 2 - (inclination * Math.PI) / 180 : 0.5, tip };
 }
 
 /**

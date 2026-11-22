@@ -1,5 +1,5 @@
 import { $ } from '../ui/dom';
-import { LineChart, measure, METRICS, type MetricId, type Series } from '../ui/graph';
+import { brightnessMagnitudes, LineChart, measure, METRICS, type MetricId, type Series } from '../ui/graph';
 import type { App } from '../app';
 
 /** The live graph panel. */
@@ -34,22 +34,34 @@ export class GraphUI {
     if (this.app.graphTimer > 0) return;
     this.app.graphTimer = 0.1;
     const body = this.app.selectedBody();
-    const note = info.perBody && !body ? 'Select a body to graph it.' : info.perBody ? `${body!.name} · x: years since the graph started` : 'Whole system · x: years';
+    // A close binary's light curve: magnitudes above the Sun's, against days.
+    const light = this.app.graphMetric === 'brightness';
+    const binary = light ? this.app.system.binaryLuminosity() : undefined;
+    const note = light
+      ? binary === undefined
+        ? 'Visit a nova, cataclysmic variable or X-ray binary to see its light curve.'
+        : 'As seen from the camera: eclipses when the donor passes in front, outbursts and eruptions · x: days'
+      : info.perBody && !body
+        ? 'Select a body to graph it.'
+        : info.perBody
+          ? `${body!.name} · x: years since the graph started`
+          : 'Whole system · x: years';
     $('graph-note').textContent = note;
+    if (light) this.app.graphTimer = 0.05;
     if (this.app.sim.time !== this.app.graphLastTime) {
       this.app.graphLastTime = this.app.sim.time;
-      let v = measure(this.app.sim, this.app.graphMetric, body);
+      let v = light ? (binary !== undefined ? brightnessMagnitudes(binary) : undefined) : measure(this.app.sim, this.app.graphMetric, body);
       if (v !== undefined && Number.isFinite(v)) {
         const last = this.app.graphSeries[this.app.graphSeries.length - 1];
         // Keep angles continuous instead of wrapping at ±180°.
         if (this.app.graphMetric === 'periapsis' && last) while (v - last[1] > 180) v -= 360;
         if (this.app.graphMetric === 'periapsis' && last) while (v - last[1] < -180) v += 360;
-        this.app.graphSeries.push([this.app.sim.time - this.app.graphStart, v]);
+        this.app.graphSeries.push([(this.app.sim.time - this.app.graphStart) * (light ? 365.25 : 1), v]);
         if (this.app.graphSeries.length > 1200) this.app.graphSeries.splice(0, this.app.graphSeries.length - 1200);
       }
     }
     const series: Series[] = [{ label: 'This run', color: '#5ea7ff', points: this.app.graphSeries }];
     if (this.app.graphRef) series.push(this.app.graphRef);
-    this.app.chart!.draw(series, 'years', `${info.label}${info.unit ? ` (${info.unit})` : ''}`);
+    this.app.chart!.draw(series, light ? 'days' : 'years', light ? 'Brightness (magnitudes above the Sun)' : `${info.label}${info.unit ? ` (${info.unit})` : ''}`);
   }
 }

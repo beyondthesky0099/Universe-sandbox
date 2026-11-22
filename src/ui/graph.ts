@@ -2,7 +2,7 @@ import type { Body } from '../sim/body';
 import type { Simulation } from '../sim/simulation';
 import { AU_PER_YEAR_IN_KMS } from '../sim/units';
 
-export type MetricId = 'distance' | 'speed' | 'energy' | 'eccentricity' | 'periapsis' | 'temperature';
+export type MetricId = 'distance' | 'speed' | 'energy' | 'eccentricity' | 'periapsis' | 'temperature' | 'brightness';
 
 export interface MetricInfo {
   id: MetricId;
@@ -18,7 +18,13 @@ export const METRICS: MetricInfo[] = [
   { id: 'eccentricity', label: 'Eccentricity', unit: '', perBody: true },
   { id: 'periapsis', label: 'Periapsis direction', unit: '°', perBody: true },
   { id: 'energy', label: 'Total energy (system)', unit: 'M☉·AU²/yr²', perBody: false },
+  { id: 'brightness', label: 'Brightness seen from here (close binaries)', unit: 'mag', perBody: false },
 ];
+
+/** Brightness in magnitudes above the Sun's (up = brighter): 2.5 log₁₀(L / L☉). */
+export function brightnessMagnitudes(lsun: number): number {
+  return 2.5 * Math.log10(lsun);
+}
 
 /** Value of a metric right now (undefined when not applicable). */
 export function measure(sim: Simulation, metric: MetricId, body?: Body): number | undefined {

@@ -9,7 +9,7 @@ import type { Approach } from '../sim/forecast';
 import { orbitPath } from '../sim/orbits';
 import type { SceneSetup } from '../sim/presets';
 import type { SimEvent, Simulation } from '../sim/simulation';
-import { atmosphereMaterial, BodyVisual, DETAIL_PIXEL_RADIUS } from './bodyVisual';
+import { atmosphereMaterial, BodyVisual, DETAIL_PIXEL_RADIUS, type OrbitCentre } from './bodyVisual';
 import { createStarfield } from './starfield';
 import { dotTexture, glowTexture, ringTexture } from './textures';
 import { kelvinToRgb } from '../sim/color';
@@ -565,24 +565,50 @@ export class SystemView {
 
   /**
    * The orbit a body is moving fast along: when this frame covered more than 1/40 of its period,
-   * a frame-by-frame trail would be straight chords, so the trail shows the orbit itself.
+   * a frame-by-frame trail would be straight chords, so the trail shows the orbit itself. A body
+   * orbits its parent; the heavier star of a pair (which has no parent) orbits the pair's centre
+   * of mass, on the relative orbit shrunk by m₂/(m₁ + m₂).
    */
-  private fastOrbit(b: Body, simDt: number): { parent: Body; mu: number } | undefined {
-    let pid = this.trailParents.get(b.id);
-    if (pid === undefined) {
-      pid = this.sim.parentOf(b)?.id ?? null;
-      this.trailParents.set(b.id, pid);
+  private fastOrbit(b: Body, simDt: number): { centre: OrbitCentre; mu: number } | undefined {
+    const parentOf = (x: Body) => {
+      let pid = this.trailParents.get(x.id);
+      if (pid === undefined) {
+        pid = this.sim.parentOf(x)?.id ?? null;
+        this.trailParents.set(x.id, pid);
+      }
+      return pid !== null ? this.sim.getBody(pid) : undefined;
+    };
+    const parent = parentOf(b);
+    let other: Body | undefined = parent;
+    let scale = 1;
+    if (!parent) {
+      // The heaviest body that orbits this one.
+      for (const o of this.sim.bodies) if (o !== b && parentOf(o) === b && (!other || o.mass > other.mass)) other = o;
+      if (!other) return undefined;
+      scale = other.mass / (other.mass + b.mass);
     }
-    const parent = pid !== null ? this.sim.getBody(pid) : undefined;
-    if (!parent) return undefined;
-    const mu = this.sim.effectiveG * (parent.mass + b.mass);
-    const r = Math.hypot(b.x - parent.x, b.y - parent.y, b.z - parent.z);
-    const v2 = (b.vx - parent.vx) ** 2 + (b.vy - parent.vy) ** 2 + (b.vz - parent.vz) ** 2;
+    if (!other) return undefined;
+    const mu = this.sim.effectiveG * (other.mass + b.mass);
+    const r = Math.hypot(b.x - other.x, b.y - other.y, b.z - other.z);
+    const v2 = (b.vx - other.vx) ** 2 + (b.vy - other.vy) ** 2 + (b.vz - other.vz) ** 2;
     const energy = v2 / 2 - mu / r;
     if (!(mu > 0) || energy >= 0) return undefined;
     const a = -mu / (2 * energy);
     const period = 2 * Math.PI * Math.sqrt((a * a * a) / mu);
-    return simDt > period / 40 ? { parent, mu } : undefined;
+    if (!(simDt > period / 40)) return undefined;
+    if (parent) return { centre: parent, mu };
+    // The centre of mass, and μ scaled by the cube of the shrink so the smaller conic keeps the period.
+    const m = b.mass + other.mass;
+    const centre: OrbitCentre = {
+      id: -1,
+      x: (b.mass * b.x + other.mass * other.x) / m,
+      y: (b.mass * b.y + other.mass * other.y) / m,
+      z: (b.mass * b.z + other.mass * other.z) / m,
+      vx: (b.mass * b.vx + other.mass * other.vx) / m,
+      vy: (b.mass * b.vy + other.mass * other.vy) / m,
+      vz: (b.mass * b.vz + other.mass * other.vz) / m,
+    };
+    return { centre, mu: mu * scale ** 3 };
   }
 
   /** The body being stood on, if any. */
@@ -698,7 +724,7 @@ export class SystemView {
       }
       if (this.trailsEnabled) {
         const orbit = simRunning && simDt > 0 ? this.fastOrbit(b, simDt) : undefined;
-        if (orbit) v.orbitTrail(b, orbit.parent, orbit.mu);
+        if (orbit) v.orbitTrail(b, orbit.centre, orbit.mu);
         else if (simRunning) v.pushTrail(b, spacing, ref);
         else if (v.orbitParentId !== undefined) {
           const p = this.sim.getBody(v.orbitParentId);

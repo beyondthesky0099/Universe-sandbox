@@ -108,6 +108,17 @@ function realTexture(file: string): THREE.Texture {
 /** Points in each comet tail. */
 const COMET_TAIL_POINTS = 260;
 
+/** What a trail's orbit goes round: a body, or a pair's centre of mass (id −1). */
+export interface OrbitCentre {
+  id: number;
+  x: number;
+  y: number;
+  z: number;
+  vx: number;
+  vy: number;
+  vz: number;
+}
+
 export class BodyVisual {
   readonly id: number;
   kind: BodyKind;
@@ -686,7 +697,7 @@ export class BodyVisual {
    * following around `parent` (two-body, μ = G(M + m)), drawn to end at the body so the trail's
    * fade still runs from tail to head.
    */
-  orbitTrail(body: Body, parent: Body, mu: number): void {
+  orbitTrail(body: Body, parent: OrbitCentre, mu: number): void {
     const path = orbitPath(mu, body.x - parent.x, body.y - parent.y, body.z - parent.z, body.vx - parent.vx, body.vy - parent.vy, body.vz - parent.vz, this.trailLength);
     if (!path) return;
     const rx = body.x - parent.x, ry = body.y - parent.y, rz = body.z - parent.z;

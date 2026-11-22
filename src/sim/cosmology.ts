@@ -34,6 +34,11 @@ export function comovingDistance(z: number): number {
   return HUBBLE_DISTANCE_MPC * integrate((x) => 1 / E(x), z);
 }
 
+/** Angular-diameter distance (Mpc): the comoving distance over 1 + z (flat universe). Sizes on the sky use it. */
+export function angularDiameterDistance(z: number): number {
+  return comovingDistance(z) / (1 + z);
+}
+
 /** Luminosity distance (Mpc). */
 export function luminosityDistance(z: number): number {
   return comovingDistance(z) * (1 + z);

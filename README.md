@@ -335,6 +335,15 @@ important ones stay and the rest fade out until you zoom in and there's room for
     edge-on, and twin jets beamed towards whichever side faces you. The camera starts where the
     unified model puts you: past the torus for a Seyfert 1 or quasar, through it for a Seyfert 2,
     down the jet for a blazar. Zoom in ten thousand times to reach the disc.
+  - **NGC 4258's warped maser disc.** In M106's nucleus the torus gives way to the disc that
+    water masers have mapped (Humphreys et al. 2013): gas 0.1–0.3 pc from a 40-million-M☉ hole,
+    warped in tilt and twist exactly as measured, with the red and blue high-velocity masers on
+    its edges and the systemic masers in front. The camera starts where Earth is, and the masers
+    fade when you fly round, because they beam only towards us.
+  - **Radio lobes.** Tick *Radio lobes* in the Universe pane to see 38 radio galaxies' lobes in
+    real radio-survey pictures (NVSS, SUMSS, GLEAM, WENSS), at their true size and angle around
+    their galaxies: Cygnus A's two lobes 180 kpc apart, Centaurus A's 8° across the sky (half a
+    million parsecs), M87's halo. The galaxy panel gives the size.
   - **All 402 known Galactic novae and 1,601 other cataclysmic variables.** Novae (orange-red,
     recurrent ones deeper red) sit at Schaefer's best distances; the rest have Gaia DR3 distances.
     Zoom in to one and the white dwarf appears with its accretion disc (none for a polar, whose
@@ -955,6 +964,17 @@ push and pull request.
   Nenkova et al. (2008); Eddington ratios and viewing angles by type from the unified model
   (Antonucci 1993, Urry & Padovani 1995). The torus shape, jets and nuclear cluster are
   illustrative, and the scene says so.
+- NGC 4258's maser disc: the base model of Humphreys et al. 2013, ApJ 775, 13 (Table 3; maser
+  velocity ranges from Table 1); systemic-maser radius and bolometric luminosity from Herrnstein
+  et al. 2005, ApJ 629, 719.
+- Radio lobes (`node scripts/build-radio-lobes.mjs`): galaxies from the 3CRR catalogue (Laing,
+  Riley & Longair 1983, MNRAS 204, 151; VizieR J/MNRAS/204/151) plus six famous southern and
+  bright ones via SIMBAD; pictures from NASA's SkyView: the NRAO VLA Sky Survey (Condon et al.
+  1998, AJ 115, 1693), the Sydney University Molonglo Sky Survey (Mauch et al. 2003, MNRAS 342,
+  1117), GLEAM (Hurley-Walker et al. 2017, MNRAS 464, 1146) and WENSS (Rengelink et al. 1997,
+  A&AS 124, 259). Sizes of the giants whose lobes the surveys can't join: Willis, Strom & Wilson
+  1974 (DA 240, 3C 236), Waggett, Warner & Baldwin 1977 (NGC 6251), Ekers et al. 1983 (Fornax A),
+  Junkes et al. 1993 (Centaurus A).
 - Black holes and pulsars: positions from SIMBAD; masses and distances from the discovery papers,
   verified against their arXiv abstracts by `node scripts/build-compact-objects.mjs`.
 - Pulsars: the ATNF Pulsar Catalogue v2.6.1 (Manchester, Hobbs, Teoh & Hobbs 2005, AJ 129, 1993;

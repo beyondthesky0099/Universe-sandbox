@@ -208,6 +208,44 @@ Plan, in priority order:
 - BodyVisual adds it in applyDetail and updates it only when the planet is more than 14 px across
   and a star is present. Tests: tests/aurora.test.ts.
 
+### AT. AGN extras: radio lobes and the NGC 4258 maser disc
+- [x] Radio lobes in the Universe view (`node scripts/build-radio-lobes.mjs`, cached in
+  node_modules/.cache/radio-lobes):
+  - Sources: the 3CRR galaxies (Laing, Riley & Longair 1983, VizieR J/MNRAS/204/151, optical
+    type G, z < 0.1) less 3C 231 (M82, a starburst), plus Cygnus A, Centaurus A, Fornax A,
+    Pictor A, Hydra A and Hercules A resolved through SIMBAD.
+  - Pictures: NASA SkyView FITS cutouts in galactic coordinates (`Sampler=LI`): NVSS 1.4 GHz,
+    SUMSS 843 MHz south of −39.5°, and for the giants GLEAM 170–231 MHz (south of +25°) or WENSS.
+  - Size: emission above 3σ, 8-connected to the brightest pixel near the centre; the field
+    doubles until it stops touching the edge; size = the principal-axis length holding 99% of the
+    flux, less one 45″ beam. Under 3 beams counts as unresolved (3C 84, 3C 305, 3C 388).
+  - GIANTS: published sizes for DA 240, 3C 236, NGC 6251, Fornax A and Centaurus A, whose
+    detached lobes the threshold can't connect; shown with the reference.
+  - Output: public/data/radio-lobes.jpg (8 × 5 tiles of 256 px, false colour) and
+    radio-lobes.json (38 galaxies). Cygnus A comes out 2.7′ at galactic PA 168° (the jet's 105°
+    east of north is 163.8° from galactic north there).
+  - src/sim/radioLobes.ts: lobeBasis (galactic north up, longitude increasing to the left),
+    lobeSizeKpc (angular-diameter distance, new in cosmology.ts), lobeHost (map entry within 2′).
+    src/render/radioLobes.ts: one additive quad per galaxy, facing the Milky Way, fading in at
+    24–80 px. CosmosView.setRadioLobes places them at the host (its distance), else by redshift,
+    and sets `LocalGalaxy.radioLobes` for the panel ("Radio lobes" row) and the nucleus tip.
+  - "Radio lobes" checkbox (`opt-cosmos-radio`) in the Universe pane.
+- [x] NGC 4258's warped maser disc (src/sim/maserDisc.ts), from Humphreys et al. 2013 Table 3
+  (D 7.6 Mpc, 4.0 × 10⁷ M☉, i = 71.74° + 2.49°/mas · r, Ω = 65.46° + 5.23°/mas · r − 0.24°/mas² ·
+  r²) and their Appendix A sky frame. High-velocity maser radii come from the observed velocity
+  ranges (Table 1); systemic masers at 0.14 pc (Herrnstein et al. 2005), which also gives
+  L_bol ≈ 10⁴² erg/s.
+  - agnParams: `maser` replaces the torus (torusInner/Outer = the disc's edges, 0.10–0.31 pc;
+    jets 2.4 × the inner edge) and viewAngle is the true one (98.7°). `agnLocalToScene` maps the
+    nucleus frame to scene axes.
+  - loadActiveNucleus adds 1,600 gas particles on circular orbits, each in its ring's plane, and
+    starts the camera from Earth (`viewFrom`); north is down on screen there (checked).
+  - AgnVisual draws the warped sheet and 150 maser spots (red, blue, gold systemic) that are
+    bright only within ~6–30° of Earth's direction (masers are beamed).
+- Tests: tests/radio-lobes.test.ts, tests/maser-disc.test.ts.
+- Next ideas: other maser discs (NGC 1068, Circinus, UGC 3789 from the Megamaser Cosmology
+  Project); a live redshift colour for the maser spots; lobes for the 3CRR quasars.
+
 ### AR. Nebulae, realism pass
 Audit with Playwright screenshots of ten famous nebulae up close found: Orion a pink haze, Carina a
 red blob with streaks, the Crab a white blob, the Veil faint, the Horsehead invisible; 16 of the

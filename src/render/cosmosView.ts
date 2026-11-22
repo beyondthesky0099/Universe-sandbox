@@ -18,6 +18,9 @@ import { labelHitDepth, textSprite } from './galaxyView';
 import { ringTexture } from './textures';
 import { relativity, RELATIVITY_PARS } from './relativity';
 import { GalaxyShapes } from './galaxyShapes';
+import { RadioLobeLayer, type LobePlacement } from './radioLobes';
+import { lobeHost, lobeSizeKpc, type RadioLobeAtlas } from '../sim/radioLobes';
+import { comovingDistance } from '../sim/cosmology';
 
 /**
  * The Universe map: real galaxies around the Milky Way, in megaparsecs. The Local Volume
@@ -150,6 +153,8 @@ export class CosmosView {
   private readonly kindVisible: Record<CosmosKind, boolean> = { galaxy: true, cluster: true, quasar: true, seyfert: true, blazar: true };
   private webPoints?: THREE.Points;
   private shapes?: GalaxyShapes;
+  private lobes?: RadioLobeLayer;
+  private lobesVisible = true;
   private readonly labels: Label[] = [];
   private readonly marker: THREE.Sprite;
   private pointScale = 300;
@@ -340,6 +345,34 @@ export class CosmosView {
     this.scene.add(sprite);
   }
 
+  /**
+   * The radio lobes (sim/radioLobes.ts), each at its galaxy: the map entry within 2′ if there is one
+   * (its measured distance), else placed by redshift. Galaxies with lobes learn their size. Call
+   * after setLocal.
+   */
+  setRadioLobes(atlas: RadioLobeAtlas, texture: THREE.Texture): void {
+    if (this.lobes) {
+      this.scene.remove(this.lobes.mesh);
+      this.lobes.dispose();
+    }
+    const placements: LobePlacement[] = atlas.lobes.map((lobe, index) => {
+      const host = lobeHost(lobe, this.local);
+      const centre = host ? this.position(this.local.indexOf(host)) : new THREE.Vector3(...galacticToCosmos(lobe.l, lobe.b, comovingDistance(lobe.z)));
+      const d = centre.length();
+      if (host) host.radioLobes = { sizeKpc: lobeSizeKpc(lobe, host.zd ? undefined : host.d), lasDeg: lobe.lasDeg, survey: lobe.survey, fr: lobe.fr, ref: lobe.sizeRef };
+      return { index, centre: [centre.x, centre.y, centre.z], side: 2 * d * Math.tan(((lobe.fieldDeg / 2) * Math.PI) / 180) };
+    });
+    this.lobes = new RadioLobeLayer(atlas, texture, placements);
+    this.lobes.mesh.visible = this.lobesVisible;
+    this.lobes.setPxPerUnit(this.pxPerUnit);
+    this.scene.add(this.lobes.mesh);
+  }
+
+  setRadioLobesVisible(on: boolean): void {
+    this.lobesVisible = on;
+    if (this.lobes) this.lobes.mesh.visible = on;
+  }
+
   setCmbVisible(on: boolean): void {
     this.cmbVisible = on;
     if (this.cmb) this.cmb.visible = on;
@@ -369,6 +402,7 @@ export class CosmosView {
       u.uPxPerUnit.value = this.pxPerUnit;
     }
     this.shapes?.setPxPerUnit(this.pxPerUnit);
+    this.lobes?.setPxPerUnit(this.pxPerUnit);
   }
 
   get cameraDistance(): number {

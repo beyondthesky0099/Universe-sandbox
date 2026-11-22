@@ -16,6 +16,8 @@
  * parsec): zooming in from the torus to the disc is a journey of ten thousand to one.
  */
 import type { AgnClass, LocalGalaxy } from './galaxies';
+import { DISC_TILT as TILT } from './kerr';
+import { auPerMas, describeMaserDisc, earthDirection, maserDiscFor, type MaserDisc } from './maserDisc';
 
 export const AU_PER_PC = 206264.8;
 export { DISC_TILT } from './kerr';
@@ -52,6 +54,22 @@ export interface AgnParams {
   torusOpening: number;
   /** Angle between the spin axis and the line of sight for the default view (rad). */
   viewAngle: number;
+  /** The radio lobes' measured size (kpc), for radio galaxies with pictures (sim/radioLobes.ts). */
+  lobesKpc?: number;
+  /**
+   * A measured maser disc (sim/maserDisc.ts), drawn instead of the torus: then torusInnerAu and
+   * torusOuterAu are the disc's edges and viewAngle is the true one, from Earth.
+   */
+  maser?: MaserDisc;
+}
+
+/**
+ * A direction in the nucleus's local frame (+z the spin axis) in scene axes: the frame the
+ * renderer turns by −π/2 + DISC_TILT about x, so that +z becomes kerr.SPIN_AXIS.
+ */
+export function agnLocalToScene(v: readonly [number, number, number]): [number, number, number] {
+  const c = Math.cos(TILT), s = Math.sin(TILT);
+  return [v[0], v[1] * s + v[2] * c, -v[1] * c + v[2] * s];
 }
 
 const ASSUMED_EDDINGTON: Record<AgnType, number> = { quasar: 0.1, blazar: 0.05, seyfert1: 0.05, seyfert2: 0.03, liner: 0.001, radio: 0.005 };
@@ -95,15 +113,16 @@ export function opticalLuminosity(vmag: number, dMpc: number): number {
 }
 
 /** What the scene needs, from a Universe-view entry. `name` is what the body is called. */
-export function agnParams(g: Pick<LocalGalaxy, 'name' | 'kind' | 'cl' | 'sp' | 'vmag' | 'radio' | 'agn' | 'bh' | 'd' | 'z'>, name = g.name): AgnParams {
+export function agnParams(g: Pick<LocalGalaxy, 'name' | 'kind' | 'cl' | 'sp' | 'vmag' | 'radio' | 'agn' | 'bh' | 'd' | 'z' | 'radioLobes'>, name = g.name): AgnParams {
   const cl = g.cl ?? g.agn?.cl;
   const sp = g.sp ?? g.agn?.sp ?? '';
   const radio = g.radio ?? g.agn?.radio;
   const type = agnType(cl, sp, radio);
   const vmag = g.vmag ?? g.agn?.vmag;
+  const maser = maserDiscFor(g.name) ?? maserDiscFor(name);
   // Luminosity from the magnitude, else typical for the type; obscured nuclei are brighter than they look.
   const lopt = vmag !== undefined && g.d > 0 ? opticalLuminosity(vmag, g.d) * (type === 'seyfert2' ? 5 : 1) : undefined;
-  let lbol = lopt !== undefined ? 9 * lopt : type === 'quasar' || type === 'blazar' ? 1e46 : type === 'liner' ? 3e42 : 1e44;
+  let lbol = maser ? maser.lbol : lopt !== undefined ? 9 * lopt : type === 'quasar' || type === 'blazar' ? 1e46 : type === 'liner' ? 3e42 : 1e44;
   let mass: number;
   if (g.bh) mass = g.bh.mass;
   else {
@@ -116,8 +135,9 @@ export function agnParams(g: Pick<LocalGalaxy, 'name' | 'kind' | 'cl' | 'sp' | '
   lbol = Math.min(lbol, 1 * L_EDDINGTON_PER_MSUN * mass);
   const eddington = lbol / (L_EDDINGTON_PER_MSUN * mass);
   const blrAu = 34 * AU_PER_LIGHT_DAY * Math.pow(lbol / 9 / 1e44, 0.53);
-  const torusInnerAu = 0.4 * AU_PER_PC * Math.sqrt(lbol / 1e45);
+  const torusInnerAu = maser ? maser.innerMas * auPerMas(maser) : 0.4 * AU_PER_PC * Math.sqrt(lbol / 1e45);
   const radioLoud = type === 'blazar' || type === 'radio' || (radio ?? 0) >= 1;
+  const earth = maser && earthDirection(maser);
   return {
     name,
     type,
@@ -126,18 +146,20 @@ export function agnParams(g: Pick<LocalGalaxy, 'name' | 'kind' | 'cl' | 'sp' | '
     massRef: g.bh?.ref,
     lbol,
     eddington,
-    luminosityMeasured: lopt !== undefined,
+    luminosityMeasured: !!maser || lopt !== undefined,
     spin: 0.9,
     rsAu: 1.97e-8 * mass,
     blrAu,
     torusInnerAu,
-    torusOuterAu: torusInnerAu * 5,
+    torusOuterAu: maser ? maser.outerMas * auPerMas(maser) : torusInnerAu * 5,
     // Drawn to a few torus radii (real jets run on for thousands of light-years), short of the camera's start.
-    jetLengthAu: torusInnerAu * (radioLoud ? 9 : 5),
+    jetLengthAu: torusInnerAu * (maser ? 2.4 : radioLoud ? 9 : 5),
     jetBeta: radioLoud ? 0.98 : 0.3,
     radioLoud,
     torusOpening: (45 * Math.PI) / 180,
-    viewAngle: viewAngleFor(type, sp),
+    viewAngle: earth ? Math.acos(earth[2]) : viewAngleFor(type, sp),
+    ...(g.radioLobes ? { lobesKpc: g.radioLobes.sizeKpc } : {}),
+    ...(maser ? { maser } : {}),
   };
 }
 
@@ -166,8 +188,9 @@ export function formatMass(mass: number): string {
 
 /** A paragraph for the scene tip. */
 export function describeAgn(p: AgnParams): string {
-  const view =
-    p.type === 'blazar'
+  const view = p.maser
+    ? 'We see its disc almost edge-on, and the disc itself, not a torus, hides the nucleus: our line of sight grazes the warp.'
+    : p.type === 'blazar'
       ? 'We look almost straight down the jet, which is beamed towards us at nearly the speed of light and outshines everything else.'
       : p.type === 'seyfert2'
         ? 'We look in through the dusty torus, which hides the disc and the broad-line clouds: only scattered light and the far gas show.'
@@ -176,7 +199,14 @@ export function describeAgn(p: AgnParams): string {
           : 'We look in past the torus, straight at the disc and the fast clouds around it.';
   const pcTorus = p.torusInnerAu / AU_PER_PC;
   const scale = `The black hole, ${formatMass(p.mass)} M☉, is ${p.rsAu < 1 ? `${(p.rsAu * 1.496e8).toLocaleString('en-US', { maximumFractionDigits: 0 })} km` : `${+p.rsAu.toPrecision(2)} AU`} across; its broad-line clouds orbit about ${(p.blrAu / AU_PER_LIGHT_DAY).toPrecision(2)} light-days out and the dust torus begins ${pcTorus < 0.1 ? `${(pcTorus * 3.26 * 365).toPrecision(2)} light-days` : `${+pcTorus.toPrecision(2)} parsec${pcTorus >= 1.5 ? 's' : ''}`} out, all to scale: zoom in ten thousand times to reach the disc.`;
+  if (p.maser) {
+    const scaleMaser = `The black hole, ${formatMass(p.mass)} M☉, is ${+((p.rsAu * 1.496e8) / 1e6).toPrecision(2)} million km across.`;
+    return `${p.name} as ${TYPE_WORDS[p.type]}: a supermassive black hole shining at ${+(p.eddington * 100).toPrecision(2)}% of its Eddington limit (${p.lbol.toExponential(1).replace('e+', ' × 10^')} erg/s, ${p.maser.lbolRef}). ${view} ${scaleMaser} ${describeMaserDisc(p.maser)} The stars of the nuclear cluster and the jets' length are illustrative.`;
+  }
   const assumed = [p.massMeasured ? '' : 'the black-hole mass', p.luminosityMeasured ? '' : 'the luminosity'].filter(Boolean);
-  const notes = `${assumed.length ? `Not measured, so typical values are used for ${assumed.join(' and ')}. ` : ''}The torus's shape, the stars of the nuclear cluster and the jets' length are illustrative; real jets reach thousands of light-years.`;
+  const lobes = p.lobesKpc
+    ? ` Its jets feed radio lobes ${Math.round(p.lobesKpc).toLocaleString('en-US')} kpc across, ${(p.lobesKpc * 1000 / (p.torusOuterAu / AU_PER_PC)).toExponential(0).replace('e+', ' × 10^')} times the torus: see them in the Universe view.`
+    : '';
+  const notes = `${assumed.length ? `Not measured, so typical values are used for ${assumed.join(' and ')}. ` : ''}The torus's shape, the stars of the nuclear cluster and the jets' length are illustrative; real jets reach thousands of light-years.${lobes}`;
   return `${p.name} as ${TYPE_WORDS[p.type]}: a supermassive black hole shining at ${+(p.eddington * 100).toPrecision(2)}% of its Eddington limit (${p.lbol.toExponential(1).replace('e+', ' × 10^')} erg/s). ${view} ${scale} ${notes}`;
 }

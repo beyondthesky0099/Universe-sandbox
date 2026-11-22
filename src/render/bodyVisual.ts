@@ -13,6 +13,8 @@ import { mulberry32 } from '../procgen/rng';
 import { glowTexture } from './textures';
 import { NeutronStarVisual } from './neutronStar';
 import { AgnVisual } from './agn';
+import { MassTransferVisual, rocheEllipsoid } from './massTransfer';
+import { transferForAccretor, transferForDonor } from '../sim/massTransfer';
 import { agnFor, DISC_TILT } from '../sim/agn';
 import { coronaMesh, StarSurface, starLook } from './starSurface';
 import { hookPlanet, hookRings, oceanRoughness, shadowUniforms, type ShadowUniforms } from './planetLighting';
@@ -276,6 +278,28 @@ export class BodyVisual {
     return (this.kind === 'rocky' || this.kind === 'gas') && !this.isProbe;
   }
 
+  /**
+   * A Roche-lobe-filling donor: stretched towards its companion and centred a little towards L1,
+   * turning with the orbit (it is tidally locked).
+   */
+  private shapeDonor(body: Body, partner: Body, r: number): void {
+    const e = this.roche!;
+    this.rx.set(partner.x - body.x, partner.y - body.y, partner.z - body.z).normalize();
+    this.ry.set(body.vx - partner.vx, body.vy - partner.vy, body.vz - partner.vz);
+    // The orbit's normal: (donor − accretor) × (relative velocity).
+    this.rz.copy(this.rx).negate().cross(this.ry);
+    if (this.rz.lengthSq() === 0) return;
+    this.ry.copy(this.rz.normalize());
+    this.rz.crossVectors(this.rx, this.ry);
+    this.rm.makeBasis(this.rx, this.ry, this.rz);
+    this.rq.setFromRotationMatrix(this.rm);
+    // Into the tilted spin group's frame.
+    const inv = this.spin.quaternion.clone().invert();
+    this.mesh.quaternion.copy(inv).multiply(this.rq);
+    this.mesh.scale.set(r * e.along, r * e.pole, r * e.side);
+    this.mesh.position.copy(this.rx).multiplyScalar(r * e.shift).applyQuaternion(inv);
+  }
+
   private build(body: Body): void {
     this.disposeParts();
     let material: THREE.Material;
@@ -293,7 +317,8 @@ export class BodyVisual {
         this.glow = body.kind === 'giant' ? this.makeGlow(this.cepheidPeriod ? 0xffe6a8 : 0xff8040, 0.7) : this.makeGlow(body.kind === 'whitedwarf' ? 0xcfe0ff : body.color, body.kind === 'whitedwarf' ? 0.8 : 1);
         if (body.kind === 'star') this.corona = coronaMesh(body.color, seedFromName(body.name));
         // A white dwarf feeding from a companion (novae, cataclysmic variables) has a disc, unless it is a polar.
-        if (body.kind === 'whitedwarf' && body.tag === 'accreting') {
+        // With a modelled companion (massTransfer.ts) the disc comes from MassTransferVisual instead.
+        if (body.kind === 'whitedwarf' && body.tag === 'accreting' && !transferForAccretor(body.name)) {
           this.disk = accretionDiskMesh({ whiteDwarf: true });
           this.disk.rotation.x = -Math.PI / 2 + 0.3;
         }
@@ -334,6 +359,14 @@ export class BodyVisual {
     }
     this.mesh = new THREE.Mesh(this.isProbe ? PROBE : this.isPlanet || this.neutron || this.star ? SPHERE : SPHERE_LOW, material);
     this.spin.add(this.mesh);
+    // Close binaries: the gas flowing onto an accretor, and a donor that fills its Roche lobe.
+    const feeding = body.kind === 'whitedwarf' || body.kind === 'neutron' || body.kind === 'blackhole' ? transferForAccretor(body.name) : undefined;
+    if (feeding) {
+      this.transfer = new MassTransferVisual(feeding);
+      this.group.add(this.transfer.frame);
+    }
+    const giving = transferForDonor(body.name);
+    this.roche = giving?.mode === 'roche' && giving.donorShape ? rocheEllipsoid(giving.donorShape, giving.lobe) : undefined;
     if (this.disk) this.group.add(this.disk);
     if (this.agn) this.group.add(this.agn.root);
     if (this.glow) this.group.add(this.glow);
@@ -504,8 +537,17 @@ export class BodyVisual {
   private cepheidPeriod?: number;
   /** The torus and jets of an active galactic nucleus. */
   private agn?: AgnVisual;
+  /** Gas flowing onto this accretor from its companion (sim/massTransfer.ts). */
+  private transfer?: MassTransferVisual;
+  /** A Roche-lobe-filling donor's shape (scale along the line to its companion, sideways, to the pole, and centre shift). */
+  private roche?: { along: number; side: number; pole: number; shift: number };
+  private readonly rq = new THREE.Quaternion();
+  private readonly rm = new THREE.Matrix4();
+  private readonly rx = new THREE.Vector3();
+  private readonly ry = new THREE.Vector3();
+  private readonly rz = new THREE.Vector3();
 
-  update(body: Body, worldPerPixel: number, dt: number, lockTo?: Body, sun?: Body, camera?: THREE.Vector3, simTime = 0): void {
+  update(body: Body, worldPerPixel: number, dt: number, lockTo?: Body, sun?: Body, camera?: THREE.Vector3, simTime = 0, partner?: Body): void {
     this.group.position.set(body.x, body.y, body.z);
     if (this.tails) {
       if (sun) this.updateTails(body, sun);
@@ -563,6 +605,9 @@ export class BodyVisual {
       this.glow.scale.setScalar(isGalaxy ? body.radius * 1.6 : big * (0.8 + 0.2 * pulse));
     }
     if (this.agn && camera) this.agn.update(camera, dt, worldPerPixel);
+    if (this.transfer && partner) this.transfer.update(body, partner, dt, worldPerPixel);
+    if (this.roche && partner && r === body.radius) this.shapeDonor(body, partner, r);
+    else if (this.roche) this.mesh.position.set(0, 0, 0);
     if (this.disk) {
       this.disk.scale.setScalar(r);
       updateAccretionDisk(this.disk, body.spin ?? 0, performance.now() / 1000);
@@ -754,6 +799,12 @@ export class BodyVisual {
       this.agn.dispose();
       this.agn = undefined;
     }
+    if (this.transfer) {
+      this.group.remove(this.transfer.frame);
+      this.transfer.dispose();
+      this.transfer = undefined;
+    }
+    this.roche = undefined;
     if (this.neutron) {
       this.spin.remove(this.neutron.root);
       this.neutron.dispose();

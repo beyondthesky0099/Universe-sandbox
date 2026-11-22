@@ -54,6 +54,8 @@ export interface LocalGalaxy {
   agn?: ActiveNucleus;
   /** The measured mass of its central black hole, where a paper has one. */
   bh?: BlackHoleMass;
+  /** Radio galaxies: the size of their radio lobes (sim/radioLobes.ts). */
+  radioLobes?: { sizeKpc: number; lasDeg: number; survey: string; fr?: 'I' | 'II'; ref?: string };
   /** Record holders: why they matter, and the paper. */
   note?: string;
   ref?: string;

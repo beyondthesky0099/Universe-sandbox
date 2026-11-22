@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { seedFromString } from '../procgen/rng';
 import { agnNucleusLabel, agnTypeLabel, displayName, type LocalGalaxy, GALAXY_CREDIT, galaxyForm, isActiveGalaxy, isFamous, loadLocalGalaxies, loadNamedGalaxies, loadUniverseObjects, loadUniverseRaw, loadWebGalaxies, markActiveHosts } from '../sim/galaxies';
 import { loadActiveNucleus } from '../sim/presets';
+import { loadRadioLobes, radioAtlasUrl } from '../sim/radioLobes';
 import { MILKY_WAY_SEED } from '../procgen/galaxy';
 import { fmt } from '../sim/units';
 import { $, escapeHtml, setFacts, toast } from '../ui/dom';
@@ -42,6 +43,15 @@ export class CosmosUI {
           this.app.cosmos.setKindVisible('quasar', $<HTMLInputElement>('opt-cosmos-quasars').checked);
           this.app.cosmos.setKindVisible('seyfert', $<HTMLInputElement>('opt-cosmos-seyferts').checked);
           this.app.cosmos.setKindVisible('blazar', $<HTMLInputElement>('opt-cosmos-blazars').checked);
+          // Radio lobes: real radio-survey pictures around the radio galaxies (sim/radioLobes.ts).
+          void Promise.all([loadRadioLobes(), new THREE.TextureLoader().loadAsync(radioAtlasUrl())])
+            .then(([atlas, tex]) => {
+              this.app.cosmos.setRadioLobes(atlas, tex);
+              this.app.cosmos.setRadioLobesVisible($<HTMLInputElement>('opt-cosmos-radio').checked);
+              const selected = this.app.cosmos.selected;
+              if (selected !== -1) this.selectCosmos(selected);
+            })
+            .catch(() => undefined);
           this.app.cosmosLoaded = true;
           $('cosmos-credit').textContent = GALAXY_CREDIT;
           this.updateCosmosInfo();

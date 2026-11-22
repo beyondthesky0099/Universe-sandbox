@@ -207,6 +207,11 @@ export function cosmosFacts(g: LocalGalaxy): [string, string][] {
     if (g.bh) facts.push(['Central black hole', `${formatBlackHoleMass(g.bh.mass)} (${g.bh.method}; ${g.bh.ref})`]);
     else if (g.name === 'MESSIER087') facts.push(['Central black hole', '6.5 billion M☉: the first black hole ever imaged (Event Horizon Telescope, 2019)']);
   }
+  if (g.radioLobes) {
+    const r = g.radioLobes;
+    const across = r.lasDeg >= 1 ? `${+r.lasDeg.toFixed(1)}°` : `${+(r.lasDeg * 60).toPrecision(2)}′`;
+    facts.push(['Radio lobes', `${Math.round(r.sizeKpc).toLocaleString('en-US')} kpc (${Math.round(r.sizeKpc * 3261.6).toLocaleString('en-US')} light-years) across, ${across} on the sky${r.fr ? `; FR ${r.fr}` : ''} (${r.survey}${r.ref ? `; size: ${r.ref}` : ''})`]);
+  }
   const radio = g.radio ?? g.agn?.radio;
   if (radio !== undefined && radio > 0) facts.push(['Radio (5 GHz)', `${radio >= 1 ? radio.toFixed(1) : radio.toFixed(3)} Jy${radio >= 1 ? ' (radio-loud)' : ''}`]);
   if (kind === 'cluster') {

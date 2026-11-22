@@ -1,5 +1,5 @@
 import type { StarSystemSpec } from '../procgen/starSystem';
-import { mainSequenceLifetime, radiusFor, type Body } from './body';
+import { mainSequenceLifetime, physicalRadius, radiusFor, type Body } from './body';
 import { kelvinToRgb, rgbToHex, starColor } from './color';
 import { keplerToState, OrbitalElements } from './orbits';
 import type { Simulation } from './simulation';
@@ -8,12 +8,14 @@ import { mulberry32 } from '../procgen/rng';
 import { rememberPulsar, spinDownPower } from './neutronStar';
 import { HULSE_TAYLOR } from './binaryPulsar';
 import type { CompactObject } from './compactObjects';
-import { ARMS, cepheidMass, describeObject, whiteDwarfMasses, whiteDwarfPeriodDays, xrayMasses, xrayPeriodDays, type CataclysmicVariable, type Cepheid, type GalacticObject, type Maser, type Nova, type WolfRayet, type XrayBinary } from './galacticObjects';
+import { ARMS, cepheidMass, describeObject, whiteDwarfMasses, whiteDwarfPeriodDays, xrayFeed, xrayMasses, xrayPeriodDays, type CataclysmicVariable, type Cepheid, type GalacticObject, type Maser, type Nova, type WolfRayet, type XrayBinary } from './galacticObjects';
 import { describePulsar, pulsarName, type PulsarRecord } from './pulsars';
 import { GAS_DISC_LIFETIME, planetesimals } from './planetFormation';
 import { julianDate, planetStates, type PlanetName } from './ephemeris';
 import { setTrueScale } from './trueScale';
-import { agnParams, describeAgn, DISC_TILT, rememberAgn } from './agn';
+import { agnLocalToScene, agnParams, describeAgn, DISC_TILT, rememberAgn } from './agn';
+import { auPerMas, earthDirection, skyPosition, skyToLocal, skyVelocity, type MaserDisc } from './maserDisc';
+import { binaryTransfer, describeTransfer, rememberTransfer } from './massTransfer';
 import type { LocalGalaxy } from './galaxies';
 import { SPACECRAFT_COLOR, spacecraftState } from './spacecraft';
 import { loadMilkyWayAndromeda } from './localGroup';
@@ -669,15 +671,37 @@ export function loadXrayBinary(sim: Simulation, o: XrayBinary & { kind: 'hmxb' |
   if (!isBlackHole && o.spin) rememberPulsar(o.name, o.spin, 0);
   const years = period.days / 365.25;
   const a = Math.cbrt(years * years * (compact + companion));
+  const ecc = Math.min(o.ecc ?? 0, 0.9);
   // A massive donor is partway through its short life; a low-mass one is old.
   const age = o.kind === 'hmxb' ? Math.min(4e9, 0.5 * mainSequenceLifetime(companion)) : Math.min(8e9, 0.6 * mainSequenceLifetime(companion));
   const giant = o.kind === 'lmxb' && !!o.sptype && /III/.test(o.sptype);
-  addOrbiting(sim, primary, { name: o.kind === 'hmxb' ? 'Donor supergiant' : 'Donor star', kind: giant ? 'giant' : 'star', mass: companion, age }, { a, e: Math.min(o.ecc ?? 0, 0.9), nu: Math.PI * 0.6 });
+  const feed = xrayFeed(o);
+  const donorName = o.kind === 'lmxb' ? 'Donor star' : feed.mode === 'be' ? 'Be star' : 'Donor supergiant';
+  const donor = addOrbiting(sim, primary, { name: donorName, kind: giant ? 'giant' : 'star', mass: companion, age }, { a, e: ecc, nu: Math.PI * 0.6 });
   if (a < 0.5) setTrueScale(sim, true);
   if (!isBlackHole) sim.relativity = true;
+  const transfer = binaryTransfer({
+    accretor: o.name,
+    donor: donorName,
+    accretorKind: isBlackHole ? 'blackhole' : 'neutron',
+    // Subgiant donors (Sco X-1's K4 IV) are evolved too: their transfer follows their expansion.
+    donorKind: giant || /IV/.test(o.sptype ?? '') ? 'giant' : 'star',
+    m1: compact,
+    m2: companion,
+    aAu: a,
+    periodDays: period.days,
+    eccentricity: ecc,
+    accretorRadiusAu: physicalRadius(primary.kind, compact),
+    donorRadiusAu: physicalRadius('star', companion),
+    donorFill: feed.fill,
+    mode: feed.mode,
+  });
+  // The donor's size: its Roche lobe when it overflows, else a fraction of it (supergiants) or its own.
+  if (sim.trueScale) donor.radius = transfer.donorRadius * a;
+  rememberTransfer(transfer);
   sim.recenter();
   const assumed = [o.mx ? '' : `the ${isBlackHole ? 'black hole' : 'neutron star'} mass`, o.mo ? '' : 'the companion mass', period.assumed ? 'the orbit' : ''].filter(Boolean);
-  const tip = `${describeObject(o)}${assumed.length ? ` Not measured, so typical values are shown for ${assumed.join(', ')}.` : ''}`;
+  const tip = `${describeObject(o)} ${describeTransfer(transfer)}${assumed.length ? ` Not measured, so typical values are shown for ${assumed.join(', ')}.` : ''}`;
   return { cameraDistance: Math.max(a * 3.2, 2e-4), timeScale: years / 6, elevation: 0.7, tip };
 }
 
@@ -700,17 +724,37 @@ export function loadWhiteDwarfBinary(sim: Simulation, o: ({ kind: 'nova' } & Nov
   const period = whiteDwarfPeriodDays(o);
   const magnetic = (o.kind === 'cv' && !!o.magnetic) || !!o.types?.some((t) => t === 'AM' || t === 'IP' || t === 'DQ');
   // Polars have no disc: the field channels the gas straight onto the poles.
-  const primary = sim.addBody({ name: o.name, kind: 'whitedwarf', mass: wd, tag: magnetic && !o.types?.includes('IP') ? 'magnetic' : 'accreting' });
+  // Intermediate polars (IP, also called DQ Her stars) keep a disc; polars (AM Her stars) don't. A
+  // magnetic system whose other subtypes imply a disc (dwarf-nova outbursts, AM CVn) counts as an
+  // intermediate polar.
+  const intermediate = magnetic && !o.types?.includes('AM') && (!!o.types?.some((t) => t === 'IP' || t === 'DQ') || !!o.types?.some((t) => t === 'DN' || t === 'AC' || t === 'SU' || t === 'UG'));
+  const primary = sim.addBody({ name: o.name, kind: 'whitedwarf', mass: wd, tag: magnetic && !intermediate ? 'magnetic' : 'accreting' });
   const years = period.days / 365.25;
   const a = Math.cbrt(years * years * (wd + donor));
   const donorName = donorKind === 'whitedwarf' ? 'Helium white dwarf donor' : donorKind === 'giant' ? 'Red giant donor' : 'Donor star';
   // The donor is old: a red dwarf is ageless on this clock, a giant donor has left the main sequence.
   const age = donorKind === 'giant' ? 1.02 * mainSequenceLifetime(donor) : Math.min(5e9, 0.5 * mainSequenceLifetime(donor));
-  addOrbiting(sim, primary, { name: donorName, kind: donorKind, mass: donor, age, color: donorKind === 'star' && donor < 0.6 ? rgbToHex(kelvinToRgb(3300)) : undefined }, { a, e: 0, nu: Math.PI * 0.6 });
+  const donorBody = addOrbiting(sim, primary, { name: donorName, kind: donorKind, mass: donor, age, color: donorKind === 'star' && donor < 0.6 ? rgbToHex(kelvinToRgb(3300)) : undefined }, { a, e: 0, nu: Math.PI * 0.6 });
   setTrueScale(sim, true);
+  // The donor fills its Roche lobe and spills gas onto the white dwarf (sim/massTransfer.ts).
+  const transfer = binaryTransfer({
+    accretor: o.name,
+    donor: donorName,
+    accretorKind: 'whitedwarf',
+    donorKind,
+    m1: wd,
+    m2: donor,
+    aAu: a,
+    periodDays: period.days,
+    accretorRadiusAu: primary.radius,
+    mode: 'roche',
+    magnetic: magnetic ? (intermediate ? 'ip' : 'polar') : undefined,
+  });
+  donorBody.radius = transfer.lobe * a;
+  rememberTransfer(transfer);
   sim.recenter();
   const notes = [...assumed, period.assumed ? 'the orbit' : ''].filter(Boolean);
-  const tip = `${describeObject(o)}${notes.length ? ` Not measured, so typical values are shown for ${notes.join(', ')}.` : ''}`;
+  const tip = `${describeObject(o)} ${describeTransfer(transfer)}${notes.length ? ` Not measured, so typical values are shown for ${notes.join(', ')}.` : ''}`;
   return { cameraDistance: Math.max(a * 3.2, 2e-4), timeScale: years / 6, elevation: 0.5, tip };
 }
 
@@ -759,7 +803,7 @@ export function loadMaser(sim: Simulation, o: Maser): SceneSetup {
  * to scale; the camera starts outside the torus, looking in at the angle the unified model gives
  * this type of nucleus.
  */
-export function loadActiveNucleus(sim: Simulation, g: Pick<LocalGalaxy, 'name' | 'kind' | 'cl' | 'sp' | 'vmag' | 'radio' | 'agn' | 'bh' | 'd' | 'z'>, name = g.name): SceneSetup {
+export function loadActiveNucleus(sim: Simulation, g: Pick<LocalGalaxy, 'name' | 'kind' | 'cl' | 'sp' | 'vmag' | 'radio' | 'agn' | 'bh' | 'd' | 'z' | 'radioLobes'>, name = g.name): SceneSetup {
   const p = agnParams(g, name);
   rememberAgn(p);
   const rand = mulberry32(name.split('').reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 11));
@@ -780,6 +824,7 @@ export function loadActiveNucleus(sim: Simulation, g: Pick<LocalGalaxy, 'name' |
   }
   // The broad-line clouds: a thick ring of gas on orbits of weeks to years, in the disc's plane.
   addParticleDisk(sim, hole, { count: 700, inner: p.blrAu * 0.5, outer: p.blrAu * 2.2, thickness: 0.3, color: [0.62, 0.78, 1], tilt: DISC_TILT, jitter: 0.45 });
+  if (p.maser) addMaserDiscGas(sim, hole, p.maser, rand);
   sim.particleCullDistance = p.torusOuterAu * 4;
   setTrueScale(sim, true);
   sim.recenter();
@@ -788,10 +833,31 @@ export function loadActiveNucleus(sim: Simulation, g: Pick<LocalGalaxy, 'name' |
   return {
     cameraDistance: p.torusOuterAu * 2.4,
     elevation: Math.PI / 2 - DISC_TILT - p.viewAngle,
+    // A measured disc is seen from where Earth really is.
+    ...(p.maser ? { viewFrom: agnLocalToScene(earthDirection(p.maser)) } : {}),
     timeScale: Math.max(0.5, years / 8),
     maxTimeScale: Math.max(100, years * 20),
     tip: describeAgn(p),
   };
+}
+
+/**
+ * The molecular gas of a maser disc (sim/maserDisc.ts): particles on circular orbits, each in the
+ * plane of the warped disc at its radius, so the warp keeps its shape as they go round.
+ */
+function addMaserDiscGas(sim: Simulation, hole: Body, m: MaserDisc, rand: () => number, count = 1600): void {
+  const au = auPerMas(m);
+  const mu = G * sim.gravityScale * hole.mass;
+  for (let k = 0; k < count; k++) {
+    const r = Math.sqrt(m.innerMas ** 2 + rand() * (m.outerMas ** 2 - m.innerMas ** 2));
+    const phi = rand() * Math.PI * 2;
+    const sky = skyPosition(m, r, phi);
+    const pos = agnLocalToScene(skyToLocal(m, [sky[0] * au, sky[1] * au, sky[2] * au]));
+    const dir = agnLocalToScene(skyToLocal(m, skyVelocity(m, r, phi)));
+    const v = Math.sqrt(mu / (r * au)) / Math.hypot(...dir);
+    const shade = 0.7 + rand() * 0.5;
+    sim.particles.add(hole.x + pos[0], hole.y + pos[1], hole.z + pos[2], hole.vx + dir[0] * v, hole.vy + dir[1] * v, hole.vz + dir[2] * v, [Math.min(1, 0.72 * shade), Math.min(1, 0.5 * shade), Math.min(1, 0.36 * shade)]);
+  }
 }
 
 /** A Galaxy Map object of any kind, in the Sandbox. */

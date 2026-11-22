@@ -57,7 +57,7 @@ describe('X-ray binaries and Wolf–Rayet stars with measured distances', () => 
   it('describes each kind and fills in typical values where the catalogue has none', () => {
     const cyg = xray(/^Cyg X-1$/);
     expect(objectKindLabel(cyg)).toBe('black-hole high-mass X-ray binary');
-    expect(describeObject(cyg)).toMatch(/black hole feeding on the wind of a \d+ M☉ supergiant every 5\.60 days/);
+    expect(describeObject(cyg)).toMatch(/black hole feeding on the wind of a \d+ M☉ supergiant \(O9\.7Iabpvar\) every 5\.60 days/);
     const wr140 = find(/^WR 140$/);
     expect(objectKindLabel(wr140)).toBe('Wolf–Rayet star (WC7pd)');
     expect(describeObject(wr140)).toContain('2,870 km/s');

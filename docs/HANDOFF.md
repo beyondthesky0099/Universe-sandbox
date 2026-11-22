@@ -208,6 +208,80 @@ Plan, in priority order:
 - BodyVisual adds it in applyDetail and updates it only when the planet is more than 14 px across
   and a star is present. Tests: tests/aurora.test.ts.
 
+### AU. Mass transfer in close binaries
+The user asked whether the CV/nova/X-ray binary scenes had mass transfer: they didn't (a disc
+of fixed size, 30 white-dwarf radii, tilted off the orbit; donors at main-sequence or generic
+giant sizes, V404 Cyg's 7.4× its Roche lobe).
+- [x] src/sim/massTransfer.ts (headless, corotating frame in units of a, accretor at the origin,
+  donor at +x, Ω along +z):
+  - rocheLobeRadius (Eggleton), l1Distance, rochePotential, rocheShape (front/back/side/pole;
+    march to the first crossing, else the root past L2), discTidalRadius (0.9 of the accretor's
+    lobe), circularizationRadius.
+  - ballisticStream: RK4 from L1 at 0.02 aΩ with Coriolis, until the disc rim (hot spot), the star,
+    or (polars) half-way from L1, then fieldLinePath along r = L sin²θ to the surface near the pole
+    (axis tilted 25°, illustrative).
+  - windPaths: β = 1 wind (v∞ = 2.6 v_esc) with the compact object's gravity and Coriolis; 48
+    paths all round plus a fan of 24 towards the compact object; capture inside 2GM/v_rel².
+  - Rates: rocheTransferRate (GW + RVJ magnetic braking for 0.35–1.5 M☉ donors, ζ = 0.8, or −1/3
+    for white-dwarf donors; thermal timescale when ζ/2 + 5/6 − q ≤ 0; 10⁻⁸ for giant and subgiant
+    donors), windCaptureRate (Bondi–Hoyle on a 10⁻⁶ M☉/yr wind), accretionLuminosity (Eddington cap).
+  - binaryTransfer assembles TransferParams; rememberTransfer / transferForAccretor /
+    transferForDonor (by body name, for the renderer); describeTransfer for the tip.
+- [x] presets: loadWhiteDwarfBinary and loadXrayBinary size the donor from the model (its lobe, or
+  0.9 / 0.7 of it for sg / SFXT supergiants, else its own radius inside the lobe at periastron) and
+  register it. Magnetic CVs without the AM type but with disc subtypes (DN, AC, SU, UG) count as
+  intermediate polars.
+- [x] galacticObjects.ts: `xrayFeed` (roche / wind / be from the Fortin class, else the spectral
+  type); HMXBs gain `sptype` and `cls` (build-galactic-objects.mjs, cache key hmxb-class).
+- [x] render/massTransfer.ts: MassTransferVisual in BodyVisual (accretors), turned and scaled with
+  the orbit each frame: Shakura–Sunyaev disc coloured by temperature with Keplerian streaks,
+  stream line with flowing dots, hot spot, polar column and spot, wind paths, Be disc.
+  BodyVisual.shapeDonor stretches a lobe-filling donor into the lobe's ellipsoid (normalized to
+  its volume) facing its companion. SystemView passes the partner (`transferPartner`).
+- Tests: tests/mass-transfer.test.ts (Eggleton and Kopal values, L1 saddle, stream bends +y onto
+  the rim, rates below and above the gap and thermal, Cyg X-1 L ~10³⁷, polar column to the pole,
+  V404 Cyg donor inside the binary, Be disc inside the lobe at periastron).
+- Ideas: nova eruptions blowing the disc away; dwarf-nova outbursts brightening the disc;
+  eclipses for the eclipsing systems; superhumps (precessing eccentric discs) in SU UMa stars.
+
+### AT. AGN extras: radio lobes and the NGC 4258 maser disc
+- [x] Radio lobes in the Universe view (`node scripts/build-radio-lobes.mjs`, cached in
+  node_modules/.cache/radio-lobes):
+  - Sources: the 3CRR galaxies (Laing, Riley & Longair 1983, VizieR J/MNRAS/204/151, optical
+    type G, z < 0.1) less 3C 231 (M82, a starburst), plus Cygnus A, Centaurus A, Fornax A,
+    Pictor A, Hydra A and Hercules A resolved through SIMBAD.
+  - Pictures: NASA SkyView FITS cutouts in galactic coordinates (`Sampler=LI`): NVSS 1.4 GHz,
+    SUMSS 843 MHz south of −39.5°, and for the giants GLEAM 170–231 MHz (south of +25°) or WENSS.
+  - Size: emission above 3σ, 8-connected to the brightest pixel near the centre; the field
+    doubles until it stops touching the edge; size = the principal-axis length holding 99% of the
+    flux, less one 45″ beam. Under 3 beams counts as unresolved (3C 84, 3C 305, 3C 388).
+  - GIANTS: published sizes for DA 240, 3C 236, NGC 6251, Fornax A and Centaurus A, whose
+    detached lobes the threshold can't connect; shown with the reference.
+  - Output: public/data/radio-lobes.jpg (8 × 5 tiles of 256 px, false colour) and
+    radio-lobes.json (38 galaxies). Cygnus A comes out 2.7′ at galactic PA 168° (the jet's 105°
+    east of north is 163.8° from galactic north there).
+  - src/sim/radioLobes.ts: lobeBasis (galactic north up, longitude increasing to the left),
+    lobeSizeKpc (angular-diameter distance, new in cosmology.ts), lobeHost (map entry within 2′).
+    src/render/radioLobes.ts: one additive quad per galaxy, facing the Milky Way, fading in at
+    24–80 px. CosmosView.setRadioLobes places them at the host (its distance), else by redshift,
+    and sets `LocalGalaxy.radioLobes` for the panel ("Radio lobes" row) and the nucleus tip.
+  - "Radio lobes" checkbox (`opt-cosmos-radio`) in the Universe pane.
+- [x] NGC 4258's warped maser disc (src/sim/maserDisc.ts), from Humphreys et al. 2013 Table 3
+  (D 7.6 Mpc, 4.0 × 10⁷ M☉, i = 71.74° + 2.49°/mas · r, Ω = 65.46° + 5.23°/mas · r − 0.24°/mas² ·
+  r²) and their Appendix A sky frame. High-velocity maser radii come from the observed velocity
+  ranges (Table 1); systemic masers at 0.14 pc (Herrnstein et al. 2005), which also gives
+  L_bol ≈ 10⁴² erg/s.
+  - agnParams: `maser` replaces the torus (torusInner/Outer = the disc's edges, 0.10–0.31 pc;
+    jets 2.4 × the inner edge) and viewAngle is the true one (98.7°). `agnLocalToScene` maps the
+    nucleus frame to scene axes.
+  - loadActiveNucleus adds 1,600 gas particles on circular orbits, each in its ring's plane, and
+    starts the camera from Earth (`viewFrom`); north is down on screen there (checked).
+  - AgnVisual draws the warped sheet and 150 maser spots (red, blue, gold systemic) that are
+    bright only within ~6–30° of Earth's direction (masers are beamed).
+- Tests: tests/radio-lobes.test.ts, tests/maser-disc.test.ts.
+- Next ideas: other maser discs (NGC 1068, Circinus, UGC 3789 from the Megamaser Cosmology
+  Project); a live redshift colour for the maser spots; lobes for the 3CRR quasars.
+
 ### AR. Nebulae, realism pass
 Audit with Playwright screenshots of ten famous nebulae up close found: Orion a pink haze, Carina a
 red blob with streaks, the Crab a white blob, the Veil faint, the Horsehead invisible; 16 of the

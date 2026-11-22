@@ -2,10 +2,12 @@
  * An active galactic nucleus around a black hole (sim/agn.ts gives the sizes): the dusty torus,
  * ray-marched with absorption so that it hides the nucleus when seen edge-on; twin jets as
  * analytic Gaussian tubes, Doppler-boosted towards the camera; and the nuclear glare, dimmed
- * when the torus is in the way. All in the disc's frame: local +z is the spin axis.
+ * when the torus is in the way. All in the disc's frame: local +z is the spin axis. Where a maser
+ * disc has been measured (NGC 4258), that disc, warped as observed, takes the torus's place.
  */
 import * as THREE from 'three';
 import type { AgnParams } from '../sim/agn';
+import { auPerMas, earthDirection, maserSpots, skyPosition, skyToLocal, type MaserDisc, type MaserKind } from '../sim/maserDisc';
 import { glowTexture } from './textures';
 
 const VERTEX = /* glsl */ `
@@ -141,39 +143,101 @@ const JET_FRAGMENT = /* glsl */ `
   }
 `;
 
+const MASER_COLORS: Record<MaserKind, number> = { red: 0xff5a4a, blue: 0x5a9cff, systemic: 0xffd36a };
+
+/**
+ * A measured maser disc (sim/maserDisc.ts) in the nucleus's local frame: the warped sheet of
+ * molecular gas, faint, and the maser spots on it, which beam towards Earth only.
+ */
+class MaserDiscVisual {
+  readonly group = new THREE.Group();
+  /** Direction to Earth in the local frame. */
+  readonly earth: THREE.Vector3;
+  private readonly sheet: THREE.Mesh;
+  private readonly spots: THREE.Points;
+
+  constructor(m: MaserDisc) {
+    const au = auPerMas(m);
+    const local = (r: number, phi: number) => {
+      const p = skyPosition(m, r, phi);
+      return skyToLocal(m, [p[0] * au, p[1] * au, p[2] * au]);
+    };
+    // The sheet: rings from the inner to the outer edge, each in its own plane, fading at the edges.
+    const NR = 24, NP = 96;
+    const pos = new Float32Array((NR + 1) * (NP + 1) * 3);
+    const col = new Float32Array((NR + 1) * (NP + 1) * 3);
+    for (let a = 0; a <= NR; a++) {
+      const r = m.innerMas + ((m.outerMas - m.innerMas) * a) / NR;
+      const edge = Math.sin((Math.PI * a) / NR) ** 0.6;
+      for (let b = 0; b <= NP; b++) {
+        const k = a * (NP + 1) + b;
+        pos.set(local(r, (2 * Math.PI * b) / NP), k * 3);
+        col.set([0.55 * edge, 0.36 * edge, 0.26 * edge], k * 3);
+      }
+    }
+    const index: number[] = [];
+    for (let a = 0; a < NR; a++)
+      for (let b = 0; b < NP; b++) {
+        const k = a * (NP + 1) + b;
+        index.push(k, k + 1, k + NP + 1, k + 1, k + NP + 2, k + NP + 1);
+      }
+    const sheetGeo = new THREE.BufferGeometry();
+    sheetGeo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    sheetGeo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    sheetGeo.setIndex(index);
+    this.sheet = new THREE.Mesh(sheetGeo, new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.4, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending }));
+    this.sheet.frustumCulled = false;
+    this.sheet.renderOrder = 4;
+    this.group.add(this.sheet);
+
+    const list = maserSpots(m);
+    const sp = new Float32Array(list.length * 3);
+    const sc = new Float32Array(list.length * 3);
+    const c = new THREE.Color();
+    list.forEach((s, k) => {
+      sp.set(s.local, k * 3);
+      c.setHex(MASER_COLORS[s.kind]);
+      sc.set([c.r, c.g, c.b], k * 3);
+    });
+    const spotGeo = new THREE.BufferGeometry();
+    spotGeo.setAttribute('position', new THREE.BufferAttribute(sp, 3));
+    spotGeo.setAttribute('color', new THREE.BufferAttribute(sc, 3));
+    this.spots = new THREE.Points(spotGeo, new THREE.PointsMaterial({ map: glowTexture(), vertexColors: true, size: 16, sizeAttenuation: false, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+    this.spots.frustumCulled = false;
+    this.spots.renderOrder = 6;
+    this.group.add(this.spots);
+    this.earth = new THREE.Vector3(...earthDirection(m));
+  }
+
+  /** Masers are beamed: bright within a few degrees of Earth's direction, faint elsewhere. `cosEarth`: the camera's direction from the hole · Earth's. */
+  update(cosEarth: number): void {
+    const beam = THREE.MathUtils.smoothstep(cosEarth, Math.cos((30 * Math.PI) / 180), Math.cos((6 * Math.PI) / 180));
+    (this.spots.material as THREE.PointsMaterial).opacity = 0.12 + 0.88 * beam;
+  }
+
+  dispose(): void {
+    for (const o of [this.sheet, this.spots]) {
+      o.geometry.dispose();
+      (o.material as THREE.Material).dispose();
+    }
+  }
+}
+
 export class AgnVisual {
   readonly root = new THREE.Group();
-  private readonly torus: THREE.Mesh;
+  private readonly torus?: THREE.Mesh;
+  private readonly maser?: MaserDiscVisual;
   private readonly jets: THREE.Mesh;
   private readonly glare: THREE.Sprite;
   private readonly tmp = new THREE.Vector3();
   private readonly axis = new THREE.Vector3();
 
   constructor(readonly params: AgnParams) {
-    const R = params.torusOuterAu * 1.1;
-    const H = params.torusOuterAu * 0.9;
-    this.torus = new THREE.Mesh(
-      new THREE.BoxGeometry(2 * R, 2 * R, 2 * H),
-      new THREE.ShaderMaterial({
-        vertexShader: VERTEX,
-        fragmentShader: TORUS_FRAGMENT,
-        uniforms: {
-          uCam: { value: new THREE.Vector3() },
-          uBox: { value: new THREE.Vector3(R, R, H) },
-          uInner: { value: params.torusInnerAu },
-          uTanOpen: { value: Math.tan(params.torusOpening) },
-          uTime: { value: 0 },
-          uSeed: { value: (params.name.length * 1.7) % 10 },
-        },
-        transparent: true,
-        depthWrite: false,
-        side: THREE.BackSide,
-        premultipliedAlpha: true,
-      }),
-    );
-    this.torus.frustumCulled = false;
-    this.torus.renderOrder = 4;
-    this.root.add(this.torus);
+    // A measured maser disc replaces the (illustrative) torus.
+    if (params.maser) {
+      this.maser = new MaserDiscVisual(params.maser);
+      this.root.add(this.maser.group);
+    } else this.torus = this.makeTorus(params);
 
     // The jets' hull: a cylinder along y, scaled to the jet length, turned onto the spin axis (local z).
     const L = params.jetLengthAu;
@@ -206,9 +270,42 @@ export class AgnVisual {
 
     // The nucleus itself, seen from torus distances: a point of glare, hidden behind the dust.
     this.glare = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(), color: 0xdde6ff, transparent: true, opacity: 0.95, depthWrite: false, blending: THREE.AdditiveBlending }));
-    this.glare.scale.setScalar(params.torusInnerAu * 0.7);
+    this.glare.scale.setScalar(this.glareSize());
     this.glare.renderOrder = 6;
     this.root.add(this.glare);
+  }
+
+  /** The glare's size: most of the torus's inner radius, or a little of a maser disc's (a faint nucleus, far inside it). */
+  private glareSize(): number {
+    return this.params.torusInnerAu * (this.params.maser ? 0.12 : 0.7);
+  }
+
+  private makeTorus(params: AgnParams): THREE.Mesh {
+    const R = params.torusOuterAu * 1.1;
+    const H = params.torusOuterAu * 0.9;
+    const torus = new THREE.Mesh(
+      new THREE.BoxGeometry(2 * R, 2 * R, 2 * H),
+      new THREE.ShaderMaterial({
+        vertexShader: VERTEX,
+        fragmentShader: TORUS_FRAGMENT,
+        uniforms: {
+          uCam: { value: new THREE.Vector3() },
+          uBox: { value: new THREE.Vector3(R, R, H) },
+          uInner: { value: params.torusInnerAu },
+          uTanOpen: { value: Math.tan(params.torusOpening) },
+          uTime: { value: 0 },
+          uSeed: { value: (params.name.length * 1.7) % 10 },
+        },
+        transparent: true,
+        depthWrite: false,
+        side: THREE.BackSide,
+        premultipliedAlpha: true,
+      }),
+    );
+    torus.frustumCulled = false;
+    torus.renderOrder = 4;
+    this.root.add(torus);
+    return torus;
   }
 
   /** Per frame, with the camera's world position. */
@@ -217,9 +314,11 @@ export class AgnVisual {
     this.root.visible = px > 1.5;
     if (!this.root.visible) return;
     this.root.updateMatrixWorld();
-    const tu = (this.torus.material as THREE.ShaderMaterial).uniforms;
-    tu.uCam.value.copy(this.torus.worldToLocal(this.tmp.copy(camera)));
-    tu.uTime.value += dt;
+    if (this.torus) {
+      const tu = (this.torus.material as THREE.ShaderMaterial).uniforms;
+      tu.uCam.value.copy(this.torus.worldToLocal(this.tmp.copy(camera)));
+      tu.uTime.value += dt;
+    }
     const ju = (this.jets.material as THREE.ShaderMaterial).uniforms;
     ju.uCam.value.copy(this.jets.worldToLocal(this.tmp.copy(camera)));
     ju.uTime.value += dt;
@@ -228,18 +327,21 @@ export class AgnVisual {
     this.axis.set(0, 0, 1).transformDirection(this.root.matrixWorld);
     const toCam = this.tmp.copy(camera).sub(this.root.getWorldPosition(new THREE.Vector3())).normalize();
     const cosView = Math.abs(toCam.dot(this.axis));
+    this.maser?.update(toCam.dot(this.axis.copy(this.maser.earth).transformDirection(this.root.matrixWorld)));
     const clear = THREE.MathUtils.smoothstep(cosView, Math.cos(this.params.torusOpening + 0.12), Math.cos(this.params.torusOpening - 0.08));
     const near = THREE.MathUtils.smoothstep(px, 1.5, 12);
     const far = 1 - THREE.MathUtils.smoothstep(this.params.torusInnerAu / worldPerPixel, 200, 2000);
     this.glare.material.opacity = (0.06 + 0.94 * clear) * near * far;
-    this.glare.scale.setScalar(Math.max(this.params.torusInnerAu * 0.7, worldPerPixel * 16));
+    this.glare.scale.setScalar(Math.max(this.glareSize(), worldPerPixel * 16));
   }
 
   dispose(): void {
     for (const m of [this.torus, this.jets]) {
+      if (!m) continue;
       m.geometry.dispose();
       (m.material as THREE.Material).dispose();
     }
+    this.maser?.dispose();
     this.glare.material.dispose();
   }
 }

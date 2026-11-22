@@ -208,6 +208,16 @@ Plan, in priority order:
 - BodyVisual adds it in applyDetail and updates it only when the planet is more than 14 px across
   and a star is present. Tests: tests/aurora.test.ts.
 
+### AY. Black-hole shadows stay black (phones)
+- [x] postfx.ts: the bloom ran after the lens pass, so the disc's glow (the brightest thing on
+  screen, right at the shadow's edge) filled the shadow with grey. On phones (smaller render, wider
+  glow) TON 618 looked like a grey, half-lit moon. A SavePass keeps the image before the bloom and
+  `shadowKeepShader` puts each shadow back after it (same edge as the lens pass, uniforms shared).
+  Centre of the shadow at 10 r_s: (35, 34, 30) before, (0, 0, 0) now.
+- [x] The tracer is Schwarzschild, so no disc light from inside 3 M (a = 0.9 put the inner edge at
+  2.3 M); the g³ intensity and the redshift factor lost their floors (0.02 and 0.05), so deeply
+  redshifted gas fades to black instead of glowing grey.
+
 ### AX. Point your phone at the sky
 - [x] src/render/devicePointing.ts: `deviceQuaternion(alpha, beta, gamma, screenAngle)` turns
   W3C DeviceOrientation angles into the Sky camera's orientation (Euler YXZ of beta, alpha,

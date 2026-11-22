@@ -30,7 +30,7 @@ export interface SkyObject {
   az: number;
   /** Distance from the observer in km. */
   km: number;
-  /** Apparent magnitude estimate (planets), angular diameter in degrees (Sun and Moon). */
+  /** Angular diameter in degrees. */
   diameter: number;
 }
 

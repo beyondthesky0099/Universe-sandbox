@@ -223,6 +223,13 @@ Plan, in priority order:
   `deviceorientation`; on iOS keeps a smoothed offset between the compass and the relative alpha.
   Slerp 0.25 against jitter. Sets now / real time / geolocation and holds a screen Wake Lock.
   Stops when the view changes or no reading arrives within 2 s.
+- [x] Pointing mode is a clean, full-screen sky (first phone test: the outlines buried the stars
+  and the About pane covered half the screen): it collapses the pane, hides the nebula and
+  cluster outlines (restored from their checkboxes on stop), draws labels 1.6× (`setLabelBoost`),
+  sets a 60° field, and shows `#sky-aim`: a crosshair plus a card naming what is under it
+  (`SkyView.aimed(7°)`: Sun, Moon with % lit, planets with a faintness note for Uranus and
+  Neptune, named bright stars when the sky is dark) and the facing direction (16-point compass,
+  altitude).
 - Checked headlessly with synthetic events (Pixel 7 and iPhone 13 emulation): N, E, S at 45°,
   W at 80°, and the iOS compass path all land within 0.05°. Not yet tried on a real phone.
 

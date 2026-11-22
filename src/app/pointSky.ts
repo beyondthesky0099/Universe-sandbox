@@ -25,6 +25,7 @@ export class PointSkyUI {
   private readonly onAbsolute = (e: Event) => this.reading(e as OrientationReading, true);
   private readonly onRelative = (e: Event) => this.reading(e as OrientationReading, false);
   private absoluteSeen = false;
+  private aimTimer?: ReturnType<typeof setInterval>;
 
   constructor(private readonly app: App) {}
 
@@ -63,6 +64,17 @@ export class PointSkyUI {
     window.addEventListener('deviceorientation', this.onRelative);
     $('btn-sky-point').classList.add('on');
     $('btn-sky-point').textContent = '✋ Stop pointing';
+    // A clean, full-screen sky: close the side pane, hide the faint-object outlines (they bury the
+    // stars on a phone screen), and make the names bigger.
+    this.app.layoutUI.setCollapsed(true);
+    this.app.sky.setOutlinesVisible('nebulae', false);
+    this.app.sky.setOutlinesVisible('clusters', false);
+    this.app.sky.setLabelBoost(1.6);
+    this.app.sky.setFov(60);
+    document.body.classList.add('pointing');
+    $('sky-aim').classList.remove('hidden');
+    this.showAim();
+    this.aimTimer = setInterval(() => this.showAim(), 250);
     // The sky as it is now, here.
     this.app.skyDate = new Date();
     this.app.skySpeed = 1;
@@ -79,7 +91,7 @@ export class PointSkyUI {
     } catch {
       // Not available or refused: the screen may dim as usual.
     }
-    toast('Hold the phone up to the sky. If the stars don’t line up, drag sideways to correct the compass.');
+    toast('Hold your phone up to the sky. Stars a little off? Drag sideways to line them up.');
     // No sensor reading at all within two seconds: this device can't do it.
     setTimeout(() => {
       if (this.on && !this.started) {
@@ -96,12 +108,43 @@ export class PointSkyUI {
     this.app.sky.setPointing(undefined);
     $('btn-sky-point').classList.remove('on');
     $('btn-sky-point').textContent = '📱 Point at the sky';
+    clearInterval(this.aimTimer);
+    this.aimTimer = undefined;
+    document.body.classList.remove('pointing');
+    $('sky-aim').classList.add('hidden');
+    this.app.sky.setLabelBoost(1);
+    this.app.sky.setOutlinesVisible('nebulae', $<HTMLInputElement>('opt-sky-nebulae').checked);
+    this.app.sky.setOutlinesVisible('clusters', $<HTMLInputElement>('opt-sky-clusters').checked);
     try {
       await this.wakeLock?.release();
     } catch {
       // Already released.
     }
     this.wakeLock = undefined;
+  }
+
+  /** The card under the crosshair: what the phone is aimed at, and which way it faces. */
+  private showAim(): void {
+    const look = this.app.sky.look;
+    const facing = `${COMPASS[Math.round(look.az / 22.5) % 16]}, ${Math.round(look.alt)}° ${look.alt >= 0 ? 'up' : 'down'}`;
+    const hit = this.started && look.alt > -5 ? this.app.sky.aimed(7) : undefined;
+    let name = this.started ? (look.alt < -5 ? 'Below the horizon' : 'Aim at a bright star or planet') : 'Hold your phone up';
+    let info = this.started ? `Facing ${facing}` : 'Waiting for the motion sensors…';
+    if (hit) {
+      name = hit.name === 'Sun' || hit.name === 'Moon' ? `The ${hit.name}` : hit.name;
+      const kind =
+        hit.kind === 'sun'
+          ? 'Our star. Never look at it directly'
+          : hit.kind === 'moon'
+            ? `Moon, ${Math.round((this.app.sky.snapshot?.moonIllumination ?? 0) * 100)}% lit`
+            : hit.kind === 'planet'
+              ? planetNote(hit.name)
+              : 'Star';
+      info = `${kind} · ${facing}`;
+    }
+    $('sky-aim-name').textContent = name;
+    $('sky-aim-info').textContent = info;
+    $('sky-aim').classList.toggle('locked', !!hit);
   }
 
   private reading(e: OrientationReading, absoluteEvent: boolean): void {
@@ -135,6 +178,15 @@ export class PointSkyUI {
     this.app.sky.setPointing(this.current);
   }
 }
+
+/** Uranus (about magnitude 5.7) and Neptune (7.8) are at or past the eye's limit. */
+function planetNote(name: string): string {
+  if (name === 'Neptune') return 'Planet, too faint to see without a telescope';
+  if (name === 'Uranus') return 'Planet, barely visible: needs a very dark sky or binoculars';
+  return 'Planet';
+}
+
+const COMPASS = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
 
 function screen_angle(): number {
   const o = (screen as Screen & { orientation?: { angle: number } }).orientation;

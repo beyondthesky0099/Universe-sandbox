@@ -208,6 +208,24 @@ Plan, in priority order:
 - BodyVisual adds it in applyDetail and updates it only when the planet is more than 14 px across
   and a star is present. Tests: tests/aurora.test.ts.
 
+### AX. Point your phone at the sky
+- [x] src/render/devicePointing.ts: `deviceQuaternion(alpha, beta, gamma, screenAngle)` turns
+  W3C DeviceOrientation angles into the Sky camera's orientation (Euler YXZ of beta, alpha,
+  −gamma; −90° about x; the screen's rotation about the view axis). `lookOf`, `trueAlpha`
+  (absolute events as they are; iOS `webkitCompassHeading` → 360 − heading), `angleDiff`.
+  tests/device-pointing.test.ts: upright phone facing N/E/S/W, tilt to altitude, screen rotation.
+- [x] skyView.ts: `setPointing(q)` drives the camera from a quaternion (yaw/pitch follow it so
+  `look` stays right); `headingOffset` turns the view about the vertical, and a sideways drag
+  changes it while pointing (compass correction). The Moon-limb code is `updateMoonLimb()`.
+- [x] src/app/pointSky.ts (PointSkyUI): the floating `#btn-sky-point` (only on `body.can-point`:
+  coarse pointer and DeviceOrientationEvent). Asks `DeviceOrientationEvent.requestPermission()`
+  where it exists (iOS, and newer Chrome), listens to `deviceorientationabsolute` (preferred) and
+  `deviceorientation`; on iOS keeps a smoothed offset between the compass and the relative alpha.
+  Slerp 0.25 against jitter. Sets now / real time / geolocation and holds a screen Wake Lock.
+  Stops when the view changes or no reading arrives within 2 s.
+- Checked headlessly with synthetic events (Pixel 7 and iPhone 13 emulation): N, E, S at 45°,
+  W at 80°, and the iOS compass path all land within 0.05°. Not yet tried on a real phone.
+
 ### AW. Planck 2018 cosmology, spacecraft contact, publishing to stargazinghyderabad.com
 - [x] cosmology.ts: Planck 2018 (H0 = 67.66, Ωm = 0.3111) plus radiation (Ωr = 9.1 × 10⁻⁵);
   integrals over the scale factor (finite at a = 0), so z = 10⁶ converges (it gave 1,168 Gly

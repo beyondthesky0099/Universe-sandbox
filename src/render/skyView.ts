@@ -30,6 +30,15 @@ export class SkyView {
   snapshot?: SkySnapshot;
   private yaw = 180 * DEG; // looking south
   private pitch = 20 * DEG;
+  /**
+   * While the phone is pointed at the sky (app/pointSky.ts): its orientation in the scene frame,
+   * which the camera follows, and a heading correction (radians) the viewer can drag to line the
+   * sky up when the compass is off.
+   */
+  private pointing?: THREE.Quaternion;
+  headingOffset = 0;
+  private readonly qHeading = new THREE.Quaternion();
+  private readonly yAxis = new THREE.Vector3(0, 1, 0);
   private readonly stars = new THREE.Group();
   private readonly starMaterials: THREE.PointsMaterial[] = [];
   private readonly starLabels: { sprite: THREE.Sprite; v: THREE.Vector3 }[] = [];
@@ -489,7 +498,26 @@ export class SkyView {
     this.anim = { yaw0: this.yaw, yaw1: this.yaw + dyaw, pitch0: this.pitch, pitch1: Math.asin(THREE.MathUtils.clamp(d.y, -1, 1)), fov0: this.camera.fov, fov1, start: performance.now() };
   }
 
+  /** Follow the device's orientation (scene frame), or stop following it (undefined). */
+  setPointing(q: THREE.Quaternion | undefined): void {
+    this.pointing = q;
+    if (q) this.anim = undefined;
+  }
+
+  get isPointing(): boolean {
+    return !!this.pointing;
+  }
+
   update(): void {
+    if (this.pointing) {
+      // The camera is the phone: its orientation, turned by the heading correction about the vertical.
+      this.camera.quaternion.copy(this.qHeading.setFromAxisAngle(this.yAxis, this.headingOffset)).multiply(this.pointing);
+      const d = new THREE.Vector3(0, 0, -1).applyQuaternion(this.camera.quaternion);
+      this.yaw = Math.atan2(-d.x, -d.z);
+      this.pitch = Math.asin(THREE.MathUtils.clamp(d.y, -1, 1));
+      this.updateMoonLimb();
+      return;
+    }
     if (this.anim) {
       const a = this.anim;
       const t = Math.min(1, (performance.now() - a.start) / 1200);
@@ -501,7 +529,11 @@ export class SkyView {
     }
     this.pitch = THREE.MathUtils.clamp(this.pitch, -10 * DEG, 89.9 * DEG);
     this.camera.rotation.set(this.pitch, this.yaw, 0);
-    // Keep the Moon's bright limb pointing at the Sun.
+    this.updateMoonLimb();
+  }
+
+  /** Keep the Moon's bright limb pointing at the Sun. */
+  private updateMoonLimb(): void {
     const snap = this.snapshot;
     const moon = this.bodies.get('Moon')!;
     if (snap) {
@@ -559,8 +591,12 @@ export class SkyView {
       if (pointers.size === 1 && (e.clientX !== p.x || e.clientY !== p.y)) {
         this.anim = undefined;
         const k = (this.camera.fov * DEG) / this.height;
-        this.yaw += (e.clientX - p.x) * k;
-        this.pitch += (e.clientY - p.y) * k;
+        // Pointing the phone: a sideways drag corrects the compass heading instead.
+        if (this.pointing) this.headingOffset += (e.clientX - p.x) * k;
+        else {
+          this.yaw += (e.clientX - p.x) * k;
+          this.pitch += (e.clientY - p.y) * k;
+        }
       }
       p.x = e.clientX;
       p.y = e.clientY;

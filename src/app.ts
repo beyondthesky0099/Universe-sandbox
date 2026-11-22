@@ -56,6 +56,7 @@ import { PhotoUI } from './app/photo';
 import { VrUI } from './app/vr';
 import { MegaSimUI } from './app/megaSim';
 import { SkyUI } from './app/sky';
+import { PointSkyUI } from './app/pointSky';
 import { OnlineUI } from './app/online';
 import { ReplaysUI } from './app/replays';
 import { ScriptingUI } from './app/scripting';
@@ -86,6 +87,7 @@ export class App {
   readonly vrUI = new VrUI(this);
   readonly megaSimUI = new MegaSimUI(this);
   readonly skyUI = new SkyUI(this);
+  readonly pointSkyUI = new PointSkyUI(this);
   readonly onlineUI = new OnlineUI(this);
   readonly replaysUI = new ReplaysUI(this);
   readonly scriptingUI = new ScriptingUI(this);
@@ -699,6 +701,7 @@ export class App {
       else el.classList.toggle('hidden', !match);
     });
     this.layoutUI.onView(view);
+    this.pointSkyUI.onView(view);
     this.updateHint();
   }
 

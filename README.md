@@ -492,6 +492,15 @@ the ELP-2000/82 lunar theory (Meeus), and the planets from JPL's approximate ele
 check positions against JPL Horizons at three sites and four dates: the Moon is within half an
 arcminute and most planets within one.
 
+### Point your phone at the sky
+On a phone or tablet, open the Sky tab and press **📱 Point at the sky**, then hold the phone up.
+The view follows the phone through its motion sensors, so whatever it points at is what the
+screen shows, named: handy at a star party for "what's that bright one?". It switches to now,
+in real time, at your location, and keeps the screen awake. North comes from the compass
+(Chrome on Android reports it directly; on an iPhone, Safari asks for motion access first and
+the compass heading is used). Compasses are easily thrown off by metal and phone cases, so if
+the stars don't line up with the real ones, drag sideways to turn the view until they do.
+
 ### Solar eclipses
 In the Sky tab, pick one of the 18 total, annular and hybrid eclipses of 2024–2035 and press
 **Watch**. You stand at the point of greatest eclipse just before totality: the sky darkens

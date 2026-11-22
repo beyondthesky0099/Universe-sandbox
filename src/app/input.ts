@@ -387,6 +387,7 @@ export class InputUI {
     $('tab-system').addEventListener('click', () => void this.app.switchToSandbox());
     $('tab-sky').addEventListener('click', () => void this.app.skyUI.openSky());
     this.app.skyUI.wireSkyPanel();
+    this.app.pointSkyUI.wire();
     $('btn-play').addEventListener('click', () => this.app.setRunning(!this.app.running));
     $('btn-undo').addEventListener('click', () => this.app.undo());
     $('btn-redo').addEventListener('click', () => this.app.redo());

@@ -11,6 +11,11 @@ or describe a scene in plain English and have Claude build it.
 
 Everything except the optional companion server runs in the browser.
 
+**Documentation:** the [user guide](docs/GUIDE.md) explains how to use everything, step by step;
+the [developer guide](docs/DEVELOPER.md) covers the architecture, tests and how to add features;
+[HANDOFF.md](docs/HANDOFF.md) has the current status and backlog. This README is the full
+feature reference and lists every data source.
+
 | Black hole with gravitational lensing | Lesson with a live graph |
 | --- | --- |
 | ![Lensing](docs/screenshots/lensing.png) | ![Lesson](docs/screenshots/lesson-graph.png) |

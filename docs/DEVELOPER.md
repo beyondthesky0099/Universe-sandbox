@@ -308,6 +308,12 @@ and the API together.
 - **`ci.yml`:** on every push and pull request, typecheck, test and build the app and the server.
 - **`deploy.yml`:** on pushes to `main`, build and publish to GitHub Pages. The optional
   repository variable `ASTRARIUM_SERVER_URL` points the site at a companion server.
+- **`website.yml`:** after every push to `main`, tests and builds the app and copies `dist/`
+  into the website repository (`prime-27/bhanu-Prakash-`) at `astrarium/app/`, pushing the
+  commit to its `main` and `website` branches together, so
+  stargazinghyderabad.com/astrarium/app/ stays current. It needs a repository secret
+  `WEBSITE_TOKEN` (a fine-grained token with Contents: Read and write on that repository only);
+  without it the job skips the publish step.
 - **`desktop.yml`:** builds the Windows `.exe` files on `windows-latest`. Pushing a tag such as
   `v0.4.0` (or running the workflow by hand) attaches the installer and portable builds, x64 and
   arm64, to a GitHub release.

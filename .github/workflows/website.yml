@@ -1,0 +1,76 @@
+name: Publish to stargazinghyderabad.com
+
+# After every change to main, build the app and copy it into the website repository
+# (prime-27/bhanu-Prakash-) at astrarium/app/, so stargazinghyderabad.com/astrarium/app/ stays
+# up to date. The website publishes from its `website` branch and keeps `main` matching it, so
+# the same commit is pushed to both.
+#
+# Needs a repository secret WEBSITE_TOKEN: a fine-grained GitHub token with "Contents: Read and
+# write" on prime-27/bhanu-Prakash- only. Without it, this workflow skips the publish step.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: website
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      WEBSITE_TOKEN: ${{ secrets.WEBSITE_TOKEN }}
+    steps:
+      - name: Check for the website token
+        id: token
+        run: |
+          if [ -n "$WEBSITE_TOKEN" ]; then echo "ok=true" >> "$GITHUB_OUTPUT"; else echo "No WEBSITE_TOKEN secret: skipping the website publish."; fi
+
+      - uses: actions/checkout@v5
+        if: steps.token.outputs.ok == 'true'
+
+      - uses: actions/setup-node@v5
+        if: steps.token.outputs.ok == 'true'
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Test and build
+        if: steps.token.outputs.ok == 'true'
+        run: |
+          npm ci
+          npm test
+          npm run build
+        env:
+          VITE_ASTRARIUM_SERVER: ${{ vars.ASTRARIUM_SERVER_URL }}
+
+      - name: Check out the website (main)
+        if: steps.token.outputs.ok == 'true'
+        uses: actions/checkout@v5
+        with:
+          repository: prime-27/bhanu-Prakash-
+          ref: main
+          token: ${{ secrets.WEBSITE_TOKEN }}
+          path: website
+          fetch-depth: 1
+
+      - name: Copy the app and push to main and website
+        if: steps.token.outputs.ok == 'true'
+        run: |
+          rsync -a --delete dist/ website/astrarium/app/
+          cd website
+          git add -A astrarium/app
+          if git diff --cached --quiet; then
+            echo "The app on the website is already up to date."
+            exit 0
+          fi
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            commit -m "Astrarium app: update to ${GITHUB_SHA::7}" -m "Built from beyondthesky0099/Universe-sandbox@${GITHUB_SHA} by its website workflow."
+          # The live site publishes from `website`; keep `main` matching it. Both must fast-forward,
+          # and they update together or not at all.
+          git push --atomic origin HEAD:main HEAD:website

@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { isLuminous, luminosity, type Body } from '../sim/body';
 import { isTidallyLocked, lagrangePoints } from '../sim/analysis';
+import { transferForAccretor, transferForDonor } from '../sim/massTransfer';
 import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import { bodyTemperature, climateFor, habitableZone } from '../sim/climate';
 import type { Approach } from '../sim/forecast';
@@ -341,6 +342,15 @@ export class SystemView {
     this.sync();
   }
 
+  /** The other star of a mass-transferring binary (sim/massTransfer.ts), if `b` is in one. */
+  private transferPartner(b: Body): Body | undefined {
+    const t = transferForAccretor(b.name) ?? transferForDonor(b.name);
+    if (!t) return undefined;
+    const other = t.accretor === b.name ? t.donor : t.accretor;
+    for (const o of this.sim.bodies) if (o.name === other && o !== b) return o;
+    return undefined;
+  }
+
   /** Animate the camera outward (used when leaving for the galaxy map). */
   zoomOut(factor: number, speed = 1.2): void {
     const offset = this.camera.position.clone().sub(this.controls.target);
@@ -669,7 +679,7 @@ export class SystemView {
       tmp.set(b.x, b.y, b.z);
       const wpp = this.worldPerPixel(tmp, viewportHeight);
       const lockId = this.locks.get(b.id);
-      v.update(b, wpp, dt, lockId !== undefined ? this.sim.getBody(lockId) : undefined, sun, this.camera.position, this.sim.time);
+      v.update(b, wpp, dt, lockId !== undefined ? this.sim.getBody(lockId) : undefined, sun, this.camera.position, this.sim.time, this.transferPartner(b));
       if (updateClimate && v.isPlanet) {
         v.setClimate(climateFor(b.kind, bodyTemperature(this.sim.bodies, b)));
         const parent = this.sim.parentOf(b);

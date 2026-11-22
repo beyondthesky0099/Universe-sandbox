@@ -1,5 +1,5 @@
 import type { StarSystemSpec } from '../procgen/starSystem';
-import { mainSequenceLifetime, radiusFor, type Body } from './body';
+import { mainSequenceLifetime, physicalRadius, radiusFor, type Body } from './body';
 import { kelvinToRgb, rgbToHex, starColor } from './color';
 import { keplerToState, OrbitalElements } from './orbits';
 import type { Simulation } from './simulation';
@@ -8,13 +8,14 @@ import { mulberry32 } from '../procgen/rng';
 import { rememberPulsar, spinDownPower } from './neutronStar';
 import { HULSE_TAYLOR } from './binaryPulsar';
 import type { CompactObject } from './compactObjects';
-import { ARMS, cepheidMass, describeObject, whiteDwarfMasses, whiteDwarfPeriodDays, xrayMasses, xrayPeriodDays, type CataclysmicVariable, type Cepheid, type GalacticObject, type Maser, type Nova, type WolfRayet, type XrayBinary } from './galacticObjects';
+import { ARMS, cepheidMass, describeObject, whiteDwarfMasses, whiteDwarfPeriodDays, xrayFeed, xrayMasses, xrayPeriodDays, type CataclysmicVariable, type Cepheid, type GalacticObject, type Maser, type Nova, type WolfRayet, type XrayBinary } from './galacticObjects';
 import { describePulsar, pulsarName, type PulsarRecord } from './pulsars';
 import { GAS_DISC_LIFETIME, planetesimals } from './planetFormation';
 import { julianDate, planetStates, type PlanetName } from './ephemeris';
 import { setTrueScale } from './trueScale';
 import { agnLocalToScene, agnParams, describeAgn, DISC_TILT, rememberAgn } from './agn';
 import { auPerMas, earthDirection, skyPosition, skyToLocal, skyVelocity, type MaserDisc } from './maserDisc';
+import { binaryTransfer, describeTransfer, rememberTransfer } from './massTransfer';
 import type { LocalGalaxy } from './galaxies';
 import { SPACECRAFT_COLOR, spacecraftState } from './spacecraft';
 import { loadMilkyWayAndromeda } from './localGroup';
@@ -670,15 +671,37 @@ export function loadXrayBinary(sim: Simulation, o: XrayBinary & { kind: 'hmxb' |
   if (!isBlackHole && o.spin) rememberPulsar(o.name, o.spin, 0);
   const years = period.days / 365.25;
   const a = Math.cbrt(years * years * (compact + companion));
+  const ecc = Math.min(o.ecc ?? 0, 0.9);
   // A massive donor is partway through its short life; a low-mass one is old.
   const age = o.kind === 'hmxb' ? Math.min(4e9, 0.5 * mainSequenceLifetime(companion)) : Math.min(8e9, 0.6 * mainSequenceLifetime(companion));
   const giant = o.kind === 'lmxb' && !!o.sptype && /III/.test(o.sptype);
-  addOrbiting(sim, primary, { name: o.kind === 'hmxb' ? 'Donor supergiant' : 'Donor star', kind: giant ? 'giant' : 'star', mass: companion, age }, { a, e: Math.min(o.ecc ?? 0, 0.9), nu: Math.PI * 0.6 });
+  const feed = xrayFeed(o);
+  const donorName = o.kind === 'lmxb' ? 'Donor star' : feed.mode === 'be' ? 'Be star' : 'Donor supergiant';
+  const donor = addOrbiting(sim, primary, { name: donorName, kind: giant ? 'giant' : 'star', mass: companion, age }, { a, e: ecc, nu: Math.PI * 0.6 });
   if (a < 0.5) setTrueScale(sim, true);
   if (!isBlackHole) sim.relativity = true;
+  const transfer = binaryTransfer({
+    accretor: o.name,
+    donor: donorName,
+    accretorKind: isBlackHole ? 'blackhole' : 'neutron',
+    // Subgiant donors (Sco X-1's K4 IV) are evolved too: their transfer follows their expansion.
+    donorKind: giant || /IV/.test(o.sptype ?? '') ? 'giant' : 'star',
+    m1: compact,
+    m2: companion,
+    aAu: a,
+    periodDays: period.days,
+    eccentricity: ecc,
+    accretorRadiusAu: physicalRadius(primary.kind, compact),
+    donorRadiusAu: physicalRadius('star', companion),
+    donorFill: feed.fill,
+    mode: feed.mode,
+  });
+  // The donor's size: its Roche lobe when it overflows, else a fraction of it (supergiants) or its own.
+  if (sim.trueScale) donor.radius = transfer.donorRadius * a;
+  rememberTransfer(transfer);
   sim.recenter();
   const assumed = [o.mx ? '' : `the ${isBlackHole ? 'black hole' : 'neutron star'} mass`, o.mo ? '' : 'the companion mass', period.assumed ? 'the orbit' : ''].filter(Boolean);
-  const tip = `${describeObject(o)}${assumed.length ? ` Not measured, so typical values are shown for ${assumed.join(', ')}.` : ''}`;
+  const tip = `${describeObject(o)} ${describeTransfer(transfer)}${assumed.length ? ` Not measured, so typical values are shown for ${assumed.join(', ')}.` : ''}`;
   return { cameraDistance: Math.max(a * 3.2, 2e-4), timeScale: years / 6, elevation: 0.7, tip };
 }
 
@@ -701,17 +724,37 @@ export function loadWhiteDwarfBinary(sim: Simulation, o: ({ kind: 'nova' } & Nov
   const period = whiteDwarfPeriodDays(o);
   const magnetic = (o.kind === 'cv' && !!o.magnetic) || !!o.types?.some((t) => t === 'AM' || t === 'IP' || t === 'DQ');
   // Polars have no disc: the field channels the gas straight onto the poles.
-  const primary = sim.addBody({ name: o.name, kind: 'whitedwarf', mass: wd, tag: magnetic && !o.types?.includes('IP') ? 'magnetic' : 'accreting' });
+  // Intermediate polars (IP, also called DQ Her stars) keep a disc; polars (AM Her stars) don't. A
+  // magnetic system whose other subtypes imply a disc (dwarf-nova outbursts, AM CVn) counts as an
+  // intermediate polar.
+  const intermediate = magnetic && !o.types?.includes('AM') && (!!o.types?.some((t) => t === 'IP' || t === 'DQ') || !!o.types?.some((t) => t === 'DN' || t === 'AC' || t === 'SU' || t === 'UG'));
+  const primary = sim.addBody({ name: o.name, kind: 'whitedwarf', mass: wd, tag: magnetic && !intermediate ? 'magnetic' : 'accreting' });
   const years = period.days / 365.25;
   const a = Math.cbrt(years * years * (wd + donor));
   const donorName = donorKind === 'whitedwarf' ? 'Helium white dwarf donor' : donorKind === 'giant' ? 'Red giant donor' : 'Donor star';
   // The donor is old: a red dwarf is ageless on this clock, a giant donor has left the main sequence.
   const age = donorKind === 'giant' ? 1.02 * mainSequenceLifetime(donor) : Math.min(5e9, 0.5 * mainSequenceLifetime(donor));
-  addOrbiting(sim, primary, { name: donorName, kind: donorKind, mass: donor, age, color: donorKind === 'star' && donor < 0.6 ? rgbToHex(kelvinToRgb(3300)) : undefined }, { a, e: 0, nu: Math.PI * 0.6 });
+  const donorBody = addOrbiting(sim, primary, { name: donorName, kind: donorKind, mass: donor, age, color: donorKind === 'star' && donor < 0.6 ? rgbToHex(kelvinToRgb(3300)) : undefined }, { a, e: 0, nu: Math.PI * 0.6 });
   setTrueScale(sim, true);
+  // The donor fills its Roche lobe and spills gas onto the white dwarf (sim/massTransfer.ts).
+  const transfer = binaryTransfer({
+    accretor: o.name,
+    donor: donorName,
+    accretorKind: 'whitedwarf',
+    donorKind,
+    m1: wd,
+    m2: donor,
+    aAu: a,
+    periodDays: period.days,
+    accretorRadiusAu: primary.radius,
+    mode: 'roche',
+    magnetic: magnetic ? (intermediate ? 'ip' : 'polar') : undefined,
+  });
+  donorBody.radius = transfer.lobe * a;
+  rememberTransfer(transfer);
   sim.recenter();
   const notes = [...assumed, period.assumed ? 'the orbit' : ''].filter(Boolean);
-  const tip = `${describeObject(o)}${notes.length ? ` Not measured, so typical values are shown for ${notes.join(', ')}.` : ''}`;
+  const tip = `${describeObject(o)} ${describeTransfer(transfer)}${notes.length ? ` Not measured, so typical values are shown for ${notes.join(', ')}.` : ''}`;
   return { cameraDistance: Math.max(a * 3.2, 2e-4), timeScale: years / 6, elevation: 0.5, tip };
 }
 

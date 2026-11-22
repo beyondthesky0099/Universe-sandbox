@@ -48,7 +48,7 @@ const XRAY_NAMES = {
 
 // High-mass X-ray binaries
 const hmxb = [];
-for (const r of parseTsv(await vizier('hmxb', { '-source': 'J/A+A/671/A149/tablea', '-out': 'ID,RAJ2000,DEJ2000,Mx,Mo,Per,Ecc,PerSpin,Dist', '-out.max': 'unlimited' }))) {
+for (const r of parseTsv(await vizier('hmxb-class', { '-source': 'J/A+A/671/A149/tablea', '-out': 'ID,RAJ2000,DEJ2000,SpType,Class,Mx,Mo,Per,Ecc,PerSpin,Dist', '-out.max': 'unlimited' }))) {
   const dist = num(r.Dist);
   if (!(dist > 0) || dist > 35000) continue;
   const [l, b] = equatorialToGalactic(num(r.RAJ2000), num(r.DEJ2000));
@@ -56,7 +56,10 @@ for (const r of parseTsv(await vizier('hmxb', { '-source': 'J/A+A/671/A149/table
   const spin = num(r.PerSpin);
   // The compact object: a measured mass above 3 M☉ means a black hole; a spin period means a pulsar.
   const compact = mx > 3 ? 'BH' : spin > 0 || (mx > 0 && mx <= 3) ? 'NS' : '?';
-  hmxb.push({ name: clean(r.ID), l: round(l, 3), b: round(b, 3), d: round(dist / 1000, 3), compact, mx: round(mx, 2), mo: round(num(r.Mo), 2), per: round(num(r.Per), 4), ecc: round(num(r.Ecc), 3), spin: round(spin, 4) });
+  // The companion's spectral type and the system's class (sg: supergiant, Be: Be star, ...), which say how it feeds.
+  const sptype = r.SpType.trim() || undefined;
+  const cls = r.Class.trim().replace('$\\gamma$\\,', 'γ ') || undefined;
+  hmxb.push({ name: clean(r.ID), l: round(l, 3), b: round(b, 3), d: round(dist / 1000, 3), compact, sptype, cls, mx: round(mx, 2), mo: round(num(r.Mo), 2), per: round(num(r.Per), 4), ecc: round(num(r.Ecc), 3), spin: round(spin, 4) });
 }
 
 // Low-mass X-ray binaries

@@ -349,6 +349,21 @@ important ones stay and the rest fade out until you zoom in and there's room for
     Zoom in to one and the white dwarf appears with its accretion disc (none for a polar, whose
     magnetic field channels the gas onto its poles) and its donor on the catalogued orbit, at
     real sizes. Masses the catalogue lacks take typical values, and the scene says so.
+  - **Mass transfer.** In every nova, cataclysmic variable and X-ray binary you can watch the
+    gas move:
+    - The donor fills its Roche lobe (stretched towards its companion), and gas pours through the
+      inner Lagrange point in a stream that the orbit's turning bends ahead. It strikes the disc's
+      rim at a flickering hot spot. The disc is as big as the companion's tides allow, and its
+      colour follows its temperature, hot inside and cooler at the edge.
+    - Polars: partway down, the white dwarf's magnetic field takes the stream and leads it along
+      a field line onto a hot spot near a magnetic pole. Intermediate polars keep a disc with its
+      middle cleared.
+    - High-mass X-ray binaries: a supergiant blows a wind that spirals out as the orbit turns,
+      and the compact object bends some of it onto itself (Cyg X-1). A Be star throws off a disc
+      of gas in its equator that the compact object crosses near periastron.
+    - The scene says how much gas moves and why: gravitational waves or magnetic braking draining
+      the orbit, the donor's thermal timescale, an evolved donor's swelling, or wind capture,
+      with the light the infall gives off.
   - **2,205 classical Cepheids** (yellow) at their period–luminosity distances, Delta Cephei and
     Polaris among them. Visit one and it swells, shrinks and brightens at its real period.
   - **199 maser sources** (green) with radio parallaxes from BeSSeL and VERA, the most precise
@@ -959,6 +974,17 @@ push and pull request.
   build script. Cepheid luminosities use the Benedict et al. (2007) period–luminosity relation,
   radii the Gieren et al. (1998) period–radius relation, and donor masses the Knigge et al. (2011)
   donor sequence.
+- Mass transfer (`src/sim/massTransfer.ts`): Roche lobes from Eggleton 1983, ApJ 268, 368; the
+  stream's path after Lubow & Shu 1975, ApJ 198, 383; disc tidal radius after Paczyński 1977,
+  ApJ 216, 822; circularization radius, wind (Bondi–Hoyle) capture and disc temperatures from
+  Frank, King & Raine, *Accretion Power in Astrophysics* (3rd ed.) and Shakura & Sunyaev 1973;
+  magnetic braking from Rappaport, Verbunt & Joss 1983, ApJ 275, 713; rates checked against
+  Knigge, Baraffe & Patterson 2011, ApJS 194, 28; supergiant winds after Castor, Abbott & Klein
+  1975 and Lamers, Snow & Lindholm 1995. HMXB classes (supergiant, Be, SFXT) and companion
+  spectral types from Fortin et al. 2023; Cyg X-1's donor filling 0.98 of its lobe from
+  Miller-Jones et al. 2021, Science 371, 1046. Rates for evolved donors and Be outbursts, the
+  supergiant wind's strength, polar field geometry and where the field takes the stream are
+  typical values, and the scene says so.
 - Active nuclei up close: luminosity from the V magnitude and distance with L_bol ≈ 9 λL_λ(5100 Å)
   (Kaspi et al. 2000); broad-line radius from Bentz et al. (2013); dust sublimation radius from
   Nenkova et al. (2008); Eddington ratios and viewing angles by type from the unified model

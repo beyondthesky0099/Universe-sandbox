@@ -208,6 +208,42 @@ Plan, in priority order:
 - BodyVisual adds it in applyDetail and updates it only when the planet is more than 14 px across
   and a star is present. Tests: tests/aurora.test.ts.
 
+### AU. Mass transfer in close binaries
+The user asked whether the CV/nova/X-ray binary scenes had mass transfer: they didn't (a disc
+of fixed size, 30 white-dwarf radii, tilted off the orbit; donors at main-sequence or generic
+giant sizes, V404 Cyg's 7.4× its Roche lobe).
+- [x] src/sim/massTransfer.ts (headless, corotating frame in units of a, accretor at the origin,
+  donor at +x, Ω along +z):
+  - rocheLobeRadius (Eggleton), l1Distance, rochePotential, rocheShape (front/back/side/pole;
+    march to the first crossing, else the root past L2), discTidalRadius (0.9 of the accretor's
+    lobe), circularizationRadius.
+  - ballisticStream: RK4 from L1 at 0.02 aΩ with Coriolis, until the disc rim (hot spot), the star,
+    or (polars) half-way from L1, then fieldLinePath along r = L sin²θ to the surface near the pole
+    (axis tilted 25°, illustrative).
+  - windPaths: β = 1 wind (v∞ = 2.6 v_esc) with the compact object's gravity and Coriolis; 48
+    paths all round plus a fan of 24 towards the compact object; capture inside 2GM/v_rel².
+  - Rates: rocheTransferRate (GW + RVJ magnetic braking for 0.35–1.5 M☉ donors, ζ = 0.8, or −1/3
+    for white-dwarf donors; thermal timescale when ζ/2 + 5/6 − q ≤ 0; 10⁻⁸ for giant and subgiant
+    donors), windCaptureRate (Bondi–Hoyle on a 10⁻⁶ M☉/yr wind), accretionLuminosity (Eddington cap).
+  - binaryTransfer assembles TransferParams; rememberTransfer / transferForAccretor /
+    transferForDonor (by body name, for the renderer); describeTransfer for the tip.
+- [x] presets: loadWhiteDwarfBinary and loadXrayBinary size the donor from the model (its lobe, or
+  0.9 / 0.7 of it for sg / SFXT supergiants, else its own radius inside the lobe at periastron) and
+  register it. Magnetic CVs without the AM type but with disc subtypes (DN, AC, SU, UG) count as
+  intermediate polars.
+- [x] galacticObjects.ts: `xrayFeed` (roche / wind / be from the Fortin class, else the spectral
+  type); HMXBs gain `sptype` and `cls` (build-galactic-objects.mjs, cache key hmxb-class).
+- [x] render/massTransfer.ts: MassTransferVisual in BodyVisual (accretors), turned and scaled with
+  the orbit each frame: Shakura–Sunyaev disc coloured by temperature with Keplerian streaks,
+  stream line with flowing dots, hot spot, polar column and spot, wind paths, Be disc.
+  BodyVisual.shapeDonor stretches a lobe-filling donor into the lobe's ellipsoid (normalized to
+  its volume) facing its companion. SystemView passes the partner (`transferPartner`).
+- Tests: tests/mass-transfer.test.ts (Eggleton and Kopal values, L1 saddle, stream bends +y onto
+  the rim, rates below and above the gap and thermal, Cyg X-1 L ~10³⁷, polar column to the pole,
+  V404 Cyg donor inside the binary, Be disc inside the lobe at periastron).
+- Ideas: nova eruptions blowing the disc away; dwarf-nova outbursts brightening the disc;
+  eclipses for the eclipsing systems; superhumps (precessing eccentric discs) in SU UMa stars.
+
 ### AT. AGN extras: radio lobes and the NGC 4258 maser disc
 - [x] Radio lobes in the Universe view (`node scripts/build-radio-lobes.mjs`, cached in
   node_modules/.cache/radio-lobes):

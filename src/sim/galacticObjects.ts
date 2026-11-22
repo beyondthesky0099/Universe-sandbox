@@ -31,8 +31,10 @@ export interface XrayBinary {
   compact: 'BH' | 'NS' | '?';
   /** A candidate system rather than a confirmed one (LMXBs). */
   candidate?: boolean;
-  /** Spectral type of the companion (LMXBs). */
+  /** Spectral type of the companion. */
   sptype?: string;
+  /** HMXBs: the class in Fortin et al. 2023 (sg supergiant, Be, SFXT supergiant fast X-ray transient, sgB[e], …). */
+  cls?: string;
   /** Masses (M☉) of the compact object and companion, orbital period (days), eccentricity, spin (s). */
   mx?: number;
   mo?: number;
@@ -239,6 +241,26 @@ export function xrayMasses(o: XrayBinary & { kind: 'hmxb' | 'lmxb' }): { compact
   return { compact, companion, isBlackHole };
 }
 
+/**
+ * How an X-ray binary's compact object is fed: low-mass ones by Roche-lobe overflow; high-mass
+ * ones by the class in Fortin et al. 2023 (sg: a supergiant's wind; SFXT: a supergiant fast X-ray
+ * transient, whose clumpy wind comes from a supergiant well inside its lobe; Be: a Be star's
+ * disc), else by the companion's luminosity class. `fill`: the supergiant's radius over its Roche
+ * lobe (Cyg X-1's fills 0.98 of it, Miller-Jones et al. 2021; SFXTs' fill less).
+ */
+export function xrayFeed(o: XrayBinary & { kind: 'hmxb' | 'lmxb' }): { mode: 'roche' | 'wind' | 'be'; fill?: number } {
+  if (o.kind === 'lmxb') return { mode: 'roche' };
+  const cls = o.cls ?? '';
+  if (/^IMXB/.test(cls)) return { mode: 'roche' };
+  if (/SFXT/.test(cls)) return { mode: 'wind', fill: 0.7 };
+  if (/sg/.test(cls)) return { mode: 'wind', fill: 0.9 };
+  if (/Be/.test(cls)) return { mode: 'be' };
+  const sp = o.sptype ?? '';
+  if (/\d(\.\d+)?\s*I(a|ab|b)?(?![IV])/.test(sp)) return { mode: 'wind', fill: 0.9 };
+  if (/e\b|e$/.test(sp)) return { mode: 'be' };
+  return { mode: 'wind' };
+}
+
 /** The orbital period to show (days): the catalogue's, else a typical one for the class. */
 export function xrayPeriodDays(o: XrayBinary & { kind: 'hmxb' | 'lmxb' }): { days: number; assumed: boolean } {
   if (o.per && o.per > 0) return { days: o.per, assumed: false };
@@ -405,8 +427,13 @@ export function describeObject(o: GalacticObject): string {
   const { compact, companion, isBlackHole } = xrayMasses(o);
   const period = xrayPeriodDays(o);
   const eater = o.compact === '?' ? 'A compact star' : isBlackHole ? `A ${compact % 1 ? compact.toFixed(1) : compact} M☉ black hole` : 'A neutron star';
-  const donor = o.kind === 'hmxb' ? `a ${Math.round(companion)} M☉ ${companion > 12 ? 'supergiant' : 'blue star'}` : `a ${companion < 0.3 ? 'tiny' : companion < 1.5 ? 'Sun-like' : 'evolved'} star${o.sptype ? ` (${o.sptype})` : ''}`;
-  const how = o.kind === 'hmxb' ? 'feeding on the wind of' : 'pulling a stream of gas from';
+  const feed = xrayFeed(o);
+  const sp = o.sptype ? ` (${o.sptype})` : '';
+  const donor =
+    o.kind === 'hmxb'
+      ? `a ${Math.round(companion)} M☉ ${feed.mode === 'be' ? 'Be star' : feed.fill ? 'supergiant' : companion > 12 ? 'supergiant' : 'blue star'}${sp}`
+      : `a ${companion < 0.3 ? 'tiny' : companion < 1.5 ? 'Sun-like' : 'evolved'} star${sp}`;
+  const how = feed.mode === 'be' ? 'feeding from the disc around' : feed.mode === 'wind' ? 'feeding on the wind of' : 'pulling a stream of gas from';
   const orbit = period.assumed ? '' : ` every ${formatPeriod(period.days)}`;
   const extras = [o.spin ? `it spins every ${o.spin < 1 ? `${(o.spin * 1000).toPrecision(3)} ms` : `${o.spin.toPrecision(3)} s`}` : '', o.bursts ? 'thermonuclear bursts flash on its surface' : '', o.gc ? `inside the globular cluster ${o.gc}` : ''].filter(Boolean);
   const more = extras.join('; ');

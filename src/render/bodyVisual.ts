@@ -108,6 +108,17 @@ function realTexture(file: string): THREE.Texture {
 /** Points in each comet tail. */
 const COMET_TAIL_POINTS = 260;
 
+/** What a trail's orbit goes round: a body, or a pair's centre of mass (id −1). */
+export interface OrbitCentre {
+  id: number;
+  x: number;
+  y: number;
+  z: number;
+  vx: number;
+  vy: number;
+  vz: number;
+}
+
 export class BodyVisual {
   readonly id: number;
   kind: BodyKind;
@@ -274,6 +285,11 @@ export class BodyVisual {
     return this.disk ? diskAxis(this.disk) : undefined;
   }
 
+  /** A mass-transferring accretor's brightness seen from the camera (L☉), for the light curve. */
+  get binaryLuminosity(): number | undefined {
+    return this.transfer?.seenLuminosity || undefined;
+  }
+
   get isPlanet(): boolean {
     return (this.kind === 'rocky' || this.kind === 'gas') && !this.isProbe;
   }
@@ -363,7 +379,7 @@ export class BodyVisual {
     const feeding = body.kind === 'whitedwarf' || body.kind === 'neutron' || body.kind === 'blackhole' ? transferForAccretor(body.name) : undefined;
     if (feeding) {
       this.transfer = new MassTransferVisual(feeding);
-      this.group.add(this.transfer.frame);
+      this.group.add(this.transfer.root);
     }
     const giving = transferForDonor(body.name);
     this.roche = giving?.mode === 'roche' && giving.donorShape ? rocheEllipsoid(giving.donorShape, giving.lobe) : undefined;
@@ -605,7 +621,7 @@ export class BodyVisual {
       this.glow.scale.setScalar(isGalaxy ? body.radius * 1.6 : big * (0.8 + 0.2 * pulse));
     }
     if (this.agn && camera) this.agn.update(camera, dt, worldPerPixel);
-    if (this.transfer && partner) this.transfer.update(body, partner, dt, worldPerPixel);
+    if (this.transfer && partner) this.transfer.update(body, partner, dt, worldPerPixel, simTime, camera);
     if (this.roche && partner && r === body.radius) this.shapeDonor(body, partner, r);
     else if (this.roche) this.mesh.position.set(0, 0, 0);
     if (this.disk) {
@@ -681,7 +697,7 @@ export class BodyVisual {
    * following around `parent` (two-body, μ = G(M + m)), drawn to end at the body so the trail's
    * fade still runs from tail to head.
    */
-  orbitTrail(body: Body, parent: Body, mu: number): void {
+  orbitTrail(body: Body, parent: OrbitCentre, mu: number): void {
     const path = orbitPath(mu, body.x - parent.x, body.y - parent.y, body.z - parent.z, body.vx - parent.vx, body.vy - parent.vy, body.vz - parent.vz, this.trailLength);
     if (!path) return;
     const rx = body.x - parent.x, ry = body.y - parent.y, rz = body.z - parent.z;
@@ -800,7 +816,7 @@ export class BodyVisual {
       this.agn = undefined;
     }
     if (this.transfer) {
-      this.group.remove(this.transfer.frame);
+      this.group.remove(this.transfer.root);
       this.transfer.dispose();
       this.transfer = undefined;
     }

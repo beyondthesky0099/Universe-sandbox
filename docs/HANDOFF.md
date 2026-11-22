@@ -208,6 +208,35 @@ Plan, in priority order:
 - BodyVisual adds it in applyDetail and updates it only when the planet is more than 14 px across
   and a star is present. Tests: tests/aurora.test.ts.
 
+### AV. Outbursts, nova eruptions and eclipses
+- [x] src/sim/binaryCycles.ts:
+  - dwarfNovaKind(types, period): WZ / ER / SU only below 3.2 h; U Gem (flagged SU) is UG.
+  - dwarfNovaCycle: typical Tₙ (UG 50 d, ZC 20, SU 20 with 250-d supercycles, ER 4 / 45, WZ
+    11,000), amplitude 0.7 + 1.9 log Tₙ, rise 1 d, plateau 2 d (super 12, WZ 20, fading 0.1 mag/d),
+    decline 1 mag/d. peakRate is set so the disc's mean rate over a (super)cycle equals the
+    transfer rate. magnitudeBelowPeak, discRate.
+  - novaEruption: catalogue vmag / t3 / fwhm (ejecta = FWHM/2; typical −7.5, 30 d, 1,000 km/s
+    otherwise), ignitionMass = 4πR⁴P/(GM) with P = 2 × 10¹⁹ and nauenbergRadius; classical:
+    recurrence = ΔM/Ṁ; recurrent: the Ṁ needed for ~30 years. novaMagnitude (rise 1 d, 3 mag per
+    t₃, gone 6 mag down), novaLuminosity, shellRadius, discSurvival (e-folds back in 20 days,
+    illustrative).
+- [x] presets.loadWhiteDwarfBinary: the dwarf-nova cycle starts one orbit in, a nova erupts half
+  an orbit in; inclination from the catalogue (82° if eclipsing without one) sets the camera
+  elevation (π/2 − i). TransferParams gains dwarfNova, nova, inclination.
+- [x] render/massTransfer.ts: the disc re-tints with its current rate (colour and brightness
+  against the outburst peak); the nova's flash sprite and a clumpy shell (1,400 points, white →
+  Hα pink) scaled by shellRadius; `measure` gives the V-band brightness seen from the camera
+  (planckV on each disc cell, white dwarf, landing spot, 12,000 K hot spot, donor, nova), with a
+  spherical donor occulting along the view and a flared rim (H/R 0.06) that shows edge-on and hides
+  the white dwarf. `root` holds the corotating frame and the shell.
+- [x] Live graph: metric `brightness` (magnitudes above the Sun in V, x in days, sampled every
+  0.05 s), from SystemView.binaryLuminosity().
+- Checked in the browser: SS Cyg rises 2.4 mag in V (the disc 3.9), Z Cha / IP Peg / DQ Her
+  eclipses 2.2–3.3 mag (real: 1.5–2.5; spherical donor and blackbodies).
+- Tests: tests/binary-cycles.test.ts.
+- Ideas: ellipsoidal variation and irradiation of the donor; X-ray transient outbursts of LMXBs
+  (V404 Cyg 2015); Z Cam standstills; superhumps.
+
 ### AU. Mass transfer in close binaries
 The user asked whether the CV/nova/X-ray binary scenes had mass transfer: they didn't (a disc
 of fixed size, 30 white-dwarf radii, tilted off the orbit; donors at main-sequence or generic

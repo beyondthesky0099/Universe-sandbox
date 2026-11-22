@@ -364,6 +364,18 @@ important ones stay and the rest fade out until you zoom in and there's room for
     - The scene says how much gas moves and why: gravitational waves or magnetic braking draining
       the orbit, the donor's thermal timescale, an evolved donor's swelling, or wind capture,
       with the light the infall gives off.
+  - **Outbursts, eruptions and eclipses.**
+    - Dwarf novae flare: every few weeks the disc heats up, turns blue-white and drains onto the
+      white dwarf, then fades over a few days. SU UMa stars add longer superoutbursts, and WZ Sge
+      stars wait decades. The scene starts just before an outburst.
+    - Novae replay their eruption: the white dwarf flares to its catalogued peak, fades at its
+      catalogued rate, and throws off a clumpy shell at the measured ejecta speed. The shell blows
+      the disc away for a few weeks. The scene says how much hydrogen sets it off, and when the
+      next eruption is due.
+    - Eclipsing systems start seen from Earth, at their catalogued inclination: once an orbit the
+      donor passes in front of the disc.
+    - The live graph (📈) has a *Brightness* setting: the light curve in visible light, as seen
+      from wherever the camera is. Look along the orbit to see eclipses.
   - **2,205 classical Cepheids** (yellow) at their period–luminosity distances, Delta Cephei and
     Polaris among them. Visit one and it swells, shrinks and brightens at its real period.
   - **199 maser sources** (green) with radio parallaxes from BeSSeL and VERA, the most precise
@@ -974,6 +986,14 @@ push and pull request.
   build script. Cepheid luminosities use the Benedict et al. (2007) period–luminosity relation,
   radii the Gieren et al. (1998) period–radius relation, and donor masses the Knigge et al. (2011)
   donor sequence.
+- Outbursts and eruptions (`src/sim/binaryCycles.ts`): the disc-instability picture of dwarf
+  novae (Osaki 1996, PASP 108, 39; Lasota 2001, New Astron. Rev. 45, 449), typical recurrence
+  times by subtype from Warner 1995 (*Cataclysmic Variable Stars*), amplitudes from the
+  Kukarkin–Parenago relation; nova ignition at a base pressure of 2 × 10¹⁹ dyn/cm² (Fujimoto
+  1982, ApJ 257, 767; Truran & Livio 1986) with Nauenberg's (1972) white-dwarf radii; eruption
+  peaks, t₃ and line widths from Schaefer 2022. Light curves treat each part as a blackbody in the
+  V band and the donor as a sphere, so eclipses come out a little deep. The disc's recovery
+  after a nova and the cycle times are typical values, and the scenes say so.
 - Mass transfer (`src/sim/massTransfer.ts`): Roche lobes from Eggleton 1983, ApJ 268, 368; the
   stream's path after Lubow & Shu 1975, ApJ 198, 383; disc tidal radius after Paczyński 1977,
   ApJ 216, 822; circularization radius, wind (Bondi–Hoyle) capture and disc temperatures from

@@ -1,37 +1,50 @@
 /**
- * Distances and times from redshift in a flat ΛCDM universe (H0 = 70 km/s/Mpc, Ωm = 0.3,
- * ΩΛ = 0.7, radiation ignored except where noted), for placing distant galaxies, quasars and
- * clusters on the Universe map. Comoving distance is what the map uses: the Universe map is a
- * comoving grid with the CMB at about 14,000 Mpc.
+ * Distances and times from redshift in a flat ΛCDM universe with the Planck 2018 parameters
+ * (Planck Collaboration 2020, A&A 641, A6, TT,TE,EE+lowE+lensing+BAO: H0 = 67.66 km/s/Mpc,
+ * Ωm = 0.3111), plus radiation (photons and three massless neutrino species, Ωr ≈ 9.1 × 10⁻⁵),
+ * for placing distant galaxies, quasars and clusters on the Universe map. Comoving distance is
+ * what the map uses: it is a comoving grid, with the cosmic microwave background on the
+ * last-scattering surface at about 45 billion light-years and the edge of the observable
+ * universe (the particle horizon) at about 46 billion.
+ *
+ * The integrals run over the scale factor a = 1/(1 + z), where the integrands stay finite all the
+ * way back to the Big Bang (with radiation, a²E(a) → √Ωr), so very high redshifts stay accurate.
  */
 
-export const H0 = 70; // km/s/Mpc
-export const OMEGA_M = 0.3;
-export const OMEGA_L = 1 - OMEGA_M;
+export const H0 = 67.66; // km/s/Mpc
+export const OMEGA_M = 0.3111;
+/** Radiation today: photons (Ωγh² = 2.47 × 10⁻⁵) and neutrinos (× 1.69), for h = 0.6766. */
+export const OMEGA_R = (2.47e-5 * 1.6913) / (0.6766 * 0.6766);
+export const OMEGA_L = 1 - OMEGA_M - OMEGA_R;
 /** Hubble distance c / H0 (Mpc). */
 export const HUBBLE_DISTANCE_MPC = 299792.458 / H0;
 /** Hubble time 1 / H0 (Gyr). */
 export const HUBBLE_TIME_GYR = 977.8 / H0;
+/** Redshift of the last-scattering surface, where the microwave background was released (Planck 2018: z* = 1089.9). */
+export const LAST_SCATTERING_Z = 1089.9;
+export const MPC_IN_LY = 3.2616e6;
 
-function E(z: number): number {
-  const a = 1 + z;
-  return Math.sqrt(OMEGA_M * a * a * a + OMEGA_L);
+/** a² E(a) = a² H(a)/H0, finite at a = 0 thanks to radiation. */
+function a2E(a: number): number {
+  return Math.sqrt(OMEGA_R + OMEGA_M * a + OMEGA_L * a * a * a * a);
 }
 
-/** ∫ f over [0, z] by Simpson's rule, with more steps for larger redshifts. */
-function integrate(f: (z: number) => number, z: number): number {
-  const n = Math.max(16, Math.min(2000, Math.ceil(z * 40))) * 2;
-  const h = z / n;
-  let s = f(0) + f(z);
-  for (let i = 1; i < n; i++) s += f(i * h) * (i % 2 ? 4 : 2);
+/** ∫ f over [a0, 1] by Simpson's rule with n (even) steps. */
+function simpson(f: (a: number) => number, a0: number, n: number): number {
+  const h = (1 - a0) / n;
+  let s = f(a0) + f(1);
+  for (let i = 1; i < n; i++) s += f(a0 + i * h) * (i % 2 ? 4 : 2);
   return (s * h) / 3;
 }
 
-/** Line-of-sight comoving distance (Mpc). Small z reduces to cz / H0. */
+/** Line-of-sight comoving distance (Mpc): c/H0 ∫ da / (a² E(a)) from 1/(1+z) to 1. Small z reduces to cz/H0. */
 export function comovingDistance(z: number): number {
   if (!(z > 0)) return 0;
   if (z < 0.01) return HUBBLE_DISTANCE_MPC * z * (1 - 0.75 * OMEGA_M * z); // second order, cheaper
-  return HUBBLE_DISTANCE_MPC * integrate((x) => 1 / E(x), z);
+  const a0 = 1 / (1 + z);
+  // More steps for deeper integrals; the integrand is smooth in a.
+  const n = z < 1 ? 200 : z < 20 ? 1000 : 4000;
+  return HUBBLE_DISTANCE_MPC * simpson((a) => 1 / a2E(a), a0, n);
 }
 
 /** Angular-diameter distance (Mpc): the comoving distance over 1 + z (flat universe). Sizes on the sky use it. */
@@ -45,22 +58,22 @@ export function luminosityDistance(z: number): number {
 }
 
 /**
- * Light travel time from an object at redshift z (Gyr): ∫ da / (a H) from a = 1 / (1 + z) to 1,
- * integrated in the scale factor, where the integrand is smooth all the way to the Big Bang.
+ * Light travel time from an object at redshift z (Gyr): ∫ da / (a H) = (1/H0) ∫ a da / (a² E(a))
+ * from a = 1 / (1 + z) to 1.
  */
 export function lookbackTime(z: number): number {
   if (!(z > 0)) return 0;
-  const a0 = 1 / (1 + z);
-  const n = 2000;
-  const h = (1 - a0) / n;
-  const f = (a: number) => 1 / Math.sqrt(OMEGA_M / a + OMEGA_L * a * a);
-  let s = f(a0) + f(1);
-  for (let i = 1; i < n; i++) s += f(a0 + i * h) * (i % 2 ? 4 : 2);
-  return (HUBBLE_TIME_GYR * s * h) / 3;
+  return HUBBLE_TIME_GYR * simpson((a) => a / a2E(a), 1 / (1 + z), 4000);
 }
 
-/** Age of the universe (Gyr): the lookback time to the Big Bang. */
-export const UNIVERSE_AGE_GYR = lookbackTime(1e7);
+/** Age of the universe (Gyr): the lookback time to the Big Bang (about 13.8 billion years). */
+export const UNIVERSE_AGE_GYR = lookbackTime(1e12);
+
+/** Distance to the cosmic microwave background's last-scattering surface (Mpc), about 13,900 (45 billion light-years). */
+export const CMB_DISTANCE_MPC = comovingDistance(LAST_SCATTERING_Z);
+
+/** The particle horizon, the edge of the observable universe (Mpc): about 14,200, or 46 billion light-years. */
+export const OBSERVABLE_RADIUS_MPC = comovingDistance(1e12);
 
 /** Age of the universe at redshift z (Gyr). */
 export function ageAt(z: number): number {

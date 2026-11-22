@@ -8,7 +8,7 @@
  * galactic (x toward l = 0, y toward l = 90°, z north) → scene (x, z, −y).
  */
 
-import { comovingDistance } from './cosmology';
+import { comovingDistance, H0 } from './cosmology';
 
 export const LY_PER_MPC = 3.2616e6;
 
@@ -341,7 +341,8 @@ let namedPromise: Promise<LocalGalaxy[]> | undefined;
 export function loadNamedGalaxies(baseUrl = import.meta.env.BASE_URL): Promise<LocalGalaxy[]> {
   namedPromise ??= fetch(`${baseUrl}data/galaxies-named.json`)
     .then((r) => (r.ok ? (r.json() as Promise<{ H0: number; galaxies: NamedRow[] }>) : { H0: 70, galaxies: [] }))
-    .then((d) => namedFromSurvey(d.galaxies, d.H0))
+    // Placed with the map's Hubble constant (Planck 2018), like everything else placed by redshift.
+    .then((d) => namedFromSurvey(d.galaxies, H0))
     .catch(() => []);
   return namedPromise;
 }

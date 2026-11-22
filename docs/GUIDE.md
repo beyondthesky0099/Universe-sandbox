@@ -101,7 +101,8 @@ The largest scale: the Milky Way's neighbourhood out to the edge of the observab
   known, each at the distance its redshift implies.
 - **Radio lobes:** tick *Radio lobes* to see the giant jets' lobes of 38 radio galaxies (Cygnus A,
   Centaurus A, M87…) as real radio-survey pictures, at their true size.
-- **The cosmic microwave background** on a sphere 46 billion light-years away. Zoom all the way
+- **The cosmic microwave background** on a sphere 45 billion light-years away, just inside the
+  edge of the observable universe (46 billion). Zoom all the way
   out to see the whole observable universe from outside.
 
 Click a galaxy for its facts. **Visit galaxy** flies into it (the Milky Way is modelled on its

@@ -139,7 +139,8 @@ longitude, then run time. The **eclipses** list has the 18 solar eclipses of 202
 **Watch** to stand in the path of totality.
 
 On a phone or tablet, **📱 Point at the sky** makes the view follow the phone: hold it up and the
-screen shows what is in that part of the sky, now, from where you are. If the stars are a little
+screen shows what is in that part of the sky, now, from where you are. Put the circle in the middle
+on a bright point and the card below names it. If the stars are a little
 off (the compass is easily disturbed by metal nearby), drag sideways to line them up. Press
 **✋ Stop pointing** to look around by dragging again.
 

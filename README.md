@@ -495,7 +495,10 @@ arcminute and most planets within one.
 ### Point your phone at the sky
 On a phone or tablet, open the Sky tab and press **📱 Point at the sky**, then hold the phone up.
 The view follows the phone through its motion sensors, so whatever it points at is what the
-screen shows, named: handy at a star party for "what's that bright one?". It switches to now,
+screen shows. Put the crosshair on something and a card names it (planet, bright star, the Moon
+and how much of it is lit) and says which way you are facing: handy at a star party for "what's
+that bright one?". The side pane closes, the nebula and cluster outlines hide and the names grow,
+so the screen shows just the sky. It switches to now,
 in real time, at your location, and keeps the screen awake. North comes from the compass
 (Chrome on Android reports it directly; on an iPhone, Safari asks for motion access first and
 the compass heading is used). Compasses are easily thrown off by metal and phone cases, so if

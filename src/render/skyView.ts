@@ -381,6 +381,13 @@ export class SkyView {
 
   /** Every text label, with its scale at the default field of view. */
   private readonly labels: { sprite: THREE.Sprite; base: THREE.Vector3 }[] = [];
+  /** Labels drawn larger than usual (pointing the phone: read at arm's length outdoors). */
+  private labelBoost = 1;
+
+  setLabelBoost(k: number): void {
+    this.labelBoost = k;
+    this.sizeBodies();
+  }
 
   private label(text: string, color: string, scale: number): THREE.Sprite {
     const sprite = textSprite(text, color, scale);
@@ -392,7 +399,7 @@ export class SkyView {
   private sizeBodies(): void {
     // Labels keep the same size on screen whatever the zoom.
     const k = Math.tan((this.camera.fov * DEG) / 2) / Math.tan((70 * DEG) / 2);
-    for (const l of this.labels) l.sprite.scale.copy(l.base).multiplyScalar(k);
+    for (const l of this.labels) l.sprite.scale.copy(l.base).multiplyScalar(k * this.labelBoost);
     if (!this.snapshot) return;
     const pxPerRad = this.height / (2 * Math.tan((this.camera.fov * DEG) / 2));
     for (const layer of this.outlineLayers.values()) (layer.points.material as THREE.ShaderMaterial).uniforms.uPxPerRad.value = pxPerRad * this.pixelRatio;
@@ -548,6 +555,29 @@ export class SkyView {
         (moon.dot.material as THREE.SpriteMaterial).rotation = Math.atan2((b.y - a.y) / this.camera.aspect, b.x - a.x) * 1 + 0;
       }
     }
+  }
+
+  /**
+   * The named object nearest the centre of the view, within `maxDeg`: the Sun, Moon, a planet, or
+   * (when the sky is dark enough to see them) a bright named star. Only things above the horizon.
+   */
+  aimed(maxDeg: number): { name: string; kind: 'sun' | 'moon' | 'planet' | 'star'; sep: number } | undefined {
+    if (!this.snapshot) return undefined;
+    const ray = new THREE.Vector3(0, 0, -1).applyQuaternion(this.camera.quaternion);
+    let best: { name: string; kind: 'sun' | 'moon' | 'planet' | 'star'; sep: number } | undefined;
+    const consider = (name: string, kind: 'sun' | 'moon' | 'planet' | 'star', pos: THREE.Vector3) => {
+      const dir = pos.clone().normalize();
+      if (dir.y < 0) return;
+      const sep = ray.angleTo(dir) / DEG;
+      if (sep < maxDeg && (!best || sep < best.sep)) best = { name, kind, sep };
+    };
+    for (const o of this.snapshot.objects) {
+      const b = this.bodies.get(o.name);
+      if (b && (b.dot.material as THREE.SpriteMaterial).opacity > 0.3) consider(o.name, o.kind, b.dot.position);
+    }
+    for (const l of this.starLabels)
+      if ((l.sprite.material as THREE.SpriteMaterial).opacity > 0.25) consider(l.sprite.userData.labelText as string, 'star', l.sprite.position);
+    return best;
   }
 
   /** The named object nearest a screen point (normalised device coordinates), within ~3°. */

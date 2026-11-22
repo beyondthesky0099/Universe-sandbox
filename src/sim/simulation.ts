@@ -12,6 +12,7 @@ import {
   NEUTRON_MAX_MASS,
   NOMINAL_DENSITY,
   physicalRadius,
+  contactDistance,
   radiusFor,
 } from './body';
 import { kelvinToRgb } from './color';
@@ -1593,10 +1594,8 @@ function overlaps(a: Body, b: Body): boolean {
   const dx = b.x - a.x;
   const dy = b.y - a.y;
   const dz = b.z - a.z;
-  // Spaceships hit a body's real surface, not its enlarged drawing (which can be wider than the
-  // whole region where the body holds satellites, as for Earth).
-  const ship = a.tag === 'ship' || b.tag === 'ship';
-  const rr = ship ? (a.tag === 'ship' ? 0 : physicalRadius(a.kind, a.mass)) + (b.tag === 'ship' ? 0 : physicalRadius(b.kind, b.mass)) : a.radius + b.radius;
+  // Spaceships and spacecraft hit a body's real surface (contactDistance).
+  const rr = contactDistance(a, b);
   return dx * dx + dy * dy + dz * dz < rr * rr;
 }
 

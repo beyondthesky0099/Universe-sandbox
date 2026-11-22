@@ -11,6 +11,11 @@ or describe a scene in plain English and have Claude build it.
 
 Everything except the optional companion server runs in the browser.
 
+**Documentation:** the [user guide](docs/GUIDE.md) explains how to use everything, step by step;
+the [developer guide](docs/DEVELOPER.md) covers the architecture, tests and how to add features;
+[HANDOFF.md](docs/HANDOFF.md) has the current status and backlog. This README is the full
+feature reference and lists every data source.
+
 | Black hole with gravitational lensing | Lesson with a live graph |
 | --- | --- |
 | ![Lensing](docs/screenshots/lensing.png) | ![Lesson](docs/screenshots/lesson-graph.png) |
@@ -298,7 +303,8 @@ important ones stay and the rest fade out until you zoom in and there's room for
     home of the first black hole ever imaged), M49, M60, the Sombrero, M77 and Fornax A. They
     are placed by redshift, and their panels say so.
   - **The edge of the observable universe:** the cosmic microwave background from NASA's WMAP
-    9-year map, on a sphere at its real distance, 46 billion light-years. From inside it's a
+    9-year map, on a sphere at its real distance: 45.3 billion light-years, just inside the edge
+    of the observable universe at 46.2 billion (Planck 2018 cosmology). From inside it's a
     faint backdrop; zoom all the way out to see the whole observable universe from outside,
     with every galaxy above a speck at its centre.
   - Click a galaxy for its type, distance, size, mass, gas and motion (Andromeda is
@@ -1081,7 +1087,7 @@ push and pull request.
 - Galaxies: the **Updated Nearby Galaxy Catalog** (Karachentsev, Makarov & Kaisina 2013, AJ
   145, 101) and the **2MASS Redshift Survey** (Huchra et al. 2012, ApJS 199, 26), retrieved
   from VizieR (CDS). Rebuild them with `node scripts/build-galaxies.mjs`. Survey distances use
-  Hubble's law (H0 = 70 km/s/Mpc), so clusters appear stretched along the line of sight
+  Hubble's law (H0 = 67.66 km/s/Mpc, Planck 2018), so clusters appear stretched along the line of sight
   ("fingers of God"). Cluster labels use approximate published positions. Each galaxy's
   position angle on the sky comes from **HyperLEDA** (Paturel et al. 2003, A&A 412, 45;
   VizieR VII/237), matched by position; the Universe view draws galaxies at that angle and
@@ -1101,8 +1107,11 @@ push and pull request.
   2008…);
   and record holders (JADES-GS-z14-0, GN-z11, J0313−1806, ULAS J1120+0641, TON 618, 3C 273)
   entered by hand from the papers cited in `public/data/universe-objects.json`. They sit at the
-  comoving distance for their redshift in a flat ΛCDM cosmology (H0 = 70 km/s/Mpc, Ωm = 0.3;
-  `src/sim/cosmology.ts`). Supercluster, wall and void labels use approximate published
+  comoving distance for their redshift in a flat ΛCDM cosmology with the Planck 2018
+  parameters (Planck Collaboration 2020, A&A 641, A6: H0 = 67.66 km/s/Mpc, Ωm = 0.3111, plus
+  radiation; `src/sim/cosmology.ts`). The universe is 13.79 billion years old, the microwave
+  background's last-scattering surface is 13,880 Mpc (45.3 billion light-years) away, and the
+  observable universe's edge (the particle horizon) 46.2 billion light-years. Supercluster, wall and void labels use approximate published
   positions.
 - Star data: **HYG database v4.1** by David Nash (astronexus), licensed **CC BY-SA 4.0**
   (https://codeberg.org/astronexus/hyg). The derived files `public/data/stars-near.json` and

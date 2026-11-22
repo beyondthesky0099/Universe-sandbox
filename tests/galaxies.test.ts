@@ -141,7 +141,7 @@ describe('every named galaxy, the rich clusters and the quasars', () => {
     expect(entries.filter((g) => g.name.startsWith('3C 273')).length).toBe(1);
     const q = entries.find((g) => g.name === '3C 273')!;
     expect(q.note).toContain('first quasar');
-    expect(q.d).toBeCloseTo(652, -1);
+    expect(q.d).toBeCloseTo(674, -1); // z = 0.158 in the Planck 2018 cosmology
     const far = entries.find((g) => g.name === 'JADES-GS-z14-0')!;
     expect(far.kind).toBe('galaxy');
     expect(far.d).toBeGreaterThan(10000); // comoving Mpc: deep in the observable universe

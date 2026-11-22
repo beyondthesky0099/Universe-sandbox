@@ -208,6 +208,20 @@ Plan, in priority order:
 - BodyVisual adds it in applyDetail and updates it only when the planet is more than 14 px across
   and a star is present. Tests: tests/aurora.test.ts.
 
+### AW. Planck 2018 cosmology, spacecraft contact, publishing to stargazinghyderabad.com
+- [x] cosmology.ts: Planck 2018 (H0 = 67.66, Ωm = 0.3111) plus radiation (Ωr = 9.1 × 10⁻⁵);
+  integrals over the scale factor (finite at a = 0), so z = 10⁶ converges (it gave 1,168 Gly
+  before). Age 13.79 Gyr; CMB_DISTANCE_MPC 13,880 (45.3 Gly, Planck's χ* ≈ 13,870);
+  OBSERVABLE_RADIUS_MPC 14,161 (46.2 Gly). cosmosView draws the CMB at CMB_DISTANCE_MPC
+  (was a hard-coded 14,000) and labels both distances; the 2MRS web and named galaxies use the
+  same H0 instead of the catalogue file's 70.
+- [x] body.ts `contactDistance`: ships and spacecraft (`probe`) meet a body's real surface, not
+  its enlarged drawing, in collisions and in the forecast. JUICE's January 2029 Earth flyby
+  (closest about 250,000 km here; Earth is drawn 1.8 million km wide) no longer counts as a
+  crash (tests/spacecraft.test.ts).
+- [x] .github/workflows/website.yml: copies each build into the website repository's
+  astrarium/app/ (needs the WEBSITE_TOKEN secret).
+
 ### AV. Outbursts, nova eruptions and eclipses
 - [x] src/sim/binaryCycles.ts:
   - dwarfNovaKind(types, period): WZ / ER / SU only below 3.2 h; U Gem (flagged SU) is UG.

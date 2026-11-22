@@ -165,6 +165,18 @@ export function physicalRadius(kind: BodyKind, mass: number): number {
   }
 }
 
+/**
+ * How close two bodies' centres can come before they touch. Spaceships and spacecraft are tiny,
+ * so they meet a body's real surface, not its enlarged drawing (which can be wider than the
+ * whole region where it holds satellites, as for Earth): a real flyby, like JUICE past Earth in
+ * 2024, must not count as a crash.
+ */
+export function contactDistance(a: Pick<Body, 'kind' | 'mass' | 'radius' | 'tag'>, b: Pick<Body, 'kind' | 'mass' | 'radius' | 'tag'>): number {
+  const tiny = (x: Pick<Body, 'tag'>) => x.tag === 'ship' || x.tag === 'probe';
+  if (!tiny(a) && !tiny(b)) return a.radius + b.radius;
+  return (tiny(a) ? 0 : physicalRadius(a.kind, a.mass)) + (tiny(b) ? 0 : physicalRadius(b.kind, b.mass));
+}
+
 /** Main-sequence lifetime in years: ~10 Gyr for the Sun, much shorter for massive stars. */
 export function mainSequenceLifetime(mass: number): number {
   return 1e10 * Math.pow(Math.max(mass, 0.08), -2.5);

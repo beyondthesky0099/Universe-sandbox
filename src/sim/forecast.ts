@@ -1,4 +1,4 @@
-import type { Body } from './body';
+import { contactDistance, type Body } from './body';
 import { Simulation } from './simulation';
 
 export interface Approach {
@@ -99,7 +99,7 @@ export function forecast(sim: Simulation, bodyId: number, horizon: number, maxBo
           otherName: original.name,
           distance: d,
           time: time - back,
-          impact: d < copy.radius + self.radius,
+          impact: d < contactDistance(original, target),
           self: at,
           other: [at[0] + rx, at[1] + ry, at[2] + rz],
         };

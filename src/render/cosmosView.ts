@@ -20,7 +20,7 @@ import { relativity, RELATIVITY_PARS } from './relativity';
 import { GalaxyShapes } from './galaxyShapes';
 import { RadioLobeLayer, type LobePlacement } from './radioLobes';
 import { lobeHost, lobeSizeKpc, type RadioLobeAtlas } from '../sim/radioLobes';
-import { comovingDistance } from '../sim/cosmology';
+import { CMB_DISTANCE_MPC, comovingDistance, H0, MPC_IN_LY, OBSERVABLE_RADIUS_MPC } from '../sim/cosmology';
 
 /**
  * The Universe map: real galaxies around the Milky Way, in megaparsecs. The Local Volume
@@ -99,8 +99,9 @@ const FORM_COLOR: Record<GalaxyForm, [number, number, number]> = {
   'dwarf spheroidal': [0.85, 0.78, 0.66],
 };
 
-/** Comoving distance to the last-scattering surface: ~14 Gpc, about 46 billion light-years. */
-export const CMB_RADIUS_MPC = 14000;
+/** Comoving distance to the last-scattering surface (sim/cosmology.ts, Planck 2018): about 13,900 Mpc, 45 billion light-years. */
+export const CMB_RADIUS_MPC = CMB_DISTANCE_MPC;
+const gly = (mpc: number) => ((mpc * MPC_IN_LY) / 1e9).toFixed(1);
 
 const CMB_VERTEX = /* glsl */ `
   varying vec3 vDir;
@@ -295,12 +296,13 @@ export class CosmosView {
 
   /** Add the cosmic web: galaxies beyond the Local Volume, placed by redshift. */
   setWeb(cat: WebCatalog): void {
-    const keep = cat.galaxies.filter((w) => w[2] / cat.H0 > 11); // nearer ones are in the Local Volume catalogue
+    // Placed with the map's Hubble constant (Planck 2018), like everything else placed by redshift.
+    const keep = cat.galaxies.filter((w) => w[2] / H0 > 11); // nearer ones are in the Local Volume catalogue
     const pos = new Float32Array(keep.length * 3);
     const col = new Float32Array(keep.length * 3);
     const size = new Float32Array(keep.length);
     keep.forEach((w, i) => {
-      pos.set(webPosition(w, cat.H0), i * 3);
+      pos.set(webPosition(w, H0), i * 3);
       // Brighter (lower magnitude) galaxies get bigger, whiter points.
       const lum = THREE.MathUtils.clamp((11.75 - w[3]) / 4, 0, 1);
       const shade = 0.35 + 0.55 * lum;
@@ -337,7 +339,7 @@ export class CosmosView {
     mesh.visible = this.cmbVisible;
     this.cmb = mesh;
     this.scene.add(mesh);
-    const sprite = textSprite('Cosmic microwave background · edge of the observable universe, 46 billion light-years', '#ffcf9a', 0.85);
+    const sprite = textSprite(`Cosmic microwave background, ${gly(CMB_RADIUS_MPC)} billion light-years away · edge of the observable universe: ${gly(OBSERVABLE_RADIUS_MPC)} billion`, '#ffcf9a', 0.85);
     sprite.position.set(0, CMB_RADIUS_MPC * 1.02, 0);
     // Out past the edge, to see the whole observable universe inside it.
     sprite.userData.goto = { distance: CMB_RADIUS_MPC * 2.6, center: true };

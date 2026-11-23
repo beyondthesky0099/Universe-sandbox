@@ -103,7 +103,7 @@ export function galaxyEntries(list: LocalGalaxy[]): SearchEntry[] {
 }
 
 export function structureEntries(): SearchEntry[] {
-  const kind = (n: string) => (n === 'Local Group' ? 'Galaxy group' : /Supercluster/.test(n) ? 'Supercluster' : /Void/.test(n) ? 'Void' : /Wall/.test(n) ? 'Galaxy wall' : 'Galaxy cluster');
+  const kind = (n: string) => (n === 'Local Group' ? 'Galaxy group' : /dark matter/.test(n) ? 'Dark matter' : /Stream/.test(n) ? 'Gas stream' : /Supercluster|superstructure/.test(n) ? 'Supercluster' : /Void/.test(n) ? 'Void' : /Wall/.test(n) ? 'Galaxy wall' : /Arc|Ring/.test(n) ? 'Large-scale structure' : 'Galaxy cluster');
   return COSMIC_STRUCTURES.map((s) => ({
     name: s.name,
     kind: kind(s.name),

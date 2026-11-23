@@ -381,6 +381,7 @@ export class GalaxyMapUI {
   buildGalaxy(seed: number, opts: GalaxyOptions & { origin?: string } = {}): void {
     this.app.galaxySeed = seed;
     this.app.galaxyOrigin = seed === MILKY_WAY_SEED ? 'Milky Way' : (opts.origin ?? '');
+    this.app.galaxy.isMilkyWay = seed === MILKY_WAY_SEED;
     const data = this.app.galaxy.build(seed, opts);
     this.app.galaxyBuilt = true;
     this.app.features = undefined;

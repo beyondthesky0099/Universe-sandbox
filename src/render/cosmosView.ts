@@ -20,6 +20,9 @@ import { relativity, RELATIVITY_PARS } from './relativity';
 import { GalaxyShapes } from './galaxyShapes';
 import { RadioLobeLayer, type LobePlacement } from './radioLobes';
 import { LaniakeaView } from './laniakeaView';
+import { CosmicShapes } from './cosmicShapes';
+import { LocalStructures } from './localStructures';
+import { BulletCluster } from './bulletCluster';
 import { dotTexture } from './textures';
 import type { Laniakea } from '../sim/laniakea';
 import { lobeHost, lobeSizeKpc, type RadioLobeAtlas } from '../sim/radioLobes';
@@ -169,6 +172,7 @@ export class CosmosView {
 
   constructor(domElement: HTMLElement) {
     this.camera = new THREE.PerspectiveCamera(55, 1, 1e-5, 1e5);
+    this.scene.add(this.cosmicShapes.group, this.nearMilkyWay.group, this.bullet.group);
     this.controls = new OrbitControls(this.camera, domElement);
     this.controls.enableDamping = true;
     this.controls.dampingFactor = 0.08;
@@ -279,10 +283,27 @@ export class CosmosView {
       sprite.position.set(...galacticToCosmos(s.l, s.b, s.d));
       // The Local Group is ~3 Mpc across, a rich galaxy cluster a few Mpc, a supercluster tens.
       sprite.userData.goto = { distance: s.viewMpc ?? (s.name === 'Local Group' ? 3 : s.d < 30 ? 8 : s.d * 0.25) };
-      this.labels.push({ sprite, min: s.size ? s.size * 0.5 : s.d < 1 ? 1.5 : s.d * 0.25, max: s.d < 1 ? 40 : 5000 });
+      this.labels.push({ sprite, min: s.viewMpc ? s.viewMpc * 0.25 : s.d < 1 ? 1.5 : s.d * 0.25, max: s.viewMpc ? s.viewMpc * 10 : s.d < 1 ? 40 : 5000 });
       this.scene.add(sprite);
     }
     this.applyPointScale();
+  }
+
+  /** The Zone of Avoidance and the giant structures' shapes (render/cosmicShapes.ts). */
+  private readonly cosmicShapes = new CosmicShapes();
+  /** The Milky Way's dark-matter halo and the Magellanic Stream; the Bullet Cluster. */
+  private readonly nearMilkyWay = new LocalStructures();
+  private readonly bullet = new BulletCluster();
+
+  setDarkMatterVisible(on: boolean): void {
+    this.nearMilkyWay.setHaloVisible(on);
+    this.bullet.group.visible = on;
+    this.bulletOn = on;
+  }
+  private bulletOn = true;
+
+  setZoneOfAvoidanceVisible(on: boolean): void {
+    this.cosmicShapes.setZoneVisible(on);
   }
 
   /** Laniakea's flows and surface (render/laniakeaView.ts). */
@@ -549,6 +570,9 @@ export class CosmosView {
     const camDist = this.cameraDistance;
     for (const l of this.labels) l.sprite.visible = camDist >= l.min && camDist <= l.max && (!l.kind || this.kindVisible[l.kind]);
     this.laniakea?.update(this.camera);
+    this.cosmicShapes.update(this.camera);
+    this.nearMilkyWay.update(this.camera);
+    if (this.bulletOn) this.bullet.update(this.camera);
     if (this.cmb) {
       // A faint backdrop from inside; full strength once you fly out past it.
       // Near a galaxy it fades further so the galaxy stands out against black.

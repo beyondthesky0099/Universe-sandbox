@@ -1135,6 +1135,22 @@ push and pull request.
   background's last-scattering surface is 13,880 Mpc (45.3 billion light-years) away, and the
   observable universe's edge (the particle horizon) 46.2 billion light-years. Supercluster, wall and void labels use approximate published
   positions.
+- Interstellar objects (`node scripts/build-interstellar.mjs`): ʻOumuamua, 2I/Borisov and 3I/ATLAS
+  with their hyperbolic orbits from the **NASA/JPL Small-Body Database API**; discovery facts from
+  Meech et al. 2017 (Nature 552, 378), Micheli et al. 2018 (Nature 559, 223), Bodewits et al.
+  2020 (Nature Astronomy 4, 867) and Seligman et al. 2025.
+- Beyond the galaxy (drawn from published measurements; shapes approximate where noted):
+  the Fermi bubbles (Su, Slatyer & Finkbeiner 2010, ApJ 724, 1044) and eROSITA bubbles (Predehl
+  et al. 2020, Nature 588, 227); the Milky Way's dark-matter halo as an NFW profile (Navarro,
+  Frenk & White 1997) with M200 = 1.08 × 10¹² M☉ (Cautun et al. 2020, MNRAS 494, 4291); the
+  Bullet Cluster's mass and gas after Clowe et al. 2006 (ApJ 648, L109) and Markevitch et al.
+  2004; the Magellanic Stream along the Magellanic coordinate system (Nidever, Majewski & Butler
+  Burton 2008, ApJ 679, 432; Nidever et al. 2010, ApJ 723, 1618), its distance from models
+  (Besla et al. 2012, MNRAS 421, 2109); the Zone of Avoidance (Kraan-Korteweg & Lahav 2000); the
+  Quipu superstructure (Böhringer et al. 2025, A&A 695, A59); the claimed Giant Arc (Lopez, Clowes
+  & Williger 2022, MNRAS 516, 1557) and Big Ring (Lopez et al. 2024, JCAP 07, 055), positions read
+  off their figures; and the claimed Hercules–Corona Borealis Great Wall (Horváth, Hakkila &
+  Bagoly 2014, A&A 561, L12).
 - Laniakea (`python3 -I scripts/build-laniakea.py`, needs numpy): the **CosmicFlows-4** density
   and peculiar-velocity grids of Courtois, Dupuy, Guinet, Baulieu, Ruppin & Brenas 2023, "Gravity
   in the local Universe: density and velocity fields using CosmicFlows-4", A&A 670, L15

@@ -11,6 +11,7 @@ import { loadVoyagerEncounter, loadVoyagerEncounters } from '../sim/voyager';
 import { synthesizeChirp } from '../sim/gwChirp';
 import { loadHalley2061, loadHalleyReturn } from '../sim/halley';
 import { getSolarData, loadSolarData } from '../sim/solarSystemData';
+import { perihelionDate } from '../sim/interstellar';
 import { loadSolarSystemOnDate, PRESETS } from '../sim/presets';
 import { ENGINES, KMS_TO_AU_YR } from '../sim/spaceship';
 import { fmt, KPC_MYR_GRAVITY_SCALE } from '../sim/units';
@@ -366,8 +367,11 @@ export class InputUI {
     $<HTMLInputElement>('opt-cosmos-seyferts').addEventListener('change', (e) => this.app.cosmos.setKindVisible('seyfert', (e.target as HTMLInputElement).checked));
     $<HTMLInputElement>('opt-cosmos-blazars').addEventListener('change', (e) => this.app.cosmos.setKindVisible('blazar', (e.target as HTMLInputElement).checked));
     $<HTMLInputElement>('opt-cosmos-radio').addEventListener('change', (e) => this.app.cosmos.setRadioLobesVisible((e.target as HTMLInputElement).checked));
+    $<HTMLInputElement>('opt-cosmos-dark').addEventListener('change', (e) => this.app.cosmos.setDarkMatterVisible((e.target as HTMLInputElement).checked));
+    $<HTMLInputElement>('opt-cosmos-zoa').addEventListener('change', (e) => this.app.cosmos.setZoneOfAvoidanceVisible((e.target as HTMLInputElement).checked));
     $<HTMLInputElement>('opt-cosmos-laniakea').addEventListener('change', (e) => this.app.cosmos.setLaniakeaVisible((e.target as HTMLInputElement).checked));
     $<HTMLInputElement>('opt-real-nebulae').addEventListener('change', (e) => this.app.galaxy.setRealLayerVisible('nebulae', (e.target as HTMLInputElement).checked));
+    $<HTMLInputElement>('opt-real-bubbles').addEventListener('change', (e) => (this.app.galaxy.bubblesOn = (e.target as HTMLInputElement).checked));
     $<HTMLInputElement>('opt-real-clusters').addEventListener('change', (e) => this.app.galaxy.setRealLayerVisible('clusters', (e.target as HTMLInputElement).checked));
     $<HTMLInputElement>('opt-real-pulsars').addEventListener('change', (e) => this.app.galaxy.setRealLayerVisible('pulsars', (e.target as HTMLInputElement).checked));
     $<HTMLInputElement>('opt-real-xray').addEventListener('change', (e) => this.app.galaxy.setRealLayerVisible('xray', (e.target as HTMLInputElement).checked));
@@ -531,6 +535,29 @@ export class InputUI {
       const list = await loadFlybys().catch(() => []);
       const f = list[Number($<HTMLSelectElement>('flyby-select').value)];
       if (f) this.app.loadScenario({ name: `${f.name} flyby`, description: `Real close approach of ${f.name} to Earth on ${f.date} UTC (JPL).`, load: () => loadFlyby(this.app.sim, f) });
+    });
+    // Interstellar visitors: ʻOumuamua, Borisov and 3I/ATLAS on their real hyperbolic orbits.
+    const visitors = () => loadSolarData().then((d) => d.interstellar ?? []);
+    void visitors()
+      .then((list) => {
+        $('interstellar-select').innerHTML = list
+          .map((o, i) => `<option value="${i}">${o.name} · ${perihelionDate(o).getUTCFullYear()} · ${Math.round(o.vInfKms)} km/s</option>`)
+          .join('');
+        $<HTMLSelectElement>('interstellar-select').value = String(Math.max(0, list.length - 1));
+      })
+      .catch(() => ($('interstellar-select').innerHTML = '<option value="">Unavailable</option>'));
+    $('btn-interstellar-load').addEventListener('click', async () => {
+      const o = (await visitors().catch(() => []))[Number($<HTMLSelectElement>('interstellar-select').value)];
+      if (!o) return;
+      const peri = perihelionDate(o);
+      // Three months before its closest pass by the Sun, following it in.
+      const start = new Date(peri.getTime() - 90 * 86400000);
+      const about = `${o.name} (${o.designation}): discovered ${o.discovered} by ${o.by}. ${o.note} It swung ${o.q.toFixed(2)} AU from the Sun on ${peri.toISOString().slice(0, 10)} and leaves at ${o.vInfKms.toFixed(1)} km/s, never to return (JPL orbit).`;
+      this.app.loadScenario({
+        name: `${o.name} passing through`,
+        description: about,
+        load: () => ({ ...loadSolarSystemOnDate(this.app.sim, start), focus: o.name, cameraDistance: 6, timeScale: 0.05, tip: about }),
+      });
     });
     void loadVoyagerEncounters()
       .then((list) => {

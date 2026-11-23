@@ -1,3 +1,4 @@
+import type { InterstellarObject } from './interstellar';
 import { G } from './units';
 import type { SpacecraftData } from './spacecraft';
 
@@ -79,6 +80,8 @@ export interface SolarData {
   ringGaps?: RingGap[];
   /** Real spacecraft trajectories (JPL Horizons), if loaded. */
   spacecraft?: SpacecraftData[];
+  /** The interstellar objects (sim/interstellar.ts), if loaded. */
+  interstellar?: InterstellarObject[];
 }
 
 export interface SaturnRing {
@@ -260,8 +263,9 @@ interface RawSmall {
   bodies: [string, number, number, number, number, number, number, number, number][];
 }
 
-export function parseSolarData(solar: RawSolar, small?: RawSmall, rings?: { rings: SaturnRing[]; gaps?: RingGap[] }, craft?: { craft: SpacecraftData[] }): SolarData {
+export function parseSolarData(solar: RawSolar, small?: RawSmall, rings?: { rings: SaturnRing[]; gaps?: RingGap[] }, craft?: { craft: SpacecraftData[] }, interstellar?: { objects: InterstellarObject[] }): SolarData {
   return {
+    interstellar: interstellar?.objects,
     rings: rings?.rings,
     ringGaps: rings?.gaps?.filter((g) => g.inner !== undefined && g.outer !== undefined),
     spacecraft: craft?.craft,
@@ -304,8 +308,11 @@ export function loadSolarData(baseUrl = import.meta.env.BASE_URL): Promise<Solar
     fetch(`${baseUrl}data/spacecraft.json`)
       .then((r) => (r.ok ? (r.json() as Promise<{ craft: SpacecraftData[] }>) : undefined))
       .catch(() => undefined),
-  ]).then(([solar, small, rings, craft]) => {
-    cached = parseSolarData(solar, small, rings, craft);
+    fetch(`${baseUrl}data/interstellar.json`)
+      .then((r) => (r.ok ? (r.json() as Promise<{ objects: InterstellarObject[] }>) : undefined))
+      .catch(() => undefined),
+  ]).then(([solar, small, rings, craft, interstellar]) => {
+    cached = parseSolarData(solar, small, rings, craft, interstellar);
     return cached;
   });
   return loading;

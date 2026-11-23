@@ -1,3 +1,4 @@
+import { GalacticBubbles } from './galacticBubbles';
 import * as THREE from 'three';
 import { LabelDeclutter } from './labelDeclutter';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
@@ -202,6 +203,10 @@ export interface LabelTarget {
 /** Procedurally generated spiral galaxy where every bright point is a selectable star system. */
 export class GalaxyView {
   readonly scene = new THREE.Scene();
+  /** The Fermi and eROSITA bubbles (render/galacticBubbles.ts): shown for the Milky Way only. */
+  readonly bubbles = new GalacticBubbles();
+  isMilkyWay = true;
+  bubblesOn = true;
   readonly camera: THREE.PerspectiveCamera;
   readonly controls: OrbitControls;
   data!: GalaxyData;
@@ -287,6 +292,7 @@ export class GalaxyView {
     this.hole.add(halo, disk, shadow);
     this.hole.renderOrder = 5;
     this.scene.add(this.hole);
+    this.scene.add(this.bubbles.group);
 
     this.marker = new THREE.Sprite(new THREE.SpriteMaterial({ map: ringTexture(), sizeAttenuation: false, depthTest: false, transparent: true }));
     this.marker.scale.setScalar(0.05);
@@ -903,5 +909,6 @@ export class GalaxyView {
     this.hole.children[1].rotation.z += dt * 0.4;
     this.starfield.position.copy(this.camera.position);
     this.starfield.scale.setScalar(this.camera.far * 0.5);
+    this.bubbles.update(this.camera, this.isMilkyWay && this.bubblesOn);
   }
 }

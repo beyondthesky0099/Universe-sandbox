@@ -70,6 +70,8 @@
           <label class="check" title="150 BL Lac objects brighter than magnitude 17.5 (Véron-Cetty &amp; Véron), in mint: jets pointed at us. BL Lac, Mrk 421, Mrk 501 and OJ 287 among them"><input id="opt-cosmos-blazars" type="checkbox" checked /> Blazars (BL Lac objects)</label>
           <label class="check" title="The radio lobes of 39 nearby radio galaxies (Cygnus A, Centaurus A, Fornax A, M87…), from the NVSS, SUMSS, GLEAM and WENSS radio surveys, in false colour at their true size and orientation. Zoom in on a radio galaxy to see them"><input id="opt-cosmos-radio" type="checkbox" checked /> Radio lobes</label>
           <label class="check" title="Our home supercluster as the motions of galaxies define it: flow lines of the CosmicFlows-4 velocity field (Courtois et al. 2023), gold where they start inside Laniakea and blue around it, its real shape (Dupuy &amp; Courtois 2023), and the Milky Way near its edge. Zoom out past 100 million light-years to see it"><input id="opt-cosmos-laniakea" type="checkbox" checked /> Laniakea and the galaxy flows</label>
+          <label class="check" title="Within about 10° of the Milky Way's plane its dust and stars hide the galaxies behind, so every survey has a gap there: the empty wedge you see in the cosmic web and in Laniakea's map"><input id="opt-cosmos-zoa" type="checkbox" checked /> Zone of Avoidance</label>
+          <label class="check" title="The Milky Way's dark-matter halo (an NFW halo of 1.1 trillion Suns out to 217 kpc; Cautun et al. 2020) and the Bullet Cluster, where the dark matter (blue, from lensing) passed through while the hot gas (pink, X-rays) lagged behind (Clowe et al. 2006)"><input id="opt-cosmos-dark" type="checkbox" checked /> Dark matter</label>
           <label class="check"><input id="opt-cmb" type="checkbox" checked /> Cosmic microwave background (WMAP)</label>
         </section>
         <section data-pane="help" data-icon="❔" data-title="How to">
@@ -156,6 +158,7 @@
           <p class="muted" id="galaxy-info"></p>
           <label class="check" title="HII regions (pink) and planetary nebulae (teal) with measured distances, from professional catalogues"><input id="opt-real-nebulae" type="checkbox" checked /> Real nebulae</label>
           <label class="check" title="Open clusters and moving groups from Gaia (Hunt & Reffert 2023, gold) and globular clusters (Harris, orange) at their measured distances"><input id="opt-real-clusters" type="checkbox" checked /> Real star clusters</label>
+          <label class="check" title="Giant bubbles above and below the Galactic Centre, blown out by an outburst a few million years ago: the Fermi bubbles in gamma rays (Su et al. 2010) and the larger eROSITA bubbles in X-rays (Predehl et al. 2020). Zoom out to see them"><input id="opt-real-bubbles" type="checkbox" checked /> Fermi and eROSITA bubbles</label>
           <label class="check" title="Every Milky Way pulsar with a distance in the ATNF Pulsar Catalogue (about 3,600): blue, millisecond pulsars white, magnetars magenta"><input id="opt-real-pulsars" type="checkbox" checked /> Real pulsars</label>
           <label class="check" title="Every X-ray binary with a measured distance (Fortin et al. 2023, 2024): black holes feeding on a companion in violet, neutron stars in cyan. Zoom in to see the pair"><input id="opt-real-xray" type="checkbox" checked /> Real X-ray binaries</label>
           <label class="check" title="Every Wolf–Rayet star with a distance in van der Hucht's catalogue (218): massive stripped stars about to explode, in white-blue"><input id="opt-real-wr" type="checkbox" checked /> Real Wolf–Rayet stars</label>
@@ -289,6 +292,11 @@
           <div class="row buttons">
             <select id="flyby-select" title="Upcoming asteroid close approaches to Earth (JPL)"><option value="">Loading flybys…</option></select>
             <button id="btn-flyby-load" title="Fly this real close approach">Watch flyby</button>
+          </div>
+          <h4>Interstellar visitors</h4>
+          <div class="row buttons">
+            <select id="interstellar-select" title="The three objects seen passing through the Solar System from other stars, on their real hyperbolic orbits (JPL)"><option value="">Loading…</option></select>
+            <button id="btn-interstellar-load" title="Watch it fall in past the Sun and leave for good">Watch it pass</button>
           </div>
           <h4>Voyager Grand Tour</h4>
           <div class="row buttons">

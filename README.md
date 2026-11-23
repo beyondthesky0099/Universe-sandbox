@@ -1173,8 +1173,13 @@ push and pull request.
   2014, Nature 513, 71, whose famous map this view follows.
 - Star data: **HYG database v4.1** by David Nash (astronexus), licensed **CC BY-SA 4.0**
   (https://codeberg.org/astronexus/hyg). The derived files `public/data/stars-near.json` and
-  `public/data/stars-bright.json` are also CC BY-SA 4.0. Rebuild them with
+  `public/data/stars-bright.json` are also CC BY-SA 4.0 (the named bright stars carry their HYG
+  distances, so search flies to them on the galaxy map). Rebuild them with
   `node scripts/build-stars.mjs`.
+- Real double stars in the Sandbox (`src/sim/realBinaries.ts`): Sirius A and B (Bond et al. 2017,
+  ApJ 840, 70), Alpha Centauri A and B (Pourbaix & Boffin 2016, A&A 586, A90) with Proxima
+  (Kervella, Thévenin & Lovis 2017, A&A 598, L7), and Procyon A and B (Bond et al. 2015, ApJ 813,
+  106), each started where it is on its orbit today.
 - Planet positions use E. M. Standish, *Keplerian Elements for Approximate Positions of the
   Major Planets* (JPL Solar System Dynamics).
 - Dwarf planets, asteroids, comets and moons come from NASA/JPL Horizons

@@ -443,6 +443,29 @@ export class GalaxyView {
     this.selected = target;
     this.marker.visible = target !== -1;
     if (target !== -1) this.marker.position.copy(this.targetPosition(target));
+    this.pin(undefined);
+    this.marker.scale.setScalar(0.05);
+  }
+
+  /** A searched-for point (a named star): the ring marker on it and its name above every other label. */
+  private pinLabel?: THREE.Sprite;
+  pin(pos: THREE.Vector3 | undefined, label?: string): void {
+    if (this.pinLabel) {
+      this.scene.remove(this.pinLabel);
+      this.pinLabel.material.map?.dispose();
+      this.pinLabel.material.dispose();
+      this.pinLabel = undefined;
+    }
+    if (!pos) return;
+    this.marker.position.copy(pos);
+    this.marker.visible = true;
+    this.marker.scale.setScalar(0.07);
+    if (label) {
+      this.pinLabel = textSprite(label, '#ffffff', 1.3);
+      this.pinLabel.position.copy(pos);
+      this.pinLabel.userData.priority = 1e6;
+      this.scene.add(this.pinLabel);
+    }
   }
 
   /** Animate the camera to close in on a star or the core. */

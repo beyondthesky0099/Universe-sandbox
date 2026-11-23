@@ -208,6 +208,18 @@ Plan, in priority order:
 - BodyVisual adds it in applyDetail and updates it only when the planet is more than 14 px across
   and a star is present. Tests: tests/aurora.test.ts.
 
+### BG. Stars go to the galaxy map; real double stars
+- [x] scripts/build-stars.mjs: named bright stars get their HYG distance (pc) as a 7th field (357
+  of 358; stars-near.json byte-identical after the rebuild). BrightStar type extended.
+- [x] nebulae.ts `eclipticToGalactic` (inverse of galacticToEcliptic). searchSources.starEntries:
+  stars → `map` action (l, b, dKpc, sizePc 1) instead of `sky`; only a star without a distance
+  still turns the Sky tab. app/search.ts pins a found star (`galaxy.pin`: ring marker scaled up,
+  a label with priority 1e6, cleared by `select`).
+- [x] galaxyMap.showNamedStarsOnMap: the 357 named stars as a real layer, labelled with light-years.
+- [x] sim/realBinaries.ts: Sirius AB, Alpha Cen AB (+ Proxima at 8,700 AU), Procyon AB, from
+  published orbits, started at today's orbital phase (periastron epochs); REAL_BINARY_PRESETS are
+  appended to PRESETS (Scenes pane and search). tests/real-stars.test.ts.
+
 ### BF. The Boötes Void; typo-tolerant search
 - [x] sim/voids.ts: BOOTES_VOID (RA 222.5°, Dec +46°, cz 15,500, radius 3,100 km/s; Kirshner et al.
   1981, Wegner et al. 2019), `bootesVoid(H0)`, `voidCensus`: 2MRS galaxies in the void's part of the

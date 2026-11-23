@@ -21,6 +21,7 @@ import type { LocalGalaxy } from './galaxies';
 import { SPACECRAFT_COLOR, spacecraftState } from './spacecraft';
 import { loadMilkyWayAndromeda } from './localGroup';
 import { hyperbolicState, INTERSTELLAR_SHOW_AU } from './interstellar';
+import { REAL_BINARY_PRESETS } from './realBinaries';
 import { getSolarData, KM_PER_AU, poleScene, realRadiusAu, REAL_COLORS, relativeState, sampleRingRadii, smallBodyState, toScene, type SolarData } from './solarSystemData';
 
 export interface SceneSetup {
@@ -1256,6 +1257,8 @@ export const PRESETS: Preset[] = [
   milkyWayAndromeda,
   galaxyCollision,
   empty,
+  // Real double stars near the Sun on their measured orbits (sim/realBinaries.ts).
+  ...REAL_BINARY_PRESETS,
 ];
 
 function gauss(): number {

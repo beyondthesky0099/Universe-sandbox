@@ -160,6 +160,13 @@ off (the compass is easily disturbed by metal nearby), drag sideways to line the
 
 Each takes a minute or two. Use 🔍 search to find the names.
 
+**Real stars**
+- **Search for a star** (Sirius, Betelgeuse, Vega…): you fly to its real place among the stars
+  around the Sun on the Galaxy map, ringed and named.
+- **Visit a real double star** (search "Sirius A and B", "Alpha Centauri A and B" or
+  "Procyon A and B", or the Scenes pane): the pair on its measured orbit, starting where it is
+  today. Sirius B and Procyon B are white dwarfs; Proxima circles Alpha Centauri 8,700 AU out.
+
 **In the Solar System**
 - **Visit Saturn** and zoom in on the rings: 6,000 particles at NASA's measured radii.
 - **Pick 1989** in the date box (Scenes pane) and press **Solar System** to find Voyager 2 at

@@ -119,7 +119,9 @@ for (let k = 1; k < lines.length; k++) {
     const len = Math.hypot(ex, ey, ez) || 1;
     // [x, y, z unit vector, magnitude, B−V colour, name if it has a proper name]
     const row = [round(ex / len, 4), round(ey / len, 4), round(ez / len, 4), round(mag, 2), ci === undefined ? 0.6 : round(ci, 2)];
-    if (r.proper) row.push(r.proper);
+    // Named stars also carry their distance (parsecs; HYG, from Hipparcos), so search can fly to
+    // them on the galaxy map.
+    if (r.proper) row.push(r.proper, dist > 0 && dist < 100000 ? round(dist, 1) : 0);
     bright.push(row);
   }
 }
@@ -214,6 +216,6 @@ writeFileSync(
 );
 writeFileSync(
   new URL('../public/data/stars-bright.json', import.meta.url),
-  JSON.stringify({ source: credit, license: 'CC BY-SA 4.0', frame: 'ecliptic J2000 unit vectors', maxMag: BRIGHT_MAG, fields: ['x', 'y', 'z', 'mag', 'bv', 'name?'], stars: bright }) + '\n',
+  JSON.stringify({ source: credit, license: 'CC BY-SA 4.0', frame: 'ecliptic J2000 unit vectors', maxMag: BRIGHT_MAG, fields: ['x', 'y', 'z', 'mag', 'bv', 'name?', 'distPc?'], stars: bright }) + '\n',
 );
 console.log(`near: ${near.length} stars within ${NEAR_PC} pc; bright: ${bright.length} stars brighter than mag ${BRIGHT_MAG}`);

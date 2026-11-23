@@ -63,7 +63,8 @@ export function upcomingEncounters(stars: NearStar[], withinYears = 2e6, maxPc =
 }
 
 /** [x, y, z unit vector (ecliptic), magnitude, B−V, proper name?] */
-export type BrightStar = [number, number, number, number, number, string?];
+/** [x, y, z (ecliptic unit vector), magnitude, B−V, name?, distance (pc)? for named stars] */
+export type BrightStar = [number, number, number, number, number, string?, number?];
 
 /** Effective temperature from B−V (Ballesteros 2012). */
 export function temperatureFromBV(bv: number): number {

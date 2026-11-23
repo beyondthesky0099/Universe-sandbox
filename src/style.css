@@ -1407,6 +1407,15 @@ body.landed #graph-panel {
   opacity: 0.8;
 }
 
+/* The heliopause and the Oort cloud (render/outerSolarSystem.ts). */
+.edge-label {
+  color: #8fb8ff;
+  opacity: 0.85;
+  max-width: 260px;
+  white-space: normal;
+  font-style: italic;
+}
+
 /* =============================================================================
    Interface frame (src/app/layout.ts): top bar, icon rail, panes, bottom dock,
    More menu and inspector. Later rules here refine the older ones above.

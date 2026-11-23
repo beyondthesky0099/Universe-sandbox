@@ -165,16 +165,21 @@ export function physicalRadius(kind: BodyKind, mass: number): number {
   }
 }
 
+/** Below this mass (about Ceres's) an asteroid or comet is small enough to meet bodies at real sizes. */
+export const SMALL_BODY_MASS = 1e-9;
+
 /**
- * How close two bodies' centres can come before they touch. Spaceships and spacecraft are tiny,
- * so they meet a body's real surface, not its enlarged drawing (which can be wider than the
- * whole region where it holds satellites, as for Earth): a real flyby, like JUICE past Earth in
- * 2024, must not count as a crash.
+ * How close two bodies' centres can come before they touch. Spaceships, spacecraft, comets and
+ * small asteroids are tiny, so they meet a body's real surface, not its enlarged drawing (which
+ * can be wider than the whole region where it holds satellites, as for Earth): a real flyby, like
+ * JUICE past Earth in 2029 or Apophis 38,000 km from Earth on 13 April 2029, must not count as a
+ * crash. Asteroids thrown in by hand (0.01 Earth masses and up) still hit at the drawn sizes.
  */
 export function contactDistance(a: Pick<Body, 'kind' | 'mass' | 'radius' | 'tag'>, b: Pick<Body, 'kind' | 'mass' | 'radius' | 'tag'>): number {
-  const tiny = (x: Pick<Body, 'tag'>) => x.tag === 'ship' || x.tag === 'probe';
-  if (!tiny(a) && !tiny(b)) return a.radius + b.radius;
-  return (tiny(a) ? 0 : physicalRadius(a.kind, a.mass)) + (tiny(b) ? 0 : physicalRadius(b.kind, b.mass));
+  const craft = (x: Pick<Body, 'tag'>) => x.tag === 'ship' || x.tag === 'probe';
+  const small = (x: Pick<Body, 'kind' | 'mass' | 'tag'>) => craft(x) || x.tag === 'comet' || (x.kind === 'rocky' && x.mass < SMALL_BODY_MASS);
+  if (!small(a) && !small(b)) return a.radius + b.radius;
+  return (craft(a) ? 0 : physicalRadius(a.kind, a.mass)) + (craft(b) ? 0 : physicalRadius(b.kind, b.mass));
 }
 
 /** Main-sequence lifetime in years: ~10 Gyr for the Sun, much shorter for massive stars. */

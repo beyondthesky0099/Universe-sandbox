@@ -162,6 +162,9 @@ Each takes a minute or two. Use 🔍 search to find the names.
 - **Fly a spaceship** to Mars (select Earth, then Create pane → 🚀 Fly a spaceship, and set the
   autopilot to Mars).
 - **Turn on Real sizes** (Physics pane) to see how empty the Solar System really is.
+- **Zoom right out** from the Solar System: past the planets you meet the heliopause (the edge of
+  the Sun's wind, about 120 AU, where the Voyagers are now), then the Oort cloud of comets from
+  2,000 to 100,000 AU, a quarter of the way to the nearest star.
 
 **Break things**
 - **Giant Impact:** a Mars-sized body hits the young Earth.

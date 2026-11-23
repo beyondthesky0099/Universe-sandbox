@@ -851,7 +851,8 @@ export class App {
   }
 
   get exitDistance(): number {
-    return Math.max(AUTO_EXIT_DISTANCE, this.sceneScale * 12);
+    // The real Solar System: far enough out to see the whole Oort cloud (to ~100,000 AU) from outside.
+    return Math.max(AUTO_EXIT_DISTANCE, this.sceneScale * 12, this.system.showsOortCloud ? 250000 : 0);
   }
 
   resetPhysicsDefaults(): void {

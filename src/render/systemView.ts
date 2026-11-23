@@ -25,6 +25,7 @@ import { DISK_LAYER } from './accretionDisk';
 import { Lander } from './lander';
 import { SNOW_LINE_AU } from '../sim/planetFormation';
 import { getSolarData } from '../sim/solarSystemData';
+import { OuterSolarSystem } from './outerSolarSystem';
 
 const MAX_LIGHTS = 4;
 const MAX_HZ = 4;
@@ -239,6 +240,7 @@ export class SystemView {
     this.gasDisc.visible = false;
     this.gasDisc.renderOrder = -1;
     this.scene.add(this.gasDisc);
+    this.scene.add(this.outerSolarSystem.group);
   }
 
   private readonly snowLine = new THREE.Mesh(
@@ -251,6 +253,26 @@ export class SystemView {
     new THREE.RingGeometry(0.3, 12, 160, 16),
     new THREE.MeshBasicMaterial({ map: gasDiscTexture(), color: 0xd8a070, transparent: true, opacity: 0.5, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending }),
   );
+
+  /** The heliopause and the Oort cloud (outerSolarSystem.ts), in the real Solar System scenes only. */
+  private readonly outerSolarSystem = new OuterSolarSystem();
+  private solarSun?: Body;
+
+  /** True while the Oort cloud is drawn: the app lets the camera go out far enough to see all of it. */
+  get showsOortCloud(): boolean {
+    return this.solarSun !== undefined;
+  }
+
+  private updateOuterSolarSystem(): void {
+    if (this.frame % 30 === 0 || (this.solarSun && !this.sim.getBody(this.solarSun.id))) {
+      const sun = this.sim.units === 'au-yr' ? this.sim.bodies.find((b) => b.name === 'Sun' && b.kind === 'star') : undefined;
+      this.solarSun = sun && this.sim.bodies.some((b) => b.name === 'Neptune') ? sun : undefined;
+      this.controls.maxDistance = Math.max(this.controls.maxDistance, this.solarSun ? 3e5 : 0);
+    }
+    const sun = this.solarSun ? this.sim.getBody(this.solarSun.id) : undefined;
+    const d = sun ? this.camera.position.distanceTo(new THREE.Vector3(sun.x, sun.y, sun.z)) : 0;
+    this.outerSolarSystem.update(this.lander.active ? undefined : sun, d);
+  }
 
   /** Show the snow line and the gas disc while a young star still has its gas. */
   private updateSnowLine(): void {
@@ -749,6 +771,7 @@ export class SystemView {
     this.updateBodyPoints();
     this.updateHabitableZones();
     this.updateSnowLine();
+    this.updateOuterSolarSystem();
     this.updateOrbitLine();
     this.updateShockwaves();
     this.updateLagrange();

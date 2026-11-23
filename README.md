@@ -163,6 +163,16 @@ important ones stay and the rest fade out until you zoom in and there's room for
     famous comets (Halley, Encke, 67P, Hale–Bopp) come from **JPL Horizons**.
   - The **4,000 brightest real asteroids, Jupiter Trojans, Centaurs and Kuiper belt objects**
     come from the **JPL Small-Body Database**. They replace the illustrative belt.
+  - **The edge of the Solar System**, shown as you zoom out (drawn, not simulated):
+    - the **heliopause** at about 120 AU, where the Sun's wind meets interstellar gas. Voyager 1
+      crossed it at 121.6 AU in 2012 and Voyager 2 at 119 AU in 2018. It is blunt towards the
+      interstellar wind (from ecliptic longitude 255°) and trails a tail; the shape is a sketch;
+    - the **Oort cloud**: the inner (Hills) cloud from 2,000 to 20,000 AU, thicker towards the
+      ecliptic, and the outer cloud out to about 100,000 AU. It has never been seen directly
+      (it is inferred from long-period comets), so its points are illustrative. In the Solar
+      System you can zoom out to 250,000 AU to see all of it before the Galaxy map takes over.
+  - Comets and small asteroids meet planets at their real sizes, so real close passes (Apophis
+    in April 2029, a spacecraft's flyby) don't count as collisions with the enlarged drawings.
   - Masses, radii, rotation periods and axial tilts are real. Planets are drawn with their real
     spin axes from the IAU (Uranus on its side, Venus upside down), and Saturn's rings lie in its
     true equatorial plane.

@@ -66,8 +66,11 @@ describe('spacecraft touch real surfaces only', () => {
     // 0.02 AU drawn, but contact at Earth's real radius (about 6,400 km).
     expect(contactDistance(earth, probe) * 1.496e8).toBeCloseTo(physicalRadius('rocky', EARTH_MASS) * 1.496e8, 6);
     expect(contactDistance(earth, probe) * 1.496e8).toBeLessThan(7000);
-    // Two ordinary bodies still touch at their drawn radii.
-    expect(contactDistance(earth, { ...probe, tag: undefined })).toBeCloseTo(0.021, 12);
+    // Two ordinary bodies (a thrown-in asteroid of 0.01 Earth masses) still touch at their drawn radii.
+    expect(contactDistance(earth, { ...probe, mass: 0.01 * EARTH_MASS, tag: undefined })).toBeCloseTo(0.021, 12);
+    // A small real asteroid or a comet meets the real surface too.
+    expect(contactDistance(earth, { ...probe, tag: undefined }) * 1.496e8).toBeLessThan(7000);
+    expect(contactDistance(earth, { ...probe, mass: 1e-12, tag: 'comet' }) * 1.496e8).toBeLessThan(7000);
   });
 
   it('flies JUICE past Earth in January 2029 without a crash', () => {
@@ -88,5 +91,28 @@ describe('spacecraft touch real surfaces only', () => {
     expect(juice()).toBeDefined();
     // It really does pass close: well inside the Moon's orbit's scale, a few Earth radii up.
     expect(closest).toBeLessThan(0.01);
+  }, 120_000);
+
+  it('passes Apophis by Earth on 13 April 2029 without a crash', () => {
+    const sim = new Simulation();
+    loadSolarSystemOnDate(sim, new Date('2029-03-01T00:00:00Z'));
+    sim.particles.clear();
+    const apophis = () => sim.bodies.find((b) => b.name === 'Apophis');
+    const earth = () => sim.bodies.find((b) => b.name === 'Earth')!;
+    expect(apophis()).toBeDefined();
+    let closest = Infinity;
+    // To late May 2029, past the flyby.
+    for (let t = 0; t < 0.24; t += 0.0002) {
+      sim.advance(0.0002, 100000, 1e9);
+      const a = apophis();
+      if (!a) break;
+      closest = Math.min(closest, Math.hypot(a.x - earth().x, a.y - earth().y, a.z - earth().z));
+    }
+    expect(apophis()).toBeDefined();
+    // JPL: 38,000 km from Earth's centre. This scene starts Apophis from catalogue elements a month
+    // out and gets about 290,000 km; the Events pane's flyby (flybys.json) follows JPL's path exactly.
+    // Either way, a close pass inside the Moon's orbit, not a collision.
+    expect(closest * 1.496e8).toBeLessThan(384400);
+    expect(closest * 1.496e8).toBeGreaterThan(6371);
   }, 120_000);
 });

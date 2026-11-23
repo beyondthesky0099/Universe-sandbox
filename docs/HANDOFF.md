@@ -208,6 +208,29 @@ Plan, in priority order:
 - BodyVisual adds it in applyDetail and updates it only when the planet is more than 14 px across
   and a star is present. Tests: tests/aurora.test.ts.
 
+### BA. The edge of the Solar System; small bodies touch real surfaces
+- [x] src/render/outerSolarSystem.ts (render only): the heliopause (a rim-lit stretched shell,
+  nose at 120 AU towards ecliptic longitude 255.4°, latitude 5.2° (IBEX), tail 3× longer) and the
+  Oort cloud (18,000 points, seed 1950: Hills cloud 2,000–20,000 AU with n ∝ r^−2.5, squashed
+  towards the ecliptic; outer cloud 20,000–100,000 AU, n ∝ r^−3.5, spherical), with labels.
+  Each fades in with the camera's distance from the Sun. systemView shows it when the scene is
+  au-yr with a Sun and a Neptune (`showsOortCloud`), raises `controls.maxDistance` to 3 × 10⁵, and
+  the app's `exitDistance` to 250,000 AU so the whole cloud can be seen before the Galaxy map.
+- [x] body.ts `contactDistance`: comets and rocky bodies under `SMALL_BODY_MASS` (10⁻⁹ M☉, about
+  Ceres) meet others at real radii, like spacecraft. Apophis "collided with Earth" in April 2029
+  in the Solar System scene (Earth is drawn 0.02 AU wide); now it passes (about 290,000 km here,
+  from catalogue elements; the Events flyby follows JPL's path to 38,000 km). Test in
+  spacecraft.test.ts.
+
+### AZ. AGN torus without box edges; labels that don't pile up
+- [x] agn.ts: the torus is ray-marched inside a bounding box, but its density (exp(−(r−1)/2.2),
+  flared upward) never reached zero before the box's walls, so the dust stopped there and the box
+  showed: a square from above, a rectangle side on (phone screenshots of TON 618). The density
+  now fades out over an ellipsoid at 55–92% of the box's half-sizes.
+- [x] systemView.ts `declutterLabels`: labels whose (estimated) screen rectangles overlap keep
+  only the most important one (selected or followed, then by mass): 16 "Nuclear star" names no
+  longer pile up on TON 618.
+
 ### AY. Black-hole shadows stay black (phones)
 - [x] postfx.ts: the bloom ran after the lens pass, so the disc's glow (the brightest thing on
   screen, right at the shadow's edge) filled the shadow with grey. On phones (smaller render, wider

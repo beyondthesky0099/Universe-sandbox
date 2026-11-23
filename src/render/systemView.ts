@@ -25,6 +25,7 @@ import { DISK_LAYER } from './accretionDisk';
 import { Lander } from './lander';
 import { SNOW_LINE_AU } from '../sim/planetFormation';
 import { getSolarData } from '../sim/solarSystemData';
+import { OuterSolarSystem } from './outerSolarSystem';
 
 const MAX_LIGHTS = 4;
 const MAX_HZ = 4;
@@ -239,6 +240,7 @@ export class SystemView {
     this.gasDisc.visible = false;
     this.gasDisc.renderOrder = -1;
     this.scene.add(this.gasDisc);
+    this.scene.add(this.outerSolarSystem.group);
   }
 
   private readonly snowLine = new THREE.Mesh(
@@ -251,6 +253,26 @@ export class SystemView {
     new THREE.RingGeometry(0.3, 12, 160, 16),
     new THREE.MeshBasicMaterial({ map: gasDiscTexture(), color: 0xd8a070, transparent: true, opacity: 0.5, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending }),
   );
+
+  /** The heliopause and the Oort cloud (outerSolarSystem.ts), in the real Solar System scenes only. */
+  private readonly outerSolarSystem = new OuterSolarSystem();
+  private solarSun?: Body;
+
+  /** True while the Oort cloud is drawn: the app lets the camera go out far enough to see all of it. */
+  get showsOortCloud(): boolean {
+    return this.solarSun !== undefined;
+  }
+
+  private updateOuterSolarSystem(): void {
+    if (this.frame % 30 === 0 || (this.solarSun && !this.sim.getBody(this.solarSun.id))) {
+      const sun = this.sim.units === 'au-yr' ? this.sim.bodies.find((b) => b.name === 'Sun' && b.kind === 'star') : undefined;
+      this.solarSun = sun && this.sim.bodies.some((b) => b.name === 'Neptune') ? sun : undefined;
+      this.controls.maxDistance = Math.max(this.controls.maxDistance, this.solarSun ? 3e5 : 0);
+    }
+    const sun = this.solarSun ? this.sim.getBody(this.solarSun.id) : undefined;
+    const d = sun ? this.camera.position.distanceTo(new THREE.Vector3(sun.x, sun.y, sun.z)) : 0;
+    this.outerSolarSystem.update(this.lander.active ? undefined : sun, d);
+  }
 
   /** Show the snow line and the gas disc while a young star still has its gas. */
   private updateSnowLine(): void {
@@ -742,12 +764,14 @@ export class SystemView {
     }
     // At most one expensive texture build per frame, largest on-screen planet first.
     if (detailCandidate) detailCandidate.v.applyDetail(detailCandidate.b, this.quality.textureWidth);
+    if (this.labelsEnabled) this.declutterLabels(viewportHeight);
 
     this.updateLights();
     this.updateParticles();
     this.updateBodyPoints();
     this.updateHabitableZones();
     this.updateSnowLine();
+    this.updateOuterSolarSystem();
     this.updateOrbitLine();
     this.updateShockwaves();
     this.updateLagrange();
@@ -814,6 +838,34 @@ export class SystemView {
       }
       r.mesh.scale.setScalar(r.size * (0.1 + t * 3));
       (r.mesh.material as THREE.MeshBasicMaterial).opacity = 0.6 * (1 - t);
+    }
+  }
+
+  /**
+   * Labels that would overlap on screen: keep the most important (selected or followed, then the
+   * heaviest) and hide the rest, so a cluster of stars around a black hole doesn't pile its names
+   * on top of each other. Label sizes are estimated from the text (no layout reads).
+   */
+  private declutterLabels(viewportHeight: number): void {
+    const w = viewportHeight * this.camera.aspect;
+    const shown: { b: Body; v: BodyVisual; x: number; y: number }[] = [];
+    const p = new THREE.Vector3();
+    for (const b of this.sim.bodies) {
+      const v = this.visuals.get(b.id);
+      if (!v?.label.visible) continue;
+      p.set(b.x, b.y, b.z).project(this.camera);
+      if (p.z > 1) continue;
+      shown.push({ b, v, x: ((p.x + 1) / 2) * w, y: ((1 - p.y) / 2) * viewportHeight });
+    }
+    if (shown.length < 2) return;
+    const rank = (b: Body) => (b.id === this.selectedId || b.id === this.followId ? Infinity : b.mass);
+    shown.sort((a, b) => rank(b.b) - rank(a.b));
+    const kept: [number, number, number, number][] = [];
+    for (const s of shown) {
+      const text = s.v.label.element.textContent ?? '';
+      const r: [number, number, number, number] = [s.x - 4, s.y - 11, s.x + 12 + text.length * 7.5, s.y + 11];
+      if (kept.some((k) => r[0] < k[2] && r[2] > k[0] && r[1] < k[3] && r[3] > k[1])) s.v.label.visible = false;
+      else kept.push(r);
     }
   }
 

@@ -47,7 +47,11 @@ const TORUS_FRAGMENT = /* glsl */ `
     // Flared: the dust fills the region below the clear cone, with a soft edge.
     float top = (r + 0.15) / uTanOpen * 0.85;
     float vertical = 1.0 - smoothstep(top * 0.75, top * 1.1, h);
-    float d = radial * vertical;
+    // Fade to nothing well inside the bounding box the ray march runs in: the dust ran on to the
+    // box's walls and showed its straight edges (a square seen from above, a rectangle side on).
+    vec3 b = uBox / uInner;
+    float shell = length(vec3(p.xy / b.xy, p.z / b.z));
+    float d = radial * vertical * (1.0 - smoothstep(0.55, 0.92, shell));
     if (d < 0.002) return 0.0;
     // Clumps, at two scales, slowly drifting.
     float ang = atan(p.y, p.x);

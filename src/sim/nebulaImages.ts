@@ -21,6 +21,13 @@ export interface NebulaImage {
   tile: number;
   /** Named nebulae: a 512-pixel picture of it alone (path under data/), loaded up close. */
   hd?: string;
+  /**
+   * The best-known nebulae: an observatory photograph (ESO, NASA/ESA Hubble, NASA/ESA/CSA Webb,
+   * NOIRLab; CC BY 4.0) reprojected into the same frame and field as `hd`, 1024 pixels
+   * (scripts/build-nebula-photos.mjs). Preferred to `hd` up close; its credit must be shown.
+   */
+  photo?: string;
+  photoCredit?: string;
   /** Which plates it was made from (DSS2, DSS2 Red + DSS1 Blue, DSS2 Red + SERC-J Blue, Mellinger). */
   source: string;
 }

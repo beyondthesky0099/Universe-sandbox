@@ -294,11 +294,14 @@ export class App {
     this.host = new SimHost(params.get('worker') !== '0', params.has('threads') ? Number(params.get('threads')) : -1);
     this.system = new SystemView(this.sim, this.canvas, QUALITY_PRESETS[this.quality]);
     this.galaxy = new GalaxyView(this.canvas);
-    // Phones: one 3D nebula at a time, with fewer particles.
-    if (LOW_POWER) {
-      this.galaxy.volumeBudget = { max: 1, steps: 32 };
-      this.galaxy.hdPhotos = false;
-    }
+    // Phones: one 3D nebula at a time, with fewer steps. Its sharp picture still loads (one
+    // file of 100–400 KB, only when flying up to it).
+    if (LOW_POWER) this.galaxy.volumeBudget = { max: 1, steps: 32 };
+    this.galaxy.onPhotoCredit = (credit) => {
+      const el = $('nebula-credit');
+      el.textContent = credit ? `Photo: ${credit} (CC BY 4.0)` : '';
+      el.classList.toggle('hidden', !credit || this.view !== 'galaxy');
+    };
     this.cosmos = new CosmosView(this.canvas);
     this.sky = new SkyView(this.canvas);
     this.tutorial = new Tutorial(this.tutorialUI.tutorialSteps(), (target) => this.layoutUI.reveal(target));
@@ -699,6 +702,7 @@ export class App {
       else if (el.id === 'cosmos-galaxy-panel') el.classList.toggle('hidden', !match || this.cosmos.selected === -1);
       else if (el.id === 'exo-panel') el.classList.toggle('hidden', !match || !this.exoOpen);
       else if (el.id === 'graph-panel') el.classList.toggle('hidden', !match || !this.graphOpen);
+      else if (el.id === 'nebula-credit') el.classList.toggle('hidden', !match || !el.textContent);
       else if (el.id === 'body-panel') el.classList.toggle('hidden', !match || this.system.selectedId === undefined);
       else el.classList.toggle('hidden', !match);
     });

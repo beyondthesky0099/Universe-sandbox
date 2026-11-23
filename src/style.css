@@ -1716,6 +1716,13 @@ body:not(.can-point) .sky-point {
   pointer-events: none;
   z-index: 5;
 }
+/* Phones: above the bottom bar. */
+@media (max-width: 760px) {
+  .nebula-credit {
+    bottom: calc(76px + env(safe-area-inset-bottom));
+    font-size: 10px;
+  }
+}
 #sky-aim .aim-ring {
   position: absolute;
   left: 50%;
@@ -2171,4 +2178,27 @@ a {
 /* Rows of many small buttons (the cosmic-history epochs). */
 .row.wrap {
   flex-wrap: wrap;
+}
+
+/* Credit for the observatory photograph a nebula is drawn from, while it fills the view. */
+.nebula-credit {
+  position: fixed;
+  left: 50%;
+  bottom: calc(14px + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  max-width: min(640px, 92vw);
+  margin: 0;
+  font-size: 11px;
+  text-align: center;
+  color: rgba(220, 228, 245, 0.75);
+  text-shadow: 0 1px 3px #000;
+  pointer-events: none;
+  z-index: 5;
+}
+/* Phones: above the bottom bar. */
+@media (max-width: 760px) {
+  .nebula-credit {
+    bottom: calc(76px + env(safe-area-inset-bottom));
+    font-size: 10px;
+  }
 }

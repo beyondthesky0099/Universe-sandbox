@@ -55,6 +55,7 @@ const DUST_FRAGMENT = /* glsl */ `
 
 /** Opacity of the procedural star layer (faded while a nebula volume is in view: updateVolumes). */
 const STAR_OPACITY = 0.75;
+const GLOW_OPACITY = 0.06;
 
 function pointsMaterial(opacity: number, maxSize: number, fragment = FRAGMENT, additive = true): THREE.ShaderMaterial {
   return new THREE.ShaderMaterial({
@@ -115,6 +116,14 @@ export interface ExoMarker {
   temperate: boolean;
 }
 
+/**
+ * Light of a volume drawn from an observatory photograph, relative to one drawn from the survey
+ * plates. The volume's brightness was set for the plates (sky-subtracted, gently stretched);
+ * observatory photographs are stretched for display, with the nebula near full scale, and at the
+ * same setting a bright one (the Eagle, the Lagoon) burns out to white.
+ */
+const OBSERVATORY_PHOTO_GAIN = 0.7;
+
 /** A nebula that becomes a ray-marched volume up close (see setCloudLayer). */
 export interface VolumeItem {
   center: [number, number, number];
@@ -127,6 +136,8 @@ export interface VolumeItem {
   backlitOnly?: boolean;
   /** Planetary nebulae: draw the central star. */
   centralStar?: boolean;
+  /** Who took the photograph it is drawn from up close (shown while it fills the view). */
+  credit?: string;
   axes?: { right: [number, number, number]; up: [number, number, number]; forward: [number, number, number] };
   /** The flat clouds standing for it from afar ([set index, cloud index]), faded out as the volume fades in. */
   fade: [number, number][];
@@ -235,7 +246,10 @@ export class GalaxyView {
   /** Real nebulae drawn as clouds at their true size (Milky Way only), with labels. */
   private readonly cloudLayers = new Map<string, { clouds: NebulaClouds[]; labels: THREE.Group; on: boolean }>();
   /** Nebulae that become ray-marched volumes up close (nebulaRaymarch.ts), and those built so far. */
-  private volumeItems: { key: string; spec: NebulaVolumeSpec; fade: [NebulaClouds, number][] }[] = [];
+  private volumeItems: { key: string; spec: NebulaVolumeSpec; fade: [NebulaClouds, number][]; credit?: string }[] = [];
+  /** Called with the photo credit of the nebula filling the view (undefined when none does). */
+  onPhotoCredit?: (credit: string | undefined) => void;
+  private shownCredit?: string;
   private readonly volumes = new Map<string, NebulaRaymarch>();
   private volumeTimer = 0;
   /** How many volumes at once, and ray-march steps per pixel. */
@@ -352,7 +366,7 @@ export class GalaxyView {
     this.solMarker.visible = this.showSol;
     this.setExoHosts([]); // the app adds real hosts for the Milky Way
     const { stars, glow, dust, nebulae } = this.data;
-    this.glow = pointCloud(glow.positions, glow.colors, glow.sizes, pointsMaterial(0.06, 36));
+    this.glow = pointCloud(glow.positions, glow.colors, glow.sizes, pointsMaterial(GLOW_OPACITY, 36));
     this.dust = pointCloud(dust.positions, undefined, dust.sizes, pointsMaterial(0.22, 60, DUST_FRAGMENT, false));
     this.stars = pointCloud(stars.positions, stars.colors, stars.sizes, pointsMaterial(STAR_OPACITY, 18));
     this.originalColors = stars.colors.slice();
@@ -711,8 +725,9 @@ export class GalaxyView {
       const atlas = v.photo ? sets[v.photo.set]?.atlas : undefined;
       this.volumeItems.push({
         key: `${key}:${i}`,
-        spec: { center: v.center, radius: v.radius, shape: v.shape, seed: v.seed, axes: v.axes, photo: v.photo && atlas ? { atlas, rect: v.photo.rect, hdUrl: v.photo.hdUrl } : undefined, backlitOnly: v.backlitOnly, centralStar: v.centralStar },
+        spec: { center: v.center, radius: v.radius, shape: v.shape, seed: v.seed, axes: v.axes, photo: v.photo && atlas ? { atlas, rect: v.photo.rect, hdUrl: v.photo.hdUrl, gain: v.credit ? OBSERVATORY_PHOTO_GAIN : 1 } : undefined, backlitOnly: v.backlitOnly, centralStar: v.centralStar },
         fade: v.fade.flatMap(([si, ci]): [NebulaClouds, number][] => (layerOf[si] ? [[layerOf[si]!, ci]] : [])),
+        credit: v.credit,
       });
     });
   }
@@ -863,18 +878,32 @@ export class GalaxyView {
           .slice(0, this.volumeBudget.max)
       : [];
     const active = new Set(near.map((x) => x.c.key));
+    // While a nebula's volume fills the view, fade the procedural stand-in stars (each a whole
+    // system, drawn at a minimum size): near the plane they pile up into a white wall in front of
+    // it. The real Gaia stars stay. The other nebulae's flat clouds dim too: towards the inner
+    // Galaxy (the Eagle, the Lagoon) dozens of them lie along the same line of sight, and added
+    // up they wash the one you came to see out to white.
+    let focus = 0;
+    for (const { d } of near) focus = Math.max(focus, THREE.MathUtils.smoothstep(10 - d, 0, 5));
+    const others = 1 - 0.9 * focus;
     for (const c of this.volumeItems) {
       if (active.has(c.key)) continue;
       const v = this.volumes.get(c.key);
       if (v) v.opacity = 0;
-      for (const [layer, i] of c.fade) layer.setFade(i, 1);
+      for (const [layer, i] of c.fade) layer.setFade(i, others);
     }
-    // While a nebula's volume fills the view, fade the procedural stand-in stars (each a whole
-    // system, drawn at a minimum size): near the plane they pile up into a white wall in front of
-    // it. The real Gaia stars stay.
-    let focus = 0;
-    for (const { d } of near) focus = Math.max(focus, THREE.MathUtils.smoothstep(10 - d, 0, 5));
-    if (this.stars) (this.stars.material as THREE.ShaderMaterial).uniforms.uOpacity.value = STAR_OPACITY * (1 - 0.85 * focus);
+    if (this.stars) (this.stars.material as THREE.ShaderMaterial).uniforms.uOpacity.value = STAR_OPACITY * (1 - 0.97 * focus);
+    // The same for the disc's diffuse glow and its stand-in nebulae: towards the inner Galaxy (the
+    // Eagle, the Lagoon) the whole bright disc lies right behind the nebula you came to see.
+    if (this.glow) (this.glow.material as THREE.ShaderMaterial).uniforms.uOpacity.value = GLOW_OPACITY * (1 - 0.8 * focus);
+    // A cluster's swarm of stars inside a photographed nebula (NGC 6611 in the Eagle) is already in
+    // the photograph; drawn on top as well it piles up into a white knot.
+    if (this.swarms) (this.swarms.material as THREE.ShaderMaterial).uniforms.uOpacity.value = 1 - 0.8 * focus;
+    for (const child of this.nebulaGroup.children) {
+      const m = (child as THREE.Sprite).material as THREE.SpriteMaterial;
+      m.userData.opacity ??= m.opacity;
+      m.opacity = (m.userData.opacity as number) * (1 - 0.8 * focus);
+    }
     for (const { c, d } of near) {
       let v = this.volumes.get(c.key);
       if (!v) {
@@ -905,6 +934,11 @@ export class GalaxyView {
       const fade = THREE.MathUtils.smoothstep(10 - d, 0, 5);
       v.opacity = fade;
       for (const [layer, i] of c.fade) layer.setFade(i, 1 - fade);
+    }
+    const credit = near.find(({ c, d }) => c.credit && d < 7)?.c.credit;
+    if (credit !== this.shownCredit) {
+      this.shownCredit = credit;
+      this.onPhotoCredit?.(credit);
     }
   }
 

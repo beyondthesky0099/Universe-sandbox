@@ -305,12 +305,16 @@ export class GalaxyMapUI {
         // Up close it becomes a volume that looks like the photograph from Earth's direction.
         // A nebula only a few dozen pixels across in its picture is a burnt-out blob; up close it
         // becomes its modelled shape instead. A named nebula's own 512-pixel picture (desktop) is
-        // four times sharper than its atlas tile, so far fewer are too small.
-        const hdUrl = image.hd && !LOW_POWER ? nebulaHdUrl(image.hd) : undefined;
-        const pixelsAcross = ((hdUrl ? 512 : page.tile) * size * 1.3) / fieldSize;
+        // four times sharper than its atlas tile, so far fewer are too small; the best-known ones
+        // have an observatory photograph (1024 pixels), sharper still. Phones load them too: one
+        // file, only when flying up to it.
+        const sharp = image.photo ?? image.hd;
+        const hdUrl = sharp ? nebulaHdUrl(sharp) : undefined;
+        const pixelsAcross = ((image.photo ? 1024 : hdUrl ? 512 : page.tile) * size * 1.3) / fieldSize;
         // A planetary nebula under 1.5′ in radius (the Ring, the Cat's Eye) burns out the plate to
-        // a white disc: its modelled shell ([O III] inside, an Hα rim, the white dwarf) is truer.
-        const tiny = pixelsAcross < 80 || (n.kind === 'pn' && n.radiusDeg < 0.025);
+        // a white disc: without a photograph, its modelled shell ([O III] inside, an Hα rim, the
+        // white dwarf) is truer.
+        const tiny = !image.photo && (pixelsAcross < 80 || (n.kind === 'pn' && n.radiusDeg < 0.025));
         volumes.push({
           center: pos,
           radius: tiny ? size * 0.6 : photoSize / 2,
@@ -320,6 +324,7 @@ export class GalaxyMapUI {
           axes: pictureAxes(n.l, n.b, n.distanceKpc!),
           centralStar: n.kind === 'pn',
           fade: [[2 + image.page, perPage[image.page].length], [1, glow.length]],
+          credit: image.photo ? image.photoCredit : undefined,
         });
         perPage[image.page].push({ pos, size: photoSize, color, tile: rect, minPx: named ? 40 : 14, brightness: 1.1, rotation: 0, puff: 0 });
         glow.push({ pos, size: size * 1.6, color, minPx: named ? 50 : 18, brightness: 0.3, rotation: k, puff: k });
@@ -338,7 +343,8 @@ export class GalaxyMapUI {
           radius: darkImage ? Math.max(size * 0.6, darkField / 2) : size * 0.6,
           shape: n.kind,
           seed: k,
-          photo: darkImage && darkPage ? { set: 2 + darkImage.page, rect: tileRect(darkPage, darkImage.tile), hdUrl: darkImage.hd && !LOW_POWER ? nebulaHdUrl(darkImage.hd) : undefined } : undefined,
+          photo: darkImage && darkPage ? { set: 2 + darkImage.page, rect: tileRect(darkPage, darkImage.tile), hdUrl: darkImage.photo || darkImage.hd ? nebulaHdUrl((darkImage.photo ?? darkImage.hd)!) : undefined } : undefined,
+          credit: darkImage?.photo ? darkImage.photoCredit : undefined,
           backlitOnly: !!darkImage,
           axes: darkImage ? pictureAxes(n.l, n.b, n.distanceKpc!) : undefined,
           centralStar: n.kind === 'pn',

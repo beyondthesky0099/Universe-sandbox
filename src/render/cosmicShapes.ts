@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { equatorialToGalactic } from '../procgen/galaxy';
 import { galacticToCosmos } from '../sim/galaxies';
 import { comovingDistance } from '../sim/cosmology';
+import { ConvexGeometry } from 'three/addons/geometries/ConvexGeometry.js';
 import { textSprite } from './galaxyView';
 import { greatWallCount, HCB, inGreatWall, type Grb } from '../sim/grbs';
 
@@ -23,7 +24,10 @@ import { greatWallCount, HCB, inGreatWall, type Grb } from '../sim/grbs';
  * chance alignments. The labels say "claimed".
  * - The Hercules–Corona Borealis Great Wall (claimed; sim/grbs.ts): the region where Horváth et al.
  *   found an excess of gamma-ray bursts, 45° around RA 255°, Dec +27.75°, between redshift 1.6
- *   and 2.1, outlined; and every burst with a measured redshift, the Wall's in gold.
+ *   and 2.1, outlined; and every burst with a measured redshift, the Wall's in gold. No survey maps
+ *   its galaxies (it is ~10 billion light-years away): its only tracers are those bursts, so its
+ *   shape is drawn from them, joined by their minimum spanning tree and wrapped in their convex
+ *   hull, with the largest distance between two of them.
  */
 function eq(raDeg: number, decDeg: number, dMpc: number): THREE.Vector3 {
   const [l, b] = equatorialToGalactic(raDeg, decDeg);
@@ -171,9 +175,10 @@ export class CosmicShapes {
       };
       const [d0, d1] = [comovingDistance(HCB.zMin), comovingDistance(HCB.zMax)];
       const inner = rim(d0), outer = rim(d1);
-      this.add(glowLine(inner, 0xffb347), 2000, 40000, 0.6);
-      this.add(glowLine(outer, 0xffb347), 2000, 40000, 0.6);
-      for (let k = 0; k < 96; k += 12) this.add(glowLine([inner[k], outer[k]], 0xffb347), 2000, 40000, 0.4);
+      // The region searched (faint): the structure itself is drawn from its bursts (addWallShape).
+      this.add(glowLine(inner, 0xffb347), 2000, 40000, 0.25);
+      this.add(glowLine(outer, 0xffb347), 2000, 40000, 0.25);
+      for (let k = 0; k < 96; k += 12) this.add(glowLine([inner[k], outer[k]], 0xffb347), 2000, 40000, 0.15);
     }
   }
 
@@ -192,7 +197,9 @@ export class CosmicShapes {
       return pts;
     };
     this.grbLayer = new THREE.Group();
-    this.grbLayer.add(points(bursts.filter((b) => !inGreatWall(b)), 0xff7a45, 3), points(bursts.filter(inGreatWall), 0xffd36b, 6));
+    const wall = bursts.filter(inGreatWall);
+    this.grbLayer.add(points(bursts.filter((b) => !inGreatWall(b)), 0xff7a45, 3), points(wall, 0xffd36b, 7));
+    this.addWallShape(wall.map(at));
     const now = greatWallCount(bursts);
     const then = greatWallCount(bursts, 2012);
     // The evidence, in two lines: bursts at redshift 1.6–2.1 in the region against chance.
@@ -207,6 +214,70 @@ export class CosmicShapes {
     });
     this.grbLayer.visible = this.grbsOn;
     this.group.add(this.grbLayer);
+  }
+
+  /** The Wall as its bursts trace it: their minimum spanning tree, convex hull and largest span. */
+  private addWallShape(p: THREE.Vector3[]): void {
+    if (p.length < 4 || !this.grbLayer) return;
+    // Prim's minimum spanning tree: the shortest set of links joining every burst.
+    const inTree = [0];
+    const links: THREE.Vector3[] = [];
+    while (inTree.length < p.length) {
+      let best = Infinity, from = -1, to = -1;
+      for (const i of inTree)
+        for (let j = 0; j < p.length; j++) {
+          if (inTree.includes(j)) continue;
+          const d = p[i].distanceTo(p[j]);
+          if (d < best) [best, from, to] = [d, i, j];
+        }
+      links.push(p[from], p[to]);
+      inTree.push(to);
+    }
+    const tree = new THREE.LineSegments(
+      new THREE.BufferGeometry().setFromPoints(links),
+      new THREE.LineBasicMaterial({ color: 0xffd36b, transparent: true, opacity: 0.55, depthWrite: false, blending: THREE.AdditiveBlending }),
+    );
+    tree.frustumCulled = false;
+    // Its skin: the convex hull of the bursts, faintly gold, brighter at its edges.
+    const skin = new THREE.Mesh(
+      new ConvexGeometry(p),
+      new THREE.ShaderMaterial({
+        transparent: true,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+        blending: THREE.AdditiveBlending,
+        vertexShader: /* glsl */ `
+          #include <common>
+          #include <logdepthbuf_pars_vertex>
+          varying vec3 vN;
+          varying vec3 vView;
+          void main() {
+            vec4 mv = modelViewMatrix * vec4(position, 1.0);
+            vN = normalize(normalMatrix * normal);
+            vView = normalize(-mv.xyz);
+            gl_Position = projectionMatrix * mv;
+            #include <logdepthbuf_vertex>
+          }`,
+        fragmentShader: /* glsl */ `
+          #include <logdepthbuf_pars_fragment>
+          varying vec3 vN;
+          varying vec3 vView;
+          void main() {
+            #include <logdepthbuf_fragment>
+            float rim = pow(1.0 - abs(dot(normalize(vN), normalize(vView))), 2.0);
+            gl_FragColor = vec4(vec3(1.0, 0.78, 0.35) * (0.03 + 0.22 * rim), 1.0);
+          }`,
+      }),
+    );
+    skin.frustumCulled = false;
+    // Its size: the two bursts farthest apart.
+    let span = 0;
+    for (const a of p) for (const b of p) span = Math.max(span, a.distanceTo(b));
+    const centre = p.reduce((c, v) => c.add(v), new THREE.Vector3()).divideScalar(p.length);
+    const size = textSprite(`${p.length} bursts, ${(span * 3.2616e-3).toFixed(0)} billion ly end to end (densest part: 7–10 billion)`, '#ffe3a3', 0.65);
+    size.position.copy(centre).addScaledVector(centre.clone().normalize(), -900);
+    size.userData.priority = 880;
+    this.grbLayer.add(skin, tree, size);
   }
 
   setGrbsVisible(on: boolean): void {
@@ -233,6 +304,7 @@ export class CosmicShapes {
       const g = THREE.MathUtils.smoothstep(d0, 400, 2000);
       for (const o of this.grbLayer.children) {
         if (o instanceof THREE.Points) (o.material as THREE.PointsMaterial).opacity = 0.9 * g;
+        else if (o instanceof THREE.LineSegments) (o.material as THREE.LineBasicMaterial).opacity = 0.55 * g;
         else o.visible = g > 0.5;
       }
     }

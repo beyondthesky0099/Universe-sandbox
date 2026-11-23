@@ -193,7 +193,8 @@ Each takes a minute or two. Use 🔍 search to find the names.
 - **Gamma-ray bursts and the Hercules–Corona Borealis Great Wall:** every burst with a measured
   distance (620) is an orange point. Search "Hercules–Corona" to see the region where too many of
   them (gold) turned up at the same distance, the claimed largest structure in the universe, with
-  the counts against chance on screen. A real wall, or a fluke? Astronomers still argue.
+  the counts against chance on screen. Its shape is drawn from those bursts, its only tracers
+  (no survey can map its galaxies that far away): joined up and wrapped in a golden skin. A real wall, or a fluke? Astronomers still argue.
 
 **Break things**
 - **Giant Impact:** a Mars-sized body hits the young Earth.

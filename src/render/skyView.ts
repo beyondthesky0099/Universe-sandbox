@@ -42,6 +42,9 @@ export class SkyView {
   private readonly stars = new THREE.Group();
   private readonly starMaterials: THREE.PointsMaterial[] = [];
   private readonly starLabels: { sprite: THREE.Sprite; v: THREE.Vector3 }[] = [];
+  /** A gold ring on the thing last searched for, so it stands out among the stars. */
+  private readonly target = new THREE.Sprite(new THREE.SpriteMaterial({ map: ringTexture(), color: 0xffd27a, transparent: true, depthTest: false, depthWrite: false }));
+  private targetV?: THREE.Vector3;
   /** Outline layers of catalogued objects (nebulae, clusters), each with its labels. */
   private readonly outlineLayers = new Map<string, { points: THREE.Points; labels: { sprite: THREE.Sprite; v: THREE.Vector3 }[] }>();
   private readonly bodies = new Map<string, { dot: THREE.Sprite; label: THREE.Sprite }>();
@@ -107,6 +110,9 @@ export class SkyView {
     }
     this.stars.matrixAutoUpdate = false;
     this.scene.add(this.stars);
+    this.target.visible = false;
+    this.target.renderOrder = 10;
+    this.scene.add(this.target);
     this.moonCanvas.width = this.moonCanvas.height = 128;
     this.moonTexture = new THREE.CanvasTexture(this.moonCanvas);
     this.moonTexture.colorSpace = THREE.SRGBColorSpace;
@@ -319,6 +325,7 @@ export class SkyView {
     this.stars.matrixWorldNeedsUpdate = true;
     for (const l of this.starLabels) l.sprite.position.copy(l.v).applyMatrix4(m4).multiplyScalar(R_STARS * 0.99);
     for (const layer of this.outlineLayers.values()) for (const l of layer.labels) l.sprite.position.copy(l.v).applyMatrix4(m4).multiplyScalar(R_STARS * 0.99);
+    if (this.targetV) this.target.position.copy(this.targetV).applyMatrix4(m4).multiplyScalar(R_STARS * 0.98);
     const sun = snap.objects.find((o) => o.name === 'Sun')!;
     const sunDir = new THREE.Vector3(...altAzToScene(sun.alt, sun.az));
     // An eclipse dims the daylight (it stays bright until the Sun is nearly covered).
@@ -400,6 +407,9 @@ export class SkyView {
     // Labels keep the same size on screen whatever the zoom.
     const k = Math.tan((this.camera.fov * DEG) / 2) / Math.tan((70 * DEG) / 2);
     for (const l of this.labels) l.sprite.scale.copy(l.base).multiplyScalar(k * this.labelBoost);
+    // The target ring: about 48 px across (more for a big nebula), whatever the zoom.
+    const ringPx = Math.max(48, ((this.target.userData.radiusDeg ?? 0) * DEG * 2.4 * this.height) / (2 * Math.tan((this.camera.fov * DEG) / 2)));
+    this.target.scale.setScalar(R_STARS * 0.98 * 2 * Math.tan((this.camera.fov * DEG) / 2) * (ringPx / this.height));
     if (!this.snapshot) return;
     const pxPerRad = this.height / (2 * Math.tan((this.camera.fov * DEG) / 2));
     for (const layer of this.outlineLayers.values()) (layer.points.material as THREE.ShaderMaterial).uniforms.uPxPerRad.value = pxPerRad * this.pixelRatio;
@@ -480,6 +490,7 @@ export class SkyView {
   goToBody(name: string): number | undefined {
     const b = this.bodies.get(name);
     if (!b || !this.snapshot) return undefined;
+    this.markTarget(undefined);
     this.turnToward(b.dot.position.clone().normalize());
     return this.snapshot.objects.find((o) => o.name === name)?.alt;
   }
@@ -491,10 +502,19 @@ export class SkyView {
    */
   goToSky(v: [number, number, number], radiusDeg?: number): number | undefined {
     if (!this.snapshot) return undefined;
+    this.markTarget(v, radiusDeg);
     const m = skyMatrix(this.snapshot, this.observer);
     const d = new THREE.Vector3(...v).applyMatrix4(new THREE.Matrix4().set(m[0], m[1], m[2], 0, m[3], m[4], m[5], 0, m[6], m[7], m[8], 0, 0, 0, 0, 1)).normalize();
     this.turnToward(d, radiusDeg);
     return (Math.asin(THREE.MathUtils.clamp(d.y, -1, 1)) * 180) / Math.PI;
+  }
+
+  /** Ring a direction among the stars (ecliptic J2000 unit vector), or clear the ring. */
+  markTarget(v: [number, number, number] | undefined, radiusDeg?: number): void {
+    this.targetV = v && new THREE.Vector3(...v).normalize();
+    this.target.userData.radiusDeg = radiusDeg;
+    this.target.visible = !!v;
+    if (v && this.snapshot) this.place();
   }
 
   private turnToward(d: THREE.Vector3, radius?: number): void {
@@ -702,4 +722,21 @@ function coronaTexture(): THREE.Texture {
   coronaTex = new THREE.CanvasTexture(c);
   coronaTex.colorSpace = THREE.SRGBColorSpace;
   return coronaTex;
+}
+
+/** A thin ring with a soft edge, for the search target. */
+function ringTexture(): THREE.Texture {
+  const c = document.createElement('canvas');
+  c.width = c.height = 128;
+  const g = c.getContext('2d')!;
+  g.strokeStyle = '#fff';
+  g.lineWidth = 7;
+  g.shadowColor = 'rgba(255, 210, 122, 0.9)';
+  g.shadowBlur = 8;
+  g.beginPath();
+  g.arc(64, 64, 52, 0, Math.PI * 2);
+  g.stroke();
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
 }

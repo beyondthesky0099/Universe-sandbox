@@ -15,7 +15,7 @@ import { $, escapeHtml, toast } from '../ui/dom';
 import { CHALLENGES } from '../game/challenges';
 import { LESSONS } from '../game/lessons';
 import { SearchIndex, type SearchEntry } from '../ui/search';
-import { activityEntries, clusterEntries, compactEntries, galacticObjectEntries, pulsarEntries, exoplanetEntries, galaxyEntries, nebulaEntries, skyBodyEntries, starEntries, structureEntries } from '../ui/searchSources';
+import { activityEntries, clusterEntries, compactEntries, galacticObjectEntries, pulsarEntries, exoplanetEntries, galaxyEntries, inSkyAction, nebulaEntries, skyBodyEntries, starEntries, structureEntries } from '../ui/searchSources';
 import { kindLabel } from './shared';
 import type { App } from '../app';
 
@@ -113,7 +113,8 @@ export class SearchUI {
   /** Go to a search result: switch to the right view and fly, turn or load. */
   async goToSearchResult(r: SearchEntry): Promise<void> {
     this.closeSearch();
-    const a = r.action;
+    // In the Sky tab, a star (or nebula, cluster, pulsar) is shown where it is in the sky.
+    const a = this.app.view === 'sky' ? inSkyAction(r.action, r.kind === 'Star') : r.action;
     switch (a.type) {
       case 'map': {
         if (!this.app.galaxyBuilt || this.app.galaxySeed !== MILKY_WAY_SEED || this.app.galaxyOrigin !== 'Milky Way') this.app.galaxyMapUI.buildGalaxy(MILKY_WAY_SEED);

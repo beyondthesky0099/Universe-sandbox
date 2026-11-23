@@ -120,7 +120,10 @@ export class SearchUI {
         if (this.app.view !== 'galaxy') await this.app.switchView('galaxy');
         const size = ((a.sizePc ?? 0) / 1000) * UNITS_PER_KPC;
         // Pulsars and black holes: stop a little way off; zooming in (or Enter) opens them.
-        this.app.travelUI.goGalaxyPoint(new THREE.Vector3(...galacticToMap(a.l, a.b, a.dKpc)), a.pulsar || a.blackHole || a.object ? 1 : Math.max(0.003, size * 3), r.name);
+        const at = new THREE.Vector3(...galacticToMap(a.l, a.b, a.dKpc));
+        this.app.travelUI.goGalaxyPoint(at, a.pulsar || a.blackHole || a.object ? 1 : Math.max(0.003, size * 3), r.name);
+        // A star: ring it and name it, among all the real stars around it.
+        if (r.kind === 'Star') this.app.galaxy.pin(at, r.name);
         // A pulsar: open its panel, with the button to visit it.
         const psr = a.pulsar ? this.app.pulsarMapList.findIndex((p) => p.jname === a.pulsar) : -1;
         if (psr >= 0) this.app.galaxyMapUI.selectTarget({ psr });

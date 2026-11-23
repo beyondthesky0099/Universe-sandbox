@@ -117,6 +117,29 @@ function kindWords(kind: string): string[] {
   const extra = KIND_SYNONYMS.filter(([re]) => re.test(kind)).map(([, w]) => w);
   return [...new Set(words([kind, ...extra].join(' ')))];
 }
+/**
+ * Close enough for a typo: the same first letter and at most one edit (two for long words) by
+ * Damerau–Levenshtein ("boots" → "bootes", "corana" → "corona", "herclues" → "hercules").
+ */
+export function nearWord(q: string, w: string): boolean {
+  if (q.length < 4 || q[0] !== w[0]) return false;
+  const max = q.length >= 8 ? 2 : 1;
+  if (Math.abs(q.length - w.length) > max) return false;
+  const d: number[][] = Array.from({ length: q.length + 1 }, (_, i) => [i, ...Array(w.length).fill(0)]);
+  for (let j = 0; j <= w.length; j++) d[0][j] = j;
+  for (let i = 1; i <= q.length; i++) {
+    let rowMin = Infinity;
+    for (let j = 1; j <= w.length; j++) {
+      const cost = q[i - 1] === w[j - 1] ? 0 : 1;
+      d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + cost);
+      if (i > 1 && j > 1 && q[i - 1] === w[j - 2] && q[i - 2] === w[j - 1]) d[i][j] = Math.min(d[i][j], d[i - 2][j - 2] + 1);
+      rowMin = Math.min(rowMin, d[i][j]);
+    }
+    if (rowMin > max) return false;
+  }
+  return d[q.length][w.length] <= max;
+}
+
 /** A query word names a kind word when either starts with the other ("novae" ↔ "nova", "pulsars" ↔ "pulsar"). */
 const sameWord = (q: string, k: string) => k.startsWith(q) || (q.length >= 3 && q.startsWith(k));
 
@@ -168,6 +191,16 @@ export class SearchIndex {
       const tmp = new SearchIndex();
       tmp.add(extra);
       for (const it of tmp.items) consider(it);
+    }
+    // Few or no matches: forgive a typo in each word ("boots void", "hercules corana").
+    if (scored.length < 3 && qWords.length) {
+      const seen = new Set(scored.map((s) => s.entry));
+      const near = (w: string, it: Indexed) => it.words.some((x) => x.startsWith(w) || nearWord(w, x)) || it.kinds.some((k) => sameWord(w, k) || nearWord(w, k));
+      for (const it of this.items) {
+        if (seen.has(it.entry)) continue;
+        if (qWords.every((w) => near(w, it)) && qWords.some((w) => it.words.some((x) => x.startsWith(w) || nearWord(w, x))))
+          scored.push({ entry: it.entry, score: 120 + 1.5 * (it.entry.rank ?? 0) });
+      }
     }
     scored.sort((a, b) => b.score - a.score || a.entry.name.length - b.entry.name.length);
     return scored.slice(0, limit).map((s) => s.entry);

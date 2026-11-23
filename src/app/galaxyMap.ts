@@ -5,7 +5,10 @@ import { type GalaxyTarget, type VolumeItem } from '../render/galaxyView';
 import { equatorialToGalactic, galacticToMap, MILKY_WAY_SEED, MW_CLUSTERS, pictureAxes, UNITS_PER_KPC, type GalaxyOptions } from '../procgen/galaxy';
 import { CLUSTER_COLORS, loadClusters } from '../sim/clusters';
 import { clusterSwarms } from '../procgen/clusterStars';
-import { diameterPc, loadNebulae, NEBULA_COLORS } from '../sim/nebulae';
+import { diameterPc, eclipticToGalactic, loadNebulae, NEBULA_COLORS } from '../sim/nebulae';
+import { loadBrightStars, temperatureFromBV } from '../sim/stars';
+import { loadGalacticExtras } from '../sim/galacticExtras';
+import { kelvinToRgb } from '../sim/color';
 import { loadNebulaImages, NEBULA_IMAGE_CREDIT, nebulaAtlasUrl, nebulaHdUrl, nebulaKey, tileRect, type NebulaImageAtlas } from '../sim/nebulaImages';
 import type { Cloud } from '../render/nebulaClouds';
 import { gaiaPoints, loadGaiaBright } from '../sim/gaiaBright';
@@ -130,6 +133,7 @@ export class GalaxyMapUI {
     const all = await loadPulsars().catch(() => undefined);
     if (!all || this.app.galaxySeed !== seed) return;
     this.app.pulsarMapList = all;
+    this.app.galaxy.extras.setPulsars(all);
     this.app.galaxy.pulsarPositions = all.map((p) => {
       const [l, b] = equatorialToGalactic(p.raDeg, p.decDeg);
       return galacticToMap(l, b, p.distanceKpc);
@@ -204,6 +208,29 @@ export class GalaxyMapUI {
     this.app.galaxy.setGaiaStars(gaiaPoints(stars, galacticToMap, 0.012));
     this.app.galaxy.setGaiaVisible($<HTMLInputElement>('opt-gaia-stars').checked);
     $('galaxy-info').textContent += ` Around the Sun, ${stars.count.toLocaleString('en-US')} real stars from Gaia DR3 (every star brighter than magnitude 8 with a good parallax) sit at their measured distances.`;
+  }
+
+  /** The named bright stars (Sirius, Betelgeuse, Deneb, …) at their distances, labelled (Milky Way only). */
+  async showNamedStarsOnMap(seed: number): Promise<void> {
+    const stars = await loadBrightStars().catch(() => undefined);
+    if (!stars || this.app.galaxySeed !== seed) return;
+    this.app.galaxy.setRealLayer(
+      'named-stars',
+      stars
+        .filter((s) => s[5] && (s[6] ?? 0) > 0)
+        .map(([x, y, z, , bv, name, pc]) => {
+          const [l, b] = eclipticToGalactic([x, y, z]);
+          const ly = pc! * 3.2616;
+          return {
+            pos: galacticToMap(l, b, pc! / 1000),
+            color: kelvinToRgb(temperatureFromBV(bv)),
+            size: 0.012,
+            label: `${name} · ${ly < 100 ? ly.toFixed(1) : Math.round(ly).toLocaleString('en-US')} ly`,
+            labelColor: '#fff0c8',
+            distance: 0.02,
+          };
+        }),
+    );
   }
 
   /** Real open and globular star clusters at their measured distances (Milky Way only). */
@@ -403,6 +430,8 @@ export class GalaxyMapUI {
       void this.showPulsarsOnMap(seed);
       void this.showGalacticObjectsOnMap(seed);
       void this.showGaiaOnMap(seed);
+      void this.showNamedStarsOnMap(seed);
+      void loadGalacticExtras().then((d) => this.app.galaxy.extras.setData(d)).catch(() => undefined);
     }
     $<HTMLInputElement>('galaxy-seed').value = String(seed);
     $('star-panel').classList.add('hidden');

@@ -56,6 +56,17 @@
           <h2>The Universe</h2>
           <p class="muted" id="cosmos-info">Loading real galaxies…</p>
         </section>
+        <section data-pane="history" data-icon="⏳" data-title="History">
+          <h3>The expanding universe</h3>
+          <p class="muted small">Slide back in time and the map shrinks with the universe; forward, it keeps growing, faster and faster (Planck 2018 cosmology).</p>
+          <input id="cosmos-time" type="range" min="0" max="1000" value="900" style="width: 100%" aria-label="Time since the Big Bang" />
+          <div class="row buttons wrap" id="cosmos-epochs"></div>
+          <div class="row buttons">
+            <button id="btn-cosmos-play">▶ Play from the afterglow</button>
+            <button id="btn-cosmos-now">Back to today</button>
+          </div>
+          <p class="small" id="cosmos-time-info"></p>
+        </section>
         <section data-pane="find" data-icon="🔍" data-title="Find">
           <h3>Find a galaxy</h3>
           <input id="cosmos-search" type="search" placeholder="Andromeda, Coma Cluster, 3C 273, quasars, seyferts…" spellcheck="false" autocomplete="off" />
@@ -73,6 +84,7 @@
           <label class="check" title="Within about 10° of the Milky Way's plane its dust and stars hide the galaxies behind, so every survey has a gap there: the empty wedge you see in the cosmic web and in Laniakea's map"><input id="opt-cosmos-zoa" type="checkbox" checked /> Zone of Avoidance</label>
           <label class="check" title="The Milky Way's dark-matter halo (an NFW halo of 1.1 trillion Suns out to 217 kpc; Cautun et al. 2020) and the Bullet Cluster, where the dark matter (blue, from lensing) passed through while the hot gas (pink, X-rays) lagged behind (Clowe et al. 2006)"><input id="opt-cosmos-dark" type="checkbox" checked /> Dark matter</label>
           <label class="check" title="Every gamma-ray burst with a measured redshift (620, from J. Greiner's table) at its distance. Those at redshift 1.6–2.1 towards Hercules and Corona Borealis (gold) are the evidence for the claimed Hercules–Corona Borealis Great Wall"><input id="opt-cosmos-grbs" type="checkbox" checked /> Gamma-ray bursts</label>
+          <label class="check" title="Fast radio bursts traced to their host galaxies (32, from DSA-110: Sharma et al. 2024), at their distances: millisecond radio flashes, most likely from magnetars"><input id="opt-cosmos-frbs" type="checkbox" checked /> Fast radio bursts</label>
           <label class="check"><input id="opt-cmb" type="checkbox" checked /> Cosmic microwave background (WMAP)</label>
         </section>
         <section data-pane="help" data-icon="❔" data-title="How to">
@@ -160,6 +172,9 @@
           <label class="check" title="HII regions (pink) and planetary nebulae (teal) with measured distances, from professional catalogues"><input id="opt-real-nebulae" type="checkbox" checked /> Real nebulae</label>
           <label class="check" title="Open clusters and moving groups from Gaia (Hunt & Reffert 2023, gold) and globular clusters (Harris, orange) at their measured distances"><input id="opt-real-clusters" type="checkbox" checked /> Real star clusters</label>
           <label class="check" title="Giant bubbles above and below the Galactic Centre, blown out by an outburst a few million years ago: the Fermi bubbles in gamma rays (Su et al. 2010) and the larger eROSITA bubbles in X-rays (Predehl et al. 2020). Zoom out to see them"><input id="opt-real-bubbles" type="checkbox" checked /> Fermi and eROSITA bubbles</label>
+          <label class="check" title="The Local Bubble, the cavity of hot gas around the Sun blown by supernovae (Pelgrims et al. 2020), and the Radcliffe Wave, a 9,000-light-year wave of star-forming clouds (Konietzka et al. 2024)"><input id="opt-real-neighbourhood" type="checkbox" checked /> Local Bubble and Radcliffe Wave</label>
+          <label class="check" title="Stars fast enough to leave the Galaxy (Brown et al. 2012), arrows showing their speed outwards, and S5-HVS1 traced back to the central black hole (Koposov et al. 2020)"><input id="opt-real-hvs" type="checkbox" checked /> Hypervelocity stars</label>
+          <label class="check" title="The 68 millisecond pulsars whose timing gave NANOGrav its evidence for the gravitational-wave background (2023)"><input id="opt-real-nanograv" type="checkbox" checked /> NANOGrav pulsars (gravitational-wave background)</label>
           <label class="check" title="Every Milky Way pulsar with a distance in the ATNF Pulsar Catalogue (about 3,600): blue, millisecond pulsars white, magnetars magenta"><input id="opt-real-pulsars" type="checkbox" checked /> Real pulsars</label>
           <label class="check" title="Every X-ray binary with a measured distance (Fortin et al. 2023, 2024): black holes feeding on a companion in violet, neutron stars in cyan. Zoom in to see the pair"><input id="opt-real-xray" type="checkbox" checked /> Real X-ray binaries</label>
           <label class="check" title="Every Wolf–Rayet star with a distance in van der Hucht's catalogue (218): massive stripped stars about to explode, in white-blue"><input id="opt-real-wr" type="checkbox" checked /> Real Wolf–Rayet stars</label>

@@ -367,11 +367,14 @@ export class InputUI {
     $<HTMLInputElement>('opt-cosmos-seyferts').addEventListener('change', (e) => this.app.cosmos.setKindVisible('seyfert', (e.target as HTMLInputElement).checked));
     $<HTMLInputElement>('opt-cosmos-blazars').addEventListener('change', (e) => this.app.cosmos.setKindVisible('blazar', (e.target as HTMLInputElement).checked));
     $<HTMLInputElement>('opt-cosmos-radio').addEventListener('change', (e) => this.app.cosmos.setRadioLobesVisible((e.target as HTMLInputElement).checked));
+    $<HTMLInputElement>('opt-cosmos-frbs').addEventListener('change', (e) => this.app.cosmos.setFrbsVisible((e.target as HTMLInputElement).checked));
     $<HTMLInputElement>('opt-cosmos-grbs').addEventListener('change', (e) => this.app.cosmos.setGrbsVisible((e.target as HTMLInputElement).checked));
     $<HTMLInputElement>('opt-cosmos-dark').addEventListener('change', (e) => this.app.cosmos.setDarkMatterVisible((e.target as HTMLInputElement).checked));
     $<HTMLInputElement>('opt-cosmos-zoa').addEventListener('change', (e) => this.app.cosmos.setZoneOfAvoidanceVisible((e.target as HTMLInputElement).checked));
     $<HTMLInputElement>('opt-cosmos-laniakea').addEventListener('change', (e) => this.app.cosmos.setLaniakeaVisible((e.target as HTMLInputElement).checked));
     $<HTMLInputElement>('opt-real-nebulae').addEventListener('change', (e) => this.app.galaxy.setRealLayerVisible('nebulae', (e.target as HTMLInputElement).checked));
+    for (const [id, layer] of [['opt-real-neighbourhood', 'neighbourhood'], ['opt-real-hvs', 'hypervelocity'], ['opt-real-nanograv', 'nanograv']] as const)
+      $<HTMLInputElement>(id).addEventListener('change', (e) => this.app.galaxy.extras.setVisible(layer, (e.target as HTMLInputElement).checked));
     $<HTMLInputElement>('opt-real-bubbles').addEventListener('change', (e) => (this.app.galaxy.bubblesOn = (e.target as HTMLInputElement).checked));
     $<HTMLInputElement>('opt-real-clusters').addEventListener('change', (e) => this.app.galaxy.setRealLayerVisible('clusters', (e.target as HTMLInputElement).checked));
     $<HTMLInputElement>('opt-real-pulsars').addEventListener('change', (e) => this.app.galaxy.setRealLayerVisible('pulsars', (e.target as HTMLInputElement).checked));
@@ -394,6 +397,7 @@ export class InputUI {
     $('tab-sky').addEventListener('click', () => void this.app.skyUI.openSky());
     this.app.skyUI.wireSkyPanel();
     this.app.pointSkyUI.wire();
+    this.app.cosmicTimeUI.wire();
     $('btn-play').addEventListener('click', () => this.app.setRunning(!this.app.running));
     $('btn-undo').addEventListener('click', () => this.app.undo());
     $('btn-redo').addEventListener('click', () => this.app.redo());

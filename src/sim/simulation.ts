@@ -865,7 +865,10 @@ export class Simulation {
       big.radius = Math.max(big.radius, small.radius) * 1.15;
       return;
     } else {
-      this.events.push({ type: 'merge', message: `${small.name} collided with ${big.name}`, x: cx, y: cy, z: cz, size: big.radius });
+      // A small body striking a much bigger one: say how hard, in megatons of TNT (4.184 × 10¹⁵ J).
+      const impact = small.mass < 1e-3 * big.mass ? impactMegatons(small.mass, relV) : 0;
+      const energy = impact >= 1 ? `: ${formatMegatons(impact)} of TNT` : '';
+      this.events.push({ type: 'merge', message: `${small.name} collided with ${big.name}${energy}`, x: cx, y: cy, z: cz, size: big.radius });
     }
     const starsOnly = big.kind !== 'blackhole' && small.kind !== 'blackhole' && big.kind !== 'neutron' && small.kind !== 'neutron';
     this.applyMass(big, m, mergedKind(big.kind, small.kind, m), starsOnly);
@@ -1063,6 +1066,26 @@ export class Simulation {
     return 2.44 * primary.radius * Math.cbrt(NOMINAL_DENSITY[primary.kind] / NOMINAL_DENSITY[victim.kind]);
   }
 
+  /**
+   * A small body (under ~10⁻¹² M☉, a few tens of km) already on a collision course: it hits before
+   * the tide can pull it apart, which takes hours (Shoemaker–Levy 9's fragments crossed Jupiter's
+   * Roche zone in minutes). Bigger bodies are torn apart as before.
+   */
+  private plungesIn(primary: Body, victim: Body): boolean {
+    if (victim.mass > 1e-12) return false;
+    const rx = victim.x - primary.x, ry = victim.y - primary.y, rz = victim.z - primary.z;
+    const vx = victim.vx - primary.vx, vy = victim.vy - primary.vy, vz = victim.vz - primary.vz;
+    if (rx * vx + ry * vy + rz * vz >= 0) return false; // moving away
+    const mu = this.effectiveG * (primary.mass + victim.mass);
+    const r = Math.hypot(rx, ry, rz);
+    const v2 = vx * vx + vy * vy + vz * vz;
+    const h2 = (ry * vz - rz * vy) ** 2 + (rz * vx - rx * vz) ** 2 + (rx * vy - ry * vx) ** 2;
+    // Periapse of the relative orbit: r_p = h² / (μ (1 + e)).
+    const energy = v2 / 2 - mu / r;
+    const e = Math.sqrt(Math.max(0, 1 + (2 * energy * h2) / (mu * mu)));
+    return h2 / (mu * (1 + e)) < contactDistance(primary, victim);
+  }
+
   /** Which primaries can tidally disrupt which victims (keeps rocky-on-rocky accretion intact). */
   private canDisrupt(primary: Body, victim: Body): boolean {
     // Spacecraft are far too small and rigid to be torn apart by tides.
@@ -1103,7 +1126,7 @@ export class Simulation {
         if (p === v || dead.has(p) || !this.canDisrupt(p, v)) continue;
         const d = Math.hypot(v.x - p.x, v.y - p.y, v.z - p.z);
         if (d < p.radius + v.radius) continue; // a collision, not a tidal event
-        if (d < this.rocheLimit(p, v)) {
+        if (d < this.rocheLimit(p, v) && !this.plungesIn(p, v)) {
           this.disrupt(p, v, d);
           dead.add(v);
           break;
@@ -1636,4 +1659,17 @@ function randomUnit(): [number, number, number] {
   const th = Math.random() * Math.PI * 2;
   const s = Math.sqrt(1 - u * u);
   return [s * Math.cos(th), u, s * Math.sin(th)];
+}
+
+/** Kinetic energy of an impact (megatons of TNT) from the impactor's mass (M☉) and speed (AU/yr). */
+export function impactMegatons(massMsun: number, speedAuYr: number): number {
+  const kg = massMsun * 1.98847e30;
+  const ms = speedAuYr * 4740.47;
+  return (0.5 * kg * ms * ms) / 4.184e15;
+}
+
+export function formatMegatons(mt: number): string {
+  if (mt >= 1e6) return `${(mt / 1e6).toLocaleString('en-US', { maximumFractionDigits: mt >= 1e7 ? 0 : 1 })} million megatons`;
+  if (mt >= 10) return `${Math.round(mt).toLocaleString('en-US')} megatons`;
+  return `${mt.toFixed(1)} megatons`;
 }

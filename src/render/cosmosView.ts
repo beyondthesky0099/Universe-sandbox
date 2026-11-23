@@ -303,8 +303,36 @@ export class CosmosView {
   }
   private bulletOn = true;
 
+  /**
+   * Cosmic history: show the universe at scale factor a (1 today), everything's distances times a
+   * about the Milky Way, as space expands. Before the first stars (a < ~0.055, ~180 million years)
+   * there are no galaxies to show, only the afterglow. undefined returns to today.
+   */
+  scaleFactor?: number;
+  private hiddenForHistory: THREE.Object3D[] = [];
+  setScaleFactor(a: number | undefined, beforeFirstStars = false): void {
+    this.scaleFactor = a;
+    this.scene.scale.setScalar(a ?? 1);
+    for (const o of this.hiddenForHistory) o.visible = true;
+    this.hiddenForHistory = [];
+    if (a !== undefined && beforeFirstStars)
+      for (const o of this.scene.children) {
+        if (o === this.cmb || !o.visible) continue;
+        o.visible = false;
+        this.hiddenForHistory.push(o);
+      }
+  }
+
   setGrbs(bursts: Grb[]): void {
     this.cosmicShapes.setGrbs(bursts);
+  }
+
+  setFrbs(bursts: [string, number, number, number, string?][]): void {
+    this.cosmicShapes.setFrbs(bursts);
+  }
+
+  setFrbsVisible(on: boolean): void {
+    this.cosmicShapes.setFrbsVisible(on);
   }
 
   setGrbsVisible(on: boolean): void {
@@ -370,6 +398,8 @@ export class CosmosView {
     geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
     geo.setAttribute('size', new THREE.BufferAttribute(size, 1));
     this.webPoints = new THREE.Points(geo, material(0.85, 1.3, 14));
+    // The Boötes Void, and how empty it is in these very galaxies (sim/voids.ts).
+    this.cosmicShapes.setVoid(cat.galaxies, H0);
     this.webPoints.frustumCulled = false;
     this.webPoints.renderOrder = 4;
     this.scene.add(this.webPoints);
@@ -585,7 +615,9 @@ export class CosmosView {
     }
     this.controls.update();
     const camDist = this.cameraDistance;
-    for (const l of this.labels) l.sprite.visible = camDist >= l.min && camDist <= l.max && (!l.kind || this.kindVisible[l.kind]);
+    // Back in time the map shrinks with the universe and the names would pile up: hide them.
+    const crowded = this.scaleFactor !== undefined && this.scaleFactor < 0.85;
+    for (const l of this.labels) l.sprite.visible = !crowded && camDist >= l.min && camDist <= l.max && (!l.kind || this.kindVisible[l.kind]);
     this.laniakea?.update(this.camera);
     this.cosmicShapes.update(this.camera);
     this.nearMilkyWay.update(this.camera);
@@ -593,7 +625,8 @@ export class CosmosView {
     if (this.cmb) {
       // A faint backdrop from inside; full strength once you fly out past it.
       // Near a galaxy it fades further so the galaxy stands out against black.
-      const outside = this.camera.position.length() > CMB_RADIUS_MPC;
+      // (Back in time the shell shrinks with everything else: from outside it, it glows.)
+      const outside = this.camera.position.length() > CMB_RADIUS_MPC * (this.scaleFactor ?? 1);
       const near = THREE.MathUtils.smoothstep(camDist, 1, 25);
       (this.cmb.material as THREE.ShaderMaterial).uniforms.uOpacity.value = outside ? 1 : 0.04 + 0.11 * near;
     }

@@ -12,16 +12,23 @@ import { agnNucleusLabel, agnTypeLabel, COSMIC_STRUCTURES, displayName, isFamous
 import type { GwEvent } from '../sim/gwEvents';
 import { galacticToEcliptic, type Nebula } from '../sim/nebulae';
 import type { BrightStar, NearStar } from '../sim/stars';
+import { eclipticToGalactic } from '../sim/nebulae';
 import type { VoyagerEncounter } from '../sim/voyager';
-import { lightYears, type SearchEntry } from './search';
+import { lightYears, type SearchAction, type SearchEntry } from './search';
 
 const NEBULA_KIND: Record<Nebula['kind'], string> = { hii: 'HII region', pn: 'Planetary nebula', snr: 'Supernova remnant', dark: 'Dark nebula', refl: 'Reflection nebula' };
 
 /** Nebulae: to the Galaxy Map when the distance is known, otherwise to the Sky tab. */
+/** Famous features known by their own names, inside catalogued nebulae. */
+const NEBULA_NICKNAMES: Record<string, string[]> = {
+  // The Hubble (1995, 2014) and Webb (2022) pictures of its pillars of gas and dust.
+  'Eagle Nebula (M16)': ['Pillars of Creation'],
+};
+
 export function nebulaEntries(list: Nebula[]): SearchEntry[] {
   return list.map((n) => ({
     name: n.name ?? n.id,
-    aliases: n.name ? [n.id] : undefined,
+    aliases: n.name ? [n.id, ...(NEBULA_NICKNAMES[n.name] ?? [])] : undefined,
     kind: NEBULA_KIND[n.kind],
     detail: n.distanceKpc ? `${lightYears(n.distanceKpc)} away${n.distanceNote ? `, the distance of its ${n.distanceNote.replace(/ \(.*$/, '')}` : ''}` : 'on the sky (distance unknown)',
     rank: n.name ? 60 : 0,
@@ -65,12 +72,20 @@ export function exoplanetEntries(cat: ExoCatalog): SearchEntry[] {
   return out;
 }
 
-/** Named stars: the bright ones (Sky tab) and those within 20 parsecs. */
+/**
+ * Named stars: the bright ones and those within 20 parsecs, flown to on the galaxy map at their
+ * real place near the Sun (a star without a distance turns to it in the Sky tab instead).
+ */
 export function starEntries(bright: BrightStar[], near: NearStar[]): SearchEntry[] {
   const out = new Map<string, SearchEntry>();
-  for (const [x, y, z, mag, , name] of bright) {
+  const onMap = (v: [number, number, number], pc: number): SearchAction => {
+    const [l, b] = eclipticToGalactic(v);
+    return { type: 'map', l, b, dKpc: pc / 1000, sizePc: 1 };
+  };
+  for (const [x, y, z, mag, , name, pc] of bright) {
     if (!name) continue;
-    out.set(name, { name, kind: 'Star', detail: `magnitude ${mag.toFixed(1)}`, rank: Math.max(0, 70 - mag * 10), action: { type: 'sky', v: [x, y, z] } });
+    const detail = `${pc ? `${lightYears(pc / 1000)} away · ` : ''}magnitude ${mag.toFixed(1)}`;
+    out.set(name, { name, kind: 'Star', detail, rank: Math.max(0, 70 - mag * 10), action: pc ? onMap([x, y, z], pc) : { type: 'sky', v: [x, y, z] } });
   }
   for (const s of near) {
     if (!s.name || s.name === 'Sol' || s.name === 'Sun') continue;
@@ -78,7 +93,7 @@ export function starEntries(bright: BrightStar[], near: NearStar[]): SearchEntry
     if (d <= 0) continue;
     const prev = out.get(s.name);
     const detail = `${lightYears(d / 1000)} away${s.spect ? ` · ${s.spect}` : ''} · magnitude ${s.mag.toFixed(1)}`;
-    out.set(s.name, { name: s.name, kind: 'Star', detail, rank: prev?.rank ?? 30, action: { type: 'sky', v: [s.xyz[0] / d, s.xyz[1] / d, s.xyz[2] / d] } });
+    out.set(s.name, { name: s.name, kind: 'Star', detail, rank: prev?.rank ?? 30, action: onMap([s.xyz[0] / d, s.xyz[1] / d, s.xyz[2] / d], d) });
   }
   return [...out.values()];
 }

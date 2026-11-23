@@ -1,4 +1,5 @@
 import { GalacticBubbles } from './galacticBubbles';
+import { GalaxyExtras } from './galaxyExtras';
 import * as THREE from 'three';
 import { LabelDeclutter } from './labelDeclutter';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
@@ -205,6 +206,8 @@ export class GalaxyView {
   readonly scene = new THREE.Scene();
   /** The Fermi and eROSITA bubbles (render/galacticBubbles.ts): shown for the Milky Way only. */
   readonly bubbles = new GalacticBubbles();
+  /** The Local Bubble, Radcliffe Wave, hypervelocity stars and NANOGrav pulsars (render/galaxyExtras.ts). */
+  readonly extras = new GalaxyExtras();
   isMilkyWay = true;
   bubblesOn = true;
   readonly camera: THREE.PerspectiveCamera;
@@ -292,7 +295,7 @@ export class GalaxyView {
     this.hole.add(halo, disk, shadow);
     this.hole.renderOrder = 5;
     this.scene.add(this.hole);
-    this.scene.add(this.bubbles.group);
+    this.scene.add(this.bubbles.group, this.extras.group);
 
     this.marker = new THREE.Sprite(new THREE.SpriteMaterial({ map: ringTexture(), sizeAttenuation: false, depthTest: false, transparent: true }));
     this.marker.scale.setScalar(0.05);
@@ -443,6 +446,29 @@ export class GalaxyView {
     this.selected = target;
     this.marker.visible = target !== -1;
     if (target !== -1) this.marker.position.copy(this.targetPosition(target));
+    this.pin(undefined);
+    this.marker.scale.setScalar(0.05);
+  }
+
+  /** A searched-for point (a named star): the ring marker on it and its name above every other label. */
+  private pinLabel?: THREE.Sprite;
+  pin(pos: THREE.Vector3 | undefined, label?: string): void {
+    if (this.pinLabel) {
+      this.scene.remove(this.pinLabel);
+      this.pinLabel.material.map?.dispose();
+      this.pinLabel.material.dispose();
+      this.pinLabel = undefined;
+    }
+    if (!pos) return;
+    this.marker.position.copy(pos);
+    this.marker.visible = true;
+    this.marker.scale.setScalar(0.07);
+    if (label) {
+      this.pinLabel = textSprite(label, '#ffffff', 1.3);
+      this.pinLabel.position.copy(pos);
+      this.pinLabel.userData.priority = 1e6;
+      this.scene.add(this.pinLabel);
+    }
   }
 
   /** Animate the camera to close in on a star or the core. */
@@ -910,5 +936,6 @@ export class GalaxyView {
     this.starfield.position.copy(this.camera.position);
     this.starfield.scale.setScalar(this.camera.far * 0.5);
     this.bubbles.update(this.camera, this.isMilkyWay && this.bubblesOn);
+    this.extras.group.visible = this.isMilkyWay;
   }
 }

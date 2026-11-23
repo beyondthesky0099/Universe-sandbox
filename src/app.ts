@@ -17,7 +17,7 @@ import { GAS_PALETTE, ROCKY_PALETTE } from './sim/color';
 import { type Forecast } from './sim/forecast';
 import { SimHost } from './sim/host';
 import type { CompactObject } from './sim/compactObjects';
-import { galacticCore, hulseTaylor, loadActiveNucleus, loadBlackHoleSystem, loadGalacticObject, loadPulsarSystem, loadSolarSystemOnDate, loadStarSystem, PRESETS, pulsarPlanets } from './sim/presets';
+import { sgrAStars, hulseTaylor, loadActiveNucleus, loadBlackHoleSystem, loadGalacticObject, loadPulsarSystem, loadSolarSystemOnDate, loadStarSystem, PRESETS, pulsarPlanets } from './sim/presets';
 import { describeObject, type GalacticObject } from './sim/galacticObjects';
 import { describePulsar, pulsarName, type PulsarRecord } from './sim/pulsars';
 import { hulseTaylorChart } from './ui/hulseTaylorChart';
@@ -57,6 +57,7 @@ import { VrUI } from './app/vr';
 import { MegaSimUI } from './app/megaSim';
 import { SkyUI } from './app/sky';
 import { PointSkyUI } from './app/pointSky';
+import { CosmicTimeUI } from './app/cosmicTime';
 import { OnlineUI } from './app/online';
 import { ReplaysUI } from './app/replays';
 import { ScriptingUI } from './app/scripting';
@@ -88,6 +89,7 @@ export class App {
   readonly megaSimUI = new MegaSimUI(this);
   readonly skyUI = new SkyUI(this);
   readonly pointSkyUI = new PointSkyUI(this);
+  readonly cosmicTimeUI = new CosmicTimeUI(this);
   readonly onlineUI = new OnlineUI(this);
   readonly replaysUI = new ReplaysUI(this);
   readonly scriptingUI = new ScriptingUI(this);
@@ -725,7 +727,8 @@ export class App {
         const shown = displayName(host);
         scenario = { name: `the nucleus of ${shown}`, load: () => loadActiveNucleus(this.sim, host, shown), origin: { kind: 'core' } };
       } else if (target === 'core') {
-        scenario = { name: galacticCore.name, load: () => galacticCore.load(this.sim), presetId: galacticCore.id, origin: { kind: 'core' } };
+        // The Milky Way's core: its real black hole and S-stars.
+        scenario = { name: sgrAStars.name, load: () => sgrAStars.load(this.sim), presetId: sgrAStars.id, origin: { kind: 'core' } };
       } else if (target === 'sol') {
         scenario = { name: 'the Solar System', load: () => loadSolarSystemOnDate(this.sim, new Date()), origin: { kind: 'sol' } };
       } else if (typeof target === 'object' && 'psr' in target) {

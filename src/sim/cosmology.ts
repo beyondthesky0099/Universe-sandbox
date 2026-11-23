@@ -86,3 +86,64 @@ export function formatLookback(gyr: number): string {
   if (gyr < 1) return `${Math.round(gyr * 1000)} million years`;
   return `${gyr.toFixed(gyr < 10 ? 1 : 0)} billion years`;
 }
+
+/** ∫ f over [a0, a1] by Simpson's rule with n (even) steps. */
+function simpsonRange(f: (a: number) => number, a0: number, a1: number, n: number): number {
+  const h = (a1 - a0) / n;
+  let s = f(a0) + f(a1);
+  for (let i = 1; i < n; i++) s += f(a0 + i * h) * (i % 2 ? 4 : 2);
+  return (s * h) / 3;
+}
+
+/**
+ * Age of the universe (Gyr) when the scale factor was a (1 today; above 1 in the future):
+ * t = (1/H0) ∫₀ᵃ a′ da′ / (a′² E(a′)), finite at a = 0 thanks to radiation.
+ */
+export function ageAtScale(a: number): number {
+  if (!(a > 0)) return 0;
+  // Split at a small a so the radiation era (t ∝ a²) gets enough steps.
+  const split = Math.min(a, 1e-3);
+  const early = simpsonRange((x) => x / a2E(x), 0, split, 2000);
+  const late = a > split ? simpsonRange((x) => x / a2E(x), split, a, 4000) : 0;
+  return HUBBLE_TIME_GYR * (early + late);
+}
+
+/** The scale factor at an age (Gyr), by bisection on ageAtScale (past and future). */
+export function scaleFactorAtAge(ageGyr: number): number {
+  let lo = 1e-7, hi = 50;
+  for (let k = 0; k < 80; k++) {
+    const mid = Math.sqrt(lo * hi);
+    if (ageAtScale(mid) < ageGyr) lo = mid;
+    else hi = mid;
+  }
+  return Math.sqrt(lo * hi);
+}
+
+/** The Hubble parameter (km/s/Mpc) at scale factor a: how fast space was expanding then. */
+export function hubbleAt(a: number): number {
+  return (H0 * a2E(a)) / (a * a);
+}
+
+/** Shares of the universe's energy in radiation, matter (dark and ordinary) and dark energy at scale factor a. */
+export function compositionAt(a: number): { radiation: number; matter: number; darkEnergy: number } {
+  const r = OMEGA_R / a ** 4, m = OMEGA_M / a ** 3, l = OMEGA_L;
+  const total = r + m + l;
+  return { radiation: r / total, matter: m / total, darkEnergy: l / total };
+}
+
+/** The deceleration parameter q (positive: expansion slowing; negative: speeding up). */
+export function decelerationAt(a: number): number {
+  const c = compositionAt(a);
+  return c.radiation + c.matter / 2 - c.darkEnergy;
+}
+
+/** The scale factor when the expansion began to speed up (q = 0), as dark energy took over. */
+export const ACCELERATION_START_A = (() => {
+  let lo = 0.1, hi = 1;
+  for (let k = 0; k < 60; k++) {
+    const mid = (lo + hi) / 2;
+    if (decelerationAt(mid) > 0) lo = mid;
+    else hi = mid;
+  }
+  return (lo + hi) / 2;
+})();

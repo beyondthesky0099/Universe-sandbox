@@ -86,6 +86,17 @@ const OBLIQUITY = 23.4392911 * DEG;
  * Sky tab can rotate nebulae with the stars). Uses the IAU galactic pole: RA 192.85948°,
  * Dec 27.12825°, and the north celestial pole at galactic longitude 122.93192°.
  */
+/** The reverse: a J2000 ecliptic direction → galactic (l, b) in degrees. */
+export function eclipticToGalactic([x, y, z]: [number, number, number]): [number, number] {
+  const ex = x, ey = Math.cos(OBLIQUITY) * y - Math.sin(OBLIQUITY) * z, ez = Math.sin(OBLIQUITY) * y + Math.cos(OBLIQUITY) * z;
+  const r = Math.hypot(ex, ey, ez) || 1;
+  const ra = Math.atan2(ey, ex), dec = Math.asin(ez / r);
+  const ap = 192.85948 * DEG, dp = 27.12825 * DEG, lncp = 122.93192 * DEG;
+  const b = Math.asin(Math.sin(dp) * Math.sin(dec) + Math.cos(dp) * Math.cos(dec) * Math.cos(ra - ap));
+  const l = lncp - Math.atan2(Math.cos(dec) * Math.sin(ra - ap), Math.cos(dp) * Math.sin(dec) - Math.sin(dp) * Math.cos(dec) * Math.cos(ra - ap));
+  return [((l / DEG) % 360 + 360) % 360, b / DEG];
+}
+
 export function galacticToEcliptic(lDeg: number, bDeg: number): [number, number, number] {
   const ap = 192.85948 * DEG, dp = 27.12825 * DEG, lncp = 122.93192 * DEG;
   const l = lDeg * DEG, b = bDeg * DEG;

@@ -160,6 +160,34 @@ off (the compass is easily disturbed by metal nearby), drag sideways to line the
 
 Each takes a minute or two. Use 🔍 search to find the names.
 
+**History of the universe** (Universe view, ⏳ History pane)
+- **Slide back in time** and watch the map shrink with the universe; press ▶ to run from the
+  afterglow to today. The panel gives the age, how much closer everything was, how fast space was
+  expanding and what it was made of (matter, then dark energy). Tap an epoch: the afterglow, the
+  first stars, cosmic noon, the moment the expansion began to speed up, the far future.
+- **Deep fields:** search "Hubble Ultra Deep Field" (its sightline to redshift 11) or "Webb's
+  First Deep Field". **Fast radio bursts** (cyan) mark their host galaxies.
+
+**Our galaxy**
+- **Sgr A* and the S-stars** (Scenes pane, or zoom into the Galaxy map's centre): the real stars
+  round our black hole. Follow S2 through its closest pass, 120 AU at ~7,700 km/s.
+- On the Galaxy map: the **Local Bubble** round the Sun, the **Radcliffe Wave** (coloured by how
+  it's moving: rising red, sinking blue), **hypervelocity stars** leaving the Galaxy (S5-HVS1
+  traced back to the black hole), and the **NANOGrav pulsars** that revealed the gravitational-
+  wave background. Search "Pillars of Creation" for the Eagle Nebula.
+
+**Solar System extras**
+- Zoom out past the planets for **Planet Nine's** predicted orbit (hypothetical); zoom in for the
+  **zodiacal cloud** of dust. Scenes: **Chicxulub** (the dinosaur-killer, at true scale) and
+  **Shoemaker–Levy 9** hitting Jupiter; each impact reports its energy in megatons.
+
+**Real stars**
+- **Search for a star** (Sirius, Betelgeuse, Vega…): you fly to its real place among the stars
+  around the Sun on the Galaxy map, ringed and named.
+- **Visit a real double star** (search "Sirius A and B", "Alpha Centauri A and B" or
+  "Procyon A and B", or the Scenes pane): the pair on its measured orbit, starting where it is
+  today. Sirius B and Procyon B are white dwarfs; Proxima circles Alpha Centauri 8,700 AU out.
+
 **In the Solar System**
 - **Visit Saturn** and zoom in on the rings: 6,000 particles at NASA's measured radii.
 - **Pick 1989** in the date box (Scenes pane) and press **Solar System** to find Voyager 2 at
@@ -190,6 +218,11 @@ Each takes a minute or two. Use 🔍 search to find the names.
   galaxies behind (that's the gap in every galaxy map).
 - **The biggest structures:** Quipu (1.4 billion light-years, the largest in the nearby
   universe), and the claimed Big Ring and Giant Arc.
+- **The Boötes Void** (search "Bootes void"): a bubble 300 million light-years across with almost
+  nothing in it. The few galaxies inside light up, and the label counts them against an average
+  patch (8 against 33 in the survey, about a quarter). Had we lived in its middle, we'd have taken
+  decades longer to discover other galaxies.
+- **Typos are forgiven:** "boots void" or "hercules corana" still find the right thing.
 - **Gamma-ray bursts and the Hercules–Corona Borealis Great Wall:** every burst with a measured
   distance (620) is an orange point. Search "Hercules–Corona" to see the region where too many of
   them (gold) turned up at the same distance, the claimed largest structure in the universe, with

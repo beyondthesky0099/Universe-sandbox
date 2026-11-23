@@ -46,3 +46,31 @@ describe('finding the structures by search', () => {
     expect(lightYears(200 * 1000)).toBe('652 million ly');
   });
 });
+
+describe('the Boötes Void, and typos', () => {
+  it('is nearly empty in the survey: about a quarter of the normal density', async () => {
+    const { readFileSync } = await import('node:fs');
+    const { voidCensus, bootesVoid } = await import('../src/sim/voids');
+    const { H0 } = await import('../src/sim/cosmology');
+    const web = JSON.parse(readFileSync(new URL('../public/data/galaxies-2mrs.json', import.meta.url), 'utf8'));
+    const c = voidCensus(web.galaxies, H0);
+    expect(c.inside).toBeLessThan(15);
+    expect(c.expected).toBeGreaterThan(25);
+    expect(c.ratio).toBeLessThan(0.4);
+    // Radius 3,100 km/s: ~46 Mpc with the map's H0.
+    expect(bootesVoid(H0).radius).toBeCloseTo(3100 / H0, 6);
+  });
+
+  it('finds things through a typo, but not nonsense', async () => {
+    const { SearchIndex, nearWord } = await import('../src/ui/search');
+    expect(nearWord('boots', 'bootes')).toBe(true);
+    expect(nearWord('corana', 'corona')).toBe(true);
+    expect(nearWord('herclues', 'hercules')).toBe(true);
+    expect(nearWord('void', 'veil')).toBe(false);
+    const index = new SearchIndex();
+    index.add(structureEntries());
+    expect(index.search('boots void')[0]?.name).toBe('Boötes Void');
+    expect(index.search('hercules corana')[0]?.name).toBe('Hercules–Corona Borealis Great Wall (claimed)');
+    expect(index.search('xqzzv')).toHaveLength(0);
+  });
+});

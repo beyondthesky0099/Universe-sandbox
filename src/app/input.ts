@@ -367,6 +367,7 @@ export class InputUI {
     $<HTMLInputElement>('opt-cosmos-seyferts').addEventListener('change', (e) => this.app.cosmos.setKindVisible('seyfert', (e.target as HTMLInputElement).checked));
     $<HTMLInputElement>('opt-cosmos-blazars').addEventListener('change', (e) => this.app.cosmos.setKindVisible('blazar', (e.target as HTMLInputElement).checked));
     $<HTMLInputElement>('opt-cosmos-radio').addEventListener('change', (e) => this.app.cosmos.setRadioLobesVisible((e.target as HTMLInputElement).checked));
+    $<HTMLInputElement>('opt-cosmos-grbs').addEventListener('change', (e) => this.app.cosmos.setGrbsVisible((e.target as HTMLInputElement).checked));
     $<HTMLInputElement>('opt-cosmos-dark').addEventListener('change', (e) => this.app.cosmos.setDarkMatterVisible((e.target as HTMLInputElement).checked));
     $<HTMLInputElement>('opt-cosmos-zoa').addEventListener('change', (e) => this.app.cosmos.setZoneOfAvoidanceVisible((e.target as HTMLInputElement).checked));
     $<HTMLInputElement>('opt-cosmos-laniakea').addEventListener('change', (e) => this.app.cosmos.setLaniakeaVisible((e.target as HTMLInputElement).checked));

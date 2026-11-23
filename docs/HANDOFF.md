@@ -208,6 +208,17 @@ Plan, in priority order:
 - BodyVisual adds it in applyDetail and updates it only when the planet is more than 14 px across
   and a star is present. Tests: tests/aurora.test.ts.
 
+### BE. Gamma-ray bursts and the Hercules–Corona Borealis Great Wall
+- [x] scripts/build-grbs.mjs → public/data/grbs.json: Greiner's GRB table (HTML rows split on
+  `<TR VALIGN="TOP">`, 10th cell the redshift; uncertain ones dropped): 620 bursts [name, RA, Dec, z].
+- [x] sim/grbs.ts: `HCB` (RA 255°, Dec +27.75°, 45°, z 1.6–2.1), `inGreatWall`, `greatWallCount`
+  (by year; 14 of 44 by 2012 against 6.4 by chance, 20 of 83 today against 12.2), `loadGrbs`.
+- [x] cosmicShapes: all bursts at their comoving distances (orange; the Wall's gold), the region's
+  outline (45° rims at z 1.6 and 2.1, radial edges), two lines of counts; `opt-cosmos-grbs`.
+- [x] cosmosView.flyToPoint: when the end point would be beyond 70% of the CMB radius, the camera
+  comes round to our side, 35° off the line to us (so far structures appear as seen from Earth,
+  not against the CMB from outside). The Great Wall's view is 11,000 Mpc.
+
 ### BD. Interstellar visitors, dark matter, the Milky Way's surroundings, giant structures
 - [x] Interstellar objects: scripts/build-interstellar.mjs → public/data/interstellar.json (JPL SBDB,
   full precision; needs NODE_USE_ENV_PROXY=1 behind the sandbox proxy). sim/interstellar.ts

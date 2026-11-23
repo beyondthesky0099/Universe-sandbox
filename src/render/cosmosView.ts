@@ -21,6 +21,7 @@ import { GalaxyShapes } from './galaxyShapes';
 import { RadioLobeLayer, type LobePlacement } from './radioLobes';
 import { LaniakeaView } from './laniakeaView';
 import { CosmicShapes } from './cosmicShapes';
+import type { Grb } from '../sim/grbs';
 import { LocalStructures } from './localStructures';
 import { BulletCluster } from './bulletCluster';
 import { dotTexture } from './textures';
@@ -302,6 +303,14 @@ export class CosmosView {
   }
   private bulletOn = true;
 
+  setGrbs(bursts: Grb[]): void {
+    this.cosmicShapes.setGrbs(bursts);
+  }
+
+  setGrbsVisible(on: boolean): void {
+    this.cosmicShapes.setGrbsVisible(on);
+  }
+
   setZoneOfAvoidanceVisible(on: boolean): void {
     this.cosmicShapes.setZoneVisible(on);
   }
@@ -492,7 +501,15 @@ export class CosmosView {
 
   /** Animate the camera to a point, stopping `distance` from it on the side it's looking from. */
   flyToPoint(to: THREE.Vector3, distance: number, speed = 0.8): void {
-    const dir = this.camera.position.clone().sub(this.controls.target).normalize();
+    let dir = this.camera.position.clone().sub(this.controls.target).normalize();
+    // Far structures are seen from our side (as they appear from Earth), so the camera never ends
+    // up outside the microwave background with nothing but its blotches in view.
+    // 35° off the line to us, so our own bright neighbourhood isn't in the middle of the view.
+    if (to.clone().addScaledVector(dir, distance).length() > CMB_RADIUS_MPC * 0.7) {
+      const back = to.clone().negate().normalize();
+      const side = new THREE.Vector3().crossVectors(back, Math.abs(back.y) < 0.9 ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(1, 0, 0)).normalize();
+      dir = back.applyAxisAngle(side, (35 * Math.PI) / 180);
+    }
     this.anim = { fromTarget: this.controls.target.clone(), toTarget: to.clone(), fromPos: this.camera.position.clone(), toPos: to.clone().add(dir.multiplyScalar(distance)), t: 0, speed };
   }
 

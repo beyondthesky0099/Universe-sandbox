@@ -3,6 +3,7 @@ import { equatorialToGalactic } from '../procgen/galaxy';
 import { galacticToCosmos } from '../sim/galaxies';
 import { comovingDistance } from '../sim/cosmology';
 import { textSprite } from './galaxyView';
+import { greatWallCount, HCB, inGreatWall, type Grb } from '../sim/grbs';
 
 /**
  * Shapes in the Universe view that labels alone can't show:
@@ -20,6 +21,9 @@ import { textSprite } from './galaxyView';
  *   12° from the Big Ring, about RA 212.5°, Dec 39°, running west–east. Drawn as a gentle arc.
  * Both arcs are debated: they are traced by absorbers in quasar spectra, and some argue they are
  * chance alignments. The labels say "claimed".
+ * - The Hercules–Corona Borealis Great Wall (claimed; sim/grbs.ts): the region where Horváth et al.
+ *   found an excess of gamma-ray bursts, 45° around RA 255°, Dec +27.75°, between redshift 1.6
+ *   and 2.1, outlined; and every burst with a measured redshift, the Wall's in gold.
  */
 function eq(raDeg: number, decDeg: number, dMpc: number): THREE.Vector3 {
   const [l, b] = equatorialToGalactic(raDeg, decDeg);
@@ -151,6 +155,63 @@ export class CosmicShapes {
       }
       this.add(glowLine(arc, 0x9fc2ff), 500, 20000, 0.8);
     }
+
+    // The Great Wall's region: its 45° circle at redshift 1.6 and 2.1, joined by radial edges.
+    {
+      const { east, north } = skyBasis(HCB.raDeg, HCB.decDeg);
+      const axis = eq(HCB.raDeg, HCB.decDeg, 1);
+      const rim = (d: number) => {
+        const pts: THREE.Vector3[] = [];
+        for (let k = 0; k <= 96; k++) {
+          const a = (k / 96) * 2 * Math.PI;
+          const off = east.clone().multiplyScalar(Math.cos(a)).addScaledVector(north, Math.sin(a)).multiplyScalar(Math.sin(HCB.radiusDeg * (Math.PI / 180)));
+          pts.push(axis.clone().multiplyScalar(Math.cos(HCB.radiusDeg * (Math.PI / 180))).add(off).multiplyScalar(d));
+        }
+        return pts;
+      };
+      const [d0, d1] = [comovingDistance(HCB.zMin), comovingDistance(HCB.zMax)];
+      const inner = rim(d0), outer = rim(d1);
+      this.add(glowLine(inner, 0xffb347), 2000, 40000, 0.6);
+      this.add(glowLine(outer, 0xffb347), 2000, 40000, 0.6);
+      for (let k = 0; k < 96; k += 12) this.add(glowLine([inner[k], outer[k]], 0xffb347), 2000, 40000, 0.4);
+    }
+  }
+
+  /** Gamma-ray bursts at their comoving distances; the Great Wall's in gold, with the counts. */
+  private grbLayer?: THREE.Group;
+  private grbsOn = true;
+
+  setGrbs(bursts: Grb[]): void {
+    const at = (b: Grb) => eq(b[1], b[2], comovingDistance(b[3]));
+    const points = (list: Grb[], color: number, size: number) => {
+      const pts = new THREE.Points(
+        new THREE.BufferGeometry().setFromPoints(list.map(at)),
+        new THREE.PointsMaterial({ color, size, sizeAttenuation: false, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending }),
+      );
+      pts.frustumCulled = false;
+      return pts;
+    };
+    this.grbLayer = new THREE.Group();
+    this.grbLayer.add(points(bursts.filter((b) => !inGreatWall(b)), 0xff7a45, 3), points(bursts.filter(inGreatWall), 0xffd36b, 6));
+    const now = greatWallCount(bursts);
+    const then = greatWallCount(bursts, 2012);
+    // The evidence, in two lines: bursts at redshift 1.6–2.1 in the region against chance.
+    [
+      `Gold bursts (z 1.6–2.1): ${then.inside} of ${then.total} by 2012, chance ${then.expected.toFixed(0)}`,
+      `${now.inside} of ${now.total} today, chance ${now.expected.toFixed(0)}: a wall, or a fluke?`,
+    ].forEach((line, k) => {
+      const s = textSprite(line, '#ffd36b', 0.7);
+      s.userData.priority = 900 - k; // above the other labels in the declutter
+      s.position.copy(eq(HCB.raDeg, HCB.decDeg - 10 - 7 * k, comovingDistance(1.85)));
+      this.grbLayer!.add(s);
+    });
+    this.grbLayer.visible = this.grbsOn;
+    this.group.add(this.grbLayer);
+  }
+
+  setGrbsVisible(on: boolean): void {
+    this.grbsOn = on;
+    if (this.grbLayer) this.grbLayer.visible = on;
   }
 
   private add(obj: THREE.Object3D, near: number, far: number, strength: number): void {
@@ -167,6 +228,14 @@ export class CosmicShapes {
     const d0 = camera.position.length();
     (this.zoa.material as THREE.ShaderMaterial).uniforms.uOpacity.value = 0.35 * THREE.MathUtils.smoothstep(d0, 15, 60) * (1 - THREE.MathUtils.smoothstep(d0, 2500, 6000));
     this.zoaLabel.visible = this.zoa.visible && d0 > 40 && d0 < 2500;
+    if (this.grbLayer?.visible) {
+      // The bursts are billions of light-years away: they show once the view is out that far.
+      const g = THREE.MathUtils.smoothstep(d0, 400, 2000);
+      for (const o of this.grbLayer.children) {
+        if (o instanceof THREE.Points) (o.material as THREE.PointsMaterial).opacity = 0.9 * g;
+        else o.visible = g > 0.5;
+      }
+    }
     for (const s of this.shapes) {
       const d = camera.position.distanceTo(s.centre);
       const k = THREE.MathUtils.smoothstep(d, s.near * 0.5, s.near) * (1 - THREE.MathUtils.smoothstep(d, s.far, s.far * 2));

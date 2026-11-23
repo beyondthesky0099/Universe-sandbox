@@ -4,6 +4,7 @@ import { agnNucleusLabel, agnTypeLabel, displayName, type LocalGalaxy, GALAXY_CR
 import { loadActiveNucleus } from '../sim/presets';
 import { loadRadioLobes, radioAtlasUrl } from '../sim/radioLobes';
 import { loadLaniakea } from '../sim/laniakea';
+import { loadGrbs } from '../sim/grbs';
 import { MILKY_WAY_SEED } from '../procgen/galaxy';
 import { fmt } from '../sim/units';
 import { $, escapeHtml, setFacts, toast } from '../ui/dom';
@@ -51,6 +52,13 @@ export class CosmosUI {
               this.app.cosmos.setRadioLobesVisible($<HTMLInputElement>('opt-cosmos-radio').checked);
               const selected = this.app.cosmos.selected;
               if (selected !== -1) this.selectCosmos(selected);
+            })
+            .catch(() => undefined);
+          // Gamma-ray bursts, and the claimed Great Wall they trace (sim/grbs.ts).
+          void loadGrbs()
+            .then((bursts) => {
+              this.app.cosmos.setGrbs(bursts);
+              this.app.cosmos.setGrbsVisible($<HTMLInputElement>('opt-cosmos-grbs').checked);
             })
             .catch(() => undefined);
           // Laniakea: the CosmicFlows-4 flows and our supercluster's real shape (sim/laniakea.ts).

@@ -309,7 +309,7 @@ export const COSMIC_STRUCTURES: { name: string; l: number; b: number; d: number;
   { name: 'Big Ring (claimed)', l: 101.3, b: 63.5, d: 2873, viewMpc: 1800 },
   // Claimed from a clustering of gamma-ray bursts at z ≈ 1.6–2.1 (Horváth, Hakkila & Bagoly 2014,
   // A&A 561, L12) at RA 17h, Dec +27.75°: perhaps 10 billion light-years long; debated.
-  { name: 'Hercules–Corona Borealis Great Wall (claimed)', l: 49.0, b: 35.5, d: 5080, viewMpc: 9000 },
+  { name: 'Hercules–Corona Borealis Great Wall (claimed)', l: 49.0, b: 35.5, d: 5080, viewMpc: 11000 },
 ];
 
 /** Familiar names of Abell clusters. */

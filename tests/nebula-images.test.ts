@@ -78,8 +78,14 @@ describe('nebula images (DSS via SkyView)', () => {
       const im = atlas.images.find((i) => i.name === name)!;
       return tileStats(im.page, im.tile).redBlue;
     };
-    // Hα glow of HII regions; starlight scattered by dust in the Iris and NGC 2023.
-    for (const name of ['Rosette Nebula', 'Heart Nebula', 'Carina Nebula']) expect(colour(name), name).toBeGreaterThan(1.3);
+    // Hα glow of HII regions; starlight scattered by dust in the Iris and NGC 2023. (Nebulae
+    // with an observatory photograph have it on their tile instead: the plate colours are
+    // checked on ones without.)
+    for (const name of ['Heart Nebula', 'Soul Nebula', 'NGC 3603']) {
+      expect(atlas.images.find((i) => i.name === name)?.photo, name).toBeUndefined();
+      expect(colour(name), name).toBeGreaterThan(1.3);
+    }
+    for (const name of ['Rosette Nebula', 'Carina Nebula']) expect(colour(name), name).toBeGreaterThan(1.1);
     for (const name of ['Iris Nebula', 'NGC 2023']) expect(colour(name), name).toBeLessThan(0.9);
     // Across all the photographed HII regions, red dominates on average.
     const hii = atlas.images.filter((i) => i.kind === 'hii').map((i) => tileStats(i.page, i.tile).redBlue);
@@ -120,5 +126,24 @@ describe('nebula images (DSS via SkyView)', () => {
       expect(img.height, im.name).toBe(512);
     }
     expect(new Set(named.map((i) => i.hd)).size).toBe(named.length);
+  });
+  it('has observatory photographs of the best-known nebulae, credited, in the same frame', () => {
+    const photographed = atlas.images.filter((i) => i.photo);
+    expect(photographed.length).toBeGreaterThanOrEqual(25);
+    for (const name of ['Orion Nebula (M42)', 'Eagle Nebula (M16)', 'Carina Nebula', 'Ring Nebula (M57)', 'Helix Nebula', 'Crab Nebula (M1)', 'Horsehead Nebula (B33)']) {
+      expect(photographed.some((i) => i.name === name), name).toBe(true);
+    }
+    for (const im of photographed) {
+      expect(im.page, im.name).toBe(0);
+      expect(im.photo, im.name).toMatch(/^nebula-photos\/[a-z0-9-]+\.jpg$/);
+      // CC BY 4.0: the credit line is shown while the photograph fills the view.
+      expect(im.photoCredit?.length ?? 0, im.name).toBeGreaterThan(2);
+      const img = jpeg.decode(readFileSync(`public/data/${im.photo}`), { useTArray: true });
+      expect(img.width, im.name).toBe(1024);
+      expect(img.height, im.name).toBe(1024);
+      // Faded into space at the edge, like the survey pictures.
+      const corner = img.data[(5 * 1024 + 5) * 4] + img.data[(5 * 1024 + 5) * 4 + 1] + img.data[(5 * 1024 + 5) * 4 + 2];
+      expect(corner, im.name).toBeLessThan(15);
+    }
   });
 });

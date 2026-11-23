@@ -438,7 +438,8 @@ The map shows **5,676 real nebulae** from professional catalogues:
 - **Every famous nebula is on the map.** 15 named nebulae have no distance in their own catalogue (the Lagoon, Eagle, Trifid, Rosette, Cone, Soul…). They take the distance of what lights or lies inside them: a maser with a radio parallax (Reid et al. 2019), the young star cluster at their heart at its Gaia distance (Hunt & Reffert 2023), their ionizing star's Gaia parallax, or their molecular cloud (Zucker et al. 2020). Search says which. Only Barnard's E, with no measured cloud nearby, stays on the Sky tab.
 - Colours are the light each kind really emits: HII regions glow pink-red in hydrogen-alpha, planetary nebulae teal in doubly ionised oxygen, and reflection nebulae blue from scattered starlight. Each cloud is a few overlapping puffs spread through its volume, so it has depth as you orbit it. Clouds too small to see from far away are drawn at a minimum size and dimmed to match.
 - Nebulae show their **real photographs** from the Digitized Sky Survey where the plates capture them: the 55 named ones (Orion, Carina, Lagoon, Eagle, the Crab, the Helix, the Horsehead, ...) and about 200 more glowing nebulae, plus 419 dark clouds on the Sky tab. The red plate is shown in red, the blue plate in blue and the fainter of the two in green, so stars stay white and hydrogen glow stays red. In emission nebulae the blue plate's excess over the red is the oxygen [O III] glow at 501 nm, which looks teal, so it adds to green too: the Ring, the Helix and the Cat's Eye show their teal centres, while reflection nebulae stay blue.
-  - Each named nebula also has its own 512-pixel picture, four times sharper than its tile, loaded only when you fly up to it (desktop).
+  - Each named nebula also has its own 512-pixel picture, four times sharper than its tile, loaded only when you fly up to it (phones too).
+  - **The best-known nebulae use observatory photographs up close** (28 of them: Orion from Hubble, the Lagoon, Omega and Eagle from ESO's VLT Survey Telescope, the Southern Ring from Webb, the Ring, the Crab and Cassiopeia A from Hubble, the Trifid and the Rosette from DECam, ...), from the image archives of ESO, ESA/Hubble, ESA/Webb and NSF NOIRLab (CC BY 4.0). `node scripts/build-nebula-photos.mjs` reprojects each one into the survey picture's frame from the sky coordinates the archive gives for it. It checks the placement against the plates (mirror image, rotation, small shifts) and fills any corner the photograph doesn't reach from the plates. The photographer's credit shows at the bottom of the screen while the nebula fills the view. The far view uses the same picture.
   - `node scripts/build-nebula-images.mjs` photographs every nebula with a distance that is at least 1.2′ in radius, then keeps only the fields where the plates show diffuse light.
   - Most HII regions were found by WISE in the infrared and are hidden behind dust in visible light; their photographs show only stars, so they keep their emission-colour clouds.
   - Phones load only the named nebulae's page (1 MB); desktops load all four pages (5 MB).
@@ -1090,6 +1091,38 @@ push and pull request.
   under U.S. Government grant NAG W-2166, from photographic data of the Oschin Schmidt Telescope
   (Palomar) and the UK Schmidt Telescope (POSS-I, POSS-II, SERC surveys), retrieved through NASA's
   SkyView (rebuild with `node scripts/build-nebula-images.mjs`).
+- Nebula observatory photographs (CC BY 4.0), from the image archives of ESO (eso.org), ESA/Hubble
+  (esahubble.org), ESA/Webb (esawebb.org) and NSF NOIRLab (noirlab.edu), reprojected with the
+  coordinates the archives give (rebuild with `node scripts/build-nebula-photos.mjs`, after
+  `build-nebula-images.mjs`). Credits:
+  - Lagoon Nebula (M8): ESO/VPHAS+ team.
+  - Trifid Nebula (M20): NSF–DOE Vera C. Rubin Observatory/NOIRLab/SLAC/AURA.
+  - Omega Nebula (M17): ESO/INAF-VST/OmegaCAM. Acknowledgement: OmegaCen/Astro-WISE/Kapteyn Institute.
+  - Eagle Nebula (M16): ESO.
+  - North America Nebula: KPNO/NOIRLab/NSF/AURA/Adam Block.
+  - Bubble Nebula: T.A. Rector (University of Alaska Anchorage), WIYN ODI team & WIYN/NOIRLab/NSF/AURA.
+  - Pacman Nebula: T.A. Rector/University of Alaska Anchorage and WIYN/AURA/NSF.
+  - Flaming Star Nebula: T.A.Rector and B.A.Wolpa/NOIRLab/NSF/AURA.
+  - Cone Nebula: T.A. Rector (NRAO/AUI/NSF and NOIRLab/NSF/AURA) and B.A. Wolpa (NOIRLab/NSF/AURA).
+  - Rosette Nebula: CTIO/NOIRLab/DOE/NSF/AURA; Image Processing: T.A. Rector (University of Alaska Anchorage/NSF NOIRLab), D. de Martin & M. Zamani (NSF NOIRLab).
+  - Orion Nebula (M42): NASA, ESA, M. Robberto (Space Telescope Science Institute/ESA) and the Hubble Space Telescope Orion Treasury Project Team.
+  - Carina Nebula: ESO. Acknowledgement: VPHAS+ Consortium/Cambridge Astronomical Survey Unit.
+  - Running Chicken Nebula: ESO/VPHAS+ team. Acknowledgement: CASU.
+  - Cat's Paw Nebula: ESO.
+  - Helix Nebula: ESO.
+  - Dumbbell Nebula (M27): ESO/I. Appenzeller, W. Seifert, O. Stahl, M. Zamani.
+  - Ring Nebula (M57): NASA, ESA, and C. Robert O’Dell (Vanderbilt University).
+  - Cat's Eye Nebula: ESA, NASA, HEIC and The Hubble Heritage Team (STScI/AURA).
+  - Little Dumbbell (M76): NASA, ESA, STScI, A. Pagan (STScI).
+  - Owl Nebula (M97): International Gemini Observatory/NOIRLab/NSF/AURA/Émilie Storer (Collège Charlemagne, QUE)/André-Nicolas Chené (HIA/NRCof Canada)/T. Rector (U.Alaska, Anchorage).
+  - Southern Ring Nebula: NASA, ESA, CSA, STScI, and the Webb ERO Production Team.
+  - Butterfly Nebula: International Gemini Observatory/NOIRLab/NSF/AURA Image Processing: J. Miller & M. Rodriguez (International Gemini Observatory/NSF NOIRLab), T.A. Rector (University of Alaska Anchorage/NSF NOIRLab), M. Zamani (NSF NOIRLab).
+  - Cygnus Loop (Veil Nebula): NASA, ESA, the Hubble Heritage (STScI/AURA)-ESA/Hubble Collaboration, and the Digitized Sky Survey 2. Acknowledgment: J. Hester (Arizona State University) and Davide De Martin (ESA/Hubble).
+  - Cassiopeia A: NASA, ESA, and the Hubble Heritage (STScI/AURA)-ESA/Hubble Collaboration. Acknowledgement: Robert A. Fesen (Dartmouth College, USA) and James Long (ESA/Hubble).
+  - Crab Nebula (M1): NASA, ESA and Allison Loll/Jeff Hester (Arizona State University). Acknowledgement: Davide De Martin (ESA/Hubble).
+  - Jellyfish Nebula (IC 443): KPNO/NOIRLab/NSF/AURA/Tom Bash and John Fox/Adam Block.
+  - Horsehead Nebula (B33): ESO.
+  - M78: ESO/Igor Chekalin.
 - Stars within 100 pc: ESA Gaia DR3 via the Gaia archive (rebuild with `node scripts/build-stars-100pc.mjs`),
   with names and the brightest stars from HYG v4.1.
 - Real stars on the Galaxy Map: every star brighter than G = 8 with a parallax good to 20% (61,673

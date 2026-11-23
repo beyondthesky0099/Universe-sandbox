@@ -194,6 +194,7 @@ const FRAGMENT = /* glsl */ `
   uniform float uOpacity;
   uniform float uSteps;
   uniform float uStar;      // 1: draw a central star (planetary nebulae, photographed or modelled)
+  uniform float uGain;      // brightness of a photographed nebula's gas (NebulaVolumeSpec.photo.gain)
   varying vec3 vWorld;
 
   const vec3 OIII = vec3(0.30, 0.95, 0.82);
@@ -235,7 +236,7 @@ const FRAGMENT = /* glsl */ `
       float depthNoise = n3(vec3(q.xy * 0.12, q.z * 1.6) + uSeed);
       float detail = 0.35 + 1.3 * depthNoise;
       float rho = gas * prof * detail / (0.56 * h);
-      emit = ph / max(lum, 0.03) * rho;
+      emit = ph / max(lum, 0.03) * rho * uGain;
       // Dark lanes within the nebula: absorbing dust where the picture is dark between bright gas.
       float dust = prof * smoothstep(0.5, 0.8, rg) * (1.0 - smoothstep(0.03, 0.2, gas)) * edge * smoothstep(0.0, 0.08, h - 0.03);
       sigma = 0.7 * rho + 5.0 * dust;
@@ -333,7 +334,7 @@ export interface NebulaVolumeSpec {
   /** Photographed nebulae: the atlas, the picture's rectangle in it (texture space), and its axes
    * (right, up as seen from Earth; forward away from Earth). The picture spans the volume's width;
    * its stars are removed before use (starlessGas). */
-  photo?: { atlas: THREE.Texture; rect: [number, number, number, number]; hdUrl?: string };
+  photo?: { atlas: THREE.Texture; rect: [number, number, number, number]; hdUrl?: string; gain?: number };
   axes?: { right: [number, number, number]; up: [number, number, number]; forward: [number, number, number] };
   /** A dark cloud with a picture: drawn from the picture only when glowing gas lies behind it (the Horsehead). */
   backlitOnly?: boolean;
@@ -372,6 +373,7 @@ export class NebulaRaymarch {
         uOpacity: { value: 0 },
         uSteps: { value: steps },
         uStar: { value: spec.centralStar ? 1 : 0 },
+        uGain: { value: spec.photo?.gain ?? 1 },
       },
       side: THREE.BackSide,
       transparent: true,

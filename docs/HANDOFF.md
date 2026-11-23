@@ -208,6 +208,33 @@ Plan, in priority order:
 - BodyVisual adds it in applyDetail and updates it only when the planet is more than 14 px across
   and a star is present. Tests: tests/aurora.test.ts.
 
+### BH. The rest of "what did we miss" (except the Sky view)
+- [x] scripts/build-galactic-extras.py → galactic-extras.json (33 kB): S-stars (VizieR
+  J/ApJ/837/30 table3), HVS (J/ApJ/751/55 table1, classes HVSs/pBHVSs/pHVSs; S5-HVS1 by hand),
+  Radcliffe Wave (Dataverse F98QHY, every 5th point), Local Bubble (Dataverse RHPVNC, HEALPix ring
+  nside 128, r_in_lmax-10, on a 72 × 37 grid; ang2pix ring written out). sim/galacticExtras.ts
+  (+ NANOGRAV_15YR, 68 names), loaded at start (main.ts) for the scene.
+- [x] sim/sStars.ts + preset `sgr-a-stars` (Milky Way core target now opens it; the old
+  `core` preset is "Galactic Core (illustrative)"). a(AU) = a″ × R0(pc). Test flies S2 through
+  periapse: 105–135 AU, 7,000–8,300 km/s.
+- [x] render/galaxyExtras.ts (Galaxy map, MW only): Local Bubble mesh, Radcliffe Wave line coloured
+  by vz, HVS with outward arrows (1,000 km/s = 10 kpc), S5-HVS1's dashed path from Sgr A*, NANOGrav
+  rings (66 of 68 found in the ATNF list). Checkboxes opt-real-neighbourhood / -hvs / -nanograv.
+  "Pillars of Creation" alias on M16 (searchSources NEBULA_NICKNAMES).
+- [x] cosmology.ts: ageAtScale, scaleFactorAtAge, hubbleAt, compositionAt, decelerationAt,
+  ACCELERATION_START_A (z ≈ 0.63, 7.7 Gyr). app/cosmicTime.ts (History pane): log slider afterglow →
+  today, linear → 30 Gyr; cosmosView.setScaleFactor scales the scene, hides labels when crowded and
+  everything but the CMB before the first stars (0.18 Gyr).
+- [x] Deep fields: HUDF sightline (cosmicShapes) + COSMIC_STRUCTURES entries (HUDF, SMACS 0723).
+  FRBs: scripts/build-frbs.mjs → frbs.json (32), sim/frbs.ts, cosmicShapes.setFrbs, opt-cosmos-frbs.
+- [x] outerSolarSystem.ts: Planet Nine's orbit (a 380, q 300, i 16°, Ω 100°, ω 150°; dashed,
+  "hypothetical") and the zodiacal cloud (12,000 points, n ∝ r^−1.3, fan).
+- [x] sim/impacts.ts: Chicxulub and Shoemaker–Levy 9 presets (true scale). simulation.ts: merges
+  of a small body (< 10⁻³ of the other) report megatons (`impactMegatons`, `formatMegatons`);
+  `plungesIn`: bodies under 10⁻¹² M☉ already on a collision course aren't tidally disrupted
+  (SL9's fragments would otherwise break up at 118,000 km).
+- Tests: tests/missed-features.test.ts.
+
 ### BG. Stars go to the galaxy map; real double stars
 - [x] scripts/build-stars.mjs: named bright stars get their HYG distance (pc) as a 7th field (357
   of 358; stars-near.json byte-identical after the rebuild). BrightStar type extended.

@@ -162,6 +162,15 @@ export class CosmicShapes {
       this.add(glowLine(arc, 0x9fc2ff), 500, 20000, 0.8);
     }
 
+    // The Hubble Ultra Deep Field (RA 53.16°, Dec −27.79°): a sightline 2.4′ wide (a tenth of the
+    // full Moon) out to redshift ~11, along which ~10,000 galaxies were counted; JWST's JADES survey
+    // looks along it too. Drawn as a line (at true width it would be invisible).
+    {
+      const far = comovingDistance(11);
+      const line = glowLine([eq(53.1625, -27.7914, 30), eq(53.1625, -27.7914, far)], 0xfff2b0);
+      this.add(line, 300, 40000, 0.7);
+    }
+
     // The Great Wall's region: its 45° circle at redshift 1.6 and 2.1, joined by radial edges.
     {
       const { east, north } = skyBasis(HCB.raDeg, HCB.decDeg);
@@ -287,6 +296,38 @@ export class CosmicShapes {
   private voidLabel?: THREE.Sprite;
   private voidCentre = new THREE.Vector3();
   private voidRadius = 1;
+
+  /**
+   * Fast radio bursts traced to their host galaxies (sim/frbs.ts): millisecond radio flashes, each
+   * at its host's distance; the two famous ones named.
+   */
+  private frbLayer?: THREE.Group;
+  setFrbs(bursts: [string, number, number, number, string?][]): void {
+    const g = new THREE.Group();
+    const pts = bursts.map(([, ra, dec, z]) => eq(ra, dec, comovingDistance(z)));
+    const dots = new THREE.Points(
+      new THREE.BufferGeometry().setFromPoints(pts),
+      new THREE.PointsMaterial({ color: 0x6ff7ff, size: 7, sizeAttenuation: false, transparent: true, opacity: 0.95, depthWrite: false, blending: THREE.AdditiveBlending }),
+    );
+    dots.frustumCulled = false;
+    g.add(dots);
+    bursts.forEach(([name, , , z, note], i) => {
+      // The DSA team's informal nicknames are lower case; only the famous two get a note.
+      if (!note || note[0] === note[0].toLowerCase() && !note.includes(' ')) return;
+      const s = textSprite(`${name}: ${note} · redshift ${z}`, '#9ffbff', 0.7);
+      s.position.copy(pts[i]);
+      s.userData.priority = 700;
+      g.add(s);
+    });
+    this.frbLayer = g;
+    g.visible = this.frbsOn;
+    this.group.add(g);
+  }
+  private frbsOn = true;
+  setFrbsVisible(on: boolean): void {
+    this.frbsOn = on;
+    if (this.frbLayer) this.frbLayer.visible = on;
+  }
 
   /** The Wall as its bursts trace it: their minimum spanning tree, convex hull and largest span. */
   private addWallShape(p: THREE.Vector3[]): void {

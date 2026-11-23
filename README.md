@@ -1151,6 +1151,19 @@ push and pull request.
   & Williger 2022, MNRAS 516, 1557) and Big Ring (Lopez et al. 2024, JCAP 07, 055), positions read
   off their figures; and the claimed Hercules–Corona Borealis Great Wall (Horváth, Hakkila &
   Bagoly 2014, A&A 561, L12).
+- The Milky Way extras (`python3 -I scripts/build-galactic-extras.py`, needs numpy): the S-stars'
+  orbits round Sgr A* (Gillessen et al. 2017, ApJ 837, 30; VizieR J/ApJ/837/30) for the
+  "Sgr A* and the S-stars" scene; hypervelocity stars (Brown et al. 2012, ApJ 751, 55; VizieR
+  J/ApJ/751/55) and S5-HVS1 (Koposov et al. 2020, MNRAS 491, 2465); the Radcliffe Wave's best-fit
+  model (Konietzka et al. 2024, Nature 628, 62; Harvard Dataverse doi:10.7910/DVN/F98QHY, CC0);
+  and the Local Bubble's shell (Pelgrims et al. 2020, A&A 636, L17; doi:10.7910/DVN/RHPVNC, CC0).
+  The 68 NANOGrav 15-year pulsars are from Agazie et al. 2023 (ApJL 951, L9, table 5).
+- Fast radio bursts (`node scripts/build-frbs.mjs`): hosts and redshifts of the DSA-110 sample of
+  Sharma et al. 2024 (Nature 635, 61; the authors' data release on GitHub), plus FRB 20121102A
+  (Tendulkar et al. 2017, ApJL 834, L7) and FRB 20220610A (Ryder et al. 2023, Science 382, 294).
+- Planet Nine's hypothetical orbit: Brown & Batygin 2021 (AJ 162, 219). The zodiacal cloud: the
+  fan model's r^−1.3 density (Kelsall et al. 1998, ApJ 508, 44). Chicxulub: Collins et al. 2020
+  (Nature Communications 11, 1480). The Hubble Ultra Deep Field: Beckwith et al. 2006 (AJ 132, 1729).
 - The Boötes Void: found by Kirshner, Oemler, Schechter & Shectman 1981 (ApJ 248, L57) at RA 14h50m,
   Dec +46°, 15,500 km/s; radius 3,100 km/s from Wegner, Salzer, Taylor & Hirschauer 2019 (ApJ 883,
   29). Its emptiness is measured in the map's 2MASS galaxies: in its near half (the survey ends at

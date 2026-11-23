@@ -304,6 +304,11 @@ export const COSMIC_STRUCTURES: { name: string; l: number; b: number; d: number;
   // Quipu (Böhringer et al. 2025, A&A 695, A59): 428 Mpc of galaxy clusters at z ≈ 0.043, the largest
   // structure known in the nearby universe; labelled near the middle of its run (RA ~60°, Dec ~−5°).
   { name: 'Quipu superstructure', l: 195.3, b: -40.0, d: 189, viewMpc: 700 },
+  // Deep fields (render/cosmicShapes.ts draws the HUDF sightline): the Hubble Ultra Deep Field
+  // (Beckwith et al. 2006; RA 53.16°, Dec −27.79°), labelled at z ≈ 4, and Webb's First Deep Field,
+  // the cluster SMACS 0723 (z = 0.39) whose lensing magnifies galaxies far behind it (July 2022).
+  { name: 'Hubble Ultra Deep Field', l: 223.55, b: -54.39, d: 7331, viewMpc: 5000, aliases: ['HUDF', 'Hubble Deep Field', 'eXtreme Deep Field', 'JADES', 'deep field'] },
+  { name: 'Webb’s First Deep Field (SMACS 0723)', l: 284.99, b: -23.7, d: 1564, viewMpc: 60, aliases: ['JWST deep field', 'SMACS J0723', 'Webb deep field'] },
   // Claimed structures at z ≈ 0.80 near Boötes, traced by Mg II absorbers (Lopez et al. 2022, 2024),
   // positions read off the papers' figures (render/cosmicShapes.ts draws them); debated.
   { name: 'Giant Arc (claimed)', l: 73.8, b: 69.8, d: 2873, viewMpc: 2600 },

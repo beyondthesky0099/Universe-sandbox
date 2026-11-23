@@ -5,6 +5,7 @@ import { loadActiveNucleus } from '../sim/presets';
 import { loadRadioLobes, radioAtlasUrl } from '../sim/radioLobes';
 import { loadLaniakea } from '../sim/laniakea';
 import { loadGrbs } from '../sim/grbs';
+import { loadFrbs } from '../sim/frbs';
 import { MILKY_WAY_SEED } from '../procgen/galaxy';
 import { fmt } from '../sim/units';
 import { $, escapeHtml, setFacts, toast } from '../ui/dom';
@@ -59,6 +60,13 @@ export class CosmosUI {
             .then((bursts) => {
               this.app.cosmos.setGrbs(bursts);
               this.app.cosmos.setGrbsVisible($<HTMLInputElement>('opt-cosmos-grbs').checked);
+            })
+            .catch(() => undefined);
+          // Fast radio bursts with host redshifts (sim/frbs.ts).
+          void loadFrbs()
+            .then((bursts) => {
+              this.app.cosmos.setFrbs(bursts);
+              this.app.cosmos.setFrbsVisible($<HTMLInputElement>('opt-cosmos-frbs').checked);
             })
             .catch(() => undefined);
           // Laniakea: the CosmicFlows-4 flows and our supercluster's real shape (sim/laniakea.ts).

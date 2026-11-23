@@ -7,6 +7,7 @@ import { CLUSTER_COLORS, loadClusters } from '../sim/clusters';
 import { clusterSwarms } from '../procgen/clusterStars';
 import { diameterPc, eclipticToGalactic, loadNebulae, NEBULA_COLORS } from '../sim/nebulae';
 import { loadBrightStars, temperatureFromBV } from '../sim/stars';
+import { loadGalacticExtras } from '../sim/galacticExtras';
 import { kelvinToRgb } from '../sim/color';
 import { loadNebulaImages, NEBULA_IMAGE_CREDIT, nebulaAtlasUrl, nebulaHdUrl, nebulaKey, tileRect, type NebulaImageAtlas } from '../sim/nebulaImages';
 import type { Cloud } from '../render/nebulaClouds';
@@ -132,6 +133,7 @@ export class GalaxyMapUI {
     const all = await loadPulsars().catch(() => undefined);
     if (!all || this.app.galaxySeed !== seed) return;
     this.app.pulsarMapList = all;
+    this.app.galaxy.extras.setPulsars(all);
     this.app.galaxy.pulsarPositions = all.map((p) => {
       const [l, b] = equatorialToGalactic(p.raDeg, p.decDeg);
       return galacticToMap(l, b, p.distanceKpc);
@@ -429,6 +431,7 @@ export class GalaxyMapUI {
       void this.showGalacticObjectsOnMap(seed);
       void this.showGaiaOnMap(seed);
       void this.showNamedStarsOnMap(seed);
+      void loadGalacticExtras().then((d) => this.app.galaxy.extras.setData(d)).catch(() => undefined);
     }
     $<HTMLInputElement>('galaxy-seed').value = String(seed);
     $('star-panel').classList.add('hidden');

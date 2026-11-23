@@ -22,6 +22,9 @@ import { SPACECRAFT_COLOR, spacecraftState } from './spacecraft';
 import { loadMilkyWayAndromeda } from './localGroup';
 import { hyperbolicState, INTERSTELLAR_SHOW_AU } from './interstellar';
 import { REAL_BINARY_PRESETS } from './realBinaries';
+import { chicxulub, shoemakerLevy9 } from './impacts';
+import { getGalacticExtras } from './galacticExtras';
+import { loadSStars } from './sStars';
 import { getSolarData, KM_PER_AU, poleScene, realRadiusAu, REAL_COLORS, relativeState, sampleRingRadii, smallBodyState, toScene, type SolarData } from './solarSystemData';
 
 export interface SceneSetup {
@@ -464,9 +467,20 @@ const selfGravitatingGalaxy: Preset = {
 };
 
 /** Central supermassive black hole with stars on eccentric orbits; also reached from the galaxy map. */
+/** The real S-stars round Sgr A* (sim/sStars.ts); the illustrative core if the data hasn't loaded. */
+export const sgrAStars: Preset = {
+  id: 'sgr-a-stars',
+  name: 'Sgr A* and the S-stars',
+  description: 'The Milky Way’s central black hole with the real stars orbiting it, on the orbits measured over 25 years. S2 comes round every 16 years.',
+  load(sim) {
+    const d = getGalacticExtras();
+    return d ? loadSStars(sim, d) : galacticCore.load(sim);
+  },
+};
+
 export const galacticCore: Preset = {
   id: 'core',
-  name: 'Galactic Core',
+  name: 'Galactic Core (illustrative)',
   description: 'A supermassive black hole with stars on wild, eccentric orbits and an infalling gas cloud. One star is on a path to be torn apart.',
   load(sim) {
     sim.dtMax = 0.02;
@@ -1252,6 +1266,7 @@ export const PRESETS: Preset[] = [
   pulsarPlanets,
   hulseTaylor,
   galacticCore,
+  sgrAStars,
   starCluster,
   selfGravitatingGalaxy,
   milkyWayAndromeda,
@@ -1259,6 +1274,9 @@ export const PRESETS: Preset[] = [
   empty,
   // Real double stars near the Sun on their measured orbits (sim/realBinaries.ts).
   ...REAL_BINARY_PRESETS,
+  // Famous impacts (sim/impacts.ts).
+  chicxulub,
+  shoemakerLevy9,
 ];
 
 function gauss(): number {

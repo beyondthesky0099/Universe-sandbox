@@ -19,10 +19,16 @@ import { lightYears, type SearchAction, type SearchEntry } from './search';
 const NEBULA_KIND: Record<Nebula['kind'], string> = { hii: 'HII region', pn: 'Planetary nebula', snr: 'Supernova remnant', dark: 'Dark nebula', refl: 'Reflection nebula' };
 
 /** Nebulae: to the Galaxy Map when the distance is known, otherwise to the Sky tab. */
+/** Famous features known by their own names, inside catalogued nebulae. */
+const NEBULA_NICKNAMES: Record<string, string[]> = {
+  // The Hubble (1995, 2014) and Webb (2022) pictures of its pillars of gas and dust.
+  'Eagle Nebula (M16)': ['Pillars of Creation'],
+};
+
 export function nebulaEntries(list: Nebula[]): SearchEntry[] {
   return list.map((n) => ({
     name: n.name ?? n.id,
-    aliases: n.name ? [n.id] : undefined,
+    aliases: n.name ? [n.id, ...(NEBULA_NICKNAMES[n.name] ?? [])] : undefined,
     kind: NEBULA_KIND[n.kind],
     detail: n.distanceKpc ? `${lightYears(n.distanceKpc)} away${n.distanceNote ? `, the distance of its ${n.distanceNote.replace(/ \(.*$/, '')}` : ''}` : 'on the sky (distance unknown)',
     rank: n.name ? 60 : 0,

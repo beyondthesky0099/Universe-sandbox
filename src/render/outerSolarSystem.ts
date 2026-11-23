@@ -126,7 +126,59 @@ export class OuterSolarSystem {
     oortLabel.position.set(0, OORT_OUTER_AU * 0.7, 0);
     this.group.add(oortLabel);
     this.labels.push({ obj: oortLabel, show: (d) => d > 30000 });
+
+    // Planet Nine, hypothetical: the orbit Brown & Batygin (2021, AJ 162, 219) infer from the
+    // clustering of distant Kuiper belt orbits: a = 380 AU, perihelion 300 AU (e = 0.21),
+    // i = 16°, Ω ≈ 100°, ϖ ≈ 250° (so ω ≈ 150°), ecliptic J2000; ~6 Earth masses. Never seen.
+    {
+      const a = 380, e = 1 - 300 / a, i = 16 * DEG, node = 100 * DEG, w = 150 * DEG;
+      const pts: THREE.Vector3[] = [];
+      for (let k = 0; k <= 256; k++) {
+        const E = (k / 256) * 2 * Math.PI;
+        const xp = a * (Math.cos(E) - e), yp = a * Math.sqrt(1 - e * e) * Math.sin(E);
+        const cO = Math.cos(node), sO = Math.sin(node), cw = Math.cos(w), sw = Math.sin(w), ci = Math.cos(i), si = Math.sin(i);
+        const x = (cO * cw - sO * sw * ci) * xp + (-cO * sw - sO * cw * ci) * yp;
+        const y = (sO * cw + cO * sw * ci) * xp + (-sO * sw + cO * cw * ci) * yp;
+        const z = sw * si * xp + cw * si * yp;
+        pts.push(new THREE.Vector3(x, z, -y)); // ecliptic → scene
+      }
+      this.planetNine = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineDashedMaterial({ color: 0xc8a0ff, dashSize: 12, gapSize: 9, transparent: true, opacity: 0 }));
+      this.planetNine.computeLineDistances();
+      this.group.add(this.planetNine);
+      const p9 = label('Planet Nine? A hypothetical orbit, predicted from distant Kuiper belt objects; not found', 'p9-label');
+      p9.position.copy(pts[128]);
+      this.group.add(p9);
+      this.labels.push({ obj: p9, show: (d) => d > 150 && d < 6000 });
+    }
+
+    // The zodiacal cloud: dust from comets and asteroid collisions, thickest near the Sun and close
+    // to the ecliptic (density ∝ r^−1.3, fan-shaped; Kelsall et al. 1998, ApJ 508, 44). Sunlight it
+    // scatters is the zodiacal light, seen after dusk in spring and before dawn in autumn.
+    {
+      const rand = mulberry32(1998);
+      const n = 12000;
+      const pos = new Float32Array(n * 3);
+      for (let k = 0; k < n; k++) {
+        // r from 0.1 to 3.5 AU with density ∝ r^−1.3 per volume: n(r) dr ∝ r^0.7 dr.
+        const r = powerLawRadius(rand(), 0.1, 3.5, -0.7);
+        const phi = 2 * Math.PI * rand();
+        // Fan model: vertical spread grows with r (half-thickness ~0.15 r).
+        const h = r * 0.15 * Math.log(1 / Math.max(1e-6, rand())) * (rand() < 0.5 ? -1 : 1);
+        pos.set([r * Math.cos(phi), h, r * Math.sin(phi)], k * 3);
+      }
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+      this.zodiacal = new THREE.Points(geo, new THREE.PointsMaterial({ color: 0xffe3b0, size: 1.4, sizeAttenuation: false, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending }));
+      this.zodiacal.frustumCulled = false;
+      this.group.add(this.zodiacal);
+      const zl = label('Zodiacal cloud: dust from comets and asteroids; its sunlight is the zodiacal light');
+      zl.position.set(2.4, 0.35, 0);
+      this.group.add(zl);
+      this.labels.push({ obj: zl, show: (d) => d > 2 && d < 25 });
+    }
   }
+  private readonly planetNine: THREE.Line;
+  private readonly zodiacal: THREE.Points;
 
   /** Show around the Sun (or hide), fading each part in with the camera's distance from the Sun (AU). */
   update(sun: { x: number; y: number; z: number } | undefined, cameraDistance: number): void {
@@ -138,5 +190,7 @@ export class OuterSolarSystem {
     const d = cameraDistance;
     (this.helio.material as THREE.ShaderMaterial).uniforms.uOpacity.value = 0.35 * THREE.MathUtils.smoothstep(d, 40, 200) * (1 - THREE.MathUtils.smoothstep(d, 20000, 80000));
     (this.oort.material as THREE.PointsMaterial).opacity = THREE.MathUtils.smoothstep(d, 400, 4000);
+    (this.planetNine.material as THREE.LineDashedMaterial).opacity = 0.7 * THREE.MathUtils.smoothstep(d, 60, 250) * (1 - THREE.MathUtils.smoothstep(d, 8000, 20000));
+    (this.zodiacal.material as THREE.PointsMaterial).opacity = 0.35 * THREE.MathUtils.smoothstep(d, 0.6, 2.5) * (1 - THREE.MathUtils.smoothstep(d, 30, 80));
   }
 }

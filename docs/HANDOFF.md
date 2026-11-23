@@ -208,13 +208,30 @@ Plan, in priority order:
 - BodyVisual adds it in applyDetail and updates it only when the planet is more than 14 px across
   and a star is present. Tests: tests/aurora.test.ts.
 
-### BC. Laniakea
-- [x] galaxies.ts COSMIC_STRUCTURES: `size` (Mpc across) for an outline; Laniakea at l 307°,
-  b 9°, 65 Mpc, 160 Mpc across (Tully et al. 2014). cosmosView `addOutline` draws a rim-lit
-  sphere that fades in once the camera is out at its scale; its label flies to 2.2 × its size.
-  searchSources: kinds (Supercluster, Void, Galaxy wall) and "…across; the Milky Way is inside it",
-  with `viewMpc` for the flight. Tests in galaxies.test.ts (inside: Milky Way, Virgo, Fornax;
-  outside: Shapley, Perseus–Pisces).
+### BC. Laniakea from the CosmicFlows-4 velocity field
+- [x] scripts/build-laniakea.py → public/data/laniakea.bin (0.8 MB): CosmicFlows-4 grids
+  (Courtois et al. 2023, Zenodo 20653238, CC BY 4.0, md5-checked), 128³ over 1000 h⁻¹ Mpc,
+  numpy axes (SGX, SGY, SGZ), velocity components (vSGX, vSGY, vSGZ) × 52 km/s. Both checked in
+  the data: −∇·v tracks δ with r = 1.000 only in that order; the velocity at the centre matches the
+  Local Group's CMB motion.
+  - Attractor: pointer-following (26 neighbours) from the Milky Way's voxel to its loop.
+  - Basin: RK4 streamlines (600 half-voxel steps) from every voxel within 250 h⁻¹ Mpc; those ending
+    within 15 h⁻¹ Mpc of the attractor (pointer-following alone left flat faces along grid planes).
+    1.95 × 10⁶ (h⁻¹ Mpc)³ vs Dupuy & Courtois 2023's 1.9 × 10⁶; attractor SG (−47, 8, 47) vs their
+    (−62, −8, 39). The full field is used (their method); smoothing it, or a local/tidal split,
+    gave other answers (everything drains into Shapley, or Ophiuchus becomes the attractor).
+  - 3,000 flow lines (1,600 seeded in Laniakea, ∝ (1 + δ)^1.5), surface nets of the basin
+    (Gaussian σ 1.1 voxel, two Laplacian passes), and the basin as a bit mask.
+  - h⁻¹ Mpc → Mpc with h = 0.6766 (the map's H0), supergalactic → galactic → Universe frame.
+- [x] sim/laniakea.ts (decode, load, `inLaniakea`), render/laniakeaView.ts (additive gold/blue
+  flow lines brightening along their length, rim-lit golden skin, red "you are here" with label
+  priority 1e6; fades in with distance). Layer checkbox `opt-cosmos-laniakea`. The structure label
+  sits at Dupuy & Courtois's attractor (l 350.0°, b −2.8°, 109 Mpc), flies out 520 Mpc.
+- [x] Tests (galaxies.test.ts) read the real file: volume, attractor, membership (Virgo, Fornax,
+  Centaurus, Hydra, Norma, Pavo II in; Coma, Perseus, Shapley, Hercules out), search entry.
+- The main CosmicFlows site (edd.ifa.hawaii.edu) fails TLS verification from the cloud sandbox,
+  and projets.ip2i.in2p3.fr dropped connections; Zenodo worked. The published watershed grid
+  (on the IP2I site) was not used: the basin is recomputed from the velocity field instead.
 
 ### BB. Radio lobes face the camera
 - [x] render/radioLobes.ts: each radio-survey picture was a fixed square facing the Milky Way, so

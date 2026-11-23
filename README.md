@@ -1134,11 +1134,18 @@ push and pull request.
   radiation; `src/sim/cosmology.ts`). The universe is 13.79 billion years old, the microwave
   background's last-scattering surface is 13,880 Mpc (45.3 billion light-years) away, and the
   observable universe's edge (the particle horizon) 46.2 billion light-years. Supercluster, wall and void labels use approximate published
-  positions. **Laniakea**, our home supercluster (Tully, Courtois, Hoffman & Pomarède 2014,
-  Nature 513, 71), is centred towards the Great Attractor (l 307°, b 9°) and drawn as a sphere
-  160 Mpc across: that holds the Milky Way, Virgo, Hydra, Centaurus, Norma and Fornax and leaves
-  out the Shapley, Perseus–Pisces and Coma superclusters, as the paper does, though its real
-  boundary (traced from galaxies' motions) is irregular.
+  positions.
+- Laniakea (`python3 -I scripts/build-laniakea.py`, needs numpy): the **CosmicFlows-4** density
+  and peculiar-velocity grids of Courtois, Dupuy, Guinet, Baulieu, Ruppin & Brenas 2023, "Gravity
+  in the local Universe: density and velocity fields using CosmicFlows-4", A&A 670, L15
+  (https://doi.org/10.1051/0004-6361/202245331), from Zenodo record 20653238
+  (https://zenodo.org/records/20653238), licensed **CC BY 4.0**. From them the script traces
+  3,000 flow lines and finds Laniakea as the basin of attraction holding the Milky Way, following
+  Dupuy et al. 2019 and Dupuy & Courtois 2023, "Dynamic cosmography of the local Universe:
+  Laniakea and five more watershed superclusters", A&A 678, A176. Our basin: 1.95 × 10⁶ (h⁻¹ Mpc)³
+  (theirs 1.9 × 10⁶); it holds Virgo, Fornax, Centaurus, Hydra, Norma and Pavo and not Coma,
+  Perseus, Shapley or Hercules. Laniakea was discovered by Tully, Courtois, Hoffman & Pomarède
+  2014, Nature 513, 71, whose famous map this view follows.
 - Star data: **HYG database v4.1** by David Nash (astronexus), licensed **CC BY-SA 4.0**
   (https://codeberg.org/astronexus/hyg). The derived files `public/data/stars-near.json` and
   `public/data/stars-bright.json` are also CC BY-SA 4.0. Rebuild them with

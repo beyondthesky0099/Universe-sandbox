@@ -110,7 +110,7 @@ export function structureEntries(): SearchEntry[] {
     // Laniakea holds the Milky Way: say how big it is, not how far.
     detail: s.size ? `${lightYears(s.size * 1000)} across; the Milky Way is inside it` : `${lightYears(s.d * 1000)} away`,
     rank: s.size ? 85 : 70,
-    action: { type: 'cosmos', l: s.l, b: s.b, dMpc: s.d, ...(s.size ? { viewMpc: s.size * 2.2 } : {}) },
+    action: { type: 'cosmos', l: s.l, b: s.b, dMpc: s.d, ...(s.viewMpc ? { viewMpc: s.viewMpc } : {}) },
   }));
 }
 

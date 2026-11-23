@@ -208,6 +208,14 @@ Plan, in priority order:
 - BodyVisual adds it in applyDetail and updates it only when the planet is more than 14 px across
   and a star is present. Tests: tests/aurora.test.ts.
 
+### BB. Radio lobes face the camera
+- [x] render/radioLobes.ts: each radio-survey picture was a fixed square facing the Milky Way, so
+  orbiting a radio galaxy (Centaurus A) turned it edge-on into a thin streak. The vertex shader now
+  turns each square by the smallest rotation from "facing the Milky Way" to "facing the camera"
+  (Rodrigues; half a turn about its up axis when exactly opposite). From our direction it is
+  unchanged; elsewhere it stays whole, its axis as near as possible to the true one. Only our
+  projection of the lobes is known, so this is a stand-in, not a 3D model.
+
 ### BA. The edge of the Solar System; small bodies touch real surfaces
 - [x] src/render/outerSolarSystem.ts (render only): the heliopause (a rim-lit stretched shell,
   nose at 120 AU towards ecliptic longitude 255.4°, latitude 5.2° (IBEX), tail 3× longer) and the

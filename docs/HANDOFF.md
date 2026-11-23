@@ -218,6 +218,9 @@ Plan, in priority order:
 - [x] cosmosView.flyToPoint: when the end point would be beyond 70% of the CMB radius, the camera
   comes round to our side, 35° off the line to us (so far structures appear as seen from Earth,
   not against the CMB from outside). The Great Wall's view is 11,000 Mpc.
+- [x] Search: a query whose words each match the name or the kind ("hercules structure") scores 300;
+  structure kinds answer to "structure / superstructure / large scale"; COSMIC_STRUCTURES `aliases`
+  (HCB). `lightYears` gives billions past 10⁹ ly ("16.6 billion ly").
 
 ### BD. Interstellar visitors, dark matter, the Milky Way's surroundings, giant structures
 - [x] Interstellar objects: scripts/build-interstellar.mjs → public/data/interstellar.json (JPL SBDB,

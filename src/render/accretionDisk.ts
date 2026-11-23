@@ -66,7 +66,9 @@ export const DISC_GLSL = /* glsl */ `
     float peak0 = discProfile(6.0 * 49.0 / 36.0, 6.0);
     float T = 6500.0 * discProfile(R, Rin) / peak0;
     vec3 col = blackbody(T * g);
-    float I = pow(T / 6500.0, 2.0) * clamp(g * g * g, 0.02, 4.0);
+    // Observed intensity goes as g³ (no floor: gas deep in the hole's well, strongly redshifted,
+    // must fade to black rather than glow grey across the shadow).
+    float I = pow(T / 6500.0, 2.0) * clamp(g * g * g, 0.0, 4.0);
     float omega = pow(R, -1.5) * 6.0;
     float swirl = phi - omega * time;
     float streaks = 0.55 + 0.45 * discNoise(vec2(R * 2.2, swirl * 5.0)) * (0.6 + 0.4 * discNoise(vec2(R * 9.0, swirl * 17.0)));

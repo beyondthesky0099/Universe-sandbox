@@ -5,6 +5,7 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { Pass } from 'three/addons/postprocessing/Pass.js';
+import { SavePass } from 'three/addons/postprocessing/SavePass.js';
 import { DISC_GLSL, DISK_LAYER } from './accretionDisk';
 import { MAX_STEPS, PHI_STEP } from '../sim/geodesic';
 
@@ -131,7 +132,10 @@ const LensShader = {
           float t = hPrev / (hPrev - hh);
           float rc = mix(rPrev, r, t);
           float phic = mix(phiPrev, phi, t);
-          if (rc >= disc.x && rc <= disc.y) {
+          // The rays are traced in the non-spinning (Schwarzschild) geometry, where no gas orbits
+          // inside the photon sphere (3 M). A fast prograde spin puts the disc's inner edge below
+          // that (2.3 M at a = 0.9); drawing gas there filled the whole shadow with dim light.
+          if (rc >= max(disc.x, 3.0) && rc <= disc.y) {
             vec3 P = e1 * (rc * cos(phic)) + e2 * (rc * sin(phic));
             vec3 m2 = cross(n, uDiscM1[i]);
             float az = atan(dot(P, m2), dot(P, uDiscM1[i]));
@@ -142,7 +146,7 @@ const LensShader = {
             vec3 v = normalize(cross(n, P));
             float beta = min(0.95, inversesqrt(rc));
             float D = sqrt(1.0 - beta * beta) / (1.0 - beta * dot(v, kdir));
-            float g = D * sqrt(max(0.05, 1.0 - 3.0 / rc));
+            float g = D * sqrt(max(0.0, 1.0 - 3.0 / rc));
             return discShade(rc, disc.x, disc.y, g, az, uTime, disc.z);
           }
         }
@@ -211,6 +215,60 @@ const LensShader = {
   `,
 };
 
+/**
+ * After the bloom: put each black hole's shadow back as it was before the bloom. The disc right
+ * next to the shadow is the brightest thing on screen, and its glow otherwise fills the shadow
+ * with grey (worst on phones, where the image is rendered smaller and the glow is wider), so the
+ * hole looked like a grey, half-lit moon. The disc light traced in front of the shadow stays.
+ */
+function shadowKeepShader(lens: ShaderPass) {
+  const u = lens.uniforms;
+  return {
+    uniforms: {
+      tDiffuse: { value: null },
+      tPre: { value: null as THREE.Texture | null },
+      // Replaced by the lens pass's own uniforms once the pass exists (PostFX constructor).
+      uAspect: u.uAspect,
+      uCount: u.uCount,
+      uLenses: u.uLenses,
+      uLensAxis: u.uLensAxis,
+      uShadow: u.uShadow,
+    },
+    vertexShader: LensShader.vertexShader,
+    fragmentShader: /* glsl */ `
+      uniform sampler2D tDiffuse;
+      uniform sampler2D tPre;
+      uniform float uAspect;
+      uniform int uCount;
+      uniform vec3 uLenses[${MAX_LENSES}];
+      uniform vec3 uLensAxis[${MAX_LENSES}];
+      uniform float uShadow[${MAX_LENSES * 32}];
+      varying vec2 vUv;
+      void main() {
+        float keep = 0.0;
+        for (int i = 0; i < ${MAX_LENSES}; i++) {
+          if (i >= uCount) break;
+          vec3 L = uLenses[i];
+          vec2 d = (vUv - L.xy) * vec2(uAspect, 1.0);
+          float r = length(d);
+          vec2 u = uLensAxis[i].xy;
+          vec2 dn = d / max(r, 1e-6);
+          float ang = atan(dn.y * u.x - dn.x * u.y, dot(dn, u));
+          if (ang < 0.0) ang += 6.2831853;
+          float t = ang / 6.2831853 * 32.0;
+          int k0 = int(floor(t));
+          float f = t - float(k0);
+          k0 = k0 - (k0 / 32) * 32;
+          int k1 = k0 + 1 - ((k0 + 1) / 32) * 32;
+          float edge = L.z * mix(uShadow[i * 32 + k0], uShadow[i * 32 + k1], f);
+          keep = max(keep, 1.0 - smoothstep(edge * 0.85, edge, r));
+        }
+        gl_FragColor = mix(texture2D(tDiffuse, vUv), texture2D(tPre, vUv), keep);
+      }
+    `,
+  };
+}
+
 /** Draws one layer of the scene over the image so far (accretion discs after the lensing pass). */
 class LayerPass extends Pass {
   scene = new THREE.Scene();
@@ -243,6 +301,8 @@ export class PostFX {
   private readonly renderPass: RenderPass;
   private readonly lens: ShaderPass;
   private readonly bloom: UnrealBloomPass;
+  private readonly preBloom = new SavePass();
+  private readonly shadowKeep: ShaderPass;
   private readonly disks = new LayerPass(DISK_LAYER);
   enabled = true;
 
@@ -257,7 +317,13 @@ export class PostFX {
     this.composer.addPass(this.renderPass);
     this.composer.addPass(this.lens);
     this.composer.addPass(this.disks);
+    this.composer.addPass(this.preBloom);
     this.composer.addPass(this.bloom);
+    this.shadowKeep = new ShaderPass(shadowKeepShader(this.lens));
+    this.shadowKeep.uniforms.tPre.value = this.preBloom.renderTarget.texture;
+    // ShaderPass clones its uniforms: share the lens pass's own objects so the shadows match.
+    for (const k of ['uAspect', 'uCount', 'uLenses', 'uLensAxis', 'uShadow']) this.shadowKeep.uniforms[k] = this.lens.uniforms[k];
+    this.composer.addPass(this.shadowKeep);
     this.composer.addPass(new OutputPass());
   }
 
@@ -270,6 +336,7 @@ export class PostFX {
   setBloom(strength: number): void {
     this.bloom.strength = strength;
     this.bloom.enabled = strength > 0;
+    this.preBloom.enabled = this.shadowKeep.enabled = strength > 0;
   }
 
   /** Lenses in screen space: x, y in [0, 1] (uv) and shadow radius in screen-height units. */

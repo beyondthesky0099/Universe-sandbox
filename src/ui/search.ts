@@ -109,6 +109,9 @@ const KIND_SYNONYMS: [RegExp, string][] = [
   [/lesson/i, 'lessons'],
   [/challenge/i, 'challenges'],
   [/eclipse/i, 'eclipses'],
+  [/wall|supercluster|large-scale|void|stream|dark matter/i, 'structure structures superstructure large scale cosmic web'],
+  [/wall/i, 'walls filament'],
+  [/supercluster/i, 'superclusters'],
 ];
 function kindWords(kind: string): string[] {
   const extra = KIND_SYNONYMS.filter(([re]) => re.test(kind)).map(([, w]) => w);
@@ -153,6 +156,9 @@ export class SearchIndex {
       });
       // Every query word starts some word of the name ("eta car" → "Eta Carinae").
       if (score < 400 && qWords.length && qWords.every((w) => it.words.some((x) => x.startsWith(w)))) score = Math.max(score, 400);
+      // Or mixes the two ("hercules structure", "virgo cluster"): each word in the name or the kind.
+      if (score < 300 && qWords.length > 1 && qWords.some((w) => it.words.some((x) => x.startsWith(w))) && qWords.every((w) => it.words.some((x) => x.startsWith(w)) || it.kinds.some((k) => sameWord(w, k))))
+        score = Math.max(score, 300);
       // Or names the kind ("pulsars", "agn", "dwarf nova"): below any name match, so the rank decides.
       if (score < 180 && qWords.length && qWords.every((w) => it.kinds.some((k) => sameWord(w, k)))) score = Math.max(score, 180);
       if (score > 0) scored.push({ entry: it.entry, score: score + 1.5 * (it.entry.rank ?? 0) });
@@ -171,6 +177,7 @@ export class SearchIndex {
 /** "1,340 ly" from a distance in kpc. */
 export function lightYears(dKpc: number): string {
   const ly = dKpc * 3261.56;
+  if (ly >= 1e9) return `${(ly / 1e9).toFixed(1)} billion ly`;
   if (ly >= 1e6) return `${(ly / 1e6).toFixed(ly >= 1e7 ? 0 : 1)} million ly`;
   return `${(ly >= 100 ? Math.round(ly / 10) * 10 : Math.round(ly * 10) / 10).toLocaleString('en-US')} ly`;
 }

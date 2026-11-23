@@ -30,3 +30,19 @@ describe('structures beyond the galaxy map', () => {
     expect(COSMIC_STRUCTURES.find((s) => s.name.startsWith('Big Ring'))!.d).toBeCloseTo(comovingDistance(0.802), -1);
   });
 });
+
+describe('finding the structures by search', () => {
+  it('finds them by a name word plus what they are, by nickname, and says billions', async () => {
+    const { SearchIndex, lightYears } = await import('../src/ui/search');
+    const index = new SearchIndex();
+    index.add(structureEntries());
+    const top = (q: string) => index.search(q, 3).map((e) => e.name);
+    expect(top('hercules structure')).toContain('Hercules–Corona Borealis Great Wall (claimed)');
+    expect(top('hercules wall')[0]).toBe('Hercules–Corona Borealis Great Wall (claimed)');
+    expect(top('HCB')[0]).toBe('Hercules–Corona Borealis Great Wall (claimed)');
+    expect(top('largest structure')).toContain('Hercules–Corona Borealis Great Wall (claimed)');
+    expect(lightYears(5080 * 1000)).toBe('16.6 billion ly');
+    expect(lightYears(330 * 1000)).toBe('1.1 billion ly');
+    expect(lightYears(200 * 1000)).toBe('652 million ly');
+  });
+});

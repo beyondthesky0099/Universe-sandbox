@@ -106,6 +106,7 @@ export function structureEntries(): SearchEntry[] {
   const kind = (n: string) => (n === 'Local Group' ? 'Galaxy group' : /dark matter/.test(n) ? 'Dark matter' : /Stream/.test(n) ? 'Gas stream' : /Supercluster|superstructure/.test(n) ? 'Supercluster' : /Void/.test(n) ? 'Void' : /Wall/.test(n) ? 'Galaxy wall' : /Arc|Ring/.test(n) ? 'Large-scale structure' : 'Galaxy cluster');
   return COSMIC_STRUCTURES.map((s) => ({
     name: s.name,
+    aliases: s.aliases,
     kind: kind(s.name),
     // Laniakea holds the Milky Way: say how big it is, not how far.
     detail: s.size ? `${lightYears(s.size * 1000)} across; the Milky Way is inside it` : `${lightYears(s.d * 1000)} away`,

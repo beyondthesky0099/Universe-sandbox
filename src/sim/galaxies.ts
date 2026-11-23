@@ -274,7 +274,7 @@ export function agnDescription(cl: AgnClass, sp: string): string {
  * (Mpc) from the literature. They are labels only; the galaxies around them are real data.
  * `size` is the published size (Mpc across); `viewMpc` how far out the view goes to show it.
  */
-export const COSMIC_STRUCTURES: { name: string; l: number; b: number; d: number; size?: number; viewMpc?: number }[] = [
+export const COSMIC_STRUCTURES: { name: string; l: number; b: number; d: number; size?: number; viewMpc?: number; aliases?: string[] }[] = [
   { name: 'Local Group', l: 0, b: 0, d: 0.4 },
   // Near the Milky Way (render/localStructures.ts): its dark-matter halo, labelled at its top
   // (r200 = 217 kpc; Cautun et al. 2020), and the Magellanic Stream, labelled halfway along its tail.
@@ -309,7 +309,7 @@ export const COSMIC_STRUCTURES: { name: string; l: number; b: number; d: number;
   { name: 'Big Ring (claimed)', l: 101.3, b: 63.5, d: 2873, viewMpc: 1800 },
   // Claimed from a clustering of gamma-ray bursts at z ≈ 1.6–2.1 (Horváth, Hakkila & Bagoly 2014,
   // A&A 561, L12) at RA 17h, Dec +27.75°: perhaps 10 billion light-years long; debated.
-  { name: 'Hercules–Corona Borealis Great Wall (claimed)', l: 49.0, b: 35.5, d: 5080, viewMpc: 11000 },
+  { name: 'Hercules–Corona Borealis Great Wall (claimed)', l: 49.0, b: 35.5, d: 5080, viewMpc: 11000, aliases: ['HCB Great Wall', 'Her–CrB Great Wall', 'largest structure in the universe'] },
 ];
 
 /** Familiar names of Abell clusters. */

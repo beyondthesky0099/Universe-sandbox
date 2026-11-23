@@ -370,6 +370,8 @@ export class CosmosView {
     geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
     geo.setAttribute('size', new THREE.BufferAttribute(size, 1));
     this.webPoints = new THREE.Points(geo, material(0.85, 1.3, 14));
+    // The Boötes Void, and how empty it is in these very galaxies (sim/voids.ts).
+    this.cosmicShapes.setVoid(cat.galaxies, H0);
     this.webPoints.frustumCulled = false;
     this.webPoints.renderOrder = 4;
     this.scene.add(this.webPoints);

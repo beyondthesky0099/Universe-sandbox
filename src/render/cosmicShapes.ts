@@ -5,6 +5,8 @@ import { comovingDistance } from '../sim/cosmology';
 import { ConvexGeometry } from 'three/addons/geometries/ConvexGeometry.js';
 import { textSprite } from './galaxyView';
 import { greatWallCount, HCB, inGreatWall, type Grb } from '../sim/grbs';
+import { bootesVoid, voidCensus } from '../sim/voids';
+import type { WebGalaxy } from '../sim/galaxies';
 
 /**
  * Shapes in the Universe view that labels alone can't show:
@@ -216,6 +218,76 @@ export class CosmicShapes {
     this.group.add(this.grbLayer);
   }
 
+  /**
+   * The Boötes Void (sim/voids.ts): a faint bubble at its published place and size, the few survey
+   * galaxies inside it picked out, and how empty it is in the survey against the same distances
+   * elsewhere.
+   */
+  setVoid(galaxies: WebGalaxy[], H0: number): void {
+    const { centre, radius } = bootesVoid(H0);
+    const c = new THREE.Vector3(...centre);
+    const bubble = new THREE.Mesh(
+      new THREE.SphereGeometry(radius, 64, 32),
+      new THREE.ShaderMaterial({
+        transparent: true,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+        blending: THREE.AdditiveBlending,
+        uniforms: { uOpacity: { value: 0 } },
+        vertexShader: /* glsl */ `
+          #include <common>
+          #include <logdepthbuf_pars_vertex>
+          varying vec3 vN;
+          varying vec3 vView;
+          void main() {
+            vec4 mv = modelViewMatrix * vec4(position, 1.0);
+            vN = normalize(normalMatrix * normal);
+            vView = normalize(-mv.xyz);
+            gl_Position = projectionMatrix * mv;
+            #include <logdepthbuf_vertex>
+          }`,
+        fragmentShader: /* glsl */ `
+          #include <logdepthbuf_pars_fragment>
+          uniform float uOpacity;
+          varying vec3 vN;
+          varying vec3 vView;
+          void main() {
+            #include <logdepthbuf_fragment>
+            float rim = pow(1.0 - abs(dot(normalize(vN), normalize(vView))), 3.0);
+            gl_FragColor = vec4(vec3(0.45, 0.65, 1.0) * rim * uOpacity, 1.0);
+          }`,
+      }),
+    );
+    bubble.position.copy(c);
+    bubble.frustumCulled = false;
+    this.voidBubble = bubble;
+    this.voidCentre = c;
+    this.voidRadius = radius;
+    // The survey's galaxies inside it, picked out.
+    const members = galaxies.map((g) => new THREE.Vector3(...galacticToCosmos(g[0], g[1], g[2] / H0))).filter((p) => p.distanceTo(c) < radius);
+    const pts = new THREE.Points(
+      new THREE.BufferGeometry().setFromPoints(members),
+      new THREE.PointsMaterial({ color: 0xcfe2ff, size: 6, sizeAttenuation: false, transparent: true, opacity: 0, depthWrite: false }),
+    );
+    pts.frustumCulled = false;
+    this.voidPoints = pts;
+    const census = voidCensus(galaxies, H0);
+    const label = textSprite(
+      `In the survey: ${census.inside} galaxies where an average patch has ${census.expected.toFixed(0)} (${Math.round(census.ratio * 100)}% of normal)`,
+      '#b9d4ff',
+      0.7,
+    );
+    label.position.copy(c).add(new THREE.Vector3(0, -radius * 0.55, 0));
+    label.userData.priority = 870;
+    this.voidLabel = label;
+    this.group.add(bubble, pts, label);
+  }
+  private voidBubble?: THREE.Mesh;
+  private voidPoints?: THREE.Points;
+  private voidLabel?: THREE.Sprite;
+  private voidCentre = new THREE.Vector3();
+  private voidRadius = 1;
+
   /** The Wall as its bursts trace it: their minimum spanning tree, convex hull and largest span. */
   private addWallShape(p: THREE.Vector3[]): void {
     if (p.length < 4 || !this.grbLayer) return;
@@ -299,6 +371,14 @@ export class CosmicShapes {
     const d0 = camera.position.length();
     (this.zoa.material as THREE.ShaderMaterial).uniforms.uOpacity.value = 0.35 * THREE.MathUtils.smoothstep(d0, 15, 60) * (1 - THREE.MathUtils.smoothstep(d0, 2500, 6000));
     this.zoaLabel.visible = this.zoa.visible && d0 > 40 && d0 < 2500;
+    if (this.voidBubble) {
+      // Shows from a few void-widths away out to the cosmic-web scale.
+      const dv = camera.position.distanceTo(this.voidCentre);
+      const k = THREE.MathUtils.smoothstep(dv, this.voidRadius * 0.6, this.voidRadius * 1.5) * (1 - THREE.MathUtils.smoothstep(dv, this.voidRadius * 25, this.voidRadius * 60));
+      (this.voidBubble.material as THREE.ShaderMaterial).uniforms.uOpacity.value = 0.9 * k;
+      (this.voidPoints!.material as THREE.PointsMaterial).opacity = k;
+      this.voidLabel!.visible = k > 0.4;
+    }
     if (this.grbLayer?.visible) {
       // The bursts are billions of light-years away: they show once the view is out that far.
       const g = THREE.MathUtils.smoothstep(d0, 400, 2000);

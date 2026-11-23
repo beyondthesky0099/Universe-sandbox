@@ -208,6 +208,16 @@ Plan, in priority order:
 - BodyVisual adds it in applyDetail and updates it only when the planet is more than 14 px across
   and a star is present. Tests: tests/aurora.test.ts.
 
+### BF. The Boötes Void; typo-tolerant search
+- [x] sim/voids.ts: BOOTES_VOID (RA 222.5°, Dec +46°, cz 15,500, radius 3,100 km/s; Kirshner et al.
+  1981, Wegner et al. 2019), `bootesVoid(H0)`, `voidCensus`: 2MRS galaxies in the void's part of the
+  shell cz 12,400–15,000 (|b| > 10°) against the shell's density elsewhere, volumes by seeded
+  sampling: 8 against ~33 (24%). cosmicShapes.setVoid (called from setWeb): rim-lit bubble, the
+  survey galaxies inside picked out, the census label. The far half is beyond the survey.
+- [x] ui/search.ts `nearWord` (Damerau–Levenshtein, same first letter, ≤1 edit, ≤2 for 8+
+  letters, words of 4+): when a query has fewer than 3 matches, each word may be a near miss of a
+  name or kind word (score 120). COSMIC_STRUCTURES aliases for the void (Great Void, the Great Nothing).
+
 ### BE. Gamma-ray bursts and the Hercules–Corona Borealis Great Wall
 - [x] scripts/build-grbs.mjs → public/data/grbs.json: Greiner's GRB table (HTML rows split on
   `<TR VALIGN="TOP">`, 10th cell the redshift; uncertain ones dropped): 620 bursts [name, RA, Dec, z].

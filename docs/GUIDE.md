@@ -190,6 +190,11 @@ Each takes a minute or two. Use 🔍 search to find the names.
   galaxies behind (that's the gap in every galaxy map).
 - **The biggest structures:** Quipu (1.4 billion light-years, the largest in the nearby
   universe), and the claimed Big Ring and Giant Arc.
+- **The Boötes Void** (search "Bootes void"): a bubble 300 million light-years across with almost
+  nothing in it. The few galaxies inside light up, and the label counts them against an average
+  patch (8 against 33 in the survey, about a quarter). Had we lived in its middle, we'd have taken
+  decades longer to discover other galaxies.
+- **Typos are forgiven:** "boots void" or "hercules corana" still find the right thing.
 - **Gamma-ray bursts and the Hercules–Corona Borealis Great Wall:** every burst with a measured
   distance (620) is an orange point. Search "Hercules–Corona" to see the region where too many of
   them (gold) turned up at the same distance, the claimed largest structure in the universe, with

@@ -297,7 +297,8 @@ export const COSMIC_STRUCTURES: { name: string; l: number; b: number; d: number;
   { name: 'CfA2 Great Wall', l: 241.4, b: 76.2, d: 95 },
   { name: 'Hercules Superclusters', l: 31.2, b: 44.5, d: 155 },
   { name: 'Shapley Supercluster', l: 311.5, b: 32.3, d: 200 },
-  { name: 'Boötes Void', l: 79.7, b: 59.9, d: 215 },
+  // The Boötes Void (sim/voids.ts, render/cosmicShapes.ts): RA 14h50m, Dec +46°, 15,500 km/s.
+  { name: 'Boötes Void', l: 79.7, b: 59.9, d: 229, viewMpc: 260, aliases: ['Great Void', 'Bootes void', 'the Great Nothing'] },
   { name: 'Horologium–Reticulum Supercluster', l: 262.2, b: -53.8, d: 265 },
   { name: 'Sloan Great Wall', l: 332.7, b: 59.4, d: 330 },
   // Quipu (Böhringer et al. 2025, A&A 695, A59): 428 Mpc of galaxy clusters at z ≈ 0.043, the largest

@@ -1151,6 +1151,10 @@ push and pull request.
   & Williger 2022, MNRAS 516, 1557) and Big Ring (Lopez et al. 2024, JCAP 07, 055), positions read
   off their figures; and the claimed Hercules–Corona Borealis Great Wall (Horváth, Hakkila &
   Bagoly 2014, A&A 561, L12).
+- The Boötes Void: found by Kirshner, Oemler, Schechter & Shectman 1981 (ApJ 248, L57) at RA 14h50m,
+  Dec +46°, 15,500 km/s; radius 3,100 km/s from Wegner, Salzer, Taylor & Hirschauer 2019 (ApJ 883,
+  29). Its emptiness is measured in the map's 2MASS galaxies: in its near half (the survey ends at
+  15,000 km/s) 8 galaxies where the same distances elsewhere average 33, about a quarter.
 - Gamma-ray bursts (`node scripts/build-grbs.mjs`): the 620 bursts with measured redshifts in
   Jochen Greiner's table of localized GRBs (MPE, https://www.mpe.mpg.de/~jcg/grbgen.html), drawn at
   their comoving distances. They reproduce the excess behind the Hercules–Corona Borealis Great

@@ -189,7 +189,11 @@ Each takes a minute or two. Use 🔍 search to find the names.
 - **The Zone of Avoidance:** the red wedge along the Milky Way's plane, where its dust hides the
   galaxies behind (that's the gap in every galaxy map).
 - **The biggest structures:** Quipu (1.4 billion light-years, the largest in the nearby
-  universe), and the claimed Big Ring, Giant Arc and Hercules–Corona Borealis Great Wall.
+  universe), and the claimed Big Ring and Giant Arc.
+- **Gamma-ray bursts and the Hercules–Corona Borealis Great Wall:** every burst with a measured
+  distance (620) is an orange point. Search "Hercules–Corona" to see the region where too many of
+  them (gold) turned up at the same distance, the claimed largest structure in the universe, with
+  the counts against chance on screen. A real wall, or a fluke? Astronomers still argue.
 
 **Break things**
 - **Giant Impact:** a Mars-sized body hits the young Earth.

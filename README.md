@@ -1151,6 +1151,11 @@ push and pull request.
   & Williger 2022, MNRAS 516, 1557) and Big Ring (Lopez et al. 2024, JCAP 07, 055), positions read
   off their figures; and the claimed Hercules–Corona Borealis Great Wall (Horváth, Hakkila &
   Bagoly 2014, A&A 561, L12).
+- Gamma-ray bursts (`node scripts/build-grbs.mjs`): the 620 bursts with measured redshifts in
+  Jochen Greiner's table of localized GRBs (MPE, https://www.mpe.mpg.de/~jcg/grbgen.html), drawn at
+  their comoving distances. They reproduce the excess behind the Hercules–Corona Borealis Great
+  Wall: 14 bursts at redshift 1.6–2.1 within 45° of RA 255°, Dec +27.75° among those known by
+  2012 (chance: about 6), 20 of 83 today (chance: about 12).
 - Laniakea (`python3 -I scripts/build-laniakea.py`, needs numpy): the **CosmicFlows-4** density
   and peculiar-velocity grids of Courtois, Dupuy, Guinet, Baulieu, Ruppin & Brenas 2023, "Gravity
   in the local Universe: density and velocity fields using CosmicFlows-4", A&A 670, L15

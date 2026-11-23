@@ -9,7 +9,7 @@ import { parseNebulae } from '../src/sim/nebulae';
 import { PRESETS } from '../src/sim/presets';
 import { normalize, SearchIndex, type SearchEntry } from '../src/ui/search';
 import {
-  activityEntries, clusterEntries, compactEntries, exoplanetEntries, galacticObjectEntries, galaxyEntries, nebulaEntries, pulsarEntries, skyBodyEntries, starEntries, structureEntries,
+  activityEntries, clusterEntries, compactEntries, exoplanetEntries, galacticObjectEntries, galaxyEntries, inSkyAction, nebulaEntries, pulsarEntries, skyBodyEntries, starEntries, structureEntries,
 } from '../src/ui/searchSources';
 import { flattenObjects } from '../src/sim/galacticObjects';
 import { universeEntries } from '../src/sim/galaxies';
@@ -72,6 +72,27 @@ describe('search everything', () => {
       expect(r?.name, q).toBe(name);
       expect(r.action.type, q).toBe(type);
     }
+  });
+
+  it('in the Sky tab, turns to a star where it really is in the sky', () => {
+    const bright = data('stars-bright.json').stars as [number, number, number, number, number, string, number][];
+    for (const [q, name] of [['sirius', 'Sirius'], ['betelguese', 'Betelgeuse'], ['rigel', 'Rigel']]) {
+      const r = top(q);
+      expect(r.name, q).toBe(name);
+      const a = inSkyAction(r.action, r.kind === 'Star');
+      expect(a.type, q).toBe('sky');
+      if (a.type !== 'sky') continue;
+      const row = bright.find((s) => s[5] === name)!;
+      // The same direction as the catalogue's own unit vector, to within 0.01° (the file rounds it to four decimals).
+      const dot = (a.v[0] * row[0] + a.v[1] * row[1] + a.v[2] * row[2]) / Math.hypot(row[0], row[1], row[2]);
+      expect(Math.acos(Math.min(1, dot)) * (180 / Math.PI), q).toBeLessThan(0.01);
+      expect(a.radiusDeg, q).toBeUndefined();
+    }
+    // A nebula is framed by its size; a galaxy is still a Universe-tab trip.
+    const m42 = inSkyAction(top('orion nebula').action, false);
+    expect(m42.type).toBe('sky');
+    if (m42.type === 'sky') expect(m42.radiusDeg).toBeGreaterThan(0.05);
+    expect(inSkyAction(top('andromeda').action, false).type).toBe('galaxy');
   });
 
   it('finds catalogue designations and planets: NGC numbers, Lynds clouds, exoplanet names', () => {

@@ -98,6 +98,17 @@ export function starEntries(bright: BrightStar[], near: NearStar[]): SearchEntry
   return [...out.values()];
 }
 
+/**
+ * A Milky Way object found while the Sky tab is open: turn the sky to where it is from here
+ * instead of leaving for the Galaxy map. Stars get the sky's default zoom; nebulae and clusters
+ * are framed by their angular size. Anything else stays as it is.
+ */
+export function inSkyAction(a: SearchAction, star: boolean): SearchAction {
+  if (a.type !== 'map') return a;
+  const radiusDeg = !star && a.sizePc && a.dKpc > 0 ? (Math.atan(a.sizePc / 2 / (a.dKpc * 1000)) * 180) / Math.PI : undefined;
+  return { type: 'sky', v: galacticToEcliptic(a.l, a.b), ...(radiusDeg ? { radiusDeg } : {}) };
+}
+
 /** Galaxies in the Universe tab. */
 export function galaxyEntries(list: LocalGalaxy[]): SearchEntry[] {
   return list.map((g) => {

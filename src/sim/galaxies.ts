@@ -276,6 +276,12 @@ export function agnDescription(cl: AgnClass, sp: string): string {
  */
 export const COSMIC_STRUCTURES: { name: string; l: number; b: number; d: number; size?: number; viewMpc?: number }[] = [
   { name: 'Local Group', l: 0, b: 0, d: 0.4 },
+  // Near the Milky Way (render/localStructures.ts): its dark-matter halo, labelled at its top
+  // (r200 = 217 kpc; Cautun et al. 2020), and the Magellanic Stream, labelled halfway along its tail.
+  { name: 'Milky Way’s dark matter halo', l: 0, b: 90, d: 0.217, viewMpc: 0.9 },
+  { name: 'Magellanic Stream', l: 68.5, b: -75.3, d: 0.075, viewMpc: 0.35 },
+  // The Bullet Cluster (render/bulletCluster.ts): dark matter seen apart from the gas.
+  { name: 'Bullet Cluster: dark matter', l: 266.0, b: -21.2, d: comovingDistance(0.296), viewMpc: 3.5 },
   // Our home supercluster (Tully, Courtois, Hoffman & Pomarède 2014, Nature 513, 71), defined by
   // where galaxies' peculiar motions flow: about 160 Mpc (520 million light-years) across, some
   // 100,000 galaxies, the Milky Way near its edge. Labelled at its attractor in CosmicFlows-4
@@ -294,6 +300,16 @@ export const COSMIC_STRUCTURES: { name: string; l: number; b: number; d: number;
   { name: 'Boötes Void', l: 79.7, b: 59.9, d: 215 },
   { name: 'Horologium–Reticulum Supercluster', l: 262.2, b: -53.8, d: 265 },
   { name: 'Sloan Great Wall', l: 332.7, b: 59.4, d: 330 },
+  // Quipu (Böhringer et al. 2025, A&A 695, A59): 428 Mpc of galaxy clusters at z ≈ 0.043, the largest
+  // structure known in the nearby universe; labelled near the middle of its run (RA ~60°, Dec ~−5°).
+  { name: 'Quipu superstructure', l: 195.3, b: -40.0, d: 189, viewMpc: 700 },
+  // Claimed structures at z ≈ 0.80 near Boötes, traced by Mg II absorbers (Lopez et al. 2022, 2024),
+  // positions read off the papers' figures (render/cosmicShapes.ts draws them); debated.
+  { name: 'Giant Arc (claimed)', l: 73.8, b: 69.8, d: 2873, viewMpc: 2600 },
+  { name: 'Big Ring (claimed)', l: 101.3, b: 63.5, d: 2873, viewMpc: 1800 },
+  // Claimed from a clustering of gamma-ray bursts at z ≈ 1.6–2.1 (Horváth, Hakkila & Bagoly 2014,
+  // A&A 561, L12) at RA 17h, Dec +27.75°: perhaps 10 billion light-years long; debated.
+  { name: 'Hercules–Corona Borealis Great Wall (claimed)', l: 49.0, b: 35.5, d: 5080, viewMpc: 9000 },
 ];
 
 /** Familiar names of Abell clusters. */

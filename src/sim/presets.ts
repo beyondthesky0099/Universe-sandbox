@@ -20,6 +20,7 @@ import { describeDwarfNova, describeNovaEruption, dwarfNovaCycle, dwarfNovaKind,
 import type { LocalGalaxy } from './galaxies';
 import { SPACECRAFT_COLOR, spacecraftState } from './spacecraft';
 import { loadMilkyWayAndromeda } from './localGroup';
+import { hyperbolicState, INTERSTELLAR_SHOW_AU } from './interstellar';
 import { getSolarData, KM_PER_AU, poleScene, realRadiusAu, REAL_COLORS, relativeState, sampleRingRadii, smallBodyState, toScene, type SolarData } from './solarSystemData';
 
 export interface SceneSetup {
@@ -916,6 +917,22 @@ const SMALL_BODY_COLORS: Record<string, [number, number, number]> = {
 };
 
 /** Real Solar System bodies added individually (beyond the eight planets). */
+/** Interstellar visitors on their hyperbolic orbits (sim/interstellar.ts), when within ~the heliopause. */
+export const INTERSTELLAR_COLOR = 0xff6ad5;
+function addInterstellar(sim: Simulation, data: SolarData, jd: number): string[] {
+  const added: string[] = [];
+  for (const o of data.interstellar ?? []) {
+    const s = hyperbolicState(o, jd);
+    if (Math.hypot(...s.pos) > INTERSTELLAR_SHOW_AU) continue;
+    const [x, y, z] = toScene(s.pos);
+    const [vx, vy, vz] = toScene(s.vel);
+    // ʻOumuamua showed no coma; Borisov and 3I/ATLAS are comets.
+    sim.addBody({ name: o.name, mass: 1e-21, kind: 'rocky', color: INTERSTELLAR_COLOR, x, y, z, vx, vy, vz, tag: o.designation.startsWith('1I') ? undefined : 'comet' });
+    added.push(o.name);
+  }
+  return added;
+}
+
 const NAMED_SMALL_BODIES = ['Pluto', 'Ceres', 'Eris', 'Haumea', 'Makemake', 'Vesta', 'Pallas', 'Hygiea', 'Apophis', 'Bennu', 'Halley', 'Encke', 'Churyumov–Gerasimenko', 'Hale–Bopp'];
 
 export function loadSolarSystemOnDate(sim: Simulation, date: Date, opts: { trueScale?: boolean } = {}): SceneSetup {
@@ -949,6 +966,7 @@ export function loadSolarSystemOnDate(sim: Simulation, date: Date, opts: { trueS
     sim.addBody({ name, mass, kind: 'rocky', color: REAL_COLORS[name] ?? (b.kind === 'comet' ? 0xcfe6ff : 0x9a9088), x, y, z, vx, vy, vz, tag: b.kind === 'comet' ? 'comet' : undefined });
   }
   addSpacecraft(sim, data, jd, opts.trueScale ? 'true' : 'enlarged');
+  const visitors = addInterstellar(sim, data, jd);
   const named = new Set(NAMED_SMALL_BODIES.map((n) => n.toLowerCase()));
   for (const b of data.small) {
     // "1 Ceres", "134340 Pluto (1930 BM)": skip bodies that are already added individually.
@@ -966,7 +984,7 @@ export function loadSolarSystemOnDate(sim: Simulation, date: Date, opts: { trueS
     cameraDistance: 9,
     timeScale: 0.1,
     elevation: 1.1,
-    tip: `The real Solar System on ${date.toISOString().slice(0, 10)}: planets from JPL's ephemerides; dwarf planets, comets and ${data.small.length.toLocaleString('en-US')} asteroids and Kuiper belt objects from JPL Horizons and the Small-Body Database, and the spacecraft that were flying on that date (cyan diamonds). Body sizes are enlarged so you can see them.`,
+    tip: `The real Solar System on ${date.toISOString().slice(0, 10)}: planets from JPL's ephemerides; dwarf planets, comets and ${data.small.length.toLocaleString('en-US')} asteroids and Kuiper belt objects from JPL Horizons and the Small-Body Database, and the spacecraft that were flying on that date (cyan diamonds)${visitors.length ? `; passing through from another star: ${visitors.join(', ')} (magenta)` : ''}. Body sizes are enlarged so you can see them.`,
   };
 }
 

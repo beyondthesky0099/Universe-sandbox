@@ -9,6 +9,8 @@ import { textSprite } from './galaxyView';
  * Way marked near its edge. Additive, like light, so where many flows meet they glow.
  */
 const LINE_VERTEX = /* glsl */ `
+  #include <common>
+  #include <logdepthbuf_pars_vertex>
   attribute float along;
   attribute vec3 tint;
   varying float vAlong;
@@ -17,19 +19,24 @@ const LINE_VERTEX = /* glsl */ `
     vAlong = along;
     vTint = tint;
     gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    #include <logdepthbuf_vertex>
   }
 `;
 const LINE_FRAGMENT = /* glsl */ `
+  #include <logdepthbuf_pars_fragment>
   uniform float uOpacity;
   varying float vAlong;
   varying vec3 vTint;
   void main() {
+    #include <logdepthbuf_fragment>
     // Faint where a flow starts, bright where it arrives.
     float k = 0.18 + 0.82 * vAlong * vAlong;
     gl_FragColor = vec4(vTint * k * uOpacity, 1.0);
   }
 `;
 const SKIN_VERTEX = /* glsl */ `
+  #include <common>
+  #include <logdepthbuf_pars_vertex>
   varying vec3 vN;
   varying vec3 vView;
   void main() {
@@ -37,13 +44,16 @@ const SKIN_VERTEX = /* glsl */ `
     vN = normalize(normalMatrix * normal);
     vView = normalize(-mv.xyz);
     gl_Position = projectionMatrix * mv;
+    #include <logdepthbuf_vertex>
   }
 `;
 const SKIN_FRAGMENT = /* glsl */ `
+  #include <logdepthbuf_pars_fragment>
   uniform float uOpacity;
   varying vec3 vN;
   varying vec3 vView;
   void main() {
+    #include <logdepthbuf_fragment>
     float rim = pow(1.0 - abs(dot(normalize(vN), normalize(vView))), 2.5);
     gl_FragColor = vec4(vec3(1.0, 0.74, 0.34) * (0.008 + 0.32 * rim) * uOpacity, 1.0);
   }

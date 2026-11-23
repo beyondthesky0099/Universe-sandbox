@@ -1,0 +1,56 @@
+{
+ "source": "NASA/JPL Small-Body Database API (ssd-api.jpl.nasa.gov/sbdb.api), heliocentric ecliptic J2000 osculating elements",
+ "objects": [
+  {
+   "name": "ʻOumuamua",
+   "designation": "1I/2017 U1",
+   "jplName": "'Oumuamua (A/2017 U1)",
+   "discovered": "2017-10-19",
+   "by": "Robert Weryk, Pan-STARRS1 (Haleakalā, Hawaiʻi)",
+   "note": "The first interstellar object ever seen. A tumbling, very elongated body with no visible coma, it sped up slightly as it left the Sun (Micheli et al. 2018, Nature 559, 223). Its name is Hawaiian for \"a messenger from afar arriving first\".",
+   "e": 1.201133796102373,
+   "q": 0.2559115812959116,
+   "i": 122.7417062847286,
+   "node": 24.59690955523242,
+   "peri": 241.8105360304898,
+   "tpJd": 2458006.0073213754,
+   "epochJd": 2458080.5,
+   "solution": "JPL orbit 16 (2018-06-26 12:17:57)",
+   "vInfKms": 26.41
+  },
+  {
+   "name": "Borisov",
+   "designation": "2I/2019 Q4",
+   "jplName": "C/2019 Q4 (Borisov)",
+   "discovered": "2019-08-30",
+   "by": "Gennadiy Borisov, an amateur astronomer (Nauchnij, Crimea)",
+   "note": "The first interstellar comet: a coma and tail like a Solar System comet, but rich in carbon monoxide (Bodewits et al. 2020, Nature Astronomy 4, 867).",
+   "e": 3.356475782676596,
+   "q": 2.006520878500843,
+   "i": 44.05264247909138,
+   "node": 308.1477292269942,
+   "peri": 209.1236864378081,
+   "tpJd": 2458826.052845906,
+   "epochJd": 2458853.5,
+   "solution": "JPL orbit 54 (2024-06-24 15:49:04)",
+   "vInfKms": 32.28
+  },
+  {
+   "name": "3I/ATLAS",
+   "designation": "3I/2025 N1",
+   "jplName": "C/2025 N1 (ATLAS)",
+   "discovered": "2025-07-01",
+   "by": "the ATLAS survey (Río Hurtado, Chile)",
+   "note": "The fastest of the three, and perhaps very old: its path suggests it comes from the Milky Way's thick disc, possibly older than the Sun (Seligman et al. 2025; Hopkins et al. 2025).",
+   "e": 6.123467394525528,
+   "q": 1.351998619400212,
+   "i": 175.2403121571192,
+   "node": 323.0251782090054,
+   "peri": 128.7969426041922,
+   "tpJd": 2460977.941795881,
+   "epochJd": 2461340.5,
+   "solution": "JPL orbit 55 (2026-10-21 09:51:09)",
+   "vInfKms": 57.98
+  }
+ ]
+}

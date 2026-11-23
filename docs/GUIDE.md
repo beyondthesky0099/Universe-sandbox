@@ -175,6 +175,21 @@ Each takes a minute or two. Use 🔍 search to find the names.
 - **Zoom right out** from the Solar System: past the planets you meet the heliopause (the edge of
   the Sun's wind, about 120 AU, where the Voyagers are now), then the Oort cloud of comets from
   2,000 to 100,000 AU, a quarter of the way to the nearest star.
+- **Watch an interstellar visitor** (Events pane → Interstellar visitors → **Watch it pass**):
+  ʻOumuamua (2017), comet Borisov (2019) or 3I/ATLAS (2025) fall in from another star, swing past
+  the Sun and leave for good. Their magenta labels are in today's Solar System too, heading out.
+
+**Beyond the Milky Way** (Universe view; Galaxy view for the bubbles)
+- **The Fermi and eROSITA bubbles:** zoom out of the Galaxy map to see the two pairs of giant
+  bubbles above and below the Galactic Centre, blown out by an outburst a few million years ago.
+- **Dark matter:** search "dark matter" for the Milky Way's invisible halo (a faint violet glow out
+  to 700,000 light-years) and the **Bullet Cluster**, where the dark matter (blue) went straight
+  through a collision while the hot gas (pink) piled up in the middle.
+- **The Magellanic Stream:** a 140°-long trail of gas torn from the Magellanic Clouds.
+- **The Zone of Avoidance:** the red wedge along the Milky Way's plane, where its dust hides the
+  galaxies behind (that's the gap in every galaxy map).
+- **The biggest structures:** Quipu (1.4 billion light-years, the largest in the nearby
+  universe), and the claimed Big Ring, Giant Arc and Hercules–Corona Borealis Great Wall.
 
 **Break things**
 - **Giant Impact:** a Mars-sized body hits the young Earth.

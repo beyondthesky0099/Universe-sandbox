@@ -208,6 +208,28 @@ Plan, in priority order:
 - BodyVisual adds it in applyDetail and updates it only when the planet is more than 14 px across
   and a star is present. Tests: tests/aurora.test.ts.
 
+### BD. Interstellar visitors, dark matter, the Milky Way's surroundings, giant structures
+- [x] Interstellar objects: scripts/build-interstellar.mjs → public/data/interstellar.json (JPL SBDB,
+  full precision; needs NODE_USE_ENV_PROXY=1 behind the sandbox proxy). sim/interstellar.ts
+  `hyperbolicState` (hyperbolic Kepler, e sinh H − H = M). Loaded with the Solar System data;
+  loadSolarSystemOnDate adds any within 130 AU (magenta; Borisov and 3I as comets). Events pane:
+  "Watch it pass" loads 90 days before perihelion and follows it. Tests: perihelion dates, the
+  discovery distances (1.22, 3.0, 4.5 AU) and v∞ (26.4, 32.3, 58.0 km/s). The body panel's
+  forecast finds 3I/ATLAS's real 0.36 AU pass of Jupiter in March 2026.
+- [x] render/cosmicShapes.ts (Universe): Zone of Avoidance (cones at b = ±10°, `opt-cosmos-zoa`),
+  Quipu's run (means of its northern/southern clusters), the Big Ring (200 Mpc radius, face-on)
+  and Giant Arc (1 Gpc, bowed), positions read off Lopez et al.'s figures (12.4° apart, as stated).
+- [x] render/localStructures.ts: the Milky Way's NFW halo (billboard of the projected density,
+  r200 217 kpc, c = 10) and the Magellanic Stream (7,000 points along Magellanic longitude 0 to
+  −140°, Leading Arm to +60°, distance 50→100 kpc from models). render/bulletCluster.ts: mass (blue)
+  and gas (pink) sprites after Clowe et al. 2006. `opt-cosmos-dark` toggles halo and Bullet Cluster.
+- [x] render/galacticBubbles.ts (Galaxy view, Milky Way only): Fermi (7.7 kpc) and eROSITA (14 kpc)
+  bubbles as pinched rim-lit ellipsoids; `opt-real-bubbles`.
+- [x] COSMIC_STRUCTURES: new labels with `viewMpc` (label range viewMpc/4 … 10 × viewMpc); search
+  kinds Supercluster, Large-scale structure, Dark matter, Gas stream. tests/cosmic-structures.test.ts.
+- Note: the renderer uses a logarithmic depth buffer; new ShaderMaterials include the logdepthbuf
+  chunks (each `#include` on its own line).
+
 ### BC. Laniakea from the CosmicFlows-4 velocity field
 - [x] scripts/build-laniakea.py → public/data/laniakea.bin (0.8 MB): CosmicFlows-4 grids
   (Courtois et al. 2023, Zenodo 20653238, CC BY 4.0, md5-checked), 128³ over 1000 h⁻¹ Mpc,

@@ -272,14 +272,49 @@ export class CosmosView {
       this.scene.add(sprite);
     });
     for (const s of COSMIC_STRUCTURES) {
-      const sprite = textSprite(s.name, '#ffb38a', 0.85);
+      const sprite = textSprite(s.name, '#ffb38a', s.size ? 1.1 : 0.85);
       sprite.position.set(...galacticToCosmos(s.l, s.b, s.d));
       // The Local Group is ~3 Mpc across, a rich galaxy cluster a few Mpc, a supercluster tens.
-      sprite.userData.goto = { distance: s.name === 'Local Group' ? 3 : s.d < 30 ? 8 : s.d * 0.25 };
-      this.labels.push({ sprite, min: s.d < 1 ? 1.5 : s.d * 0.25, max: s.d < 1 ? 40 : 5000 });
+      sprite.userData.goto = { distance: s.size ? s.size * 2.2 : s.name === 'Local Group' ? 3 : s.d < 30 ? 8 : s.d * 0.25 };
+      this.labels.push({ sprite, min: s.size ? s.size * 0.5 : s.d < 1 ? 1.5 : s.d * 0.25, max: s.d < 1 ? 40 : 5000 });
       this.scene.add(sprite);
+      if (s.size) this.addOutline(sprite.position, s.size / 2);
     }
     this.applyPointScale();
+  }
+
+  /** Faint rim-lit spheres around the structures with a known extent (Laniakea). */
+  private readonly outlines: { mesh: THREE.Mesh; radius: number }[] = [];
+
+  private addOutline(centre: THREE.Vector3, radius: number): void {
+    const mesh = new THREE.Mesh(
+      new THREE.SphereGeometry(radius, 64, 32),
+      new THREE.ShaderMaterial({
+        transparent: true,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+        blending: THREE.AdditiveBlending,
+        uniforms: { uOpacity: { value: 0 } },
+        vertexShader: /* glsl */ `
+          varying vec3 vN; varying vec3 vView;
+          void main() {
+            vec4 mv = modelViewMatrix * vec4(position, 1.0);
+            vN = normalize(normalMatrix * normal); vView = normalize(-mv.xyz);
+            gl_Position = projectionMatrix * mv;
+          }`,
+        fragmentShader: /* glsl */ `
+          uniform float uOpacity;
+          varying vec3 vN; varying vec3 vView;
+          void main() {
+            float rim = pow(1.0 - abs(dot(normalize(vN), normalize(vView))), 4.0);
+            gl_FragColor = vec4(vec3(1.0, 0.62, 0.4) * rim * uOpacity, 1.0);
+          }`,
+      }),
+    );
+    mesh.position.copy(centre);
+    mesh.renderOrder = -1;
+    this.outlines.push({ mesh, radius });
+    this.scene.add(mesh);
   }
 
   /** Show or hide a layer: the rich clusters, the quasars, the Seyferts or the blazars. */
@@ -526,6 +561,11 @@ export class CosmosView {
     this.controls.update();
     const camDist = this.cameraDistance;
     for (const l of this.labels) l.sprite.visible = camDist >= l.min && camDist <= l.max && (!l.kind || this.kindVisible[l.kind]);
+    // An outline shows once the view is out at its scale, and fades again at the cosmic-web scale.
+    for (const o of this.outlines) {
+      const d = this.camera.position.distanceTo(o.mesh.position);
+      (o.mesh.material as THREE.ShaderMaterial).uniforms.uOpacity.value = 0.5 * THREE.MathUtils.smoothstep(d, o.radius * 0.8, o.radius * 2) * (1 - THREE.MathUtils.smoothstep(d, o.radius * 25, o.radius * 60));
+    }
     if (this.cmb) {
       // A faint backdrop from inside; full strength once you fly out past it.
       // Near a galaxy it fades further so the galaxy stands out against black.

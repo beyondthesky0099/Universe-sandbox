@@ -272,9 +272,17 @@ export function agnDescription(cl: AgnClass, sp: string): string {
 /**
  * Well-known clusters and superclusters, at approximate galactic coordinates and distances
  * (Mpc) from the literature. They are labels only; the galaxies around them are real data.
+ * `size` (Mpc across) is drawn as a faint outline.
  */
-export const COSMIC_STRUCTURES: { name: string; l: number; b: number; d: number }[] = [
+export const COSMIC_STRUCTURES: { name: string; l: number; b: number; d: number; size?: number }[] = [
   { name: 'Local Group', l: 0, b: 0, d: 0.4 },
+  // Our home supercluster (Tully, Courtois, Hoffman & Pomarède 2014, Nature 513, 71), defined by
+  // where galaxies' peculiar motions flow: about 160 Mpc (520 million light-years) across, some
+  // 100,000 galaxies, centred towards the Great Attractor (l 307°, b 9°; Lynden-Bell et al. 1988).
+  // The Milky Way is near its edge. Its real boundary is irregular; the outline is a sphere of
+  // 80 Mpc radius, which holds Virgo, Hydra, Centaurus, Norma and Fornax and leaves out the
+  // neighbouring Shapley, Perseus–Pisces and Coma superclusters, as the paper does.
+  { name: 'Laniakea Supercluster (our home)', l: 307, b: 9, d: 65, size: 160 },
   { name: 'Virgo Cluster', l: 283.8, b: 74.5, d: 16.5 },
   { name: 'Fornax Cluster', l: 236.7, b: -53.6, d: 19 },
   { name: 'Local Void', l: 33.9, b: -1.9, d: 25 },

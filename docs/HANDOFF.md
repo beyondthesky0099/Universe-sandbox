@@ -208,6 +208,14 @@ Plan, in priority order:
 - BodyVisual adds it in applyDetail and updates it only when the planet is more than 14 px across
   and a star is present. Tests: tests/aurora.test.ts.
 
+### BC. Laniakea
+- [x] galaxies.ts COSMIC_STRUCTURES: `size` (Mpc across) for an outline; Laniakea at l 307°,
+  b 9°, 65 Mpc, 160 Mpc across (Tully et al. 2014). cosmosView `addOutline` draws a rim-lit
+  sphere that fades in once the camera is out at its scale; its label flies to 2.2 × its size.
+  searchSources: kinds (Supercluster, Void, Galaxy wall) and "…across; the Milky Way is inside it",
+  with `viewMpc` for the flight. Tests in galaxies.test.ts (inside: Milky Way, Virgo, Fornax;
+  outside: Shapley, Perseus–Pisces).
+
 ### BB. Radio lobes face the camera
 - [x] render/radioLobes.ts: each radio-survey picture was a fixed square facing the Milky Way, so
   orbiting a radio galaxy (Centaurus A) turned it edge-on into a thin streak. The vertex shader now

@@ -97,6 +97,11 @@ The largest scale: the Milky Way's neighbourhood out to the edge of the observab
   distance, size and tilt.
 - **The cosmic web:** 38,000 galaxies from the 2MASS Redshift Survey, with the famous clusters
   labelled (Virgo, Fornax, Coma, the Great Attractor…).
+- **Laniakea, our home supercluster** (search "Laniakea"): about 520 million light-years across,
+  some 100,000 galaxies whose motions all flow towards the Great Attractor, with the Milky Way near
+  its edge. It is drawn as a faint outline; the real boundary is irregular.
+- **Radio lobes:** when you fly around a radio galaxy, its picture turns to face you (only our view
+  of the lobes from Earth is known).
 - **Galaxy clusters, quasars, Seyfert galaxies and blazars**, out to the most distant galaxy
   known, each at the distance its redshift implies.
 - **Radio lobes:** tick *Radio lobes* to see the giant jets' lobes of 38 radio galaxies (Cygnus A,

@@ -1134,7 +1134,11 @@ push and pull request.
   radiation; `src/sim/cosmology.ts`). The universe is 13.79 billion years old, the microwave
   background's last-scattering surface is 13,880 Mpc (45.3 billion light-years) away, and the
   observable universe's edge (the particle horizon) 46.2 billion light-years. Supercluster, wall and void labels use approximate published
-  positions.
+  positions. **Laniakea**, our home supercluster (Tully, Courtois, Hoffman & Pomarède 2014,
+  Nature 513, 71), is centred towards the Great Attractor (l 307°, b 9°) and drawn as a sphere
+  160 Mpc across: that holds the Milky Way, Virgo, Hydra, Centaurus, Norma and Fornax and leaves
+  out the Shapley, Perseus–Pisces and Coma superclusters, as the paper does, though its real
+  boundary (traced from galaxies' motions) is irregular.
 - Star data: **HYG database v4.1** by David Nash (astronexus), licensed **CC BY-SA 4.0**
   (https://codeberg.org/astronexus/hyg). The derived files `public/data/stars-near.json` and
   `public/data/stars-bright.json` are also CC BY-SA 4.0. Rebuild them with

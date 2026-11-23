@@ -19,7 +19,7 @@ export type SearchAction =
   /** A galaxy in the Universe tab, by name. */
   | { type: 'galaxy'; name: string }
   /** A point in the Universe tab: galactic l, b and distance (Mpc). */
-  | { type: 'cosmos'; l: number; b: number; dMpc: number }
+  | { type: 'cosmos'; l: number; b: number; dMpc: number; viewMpc?: number }
   /** A body in the current scene, by id. */
   | { type: 'body'; id: number }
   /** Load a real exoplanet system, by host name. */

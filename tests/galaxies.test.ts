@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { generateGalaxy } from '../src/procgen/galaxy';
+import { structureEntries } from '../src/ui/searchSources';
 import { ABELL_NAMES, COSMIC_STRUCTURES, displayName, galacticToCosmos, galaxyForm, isFamous, localPosition, universeEntries, webPosition, type LocalGalaxy, type UniverseObjects, type WebCatalog } from '../src/sim/galaxies';
 
 const local: LocalGalaxy[] = JSON.parse(readFileSync(new URL('../public/data/galaxies-local.json', import.meta.url), 'utf8')).galaxies;
@@ -199,5 +200,31 @@ describe('active galactic nuclei', () => {
     expect(entries.some((g) => g.name === 'NGC 3031' || g.name === 'NGC 1068' || g.name === 'NGC 4486')).toBe(false);
     // Hosts count as famous, so they keep a label.
     expect(isFamous(m77)).toBe(true);
+  });
+});
+
+describe('Laniakea, our home supercluster', () => {
+  const at = (name: string) => {
+    const s = COSMIC_STRUCTURES.find((x) => x.name.startsWith(name))!;
+    return galacticToCosmos(s.l, s.b, s.d);
+  };
+  const lan = COSMIC_STRUCTURES.find((s) => s.name.startsWith('Laniakea'))!;
+  const centre = galacticToCosmos(lan.l, lan.b, lan.d);
+  const inside = (p: [number, number, number]) => Math.hypot(p[0] - centre[0], p[1] - centre[1], p[2] - centre[2]) < lan.size! / 2;
+
+  it('holds the Milky Way, Virgo and Fornax and leaves out its neighbours (Tully et al. 2014)', () => {
+    expect(lan.size).toBe(160);
+    expect(inside([0, 0, 0])).toBe(true);
+    expect(inside(at('Virgo Cluster'))).toBe(true);
+    expect(inside(at('Fornax Cluster'))).toBe(true);
+    expect(inside(at('Shapley Supercluster'))).toBe(false);
+    expect(inside(at('Perseus–Pisces'))).toBe(false);
+  });
+
+  it('can be searched for, and says the Milky Way is inside it', () => {
+    const e = structureEntries().find((x) => x.name.startsWith('Laniakea'))!;
+    expect(e.kind).toBe('Supercluster');
+    expect(e.detail).toContain('across');
+    expect(e.action).toMatchObject({ type: 'cosmos', viewMpc: 352 });
   });
 });

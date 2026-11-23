@@ -103,7 +103,15 @@ export function galaxyEntries(list: LocalGalaxy[]): SearchEntry[] {
 }
 
 export function structureEntries(): SearchEntry[] {
-  return COSMIC_STRUCTURES.map((s) => ({ name: s.name, kind: s.name === 'Local Group' ? 'Galaxy group' : 'Galaxy cluster', detail: `${lightYears(s.d * 1000)} away`, rank: 70, action: { type: 'cosmos', l: s.l, b: s.b, dMpc: s.d } }));
+  const kind = (n: string) => (n === 'Local Group' ? 'Galaxy group' : /Supercluster/.test(n) ? 'Supercluster' : /Void/.test(n) ? 'Void' : /Wall/.test(n) ? 'Galaxy wall' : 'Galaxy cluster');
+  return COSMIC_STRUCTURES.map((s) => ({
+    name: s.name,
+    kind: kind(s.name),
+    // Laniakea holds the Milky Way: say how big it is, not how far.
+    detail: s.size ? `${lightYears(s.size * 1000)} across; the Milky Way is inside it` : `${lightYears(s.d * 1000)} away`,
+    rank: s.size ? 85 : 70,
+    action: { type: 'cosmos', l: s.l, b: s.b, dMpc: s.d, ...(s.viewMpc ? { viewMpc: s.viewMpc } : {}) },
+  }));
 }
 
 export function compactEntries(list: { name: string; kind: 'blackhole' | 'pulsar'; raDeg: number; decDeg: number; distanceKpc: number; mass?: number }[]): SearchEntry[] {

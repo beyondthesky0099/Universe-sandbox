@@ -1,6 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { generateGalaxy } from '../src/procgen/galaxy';
+import { structureEntries } from '../src/ui/searchSources';
+import { decodeLaniakea, inLaniakea } from '../src/sim/laniakea';
 import { ABELL_NAMES, COSMIC_STRUCTURES, displayName, galacticToCosmos, galaxyForm, isFamous, localPosition, universeEntries, webPosition, type LocalGalaxy, type UniverseObjects, type WebCatalog } from '../src/sim/galaxies';
 
 const local: LocalGalaxy[] = JSON.parse(readFileSync(new URL('../public/data/galaxies-local.json', import.meta.url), 'utf8')).galaxies;
@@ -199,5 +201,53 @@ describe('active galactic nuclei', () => {
     expect(entries.some((g) => g.name === 'NGC 3031' || g.name === 'NGC 1068' || g.name === 'NGC 4486')).toBe(false);
     // Hosts count as famous, so they keep a label.
     expect(isFamous(m77)).toBe(true);
+  });
+});
+
+describe('Laniakea, our home supercluster', () => {
+  // scripts/build-laniakea.py: the CosmicFlows-4 velocity field (Courtois et al. 2023) and its basins.
+  const raw = readFileSync(new URL('../public/data/laniakea.bin', import.meta.url));
+  const lan = decodeLaniakea(raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength));
+  // A cluster at its CMB-frame redshift, placed like the map's galaxies (H0 = 67.66).
+  const at = (l: number, b: number, cz: number) => galacticToCosmos(l, b, cz / 67.66);
+
+  it('matches the basin Dupuy & Courtois (2023) found in CosmicFlows-4', () => {
+    let voxels = 0;
+    for (const byte of lan.mask) for (let k = 0; k < 8; k++) voxels += (byte >> k) & 1;
+    // 1.9 × 10⁶ (h⁻¹ Mpc)³ in the paper.
+    expect((voxels * lan.voxel ** 3) / 1e6).toBeGreaterThan(1.7);
+    expect((voxels * lan.voxel ** 3) / 1e6).toBeLessThan(2.1);
+    // Its attractor: SG (−62, −8, 39) h⁻¹ Mpc there, ~110 Mpc away towards l 350°, b −3°.
+    const published = galacticToCosmos(350.0, -2.8, 73.7 / lan.h);
+    expect(Math.hypot(...lan.attractor.map((x, i) => x - published[i]))).toBeLessThan(40);
+    expect(lan.lineLengths.length).toBeGreaterThan(2000);
+    expect(lan.lineInside.reduce((a, b) => a + b, 0)).toBeGreaterThan(1000);
+  });
+
+  it('holds the Milky Way and its neighbours, and not the superclusters next door (Tully et al. 2014)', () => {
+    expect(inLaniakea(lan, [0, 0, 0])).toBe(true);
+    for (const [l, b, cz] of [
+      [283.8, 74.5, 1300], // Virgo
+      [236.7, -53.6, 1400], // Fornax
+      [302.4, 21.6, 3400], // Centaurus
+      [269.6, 26.5, 3800], // Hydra
+      [325.3, -7.3, 4900], // Norma, at the Great Attractor
+      [332.3, -23.6, 4200], // Pavo II
+    ])
+      expect(inLaniakea(lan, at(l, b, cz))).toBe(true);
+    for (const [l, b, cz] of [
+      [58.1, 88.0, 7200], // Coma
+      [150.6, -13.3, 5400], // Perseus
+      [311.98, 30.7, 14500], // Shapley
+      [31.6, 44.5, 11100], // Hercules
+    ])
+      expect(inLaniakea(lan, at(l, b, cz))).toBe(false);
+  });
+
+  it('can be searched for, and says the Milky Way is inside it', () => {
+    const e = structureEntries().find((x) => x.name.startsWith('Laniakea'))!;
+    expect(e.kind).toBe('Supercluster');
+    expect(e.detail).toContain('across');
+    expect(e.action).toMatchObject({ type: 'cosmos', viewMpc: 520 });
   });
 });

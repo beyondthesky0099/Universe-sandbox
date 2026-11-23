@@ -366,6 +366,7 @@ export class InputUI {
     $<HTMLInputElement>('opt-cosmos-seyferts').addEventListener('change', (e) => this.app.cosmos.setKindVisible('seyfert', (e.target as HTMLInputElement).checked));
     $<HTMLInputElement>('opt-cosmos-blazars').addEventListener('change', (e) => this.app.cosmos.setKindVisible('blazar', (e.target as HTMLInputElement).checked));
     $<HTMLInputElement>('opt-cosmos-radio').addEventListener('change', (e) => this.app.cosmos.setRadioLobesVisible((e.target as HTMLInputElement).checked));
+    $<HTMLInputElement>('opt-cosmos-laniakea').addEventListener('change', (e) => this.app.cosmos.setLaniakeaVisible((e.target as HTMLInputElement).checked));
     $<HTMLInputElement>('opt-real-nebulae').addEventListener('change', (e) => this.app.galaxy.setRealLayerVisible('nebulae', (e.target as HTMLInputElement).checked));
     $<HTMLInputElement>('opt-real-clusters').addEventListener('change', (e) => this.app.galaxy.setRealLayerVisible('clusters', (e.target as HTMLInputElement).checked));
     $<HTMLInputElement>('opt-real-pulsars').addEventListener('change', (e) => this.app.galaxy.setRealLayerVisible('pulsars', (e.target as HTMLInputElement).checked));

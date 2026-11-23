@@ -148,7 +148,7 @@ export class SearchUI {
             this.app.travelUI.goCosmosGalaxy(i);
           }
         } else {
-          this.app.travelUI.goCosmosPoint(new THREE.Vector3(...galacticToCosmos(a.l, a.b, a.dMpc)), a.dMpc < 1 ? 3 : 8, r.name);
+          this.app.travelUI.goCosmosPoint(new THREE.Vector3(...galacticToCosmos(a.l, a.b, a.dMpc)), a.viewMpc ?? (a.dMpc < 1 ? 3 : 8), r.name);
         }
         break;
       }

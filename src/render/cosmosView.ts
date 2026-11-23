@@ -19,6 +19,9 @@ import { ringTexture } from './textures';
 import { relativity, RELATIVITY_PARS } from './relativity';
 import { GalaxyShapes } from './galaxyShapes';
 import { RadioLobeLayer, type LobePlacement } from './radioLobes';
+import { LaniakeaView } from './laniakeaView';
+import { dotTexture } from './textures';
+import type { Laniakea } from '../sim/laniakea';
 import { lobeHost, lobeSizeKpc, type RadioLobeAtlas } from '../sim/radioLobes';
 import { CMB_DISTANCE_MPC, comovingDistance, H0, MPC_IN_LY, OBSERVABLE_RADIUS_MPC } from '../sim/cosmology';
 
@@ -272,14 +275,33 @@ export class CosmosView {
       this.scene.add(sprite);
     });
     for (const s of COSMIC_STRUCTURES) {
-      const sprite = textSprite(s.name, '#ffb38a', 0.85);
+      const sprite = textSprite(s.name, '#ffb38a', s.size ? 1.1 : 0.85);
       sprite.position.set(...galacticToCosmos(s.l, s.b, s.d));
       // The Local Group is ~3 Mpc across, a rich galaxy cluster a few Mpc, a supercluster tens.
-      sprite.userData.goto = { distance: s.name === 'Local Group' ? 3 : s.d < 30 ? 8 : s.d * 0.25 };
-      this.labels.push({ sprite, min: s.d < 1 ? 1.5 : s.d * 0.25, max: s.d < 1 ? 40 : 5000 });
+      sprite.userData.goto = { distance: s.viewMpc ?? (s.name === 'Local Group' ? 3 : s.d < 30 ? 8 : s.d * 0.25) };
+      this.labels.push({ sprite, min: s.size ? s.size * 0.5 : s.d < 1 ? 1.5 : s.d * 0.25, max: s.d < 1 ? 40 : 5000 });
       this.scene.add(sprite);
     }
     this.applyPointScale();
+  }
+
+  /** Laniakea's flows and surface (render/laniakeaView.ts). */
+  private laniakea?: LaniakeaView;
+  private laniakeaVisible = true;
+
+  setLaniakea(data: Laniakea): void {
+    if (this.laniakea) {
+      this.scene.remove(this.laniakea.group);
+      this.laniakea.dispose();
+    }
+    this.laniakea = new LaniakeaView(data, dotTexture());
+    this.laniakea.group.visible = this.laniakeaVisible;
+    this.scene.add(this.laniakea.group);
+  }
+
+  setLaniakeaVisible(on: boolean): void {
+    this.laniakeaVisible = on;
+    if (this.laniakea) this.laniakea.group.visible = on;
   }
 
   /** Show or hide a layer: the rich clusters, the quasars, the Seyferts or the blazars. */
@@ -526,6 +548,7 @@ export class CosmosView {
     this.controls.update();
     const camDist = this.cameraDistance;
     for (const l of this.labels) l.sprite.visible = camDist >= l.min && camDist <= l.max && (!l.kind || this.kindVisible[l.kind]);
+    this.laniakea?.update(this.camera);
     if (this.cmb) {
       // A faint backdrop from inside; full strength once you fly out past it.
       // Near a galaxy it fades further so the galaxy stands out against black.

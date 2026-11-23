@@ -208,6 +208,15 @@ Plan, in priority order:
 - BodyVisual adds it in applyDetail and updates it only when the planet is more than 14 px across
   and a star is present. Tests: tests/aurora.test.ts.
 
+### AZ. AGN torus without box edges; labels that don't pile up
+- [x] agn.ts: the torus is ray-marched inside a bounding box, but its density (exp(−(r−1)/2.2),
+  flared upward) never reached zero before the box's walls, so the dust stopped there and the box
+  showed: a square from above, a rectangle side on (phone screenshots of TON 618). The density
+  now fades out over an ellipsoid at 55–92% of the box's half-sizes.
+- [x] systemView.ts `declutterLabels`: labels whose (estimated) screen rectangles overlap keep
+  only the most important one (selected or followed, then by mass): 16 "Nuclear star" names no
+  longer pile up on TON 618.
+
 ### AY. Black-hole shadows stay black (phones)
 - [x] postfx.ts: the bloom ran after the lens pass, so the disc's glow (the brightest thing on
   screen, right at the shadow's edge) filled the shadow with grey. On phones (smaller render, wider

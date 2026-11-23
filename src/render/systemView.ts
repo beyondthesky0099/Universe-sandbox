@@ -742,6 +742,7 @@ export class SystemView {
     }
     // At most one expensive texture build per frame, largest on-screen planet first.
     if (detailCandidate) detailCandidate.v.applyDetail(detailCandidate.b, this.quality.textureWidth);
+    if (this.labelsEnabled) this.declutterLabels(viewportHeight);
 
     this.updateLights();
     this.updateParticles();
@@ -814,6 +815,34 @@ export class SystemView {
       }
       r.mesh.scale.setScalar(r.size * (0.1 + t * 3));
       (r.mesh.material as THREE.MeshBasicMaterial).opacity = 0.6 * (1 - t);
+    }
+  }
+
+  /**
+   * Labels that would overlap on screen: keep the most important (selected or followed, then the
+   * heaviest) and hide the rest, so a cluster of stars around a black hole doesn't pile its names
+   * on top of each other. Label sizes are estimated from the text (no layout reads).
+   */
+  private declutterLabels(viewportHeight: number): void {
+    const w = viewportHeight * this.camera.aspect;
+    const shown: { b: Body; v: BodyVisual; x: number; y: number }[] = [];
+    const p = new THREE.Vector3();
+    for (const b of this.sim.bodies) {
+      const v = this.visuals.get(b.id);
+      if (!v?.label.visible) continue;
+      p.set(b.x, b.y, b.z).project(this.camera);
+      if (p.z > 1) continue;
+      shown.push({ b, v, x: ((p.x + 1) / 2) * w, y: ((1 - p.y) / 2) * viewportHeight });
+    }
+    if (shown.length < 2) return;
+    const rank = (b: Body) => (b.id === this.selectedId || b.id === this.followId ? Infinity : b.mass);
+    shown.sort((a, b) => rank(b.b) - rank(a.b));
+    const kept: [number, number, number, number][] = [];
+    for (const s of shown) {
+      const text = s.v.label.element.textContent ?? '';
+      const r: [number, number, number, number] = [s.x - 4, s.y - 11, s.x + 12 + text.length * 7.5, s.y + 11];
+      if (kept.some((k) => r[0] < k[2] && r[2] > k[0] && r[1] < k[3] && r[3] > k[1])) s.v.label.visible = false;
+      else kept.push(r);
     }
   }
 

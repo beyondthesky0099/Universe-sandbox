@@ -9,6 +9,12 @@
   {
    "name": "UY Scuti",
    "kind": "Red supergiant",
+   "visit": {
+    "radiusSun": 1140,
+    "temperature": 3365,
+    "mass": 10,
+    "ref": "Radius 1,708 R☉ at 2.9 kpc (Arroyo-Torres et al. 2013), scaled to the Gaia distance; mass illustrative"
+   },
    "note": "One of the largest stars known: a red supergiant roughly 900 to 1,700 times the width of the Sun (its distance, and so its size, is uncertain). In the Sun’s place it would swallow the orbit of Mars.",
    "ref": "Arroyo-Torres et al. 2013, A&A 554, A76; distance from its Gaia DR3 parallax",
    "l": 19.144,
@@ -23,6 +29,12 @@
    ],
    "kind": "Red supergiant",
    "d": 5.8,
+   "visit": {
+    "radiusSun": 2150,
+    "temperature": 3200,
+    "mass": 15,
+    "ref": "Radius from its luminosity (4.4 × 10⁵ L☉) and temperature (3,200 K), Davies et al. 2007; mass illustrative"
+   },
    "note": "A red supergiant in the young cluster Stephenson 2, perhaps around 2,000 times the width of the Sun: a candidate for the largest star known.",
    "ref": "Davies et al. 2007, ApJ 671, 781 (position and the cluster’s distance)",
    "l": 26.105,

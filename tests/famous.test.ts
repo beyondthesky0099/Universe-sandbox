@@ -85,3 +85,31 @@ describe('famous objects (scripts/build-famous-objects.mjs)', () => {
     expect(s('CMB Cold Spot').d / CMB_DISTANCE_MPC).toBeLessThan(1);
   });
 });
+
+describe('famous stars up close', () => {
+  it('shows a supergiant at its real size with the Sun to scale beside it, and keeps them apart', async () => {
+    const { Simulation } = await import('../src/sim/simulation');
+    const { loadStarToScale } = await import('../src/sim/presets');
+    const f = famous.map.find((o) => o.name === 'Stephenson 2-18')!;
+    expect(f.visit?.radiusSun).toBe(2150);
+    const sim = new Simulation();
+    const setup = loadStarToScale(sim, { ...f, visit: f.visit! });
+    const R_SUN = 695700 / 149597870.7;
+    const star = sim.bodies.find((b) => b.name === 'Stephenson 2-18')!;
+    const sun = sim.bodies.find((b) => b.name === 'The Sun (to scale)')!;
+    // 2,150 solar radii is 10 AU: Saturn's orbit would fit inside.
+    expect(star.radius).toBeCloseTo(2150 * R_SUN, 6);
+    expect(star.radius).toBeGreaterThan(9.5);
+    expect(sun.radius).toBeCloseTo(R_SUN, 9);
+    expect(setup.tip).toMatch(/2,150 times the Sun/);
+    // A few orbits of the Sun: nothing merges or explodes, and the sizes stay real.
+    const period = Math.sqrt((star.radius * 1.6) ** 3 / 16);
+    for (let i = 0; i < 40; i++) sim.advance(period / 10);
+    expect(sim.bodies.map((b) => b.name).sort()).toEqual(['Stephenson 2-18', 'The Sun (to scale)']);
+    const s = sim.bodies.find((b) => b.name === 'Stephenson 2-18')!;
+    const sunNow = sim.bodies.find((b) => b.name === 'The Sun (to scale)')!;
+    expect(s.kind).toBe('giant');
+    expect(s.radius).toBeCloseTo(2150 * R_SUN, 6);
+    expect(Math.hypot(sunNow.x - s.x, sunNow.y - s.y, sunNow.z - s.z)).toBeGreaterThan(s.radius);
+  });
+});

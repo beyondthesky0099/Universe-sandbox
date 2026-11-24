@@ -9,6 +9,7 @@ import { diameterPc, eclipticToGalactic, loadNebulae, NEBULA_COLORS } from '../s
 import { loadBrightStars, temperatureFromBV } from '../sim/stars';
 import { loadGalacticExtras } from '../sim/galacticExtras';
 import { loadFamous } from '../sim/famous';
+import { loadStarToScale } from '../sim/presets';
 import { kelvinToRgb } from '../sim/color';
 import { loadNebulaImages, NEBULA_IMAGE_CREDIT, nebulaAtlasUrl, nebulaHdUrl, nebulaKey, tileRect, type NebulaImageAtlas } from '../sim/nebulaImages';
 import type { Cloud } from '../render/nebulaClouds';
@@ -254,6 +255,9 @@ export class GalaxyMapUI {
     );
   }
 
+  /** The famous object whose card is open (its "See it up close" button visits it). */
+  famousShown?: string;
+
   /** The card of a famous object: what it is, how far, why it matters and the paper. */
   async showFamousCard(name: string): Promise<void> {
     const f = (await loadFamous()).map.find((o) => o.name === name);
@@ -263,11 +267,36 @@ export class GalaxyMapUI {
     setFacts($('star-facts'), [
       ['Type', f.kind],
       ['Distance', `${f.approx ? 'about ' : ''}${ly < 100 ? ly.toFixed(2) : Math.round(ly).toLocaleString('en-US')} light-years`],
+      ...(f.visit ? ([['Size', `about ${f.visit.radiusSun.toLocaleString('en-US')} times the Sun’s width`]] as [string, string][]) : []),
       ['Why it matters', f.note],
       ['Source', f.ref],
     ]);
     for (const id of ['btn-star-bookmark', 'btn-star-hear', 'btn-star-neighbourhood', 'btn-star-enter', 'btn-star-fly']) $(id).classList.add('hidden');
+    // A star with a measured size can be seen up close, at that size.
+    this.famousShown = f.visit ? f.name : undefined;
+    if (f.visit) {
+      $('btn-star-enter').textContent = 'See it up close →';
+      $('btn-star-enter').classList.remove('hidden');
+    }
     $('star-panel').classList.remove('hidden');
+  }
+
+  /** Into the Sandbox: a famous star at its real size, with the Sun beside it to scale. */
+  async visitFamous(name: string): Promise<void> {
+    const f = (await loadFamous()).map.find((o) => o.name === name);
+    if (!f?.visit || this.app.transitioning) return;
+    const visit = f.visit;
+    this.app.transitioning = true;
+    try {
+      await this.app.fade(true);
+      this.app.loadScenario({ name: f.name, description: f.note, load: () => loadStarToScale(this.app.sim, { ...f, visit }) }, { zoomFrom: 30 });
+      this.app.setView('system');
+      await sleep(60);
+      await this.app.fade(false);
+      toast(`Arrived at ${f.name}`);
+    } finally {
+      this.app.transitioning = false;
+    }
   }
 
   /** Real open and globular star clusters at their measured distances (Milky Way only). */
@@ -504,7 +533,9 @@ export class GalaxyMapUI {
     this.app.galaxy.select(target);
     const panel = $('star-panel');
     $('btn-star-hear').classList.toggle('hidden', !(typeof target === 'object' && 'psr' in target));
-    // (A famous object's card hides these; every real target has them.)
+    // (A famous object's card hides these, or renames Enter; every real target has them.)
+    this.famousShown = undefined;
+    $('btn-star-enter').textContent = 'Enter system →';
     $('btn-star-enter').classList.remove('hidden');
     $('btn-star-fly').classList.remove('hidden');
     if (target === -1) {

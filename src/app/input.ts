@@ -461,7 +461,10 @@ export class InputUI {
     $<HTMLInputElement>('galaxy-seed').addEventListener('keydown', (e) => e.key === 'Enter' && goSeed());
     $('btn-galaxy-random').addEventListener('click', () => this.app.galaxyMapUI.buildGalaxy(Math.floor(Math.random() * 1e9)));
     $('btn-star-fly').addEventListener('click', () => this.app.galaxy.selected !== -1 && this.app.travelUI.goGalaxyTarget(this.app.galaxy.selected));
-    $('btn-star-enter').addEventListener('click', () => this.app.galaxy.selected !== -1 && void this.app.enterTarget(this.app.galaxy.selected));
+    $('btn-star-enter').addEventListener('click', () => {
+      if (this.app.galaxyMapUI.famousShown) void this.app.galaxyMapUI.visitFamous(this.app.galaxyMapUI.famousShown);
+      else if (this.app.galaxy.selected !== -1) void this.app.enterTarget(this.app.galaxy.selected);
+    });
     $('btn-star-bookmark').addEventListener('click', () => this.app.galaxyMapUI.toggleBookmark());
     $('btn-back').addEventListener('click', () => void this.app.exitToGalaxy());
     $<HTMLInputElement>('star-search').addEventListener('input', (e) => this.app.galaxyMapUI.search((e.target as HTMLInputElement).value));

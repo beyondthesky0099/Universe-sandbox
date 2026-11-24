@@ -19,6 +19,8 @@ export interface FamousMapObject {
   d: number;
   /** The distance is only roughly known. */
   approx?: boolean;
+  /** A star that can be visited up close: its radius (R☉), temperature (K), mass (M☉) and their source. */
+  visit?: { radiusSun: number; temperature: number; mass: number; ref: string };
   note: string;
   ref: string;
 }

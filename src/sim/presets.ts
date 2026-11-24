@@ -789,6 +789,32 @@ export function loadWhiteDwarfBinary(sim: Simulation, o: ({ kind: 'nova' } & Nov
 }
 
 /**
+ * A famous star at its real size (sim/famous.ts), with the Sun to scale on a wide orbit just
+ * outside it. The giant keeps the given radius: it is not recomputed unless the viewer toggles
+ * Real sizes.
+ */
+export function loadStarToScale(sim: Simulation, f: { name: string; note: string; visit: { radiusSun: number; temperature: number; mass: number; ref: string } }): SceneSetup {
+  const R_SUN = 695700 / 149597870.7;
+  const { radiusSun, temperature, mass, ref } = f.visit;
+  setTrueScale(sim, true);
+  const radius = radiusSun * R_SUN;
+  // Well into its supergiant phase, far from exploding (giants go at 1.1 × the main-sequence life).
+  const star = sim.addBody({ name: f.name, kind: 'giant', mass, radius, age: 1.02 * mainSequenceLifetime(mass), color: rgbToHex(kelvinToRgb(temperature)) });
+  addOrbiting(sim, star, { name: 'The Sun (to scale)', kind: 'star', mass: 1, age: 4.6e9 }, { a: radius * 1.6, e: 0, inc: 0, lan: 0, argp: 0, nu: 0 });
+  const sun = sim.bodies.find((b) => b.name === 'The Sun (to scale)');
+  if (sun) sun.radius = R_SUN;
+  sim.recenter();
+  const across = (2 * radius).toFixed(radius < 5 ? 1 : 0);
+  const period = Math.sqrt((radius * 1.6) ** 3 / (mass + 1));
+  return {
+    cameraDistance: radius * 4.5,
+    timeScale: period / 30,
+    elevation: 0.35,
+    tip: `${f.name} at its real size: about ${radiusSun.toLocaleString('en-US')} times the Sun’s width, ${across} AU across. The tiny dot circling it is the Sun, to the same scale. ${f.note} (${ref}.)`,
+  };
+}
+
+/**
  * A real classical Cepheid: a yellow supergiant whose mass follows its age, pulsing at its
  * catalogued period (BodyVisual reads the `cepheid:<days>` tag). One pulse takes about four
  * seconds at the scene's speed.

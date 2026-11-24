@@ -125,7 +125,9 @@ export function kindLabel(b: Body): string {
     case 'star':
       return 'Star';
     case 'giant':
-      return 'Red giant';
+      // Stars of 8 M☉ and more swell into supergiants; a Cepheid is a yellow one.
+      if (b.tag?.startsWith('cepheid')) return 'Yellow supergiant (Cepheid)';
+      return b.mass >= 8 ? 'Red supergiant' : 'Red giant';
     case 'whitedwarf':
       return 'White dwarf';
     case 'neutron':

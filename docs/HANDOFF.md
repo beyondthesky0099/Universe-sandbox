@@ -208,6 +208,17 @@ Plan, in priority order:
 - BodyVisual adds it in applyDetail and updates it only when the planet is more than 14 px across
   and a star is present. Tests: tests/aurora.test.ts.
 
+### BK. Famous stars up close
+- [x] Famous map objects can have a `visit` block (`radiusSun`, `temperature`, `mass`, `ref`), set in
+  `build-famous-objects.mjs`. So far: Stephenson 2-18 (2,150 R☉) and UY Scuti (1,140 R☉, at the
+  Gaia distance).
+- [x] Their card shows "See it up close →" (`btn-star-enter`, renamed while `famousShown` is set).
+  It runs `visitFamous` → `loadStarToScale` in `presets.ts`: the giant at its real radius with
+  real sizes on, and the Sun to scale orbiting at 1.6 R. The radius is set explicitly and is kept
+  unless the viewer toggles Real sizes.
+- [x] `kindLabel`: giants of 8 M☉ and more read "Red supergiant", and Cepheids read "Yellow
+  supergiant (Cepheid)".
+
 ### BJ. What we missed: Messier, galaxies, deep universe, around the Milky Way, stars, nebulae
 - [x] All 110 Messier objects can be found by M number (test in `tests/search.test.ts`):
   - `build-clusters.mjs` names the 17 missing open clusters. It now asks SIMBAD one object at a

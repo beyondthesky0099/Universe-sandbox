@@ -208,6 +208,16 @@ Plan, in priority order:
 - BodyVisual adds it in applyDetail and updates it only when the planet is more than 14 px across
   and a star is present. Tests: tests/aurora.test.ts.
 
+### BI. Close buttons, Sky-tab star search, the hidden star (Easter egg)
+- [x] ✕ on the Universe galaxy card (`cosmos-galaxy-close`) and the Galaxy map star card (`star-close`).
+- [x] Search from the Sky tab turns the sky to the object (`inSkyAction` in `ui/searchSources.ts`)
+      and rings it (`SkyView.markTarget`); from other tabs it still flies to the Galaxy map.
+- [x] Easter egg: a hidden star named "Bhanu Prakash" ("light of the Sun"), named for the app's
+      maker. `BHANU_PRAKASH_SEED` (14802, a 5,901 K G star with 7 planets, 2 temperate, a belt) in
+      `procgen/starSystem.ts`; `BHANU_PRAKASH_STAR` in `procgen/galaxy.ts` puts it in the Milky Way
+      map's last star slot, 108 ly from the Sun at l 45°, b +10°. It is found only by a search that
+      starts with "bhanu" or "prakash" (`secretStarEntry`). Tests: `tests/easter-egg.test.ts`.
+
 ### BH. The rest of "what did we miss" (except the Sky view)
 - [x] scripts/build-galactic-extras.py → galactic-extras.json (33 kB): S-stars (VizieR
   J/ApJ/837/30 table3), HVS (J/ApJ/751/55 table1, classes HVSs/pBHVSs/pHVSs; S5-HVS1 by hand),

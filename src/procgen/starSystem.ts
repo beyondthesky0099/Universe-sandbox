@@ -100,11 +100,21 @@ function classForMass(mass: number): SpectralClass {
  * The star at a galaxy position is fully determined by its seed. This is the cheap
  * part used to colour all the stars on the galaxy map.
  */
+/**
+ * The Easter egg: one star on the Milky Way map carries this seed, which grows a near twin of the
+ * Sun (5,900 K, 1.04 M☉) with seven planets, two of them temperate, gas giants with moons and an
+ * asteroid belt. It is named for Bhanu Prakash, who made Astrarium: "light of the Sun" in Sanskrit.
+ */
+export const BHANU_PRAKASH_SEED = 14802;
+const SPECIAL_NAMES = new Map<number, string>([[BHANU_PRAKASH_SEED, 'Bhanu Prakash']]);
+
 export function starSummary(seed: number): StarSummary {
   const rng = mulberry32(seed);
   const spectralClass = weighted(rng, CLASS_WEIGHTS);
   const star = makeStar(rng, spectralClass);
-  star.name = starName(rng);
+  // (Always draw the generated name, so a special name leaves the rest of the stream unchanged.)
+  const generated = starName(rng);
+  star.name = SPECIAL_NAMES.get(seed) ?? generated;
   return star;
 }
 
@@ -113,7 +123,9 @@ export function generateStarSystem(seed: number): StarSystemSpec {
   const rng = mulberry32(seed);
   const spectralClass = weighted(rng, CLASS_WEIGHTS);
   const star = makeStar(rng, spectralClass);
-  star.name = starName(rng);
+  // (Always draw the generated name, so a special name leaves the rest of the stream unchanged.)
+  const generated = starName(rng);
+  star.name = SPECIAL_NAMES.get(seed) ?? generated;
   const starRadius = radiusFor('star', star.mass);
 
   // Optional wide binary companion. Planets stay well inside its orbit.

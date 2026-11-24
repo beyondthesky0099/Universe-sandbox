@@ -2,7 +2,7 @@ import { kelvinToRgb, starTemperature } from '../sim/color';
 import type { GalaxyForm } from '../sim/galaxies';
 import { galaxyName, properName } from './names';
 import { Rng, gaussian, hash32, intRange, mulberry32, range } from './rng';
-import { generateStarSystem, starSummary, type SpectralClass } from './starSystem';
+import { BHANU_PRAKASH_SEED, generateStarSystem, starSummary, type SpectralClass } from './starSystem';
 
 export interface GalaxyData {
   seed: number;
@@ -100,6 +100,12 @@ export const UNITS_PER_KPC = 100 / 15;
 /** Distance of the Sun from the Galactic Centre (kpc) and height above the plane. */
 export const SUN_R0_KPC = 8.2;
 export const SUN_Z_KPC = 0.02;
+/**
+ * Where the Easter-egg star sits on the Milky Way map: 108 light-years from the Sun (108 is an
+ * auspicious number in Indian tradition), at galactic l = 45°, b = +10°. It takes the last
+ * selectable star's slot, so every other star keeps its place and name.
+ */
+export const BHANU_PRAKASH_STAR = { seed: BHANU_PRAKASH_SEED, l: 45, b: 10, dKpc: 108 / 3261.56 };
 const MW_PITCH = (12 * Math.PI) / 180;
 /** Each arm's radius (kpc) in the direction of the Sun (galactocentric angle π). */
 export const MW_ARMS: { name: string; rSun: number; weight: number }[] = [
@@ -341,8 +347,10 @@ export function generateGalaxy(seed: number, starCount = 30000, glowCount = 6000
       t = samplePosition(posRng, shape, sp, k);
     }
     // Dim the dense core so overlapping additive sprites don't saturate to white.
-    const dim = 0.35 + 0.65 * Math.min(1, t * 4);
-    const s = starSeed(seed, i);
+    const special = mw && i === starCount - 1;
+    const dim = special ? 1 : 0.35 + 0.65 * Math.min(1, t * 4);
+    if (special) sp.set(galacticToMap(BHANU_PRAKASH_STAR.l, BHANU_PRAKASH_STAR.b, BHANU_PRAKASH_STAR.dKpc), k);
+    const s = special ? BHANU_PRAKASH_SEED : starSeed(seed, i);
     seeds[i] = s;
     const summary = starSummary(s);
     names[i] = summary.name;

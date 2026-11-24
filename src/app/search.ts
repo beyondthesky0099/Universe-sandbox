@@ -15,7 +15,7 @@ import { $, escapeHtml, toast } from '../ui/dom';
 import { CHALLENGES } from '../game/challenges';
 import { LESSONS } from '../game/lessons';
 import { SearchIndex, type SearchEntry } from '../ui/search';
-import { activityEntries, clusterEntries, compactEntries, galacticObjectEntries, pulsarEntries, exoplanetEntries, galaxyEntries, inSkyAction, nebulaEntries, skyBodyEntries, starEntries, structureEntries } from '../ui/searchSources';
+import { activityEntries, clusterEntries, compactEntries, galacticObjectEntries, pulsarEntries, exoplanetEntries, galaxyEntries, inSkyAction, nebulaEntries, secretStarEntry, skyBodyEntries, starEntries, structureEntries } from '../ui/searchSources';
 import { kindLabel } from './shared';
 import type { App } from '../app';
 
@@ -90,7 +90,8 @@ export class SearchUI {
     const scene: SearchEntry[] = this.app.sim.bodies
       .filter((b) => !/^Body \d+$/.test(b.name))
       .map((b) => ({ name: b.name, kind: 'In this scene', detail: kindLabel(b), rank: 100, action: { type: 'body', id: b.id } }));
-    this.app.searchResults = q.trim() ? index.search(q, 40, scene) : [];
+    const secret = secretStarEntry(q);
+    this.app.searchResults = q.trim() ? [...(secret ? [secret] : []), ...index.search(q, 40, scene)] : [];
     this.app.searchActive = 0;
     $('global-results').innerHTML = this.app.searchResults.length
       ? this.app.searchResults
@@ -125,6 +126,9 @@ export class SearchUI {
         this.app.travelUI.goGalaxyPoint(at, a.pulsar || a.blackHole || a.object ? 1 : Math.max(0.003, size * 3), r.name);
         // A star: ring it and name it, among all the real stars around it.
         if (r.kind === 'Star') this.app.galaxy.pin(at, r.name);
+        // The hidden star: open its card, with the button to enter its system.
+        const hidden = a.starSeed !== undefined ? this.app.galaxy.data.stars.seeds.indexOf(a.starSeed) : -1;
+        if (hidden >= 0) this.app.galaxyMapUI.selectTarget(hidden);
         // A pulsar: open its panel, with the button to visit it.
         const psr = a.pulsar ? this.app.pulsarMapList.findIndex((p) => p.jname === a.pulsar) : -1;
         if (psr >= 0) this.app.galaxyMapUI.selectTarget({ psr });

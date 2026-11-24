@@ -20,12 +20,16 @@
  *                                     name (NGC, IC, UGC, ESO, MCG, Markarian, …), with its
  *                                     position angle, size and common name from OpenNGC
  *                                     (Mattia Verga, CC BY-SA 4.0) where it is an NGC/IC object.
+ *                                     2MRS lists some famous galaxies only by their 2MASX number
+ *                                     (the Antennae, the giants at the heart of the Coma Cluster);
+ *                                     an NGC/IC galaxy of OpenNGC within 1′ gives them their name.
+ *                                     Messier galaxies are labelled with their M number.
  *
  *   node scripts/build-galaxies.mjs
  */
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { num, parseTsv, round, vizierClient } from './lib/vizier.mjs';
+import { equatorialToGalactic, num, parseTsv, round, vizierClient } from './lib/vizier.mjs';
 
 const H0 = 70; // km/s/Mpc
 const MAX_CZ = 15000; // km/s, about 214 Mpc
@@ -125,25 +129,81 @@ function ngcKey(name) {
 }
 const openngc = await openNgc();
 
+/** "12:57:24.35", "+27:58:37.0" → degrees. */
+function sexagesimalDeg(s, hours) {
+  const m = s.match(/^([+-]?)(\d+):(\d+):([\d.]+)$/);
+  if (!m) return undefined;
+  const v = Number(m[2]) + Number(m[3]) / 60 + Number(m[4]) / 3600;
+  return (m[1] === '-' ? -v : v) * (hours ? 15 : 1);
+}
+// OpenNGC galaxies on a 1° grid of galactic coordinates, to name the galaxies 2MRS left anonymous.
+const ngcGrid = new Map();
+for (const r of new Set(openngc.values())) {
+  if (!/^G(Pair|Trpl)?$/.test(r.Type) || !ngcKey(r.Name)) continue;
+  const ra = sexagesimalDeg(r.RA, true);
+  const dec = sexagesimalDeg(r.Dec, false);
+  if (ra === undefined || dec === undefined) continue;
+  const [l, b] = equatorialToGalactic(ra, dec);
+  const key = `${Math.floor(l)},${Math.floor(b)}`;
+  if (!ngcGrid.has(key)) ngcGrid.set(key, []);
+  ngcGrid.get(key).push({ l, b, name: ngcKey(r.Name) });
+}
+/** The OpenNGC galaxy within `maxDeg` of (l, b), if any: its key ("NGC4889"). */
+function ngcAt(l, b, maxDeg) {
+  let best;
+  const D = Math.PI / 180;
+  for (let dl = -1; dl <= 1; dl++) {
+    for (let db = -1; db <= 1; db++) {
+      for (const g of ngcGrid.get(`${(Math.floor(l) + dl + 360) % 360},${Math.floor(b) + db}`) ?? []) {
+        const c = Math.sin(b * D) * Math.sin(g.b * D) + Math.cos(b * D) * Math.cos(g.b * D) * Math.cos((l - g.l) * D);
+        const sep = Math.acos(Math.min(1, c)) / D;
+        if (sep < maxDeg && (!best || sep < best.sep)) best = { sep, name: g.name };
+      }
+    }
+  }
+  return best?.name;
+}
+
 // Named galaxies beyond the Local Volume: every 2MRS galaxy with a catalogue name (not the
 // anonymous "g…" and "A…" entries), with numeric T-types (leading integer of the ZCAT type code),
 // position angles (OpenNGC, then HyperLEDA for the brightest), axis ratios (2MRS) and common names.
 const named = [];
+/** A 2MRS name as an OpenNGC key: "MESSIER049" → "NGC4472", "NGC_0253" → "NGC253". */
+const ngcOf = (cat) => {
+  const k = ngcKey(cat);
+  return k?.startsWith('M') ? ngcKey(openngc.get(k)?.Name ?? '') : k;
+};
+const namedKeys = new Set(tmrs.map((r) => ngcOf(r.CAT.replace(/_/g, ''))).filter(Boolean));
 for (const r of tmrs) {
   const cz = num(r.cz);
   const kt = num(r.Ktmag);
   if (!(cz / H0 > 11) || cz > MAX_CZ) continue;
-  const cat = r.CAT.replace(/_/g, '');
+  let cat = r.CAT.replace(/_/g, '');
+  const surveyName = cat;
+  if (!/^(NGC|IC|MESSIER)/.test(cat)) {
+    // Anonymous in 2MRS, or listed under another catalogue (NGC 4889 as CGCG 160-241): an NGC/IC
+    // galaxy at the same place (within 1′) lends its better-known name.
+    const ngcName = ngcAt(num(r.GLON), num(r.GLAT), 1 / 60);
+    if (ngcName && !namedKeys.has(ngcName)) {
+      namedKeys.add(ngcName);
+      cat = ngcName;
+    } else if (/^(g|A|2MASX)/.test(cat)) continue;
+  }
   if (!/^(NGC|IC|UGC|ESO|MCG|MRK|CGCG|KUG|ARK|AM|WKK|MESSIER|PGC|UGCA|DDO|HIZSS|LEDA)/.test(cat) && !(kt < 8.5)) continue;
-  if (/^(g|A|2MASX)/.test(cat)) continue;
   const t = r.type.match(/^-?\d+/);
   const ngc = openngc.get(ngcKey(cat) ?? '');
-  const common = ngc?.['Common names']?.split(',')[0] || null;
+  const familiar = ngc?.['Common names']?.split(',')[0] || null;
+  // Messier galaxies carry their number: "Sunflower Galaxy (M63)", or just "M89".
+  const messier = ngc?.M ? `M${Number(ngc.M)}` : null;
+  const common = messier ? (familiar ? `${familiar} (${messier})` : messier) : familiar;
   const pa = ngc && ngc.PosAng !== '' ? Number(ngc.PosAng) : null;
   // Axis ratio: OpenNGC's optical axes where it has them (the 2MASS K-band ratio is bulge-heavy,
   // so edge-on discs look too round), else the 2MRS value.
   const optical = ngc && num(ngc.MajAx) > 0 && num(ngc.MinAx) > 0 ? num(ngc.MinAx) / num(ngc.MajAx) : undefined;
-  named.push([cat, round(num(r.GLON), 3), round(num(r.GLAT), 3), Math.round(cz), round(kt, 2), t ? Number(t[0]) : null, pa, round(optical ?? num(r['b/a']), 2) ?? null, common]);
+  const row = [cat, round(num(r.GLON), 3), round(num(r.GLAT), 3), Math.round(cz), round(kt, 2), t ? Number(t[0]) : null, pa, round(optical ?? num(r['b/a']), 2) ?? null, common];
+  // Renamed: keep the survey's own name, which other catalogues (the AGN hosts) may use.
+  if (surveyName !== cat) row.push(surveyName);
+  named.push(row);
 }
 
 // ---------------------------------------------------------------------------
@@ -212,14 +272,35 @@ async function mapLimited(items, limit, fn) {
   return out;
 }
 
+// The mirror sometimes answers "The database is not currently reachable" for hours. Then the
+// orientations come from the last build's files, by name, so a rebuild still gets everything else.
+const previous = (file) => {
+  try {
+    return JSON.parse(readFileSync(new URL(`../public/data/${file}`, import.meta.url), 'utf8')).galaxies;
+  } catch {
+    return [];
+  }
+};
+const lastLocal = new Map(previous('galaxies-local.json').map((g) => [g.name, { pa: g.pa, ba: g.ba }]));
+const lastNamed = new Map(previous('galaxies-named.json').map((r) => [r[0], { pa: r[6] ?? undefined, ba: r[7] ?? undefined }]));
+let ledaDown = false;
+async function orientation(name, l, b, sizeArcmin, last) {
+  if (!ledaDown) {
+    try {
+      return await ledaOrientation(name, l, b, sizeArcmin);
+    } catch (err) {
+      if (!ledaDown) console.warn(`HyperLEDA unreachable (${err.message}): using the last build's orientations`);
+      ledaDown = true;
+    }
+  }
+  return last;
+}
+
 let oriented = 0;
 await mapLimited(local, 6, async (g) => {
   if (g.name === 'Milky Way') return;
   const sizeArcmin = g.size ? ((g.size / (g.d * 1000)) * 180 * 60) / Math.PI : undefined;
-  const o = await ledaOrientation(g.name, g.l, g.b, sizeArcmin).catch((err) => {
-    console.warn(`HyperLEDA ${g.name}: ${err.message}`);
-    return undefined;
-  });
+  const o = await orientation(g.name, g.l, g.b, sizeArcmin, lastLocal.get(g.name));
   if (!o) return;
   if (Number.isFinite(o.pa)) {
     g.pa = o.pa;
@@ -238,7 +319,7 @@ await mapLimited(named, 6, async (row) => {
     return;
   }
   if (!(kt < 8.5)) return; // the bright ones only: a cone search each
-  const o = await ledaOrientation(`named-${name}`, l, b, undefined).catch(() => undefined);
+  const o = await orientation(`named-${name}`, l, b, undefined, lastNamed.get(name));
   if (o && Number.isFinite(o.pa)) {
     row[6] = o.pa;
     orientedNamed++;
@@ -261,7 +342,7 @@ writeFileSync(
 );
 writeFileSync(
   new URL('galaxies-named.json', out),
-  JSON.stringify({ source: credit.named, H0, fields: ['name', 'l_deg', 'b_deg', 'cz_kms', 'Kt_mag', 'T_type', 'PA_deg', 'b/a', 'common_name'], galaxies: named }) + '\n',
+  JSON.stringify({ source: credit.named, H0, fields: ['name', 'l_deg', 'b_deg', 'cz_kms', 'Kt_mag', 'T_type', 'PA_deg', 'b/a', 'common_name', '2MRS name when renamed?'], galaxies: named }) + '\n',
 );
 console.log(`Named distant galaxies: ${named.length}`);
 console.log(`Local Volume: ${local.length} galaxies (nearest: ${local.slice(0, 5).map((g) => g.name).join(', ')})`);

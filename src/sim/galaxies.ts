@@ -8,7 +8,7 @@
  * galactic (x toward l = 0, y toward l = 90°, z north) → scene (x, z, −y).
  */
 
-import { comovingDistance, H0 } from './cosmology';
+import { CMB_DISTANCE_MPC, comovingDistance, H0 } from './cosmology';
 
 export const LY_PER_MPC = 3.2616e6;
 
@@ -59,6 +59,12 @@ export interface LocalGalaxy {
   /** Record holders: why they matter, and the paper. */
   note?: string;
   ref?: string;
+  /** A named galaxy listed under another name in the 2MASS Redshift Survey (AGN hosts use it). */
+  surveyName?: string;
+  /** Famous objects (sim/famous.ts): what it is, in words; other names; not a galaxy to enter. */
+  label?: string;
+  aliases?: string[];
+  noVisit?: boolean;
   /** Galactic longitude and latitude (degrees) and distance from the Sun (Mpc). */
   l: number;
   b: number;
@@ -168,6 +174,18 @@ const COMMON: Record<string, string> = {
   MESSIER086: 'M86',
   MESSIER077: 'M77 (Cetus A)',
   NGC1316: 'Fornax A',
+  // Messier galaxies of the Local Volume, which its catalogue lists by NGC number.
+  NGC5055: 'Sunflower Galaxy (M63)',
+  NGC4826: 'Black Eye Galaxy (M64)',
+  NGC3627: 'M66 (Leo Triplet)',
+  NGC0628: 'Phantom Galaxy (M74)',
+  NGC5236: 'Southern Pinwheel (M83)',
+  NGC4736: 'M94',
+  NGC3351: 'M95',
+  NGC3368: 'M96',
+  NGC4258: 'M106',
+  NGC3556: 'Surfboard Galaxy (M108)',
+  NGC3379: 'M105',
   NGC1399: 'NGC 1399 (Fornax Cluster centre)',
 };
 
@@ -273,13 +291,26 @@ export function agnDescription(cl: AgnClass, sp: string): string {
  * Well-known clusters and superclusters, at approximate galactic coordinates and distances
  * (Mpc) from the literature. They are labels only; the galaxies around them are real data.
  * `size` is the published size (Mpc across); `viewMpc` how far out the view goes to show it.
+ * `kind` and `note` (what it is, why it matters) are for the ones that aren't clusters or
+ * superclusters.
  */
-export const COSMIC_STRUCTURES: { name: string; l: number; b: number; d: number; size?: number; viewMpc?: number; aliases?: string[] }[] = [
+export const COSMIC_STRUCTURES: { name: string; l: number; b: number; d: number; size?: number; viewMpc?: number; aliases?: string[]; kind?: string; note?: string }[] = [
   { name: 'Local Group', l: 0, b: 0, d: 0.4 },
   // Near the Milky Way (render/localStructures.ts): its dark-matter halo, labelled at its top
   // (r200 = 217 kpc; Cautun et al. 2020), and the Magellanic Stream, labelled halfway along its tail.
   { name: 'Milky Way’s dark matter halo', l: 0, b: 90, d: 0.217, viewMpc: 0.9 },
   { name: 'Magellanic Stream', l: 68.5, b: -75.3, d: 0.075, viewMpc: 0.35 },
+  // The Sagittarius Stream (Majewski et al. 2003, ApJ 599, 1082; Belokurov et al. 2006, ApJL 642,
+  // L137): labelled on its bright leading arm across the northern sky (RA 210°, Dec +10°), 40–50 kpc out.
+  { name: 'Sagittarius Stream', l: 349.5, b: 66.5, d: 0.045, viewMpc: 0.3, kind: 'Stellar stream', note: 'Streams of stars torn from the Sagittarius Dwarf Galaxy by the Milky Way’s tides, wrapped all the way around the galaxy.' },
+  // Gaia–Enceladus (Helmi et al. 2018, Nature 563, 85; Belokurov et al. 2018, MNRAS 478, 611):
+  // its stars fill the inner halo within about 30 kpc; labelled below the disc.
+  { name: 'Gaia–Enceladus', l: 180, b: -45, d: 0.015, viewMpc: 0.12, aliases: ['Gaia-Sausage-Enceladus', 'Gaia Sausage'], kind: 'Merged galaxy (debris)', note: 'The remains of a galaxy that merged with the Milky Way 8 to 11 billion years ago. Its stars now fill the inner halo on long, plunging orbits.' },
+  // In the Large Magellanic Cloud (distance 49.6 kpc, Pietrzyński et al. 2019, Nature 567, 200).
+  // The Tarantula: RA 84.65°, Dec −69.09° (SIMBAD); Crowther et al. 2010, MNRAS 408, 731.
+  { name: 'Tarantula Nebula', l: 279.45, b: -31.68, d: 0.0496, viewMpc: 0.03, aliases: ['30 Doradus', 'NGC 2070'], kind: 'Nebula (in the Large Magellanic Cloud)', note: 'The most active star-forming region in the Local Group, lit by the cluster R136, home of the most massive stars known.' },
+  // WOH G64: RA 73.79°, Dec −68.34° (SIMBAD); Ohnaka et al. 2024, A&A 691, L15; Muñoz-Sanchez et al. 2024.
+  { name: 'WOH G64', l: 279.53, b: -35.69, d: 0.0496, viewMpc: 0.03, kind: 'Red supergiant (in the Large Magellanic Cloud)', note: 'One of the largest stars known, about 1,500 times the width of the Sun, and the first star in another galaxy imaged up close (2024). It seems to be turning into a yellow hypergiant.' },
   // The Bullet Cluster (render/bulletCluster.ts): dark matter seen apart from the gas.
   { name: 'Bullet Cluster: dark matter', l: 266.0, b: -21.2, d: comovingDistance(0.296), viewMpc: 3.5 },
   // Our home supercluster (Tully, Courtois, Hoffman & Pomarède 2014, Nature 513, 71), defined by
@@ -316,6 +347,9 @@ export const COSMIC_STRUCTURES: { name: string; l: number; b: number; d: number;
   // Claimed from a clustering of gamma-ray bursts at z ≈ 1.6–2.1 (Horváth, Hakkila & Bagoly 2014,
   // A&A 561, L12) at RA 17h, Dec +27.75°: perhaps 10 billion light-years long; debated.
   { name: 'Hercules–Corona Borealis Great Wall (claimed)', l: 49.0, b: 35.5, d: 5080, viewMpc: 11000, aliases: ['HCB Great Wall', 'Her–CrB Great Wall', 'largest structure in the universe'] },
+  // The CMB Cold Spot (Vielva et al. 2004, ApJ 609, 22; Cruz et al. 2005, MNRAS 356, 29), centred
+  // at l = 209°, b = −57°, about 10° across, on the sphere of the cosmic microwave background.
+  { name: 'CMB Cold Spot', l: 209, b: -57, d: CMB_DISTANCE_MPC * 0.995, viewMpc: 20000, aliases: ['Cold Spot', 'WMAP Cold Spot'], kind: 'Feature of the cosmic microwave background', note: 'An unusually large, cold patch of the cosmic microwave background, about 10° across. A giant void in front of it, a statistical fluke or something stranger: it is still debated.' },
 ];
 
 /** Familiar names of Abell clusters. */
@@ -340,14 +374,14 @@ export const ABELL_NAMES: Record<number, string> = {
 };
 
 /** [name, l, b, cz (km/s), total Ks magnitude, T-type, position angle (degrees), axis ratio] */
-type NamedRow = [string, number, number, number, number, number | null, (number | null)?, (number | null)?, (string | null)?];
+type NamedRow = [string, number, number, number, number, number | null, (number | null)?, (number | null)?, (string | null)?, string?];
 
 /**
  * The brightest galaxies beyond the Local Volume (2MRS), as clickable map entries. Distances
  * are from redshift; luminosities and sizes are estimated from the Ks magnitude.
  */
 export function namedFromSurvey(rows: NamedRow[], H0: number): LocalGalaxy[] {
-  return rows.map(([name, l, b, cz, kt, t, pa, ba, common]) => {
+  return rows.map(([name, l, b, cz, kt, t, pa, ba, common, surveyName]) => {
     const d = cz / H0;
     const absK = kt - 5 * Math.log10(d * 1e6) + 5;
     const lk = (3.28 - absK) / 2.5; // log10 Ks luminosity, solar units
@@ -364,6 +398,8 @@ export function namedFromSurvey(rows: NamedRow[], H0: number): LocalGalaxy[] {
       ...(pa !== null && pa !== undefined ? { pa } : {}),
       ...(ba !== null && ba !== undefined ? { ba } : {}),
       ...(common ? { common } : {}),
+      // The 2MRS name of a galaxy the build named after its NGC/IC entry (2MASX numbers get the prefix).
+      ...(surveyName ? { aliases: [/^\d/.test(surveyName) ? `2MASX J${surveyName}` : surveyName], surveyName } : {}),
     };
   });
 }
@@ -460,7 +496,7 @@ export function universeEntries(u: UniverseObjects): LocalGalaxy[] {
 /** Give the named galaxies that host a catalogued active nucleus their `agn` (and black hole). */
 export function markActiveHosts(galaxies: LocalGalaxy[], u: Pick<UniverseObjects, 'hosts' | 'blackHoles'>): number {
   const holes = blackHoleTable(u as UniverseObjects);
-  const byName = new Map(galaxies.map((g) => [g.name, g]));
+  const byName = new Map(galaxies.flatMap((g) => [[g.name, g] as const, ...(g.surveyName ? [[g.surveyName, g] as const] : [])]));
   let n = 0;
   for (const [host, name, cl, sp, vmag, radio] of u.hosts ?? []) {
     const g = byName.get(host);

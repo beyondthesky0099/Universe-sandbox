@@ -11,11 +11,12 @@ import { loadFlybys } from '../sim/flybys';
 import { loadVoyagerEncounters } from '../sim/voyager';
 import { PRESETS } from '../sim/presets';
 import { loadBrightStars, loadNearStars } from '../sim/stars';
+import { famousGalaxies, loadFamous } from '../sim/famous';
 import { $, escapeHtml, toast } from '../ui/dom';
 import { CHALLENGES } from '../game/challenges';
 import { LESSONS } from '../game/lessons';
 import { SearchIndex, type SearchEntry } from '../ui/search';
-import { activityEntries, clusterEntries, compactEntries, galacticObjectEntries, pulsarEntries, exoplanetEntries, galaxyEntries, inSkyAction, nebulaEntries, secretStarEntry, skyBodyEntries, starEntries, structureEntries } from '../ui/searchSources';
+import { activityEntries, clusterEntries, compactEntries, galacticObjectEntries, pulsarEntries, exoplanetEntries, famousMapEntries, galaxyEntries, inSkyAction, nebulaEntries, secretStarEntry, skyBodyEntries, starEntries, structureEntries } from '../ui/searchSources';
 import { kindLabel } from './shared';
 import type { App } from '../app';
 
@@ -48,6 +49,7 @@ export class SearchUI {
         safe(loadPulsars(), []),
         safe(loadGalacticObjects(), []),
       ]);
+      const famous = await loadFamous();
       const index = new SearchIndex();
       index.add(skyBodyEntries());
       index.add(starEntries(bright, near));
@@ -58,7 +60,8 @@ export class SearchUI {
       index.add(galacticObjectEntries(objects));
       if (catalog) index.add(exoplanetEntries(catalog));
       markActiveHosts([...local, ...named], universeRaw);
-      index.add(galaxyEntries([...local, ...named, ...deep]));
+      index.add(galaxyEntries([...local, ...named, ...deep, ...famousGalaxies(famous.cosmos)]));
+      index.add(famousMapEntries(famous.map));
       index.add(structureEntries());
       index.add(activityEntries({ presets: PRESETS, lessons: LESSONS, challenges: CHALLENGES, gw, flybys, voyager, eclipses }));
       return index;
@@ -119,6 +122,8 @@ export class SearchUI {
     switch (a.type) {
       case 'map': {
         if (!this.app.galaxyBuilt || this.app.galaxySeed !== MILKY_WAY_SEED || this.app.galaxyOrigin !== 'Milky Way') this.app.galaxyMapUI.buildGalaxy(MILKY_WAY_SEED);
+        // Close whatever card was open; the place we fly to opens its own, if it has one.
+        this.app.galaxyMapUI.selectTarget(-1);
         if (this.app.view !== 'galaxy') await this.app.switchView('galaxy');
         const size = ((a.sizePc ?? 0) / 1000) * UNITS_PER_KPC;
         // Pulsars and black holes: stop a little way off; zooming in (or Enter) opens them.
@@ -129,6 +134,8 @@ export class SearchUI {
         // The hidden star: open its card, with the button to enter its system.
         const hidden = a.starSeed !== undefined ? this.app.galaxy.data.stars.seeds.indexOf(a.starSeed) : -1;
         if (hidden >= 0) this.app.galaxyMapUI.selectTarget(hidden);
+        // A famous star or object: its card, with why it matters.
+        if (a.famous) void this.app.galaxyMapUI.showFamousCard(a.famous);
         // A pulsar: open its panel, with the button to visit it.
         const psr = a.pulsar ? this.app.pulsarMapList.findIndex((p) => p.jname === a.pulsar) : -1;
         if (psr >= 0) this.app.galaxyMapUI.selectTarget({ psr });
@@ -156,6 +163,7 @@ export class SearchUI {
             this.app.travelUI.goCosmosGalaxy(i);
           }
         } else {
+          this.app.cosmosUI.selectCosmos(-1);
           this.app.travelUI.goCosmosPoint(new THREE.Vector3(...galacticToCosmos(a.l, a.b, a.dMpc)), a.viewMpc ?? (a.dMpc < 1 ? 3 : 8), r.name);
         }
         break;

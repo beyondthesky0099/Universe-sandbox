@@ -9,22 +9,25 @@ import { parseNebulae } from '../src/sim/nebulae';
 import { PRESETS } from '../src/sim/presets';
 import { normalize, SearchIndex, type SearchEntry } from '../src/ui/search';
 import {
-  activityEntries, clusterEntries, compactEntries, exoplanetEntries, galacticObjectEntries, galaxyEntries, inSkyAction, nebulaEntries, pulsarEntries, skyBodyEntries, starEntries, structureEntries,
+  activityEntries, clusterEntries, compactEntries, exoplanetEntries, galacticObjectEntries, famousMapEntries, galaxyEntries, inSkyAction, nebulaEntries, pulsarEntries, skyBodyEntries, starEntries, structureEntries,
 } from '../src/ui/searchSources';
 import { flattenObjects } from '../src/sim/galacticObjects';
 import { universeEntries } from '../src/sim/galaxies';
 import { parsePulsars } from '../src/sim/pulsars';
+import { famousGalaxies, famousNebulae, type FamousObjects } from '../src/sim/famous';
 
 const data = (f: string) => JSON.parse(readFileSync(`public/data/${f}`, 'utf8'));
 const named = data('galaxies-named.json');
+const famous = data('famous-objects.json') as FamousObjects;
 const index = new SearchIndex();
 index.add(skyBodyEntries());
 index.add(starEntries(data('stars-bright.json').stars, data('stars-near.json').stars));
-index.add(nebulaEntries(parseNebulae(data('nebulae.json'))));
+index.add(nebulaEntries([...parseNebulae(data('nebulae.json')), ...famousNebulae(famous.nebulae)]));
 index.add(clusterEntries(parseClusters(data('clusters.json'))));
 index.add(compactEntries(data('compact-objects.json').objects));
 index.add(exoplanetEntries(parseCatalog(data('exoplanets.json'))));
-index.add(galaxyEntries([...(data('galaxies-local.json').galaxies as LocalGalaxy[]), ...namedFromSurvey(named.galaxies, named.H0), ...universeEntries(data('universe-objects.json'))]));
+index.add(galaxyEntries([...(data('galaxies-local.json').galaxies as LocalGalaxy[]), ...namedFromSurvey(named.galaxies, named.H0), ...universeEntries(data('universe-objects.json')), ...famousGalaxies(famous.cosmos)]));
+index.add(famousMapEntries(famous.map));
 index.add(pulsarEntries(parsePulsars(data('pulsars.json'))));
 index.add(galacticObjectEntries(flattenObjects(data('galactic-objects.json'))));
 index.add(structureEntries());
@@ -35,6 +38,18 @@ index.add(
   }),
 );
 const top = (q: string): SearchEntry => index.search(q)[0];
+
+describe('the Messier catalogue', () => {
+  it('finds all 110 Messier objects by their M number', () => {
+    const missing: string[] = [];
+    for (let n = 1; n <= 110; n++) {
+      const hits = index.search(`M${n}`, 5);
+      const word = new RegExp(`(^|[^0-9A-Za-z])M ?${n}([^0-9]|$)`);
+      if (!hits.some((h) => word.test(h.name) || (h.aliases ?? []).some((a) => word.test(a)))) missing.push(`M${n}`);
+    }
+    expect(missing).toEqual([]);
+  });
+});
 
 describe('search everything', () => {
   it('indexes every catalogue: tens of thousands of things', () => {

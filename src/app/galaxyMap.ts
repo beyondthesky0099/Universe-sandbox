@@ -8,6 +8,7 @@ import { clusterSwarms } from '../procgen/clusterStars';
 import { diameterPc, eclipticToGalactic, loadNebulae, NEBULA_COLORS } from '../sim/nebulae';
 import { loadBrightStars, temperatureFromBV } from '../sim/stars';
 import { loadGalacticExtras } from '../sim/galacticExtras';
+import { loadFamous } from '../sim/famous';
 import { kelvinToRgb } from '../sim/color';
 import { loadNebulaImages, NEBULA_IMAGE_CREDIT, nebulaAtlasUrl, nebulaHdUrl, nebulaKey, tileRect, type NebulaImageAtlas } from '../sim/nebulaImages';
 import type { Cloud } from '../render/nebulaClouds';
@@ -233,6 +234,42 @@ export class GalaxyMapUI {
     );
   }
 
+  /** Famous stars and objects (sim/famous.ts), labelled at their distances (Milky Way only). */
+  async showFamousOnMap(seed: number): Promise<void> {
+    const famous = await loadFamous();
+    if (this.app.galaxySeed !== seed) return;
+    this.app.galaxy.setRealLayer(
+      'famous',
+      famous.map.map((f) => {
+        const ly = f.d * 3261.56;
+        return {
+          pos: galacticToMap(f.l, f.b, f.d),
+          color: [1, 0.85, 0.55] as [number, number, number],
+          size: 0.016,
+          label: `${f.name} · ${f.approx ? '~' : ''}${ly < 100 ? ly.toFixed(1) : Math.round(ly).toLocaleString('en-US')} ly`,
+          labelColor: '#ffd9a0',
+          distance: 0.02,
+        };
+      }),
+    );
+  }
+
+  /** The card of a famous object: what it is, how far, why it matters and the paper. */
+  async showFamousCard(name: string): Promise<void> {
+    const f = (await loadFamous()).map.find((o) => o.name === name);
+    if (!f) return;
+    const ly = f.d * 3261.56;
+    $('star-name').textContent = f.name;
+    setFacts($('star-facts'), [
+      ['Type', f.kind],
+      ['Distance', `${f.approx ? 'about ' : ''}${ly < 100 ? ly.toFixed(2) : Math.round(ly).toLocaleString('en-US')} light-years`],
+      ['Why it matters', f.note],
+      ['Source', f.ref],
+    ]);
+    for (const id of ['btn-star-bookmark', 'btn-star-hear', 'btn-star-neighbourhood', 'btn-star-enter', 'btn-star-fly']) $(id).classList.add('hidden');
+    $('star-panel').classList.remove('hidden');
+  }
+
   /** Real open and globular star clusters at their measured distances (Milky Way only). */
   async showClustersOnMap(seed: number): Promise<void> {
     const all = await loadClusters().catch(() => undefined);
@@ -435,6 +472,7 @@ export class GalaxyMapUI {
       void this.showClustersOnMap(seed);
       void this.showPulsarsOnMap(seed);
       void this.showGalacticObjectsOnMap(seed);
+      void this.showFamousOnMap(seed);
       void this.showGaiaOnMap(seed);
       void this.showNamedStarsOnMap(seed);
       void loadGalacticExtras().then((d) => this.app.galaxy.extras.setData(d)).catch(() => undefined);
@@ -466,6 +504,9 @@ export class GalaxyMapUI {
     this.app.galaxy.select(target);
     const panel = $('star-panel');
     $('btn-star-hear').classList.toggle('hidden', !(typeof target === 'object' && 'psr' in target));
+    // (A famous object's card hides these; every real target has them.)
+    $('btn-star-enter').classList.remove('hidden');
+    $('btn-star-fly').classList.remove('hidden');
     if (target === -1) {
       panel.classList.add('hidden');
       return;

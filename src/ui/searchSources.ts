@@ -15,6 +15,7 @@ import type { BrightStar, NearStar } from '../sim/stars';
 import { eclipticToGalactic } from '../sim/nebulae';
 import type { VoyagerEncounter } from '../sim/voyager';
 import { BHANU_PRAKASH_STAR } from '../procgen/galaxy';
+import type { FamousMapObject } from '../sim/famous';
 import { lightYears, normalize, type SearchAction, type SearchEntry } from './search';
 
 const NEBULA_KIND: Record<Nebula['kind'], string> = { hii: 'HII region', pn: 'Planetary nebula', snr: 'Supernova remnant', dark: 'Dark nebula', refl: 'Reflection nebula' };
@@ -128,14 +129,26 @@ export function secretStarEntry(query: string): SearchEntry | undefined {
   };
 }
 
+/** Famous single objects on the Galaxy Map (sim/famous.ts): flying there opens their card. */
+export function famousMapEntries(list: FamousMapObject[]): SearchEntry[] {
+  return list.map((f) => ({
+    name: f.name,
+    aliases: f.aliases,
+    kind: f.kind,
+    detail: `${f.approx ? 'about ' : ''}${lightYears(f.d)} away`,
+    rank: 85,
+    action: { type: 'map', l: f.l, b: f.b, dKpc: f.d, sizePc: 1, famous: f.name },
+  }));
+}
+
 /** Galaxies in the Universe tab. */
 export function galaxyEntries(list: LocalGalaxy[]): SearchEntry[] {
   return list.map((g) => {
     const shown = displayName(g);
     const kind = g.kind ?? 'galaxy';
     const active = kind === 'quasar' || kind === 'seyfert' || kind === 'blazar';
-    const label = kind === 'cluster' ? 'Galaxy cluster' : active ? agnTypeLabel(g.cl ?? 'Q', g.sp ?? '').split(' (')[0] : g.agn ? `Galaxy (${agnNucleusLabel(g.agn)})` : 'Galaxy';
-    const aliases = [...(shown !== g.name ? [g.name] : []), ...(g.agn && g.agn.name !== g.name ? [g.agn.name] : [])];
+    const label = g.label ?? (kind === 'cluster' ? 'Galaxy cluster' : active ? agnTypeLabel(g.cl ?? 'Q', g.sp ?? '').split(' (')[0] : g.agn ? `Galaxy (${agnNucleusLabel(g.agn)})` : 'Galaxy');
+    const aliases = [...(shown !== g.name ? [g.name] : []), ...(g.agn && g.agn.name !== g.name ? [g.agn.name] : []), ...(g.aliases ?? [])];
     return {
       name: shown,
       aliases: aliases.length ? aliases : undefined,
@@ -152,9 +165,9 @@ export function structureEntries(): SearchEntry[] {
   return COSMIC_STRUCTURES.map((s) => ({
     name: s.name,
     aliases: s.aliases,
-    kind: kind(s.name),
+    kind: s.kind ?? kind(s.name),
     // Laniakea holds the Milky Way: say how big it is, not how far.
-    detail: s.size ? `${lightYears(s.size * 1000)} across; the Milky Way is inside it` : `${lightYears(s.d * 1000)} away`,
+    detail: s.size ? `${lightYears(s.size * 1000)} across; the Milky Way is inside it` : `${lightYears(s.d * 1000)} away${s.note ? ` · ${s.note}` : ''}`,
     rank: s.size ? 85 : 70,
     action: { type: 'cosmos', l: s.l, b: s.b, dMpc: s.d, ...(s.viewMpc ? { viewMpc: s.viewMpc } : {}) },
   }));

@@ -464,7 +464,7 @@ The map shows **5,676 real nebulae** from professional catalogues:
 
 **Sky tab:** every nebula is outlined at its real position and angular size, and fades out in daylight. The 55 named ones show their Digitized Sky Survey photographs on the sky, at their true size and orientation.
 
-Famous nebulae are labelled: Orion, Lagoon, Eagle, Helix, Ring, Cat's Eye, the Crab, Cassiopeia A, the Veil, the Horsehead, the Pipe, the Iris and others. The names are matched to the catalogues through the SIMBAD astronomy database, not typed in by hand. The California, Crescent and Witch Head nebulae aren't in these catalogues, so they're left unlabelled. Toggle the layer with **Real nebulae** in the Galaxy Map panel, or **Nebulae** in the Sky tab.
+Famous nebulae are labelled: Orion, Lagoon, Eagle, Helix, Ring, Cat's Eye, the Crab, Cassiopeia A, the Veil, the Horsehead, the Pipe, the Iris and others. The names are matched to the catalogues through the SIMBAD astronomy database, not typed in by hand. The Crescent and Witch Head nebulae, Barnard's Loop, the Gum Nebula, the Lambda Orionis Ring, the Spaghetti Nebula (Simeis 147) and M43 aren't in these catalogues: they're added from `scripts/build-famous-objects.mjs` (below). The California Nebula is still left unlabelled. Toggle the layer with **Real nebulae** in the Galaxy Map panel, or **Nebulae** in the Sky tab.
 
 ### 326 light-years of real stars (Gaia)
 Press **✨ 326 ly (Gaia)** for every star within 100 parsecs (326 light-years) brighter than Gaia magnitude 11: about 44,500 stars from ESA Gaia DR3.
@@ -483,7 +483,7 @@ Press **✨ 326 ly (Gaia)** for every star within 100 parsecs (326 light-years) 
 
 **Sky tab:** every cluster is outlined at its real size.
 
-32 famous clusters are labelled, matched through SIMBAD by catalogue designation and position: the Pleiades, the Hyades, the Beehive, the Double Cluster, the Jewel Box, Omega Centauri, 47 Tucanae, M13 and others. Toggle them with **Real star clusters** in the Galaxy Map panel, or **Star clusters** in the Sky tab.
+49 famous clusters are labelled, among them all of Messier's open clusters, matched through SIMBAD by catalogue designation and position: the Pleiades, the Hyades, the Beehive, the Double Cluster, the Jewel Box, Omega Centauri, 47 Tucanae, M13 and others. Toggle them with **Real star clusters** in the Galaxy Map panel, or **Star clusters** in the Sky tab.
 
 The 145 globular clusters with distances, and the open clusters with at least 300 Gaia members or a name, are also drawn as balls of stars at their measured sizes. Each is a Plummer sphere whose half-light radius is the catalogue's (Harris for globulars, Hunt & Reffert for open clusters), so flying to M13 or the Pleiades shows a cluster of stars rather than a dot. The stars are a representative sample: their number follows the cluster's brightness or membership, and their colours its age. They are not the cluster's real individual stars.
 
@@ -1128,6 +1128,15 @@ push and pull request.
 - Real stars on the Galaxy Map: every star brighter than G = 8 with a parallax good to 20% (61,673
   stars), ESA Gaia DR3 (Gaia Collaboration, Vallenari et al. 2023) via the Gaia archive, with the
   Lindegren et al. (2021) parallax zero-point (rebuild with `node scripts/build-gaia-bright.mjs`).
+- Famous objects the catalogues miss (`public/data/famous-objects.json`, rebuild with
+  `node scripts/build-famous-objects.mjs`): record-breaking and strange stars (UY Scuti,
+  Stephenson 2-18, Tabby's Star, Przybylski's Star, WISE 0855−0714, Scholz's Star, the magnetar
+  SGR 1806−20, …), M24, M40, M73, the Smith Cloud, large nebulae (Barnard's Loop, the Gum Nebula,
+  …), oddball galaxies (Hoag's Object, Malin 1, IC 1101, Dragonfly 44, the Cartwheel, Stephan's
+  Quintet, Crater II, Antlia II), the Virgo Messier galaxies the redshift survey misplaces, El
+  Gordo, the Phoenix Cluster, the Einstein Cross and Earendel. Positions from SIMBAD (Wenger et
+  al. 2000), except Stephenson 2-18, Dragonfly 44 and Earendel, whose discovery papers give them;
+  distances and notes from the paper cited with each object, or from Gaia DR3 parallaxes.
 - Star clusters: Hunt & Reffert 2023 ("Improving the open cluster census. II.", A&A 673, A114),
   based on ESA Gaia DR3, and the Harris catalogue of Milky Way globular clusters (VII/202), via
   VizieR (CDS); familiar names resolved with SIMBAD (rebuild with `node scripts/build-clusters.mjs`).
@@ -1145,8 +1154,11 @@ push and pull request.
   Hubble's law (H0 = 67.66 km/s/Mpc, Planck 2018), so clusters appear stretched along the line of sight
   ("fingers of God"). Cluster labels use approximate published positions. Each galaxy's
   position angle on the sky comes from **HyperLEDA** (Paturel et al. 2003, A&A 412, 45;
-  VizieR VII/237), matched by position; the Universe view draws galaxies at that angle and
-  the catalogue's inclination. Every 2MRS galaxy with a catalogue name (NGC, IC, UGC, ESO,
+  VizieR VII/237), matched by position (when HyperLEDA is unreachable, a rebuild keeps the last
+  build's angles); the Universe view draws galaxies at that angle and
+  the catalogue's inclination. A 2MRS galaxy listed only by its 2MASS number, or under another
+  catalogue, takes the name of an OpenNGC galaxy within 1′ (the Antennae, the Coma Cluster's
+  NGC 4889 and NGC 4874: 4,284 galaxies), and Messier galaxies carry their M number. Every 2MRS galaxy with a catalogue name (NGC, IC, UGC, ESO,
   MCG, Markarian…) is a named, clickable entry; the NGC/IC ones take their position angles,
   optical axis ratios and common names from **OpenNGC** (Mattia Verga,
   https://github.com/mattiaverga/OpenNGC, **CC BY-SA 4.0**).

@@ -6,6 +6,8 @@
  * al. 2020, where measured), and reflection nebulae from van den Bergh's. Positions are
  * galactic (l, b) in degrees.
  */
+import { famousNebulae, loadFamous } from './famous';
+
 export type NebulaKind = 'hii' | 'pn' | 'snr' | 'dark' | 'refl';
 
 export interface Nebula {
@@ -30,6 +32,8 @@ export interface Nebula {
   cloud?: string;
   /** Named nebulae the catalogues leave without a distance: what it was taken from ("cluster NGC 6530 (Gaia DR3)"). */
   distanceNote?: string;
+  /** Famous nebulae added by hand (sim/famous.ts): the paper their distance comes from. */
+  ref?: string;
 }
 
 type Row = (string | number | null)[];
@@ -68,7 +72,8 @@ export function loadNebulae(baseUrl = import.meta.env.BASE_URL): Promise<Nebula[
       if (!r.ok) throw new Error(`Couldn't load nebulae (${r.status})`);
       return r.json() as Promise<RawCatalog>;
     })
-    .then(parseNebulae);
+    // Plus the famous nebulae no catalogue row stands for (Barnard's Loop, the Gum Nebula, …).
+    .then(async (raw) => [...parseNebulae(raw), ...famousNebulae((await loadFamous(baseUrl)).nebulae)]);
   return promise;
 }
 

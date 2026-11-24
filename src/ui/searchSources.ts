@@ -14,7 +14,8 @@ import { galacticToEcliptic, type Nebula } from '../sim/nebulae';
 import type { BrightStar, NearStar } from '../sim/stars';
 import { eclipticToGalactic } from '../sim/nebulae';
 import type { VoyagerEncounter } from '../sim/voyager';
-import { lightYears, type SearchAction, type SearchEntry } from './search';
+import { BHANU_PRAKASH_STAR } from '../procgen/galaxy';
+import { lightYears, normalize, type SearchAction, type SearchEntry } from './search';
 
 const NEBULA_KIND: Record<Nebula['kind'], string> = { hii: 'HII region', pn: 'Planetary nebula', snr: 'Supernova remnant', dark: 'Dark nebula', refl: 'Reflection nebula' };
 
@@ -104,9 +105,27 @@ export function starEntries(bright: BrightStar[], near: NearStar[]): SearchEntry
  * are framed by their angular size. Anything else stays as it is.
  */
 export function inSkyAction(a: SearchAction, star: boolean): SearchAction {
-  if (a.type !== 'map') return a;
+  // A star of the Galaxy map alone (the Easter egg) isn't in the real sky: it stays a map trip.
+  if (a.type !== 'map' || a.starSeed !== undefined) return a;
   const radiusDeg = !star && a.sizePc && a.dKpc > 0 ? (Math.atan(a.sizePc / 2 / (a.dKpc * 1000)) * 180) / Math.PI : undefined;
   return { type: 'sky', v: galacticToEcliptic(a.l, a.b), ...(radiusDeg ? { radiusDeg } : {}) };
+}
+
+/**
+ * The Easter egg: a hidden Sun-like star named for Bhanu Prakash, who made Astrarium. It is in no
+ * catalogue and no list; it appears only when the search starts with "bhanu" or "prakash".
+ */
+export function secretStarEntry(query: string): SearchEntry | undefined {
+  const q = normalize(query);
+  if (!/^(bhanu|prakash)/.test(q)) return undefined;
+  const { l, b, dKpc, seed } = BHANU_PRAKASH_STAR;
+  return {
+    name: 'Bhanu Prakash',
+    kind: '✨ Hidden star',
+    detail: `108 light-years away · "light of the Sun"`,
+    rank: 1000,
+    action: { type: 'map', l, b, dKpc, sizePc: 1, starSeed: seed },
+  };
 }
 
 /** Galaxies in the Universe tab. */

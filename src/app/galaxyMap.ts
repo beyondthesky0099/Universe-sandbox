@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { FEATURE, systemFeatures, type FeatureName } from '../procgen/galaxy';
-import { generateStarSystem, starSummary } from '../procgen/starSystem';
+import { BHANU_PRAKASH_SEED, generateStarSystem, starSummary } from '../procgen/starSystem';
 import { type GalaxyTarget, type VolumeItem } from '../render/galaxyView';
 import { equatorialToGalactic, galacticToMap, MILKY_WAY_SEED, MW_CLUSTERS, pictureAxes, UNITS_PER_KPC, type GalaxyOptions } from '../procgen/galaxy';
 import { CLUSTER_COLORS, loadClusters } from '../sim/clusters';
@@ -557,7 +557,11 @@ export class GalaxyMapUI {
       const spec = generateStarSystem(this.app.galaxy.data.stars.seeds[target]);
       $('star-name').textContent = spec.star.name;
       const moons = spec.planets.reduce((n, p) => n + p.moons.length, 0);
+      // The Easter egg: the hidden star named for the maker of Astrarium.
+      const secret = spec.seed === BHANU_PRAKASH_SEED;
+      if (secret) toast('✨ You found the hidden star. Bhanu Prakash means "light of the Sun".');
       setFacts($('star-facts'), [
+        ...(secret ? ([['Name', '"Light of the Sun" (Sanskrit)'], ['Named for', 'Bhanu Prakash, who made Astrarium']] as [string, string][]) : []),
         ['Class', `${spec.star.spectralClass}-type star`],
         ['Mass', `${fmt(spec.star.mass)} M☉`],
         ['Temperature', `${Math.round(spec.star.temperature).toLocaleString()} K`],

@@ -43,11 +43,20 @@ const BODIES = [
   ['Hygiea', '10;', '10', 'asteroid'],
   ['Apophis', '99942;', '10', 'asteroid'],
   ['Bennu', '101955;', '10', 'asteroid'],
+  ['Ryugu', '162173;', '10', 'asteroid'],
+  // Earth's companions: the quasi-satellite Kamoʻoalewa and the two known Earth Trojans (at L4).
+  ['Kamoʻoalewa', '469219;', '10', 'asteroid'],
+  ['2010 TK7', '706765;', '10', 'asteroid'],
+  ['2020 XL5', '614689;', '10', 'asteroid'],
   // Comets (closest apparition solution)
   ['Halley', 'DES=1P;CAP;', '10', 'comet'],
   ['Encke', 'DES=2P;CAP;', '10', 'comet'],
   ['Churyumov–Gerasimenko', 'DES=67P;CAP;', '10', 'comet'],
   ['Hale–Bopp', 'DES=C/1995 O1;CAP;', '10', 'comet'],
+  // The bright comets of 2020 and 2024 (NEOWISE on a ~6,700-year orbit; Tsuchinshan–ATLAS leaving
+  // on a slightly hyperbolic one).
+  ['NEOWISE', 'DES=C/2020 F3;CAP;', '10', 'comet'],
+  ['Tsuchinshan–ATLAS', 'DES=C/2023 A3;CAP;', '10', 'comet'],
   // Moons
   ['Moon', '301', '399', 'moon'],
   ['Phobos', '401', '499', 'moon'],

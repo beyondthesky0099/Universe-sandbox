@@ -159,8 +159,10 @@ important ones stay and the rest fade out until you zoom in and there's room for
 - **The real Solar System on any date:**
   - Planet positions come from JPL's approximate Keplerian elements, valid 3000 BC – 3000 AD.
     The tests check them against JPL Horizons, and they agree to within 0.01 AU.
-  - Pluto, the dwarf planets, large asteroids (Vesta, Pallas, Hygiea, Apophis, Bennu) and
-    famous comets (Halley, Encke, 67P, Hale–Bopp) come from **JPL Horizons**.
+  - Pluto, the dwarf planets, large and visited asteroids (Vesta, Pallas, Hygiea, Apophis, Bennu,
+    Ryugu), Earth's quasi-satellite Kamoʻoalewa and its two known Trojans (2010 TK7, 2020 XL5),
+    and famous comets (Halley, Encke, 67P, Hale–Bopp, NEOWISE, and Tsuchinshan–ATLAS on its
+    hyperbolic way out) come from **JPL Horizons**. Search finds them from anywhere.
   - The **4,000 brightest real asteroids, Jupiter Trojans, Centaurs and Kuiper belt objects**
     come from the **JPL Small-Body Database**. They replace the illustrative belt.
   - **The edge of the Solar System**, shown as you zoom out (drawn, not simulated):

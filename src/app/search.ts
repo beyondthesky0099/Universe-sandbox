@@ -9,14 +9,15 @@ import { loadNebulae } from '../sim/nebulae';
 import { loadGwEvents } from '../sim/gwEvents';
 import { loadFlybys } from '../sim/flybys';
 import { loadVoyagerEncounters } from '../sim/voyager';
-import { PRESETS } from '../sim/presets';
+import { NAMED_SMALL_BODIES, PRESETS } from '../sim/presets';
+import { getSolarData, type SolarKind } from '../sim/solarSystemData';
 import { loadBrightStars, loadNearStars } from '../sim/stars';
 import { famousGalaxies, loadFamous } from '../sim/famous';
 import { $, escapeHtml, toast } from '../ui/dom';
 import { CHALLENGES } from '../game/challenges';
 import { LESSONS } from '../game/lessons';
 import { SearchIndex, type SearchEntry } from '../ui/search';
-import { activityEntries, clusterEntries, compactEntries, galacticObjectEntries, pulsarEntries, exoplanetEntries, famousMapEntries, galaxyEntries, inSkyAction, nebulaEntries, secretStarEntry, skyBodyEntries, starEntries, structureEntries } from '../ui/searchSources';
+import { activityEntries, clusterEntries, compactEntries, galacticObjectEntries, pulsarEntries, exoplanetEntries, famousMapEntries, galaxyEntries, smallBodyEntries, inSkyAction, nebulaEntries, secretStarEntry, skyBodyEntries, starEntries, structureEntries } from '../ui/searchSources';
 import { kindLabel } from './shared';
 import type { App } from '../app';
 
@@ -62,6 +63,15 @@ export class SearchUI {
       markActiveHosts([...local, ...named], universeRaw);
       index.add(galaxyEntries([...local, ...named, ...deep, ...famousGalaxies(famous.cosmos)]));
       index.add(famousMapEntries(famous.map));
+      const solar = getSolarData();
+      index.add(
+        smallBodyEntries(
+          NAMED_SMALL_BODIES.flatMap((name) => {
+            const kind = solar?.byName.get(name)?.kind as SolarKind | undefined;
+            return kind === 'dwarf' || kind === 'asteroid' || kind === 'comet' ? [{ name, kind }] : [];
+          }),
+        ),
+      );
       index.add(structureEntries());
       index.add(activityEntries({ presets: PRESETS, lessons: LESSONS, challenges: CHALLENGES, gw, flybys, voyager, eclipses }));
       return index;
@@ -189,6 +199,12 @@ export class SearchUI {
         if (!preset) break;
         if (this.app.view !== 'system') await this.app.switchToSandbox();
         this.app.loadScenario({ name: preset.name, load: () => preset.load(this.app.sim), presetId: preset.id });
+        // A body found by name: select it and follow it.
+        const focus = a.focus ? this.app.sim.bodies.find((b) => b.name === a.focus) : undefined;
+        if (focus) {
+          this.app.selectBody(focus);
+          this.app.system.follow(focus.id);
+        }
         break;
       }
       case 'lesson': {

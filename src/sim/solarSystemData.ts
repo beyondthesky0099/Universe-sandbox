@@ -128,19 +128,45 @@ function eccentricAnomaly(M: number, e: number): number {
   return E;
 }
 
+/** Hyperbolic anomaly H from the mean anomaly M = e sinh H − H (e > 1). */
+function hyperbolicAnomaly(M: number, e: number): number {
+  let H = Math.asinh(M / e);
+  for (let k = 0; k < 80; k++) {
+    const d = (e * Math.sinh(H) - H - M) / (e * Math.cosh(H) - 1);
+    H -= d;
+    if (Math.abs(d) < 1e-13) break;
+  }
+  return H;
+}
+
 /**
- * State from elements. Angles in radians, `mu` in AU³/yr². Elliptic orbits only.
+ * State from elements. Angles in radians, `mu` in AU³/yr². Elliptic orbits, and hyperbolic ones
+ * (e > 1, a < 0: comets that will leave the Solar System, like Tsuchinshan–ATLAS).
  */
 export function stateFromElements(a: number, e: number, i: number, node: number, peri: number, M: number, mu: number): EclipticState {
-  const E = eccentricAnomaly(M, e);
-  const cosE = Math.cos(E), sinE = Math.sin(E);
-  const b = a * Math.sqrt(1 - e * e);
-  const n = Math.sqrt(mu / (a * a * a));
-  const denom = 1 - e * cosE;
-  const xp = a * (cosE - e);
-  const yp = b * sinE;
-  const vxp = (-a * n * sinE) / denom;
-  const vyp = (b * n * cosE) / denom;
+  let xp: number, yp: number, vxp: number, vyp: number;
+  if (e > 1) {
+    const A = Math.abs(a);
+    const H = hyperbolicAnomaly(M, e);
+    const ch = Math.cosh(H), sh = Math.sinh(H);
+    const n = Math.sqrt(mu / (A * A * A));
+    const bh = A * Math.sqrt(e * e - 1);
+    const denom = e * ch - 1;
+    xp = A * (e - ch);
+    yp = bh * sh;
+    vxp = (-A * n * sh) / denom;
+    vyp = (bh * n * ch) / denom;
+  } else {
+    const E = eccentricAnomaly(M, e);
+    const cosE = Math.cos(E), sinE = Math.sin(E);
+    const b = a * Math.sqrt(1 - e * e);
+    const n = Math.sqrt(mu / (a * a * a));
+    const denom = 1 - e * cosE;
+    xp = a * (cosE - e);
+    yp = b * sinE;
+    vxp = (-a * n * sinE) / denom;
+    vyp = (b * n * cosE) / denom;
+  }
   const cO = Math.cos(node), sO = Math.sin(node);
   const cw = Math.cos(peri), sw = Math.sin(peri);
   const ci = Math.cos(i), si = Math.sin(i);
@@ -153,7 +179,7 @@ export function stateFromElements(a: number, e: number, i: number, node: number,
   };
 }
 
-/** Classical elements (radians) from a state vector, for bound orbits. */
+/** Classical elements (radians) from a state vector; for e > 1, `a` < 0 and M is the hyperbolic mean anomaly. */
 export function elementsFromState(s: EclipticState, mu: number): { a: number; e: number; i: number; node: number; peri: number; M: number } {
   const [x, y, z] = s.pos;
   const [vx, vy, vz] = s.vel;
@@ -191,6 +217,10 @@ export function elementsFromState(s: EclipticState, mu: number): { a: number; e:
     nu = nn > 1e-12 ? Math.acos(Math.max(-1, Math.min(1, (nx * x + ny * y) / (nn * r)))) : Math.atan2(y, x);
     if (z < 0) nu = 2 * Math.PI - nu;
   }
+  if (e > 1) {
+    const H = 2 * Math.atanh(Math.sqrt((e - 1) / (e + 1)) * Math.tan((nu > Math.PI ? nu - 2 * Math.PI : nu) / 2));
+    return { a, e, i, node, peri, M: e * Math.sinh(H) - H };
+  }
   const E = 2 * Math.atan2(Math.sqrt(1 - e) * Math.sin(nu / 2), Math.sqrt(1 + e) * Math.cos(nu / 2));
   const M = E - e * Math.sin(E);
   return { a, e, i, node, peri, M };
@@ -215,12 +245,12 @@ export function relativeState(body: SolarBodyData, jd: number, muTotal?: number)
     return stateFromElements(el.a, el.e, el.i * DEG, node * DEG, (varpi - node) * DEG, M * DEG, mu);
   }
   const nYr = el.n * DEG * DAYS_PER_YEAR; // rad/yr
-  const muCentre = nYr * nYr * el.a ** 3; // the GM Horizons used for these osculating elements
+  const muCentre = nYr * nYr * Math.abs(el.a) ** 3; // the GM Horizons used for these osculating elements
   const epochState = stateFromElements(el.a, el.e, el.i * DEG, el.node * DEG, el.peri * DEG, el.M * DEG, muCentre);
   const mu = muTotal ?? muCentre;
   const k = elementsFromState(epochState, mu);
   const dtYears = (jd - el.epochJd) / DAYS_PER_YEAR;
-  const M = k.M + Math.sqrt(mu / k.a ** 3) * dtYears;
+  const M = k.M + Math.sqrt(mu / Math.abs(k.a) ** 3) * dtYears;
   return stateFromElements(k.a, k.e, k.i, k.node, k.peri, M, mu);
 }
 
@@ -383,4 +413,8 @@ export const REAL_COLORS: Record<string, number> = {
   Hygiea: 0x5e5a55,
   Apophis: 0x8d8073,
   Bennu: 0x3c3a38,
+  Ryugu: 0x3b3936,
+  Kamoʻoalewa: 0x9a7d6a,
+  '2010 TK7': 0x8a8078,
+  '2020 XL5': 0x5d5852,
 };

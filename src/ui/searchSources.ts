@@ -141,6 +141,33 @@ export function famousMapEntries(list: FamousMapObject[]): SearchEntry[] {
   }));
 }
 
+/** Other names of the Solar System's named small bodies, and what they are. */
+const SMALL_BODY_INFO: Record<string, { aliases?: string[]; kind?: string }> = {
+  Ryugu: { aliases: ['162173 Ryugu', 'Hayabusa2'] },
+  Bennu: { aliases: ['101955 Bennu', 'OSIRIS-REx'] },
+  Apophis: { aliases: ['99942 Apophis'] },
+  Kamoʻoalewa: { aliases: ['2016 HO3', '469219'], kind: 'Asteroid (Earth’s quasi-satellite)' },
+  '2010 TK7': { aliases: ['Earth Trojan'], kind: 'Asteroid (Earth Trojan)' },
+  '2020 XL5': { aliases: ['Earth Trojan'], kind: 'Asteroid (Earth Trojan)' },
+  NEOWISE: { aliases: ['C/2020 F3', 'Comet NEOWISE'] },
+  'Tsuchinshan–ATLAS': { aliases: ['C/2023 A3', 'Tsuchinshan-ATLAS', 'Comet Tsuchinshan'] },
+  'Churyumov–Gerasimenko': { aliases: ['67P', 'Rosetta'] },
+  'Hale–Bopp': { aliases: ['C/1995 O1'] },
+  Halley: { aliases: ['1P/Halley', "Halley's Comet"] },
+};
+
+/** The named dwarf planets, asteroids and comets: found from anywhere, they open the real Solar System today. */
+export function smallBodyEntries(bodies: { name: string; kind: 'dwarf' | 'asteroid' | 'comet' }[]): SearchEntry[] {
+  return bodies.map((b) => ({
+    name: b.name,
+    aliases: SMALL_BODY_INFO[b.name]?.aliases,
+    kind: SMALL_BODY_INFO[b.name]?.kind ?? (b.kind === 'dwarf' ? 'Dwarf planet' : b.kind === 'comet' ? 'Comet' : 'Asteroid'),
+    detail: 'in the real Solar System today',
+    rank: 60,
+    action: { type: 'preset', id: 'solar', focus: b.name },
+  }));
+}
+
 /** Galaxies in the Universe tab. */
 export function galaxyEntries(list: LocalGalaxy[]): SearchEntry[] {
   return list.map((g) => {

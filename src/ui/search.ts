@@ -24,7 +24,8 @@ export type SearchAction =
   | { type: 'body'; id: number }
   /** Load a real exoplanet system, by host name. */
   | { type: 'exo'; host: string }
-  | { type: 'preset'; id: string }
+  /** A scenario; `focus` names a body in it to select and follow. */
+  | { type: 'preset'; id: string; focus?: string }
   | { type: 'lesson'; id: string }
   | { type: 'challenge'; id: string }
   | { type: 'gw'; index: number }

@@ -234,10 +234,16 @@ Plan, in priority order:
   - "M 2" reads as m2, but Minkowski's "M 1-4" stays as it is.
   - Short kind words ("a") no longer match any query.
   - Search closes stale cards.
-- Not done: `build-deep-universe.mjs` couldn't be rerun (VizieR down); its host table still uses
-  the old 2MRS names, which `surveyName` covers. Rerun it when VizieR is back. Solar System
-  objects from the "missed" list (Ryugu, Kamo'oalewa, Earth Trojans, NEOWISE,
-  Tsuchinshan–ATLAS) are still to do.
+- [x] Retried once VizieR was back:
+  - `build-galaxies.mjs` ran with live HyperLEDA, and every angle matched the fallback.
+  - `build-deep-universe.mjs` attached 250 more AGN to their (newly named) host galaxies.
+- [x] Solar System, from Horizons in `build-solar-system.mjs`:
+  - Ryugu, Kamoʻoalewa, 2010 TK7, 2020 XL5, NEOWISE and Tsuchinshan–ATLAS.
+  - The last is hyperbolic (e = 1.0002): `stateFromElements`, `elementsFromState` and
+    `relativeState` now handle e > 1.
+  - Checked against Horizons vectors on 2027-03-15 (`tests/solarsystem.test.ts`).
+  - Named small bodies are searchable from anywhere (`smallBodyEntries`). The preset action's
+    `focus` selects and follows the body.
 
 ### BI. Close buttons, Sky-tab star search, the hidden star (Easter egg)
 - [x] ✕ on the Universe galaxy card (`cosmos-galaxy-close`) and the Galaxy map star card (`star-close`).

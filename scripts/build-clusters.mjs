@@ -13,7 +13,6 @@
  *
  *   node scripts/build-clusters.mjs
  */
-import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -79,6 +78,10 @@ const FAMOUS = [
   ['M 6', 'Butterfly Cluster (M6)'], ['M 7', 'Ptolemy Cluster (M7)'], ['M 67', 'M67'], ['NGC 2547', 'NGC 2547'],
   ['IC 2391', 'Omicron Velorum Cluster'], ['M 35', 'M35'], ['M 41', 'M41'], ['M 47', 'M47'], ['NGC 3532', 'Wishing Well Cluster'],
   ['Trumpler 14', 'Trumpler 14'], ['NGC 2516', 'Southern Beehive (NGC 2516)'],
+  // The rest of Messier's open clusters, so every one can be found by its M number.
+  ['M 18', 'M18'], ['M 21', 'M21'], ['M 23', 'M23'], ['M 25', 'M25'], ['M 26', 'M26'], ['M 29', 'M29'], ['M 34', 'M34'],
+  ['M 36', 'Pinwheel Cluster (M36)'], ['M 37', 'M37'], ['M 38', 'Starfish Cluster (M38)'], ['M 39', 'M39'], ['M 46', 'M46'],
+  ['M 48', 'M48'], ['M 50', 'M50'], ['M 52', 'M52'], ['M 93', 'M93'], ['M 103', 'M103'],
   // Globular clusters: matched only against Harris's catalogue.
   ['NGC 5139', 'Omega Centauri', 'globular'], ['NGC 104', '47 Tucanae', 'globular'], ['M 13', 'Hercules Cluster (M13)', 'globular'],
   ['M 4', 'M4', 'globular'], ['M 22', 'M22', 'globular'], ['M 3', 'M3', 'globular'], ['M 15', 'M15', 'globular'], ['M 5', 'M5', 'globular'],
@@ -97,16 +100,40 @@ function sep(l1, b1, l2, b2) {
   const c = Math.sin(b1 * DEG) * Math.sin(b2 * DEG) + Math.cos(b1 * DEG) * Math.cos(b2 * DEG) * Math.cos((l1 - l2) * DEG);
   return Math.acos(Math.min(1, c)) / DEG;
 }
-const script = ['output console=off script=off', 'format object "%IDLIST(1)|%COO(d;A D)|%IDLIST[%*;]"', ...FAMOUS.map((f) => f[0])].join('\n');
-const simbad = await fetchCached(
-  join(cache, `simbad-${createHash('sha1').update(script).digest('hex').slice(0, 10)}.txt`),
-  `https://simbad.cfa.harvard.edu/simbad/sim-script?script=${encodeURIComponent(script)}`,
-  (t) => !t.includes('::error') && t.split('\n').filter((l) => l.includes('|')).length === FAMOUS.length,
-);
+/**
+ * SIMBAD, one object at a time: "main id|ra dec|all identifiers". SIMBAD sometimes can't print an
+ * object's full identifier list (a cross-identification from a catalogue it no longer knows, as
+ * for M 36 in 2026): then only its own name and position, and the match falls back to position.
+ */
+async function simbadObject(id) {
+  const file = join(cache, `simbad-${id.replace(/[^A-Za-z0-9]+/g, '_')}.txt`);
+  if (existsSync(file)) return readFileSync(file, 'utf8');
+  for (const format of ['%IDLIST(1)|%COO(d;A D)|%IDLIST[%*;]', '%IDLIST(1)|%COO(d;A D)|%IDLIST(1)']) {
+    const script = ['output console=off script=off', `format object "${format}"`, id].join('\n');
+    for (let attempt = 0; attempt < 5; attempt++) {
+      try {
+        const res = await fetch(`https://simbad.cfa.harvard.edu/simbad/sim-script?script=${encodeURIComponent(script)}`, { signal: AbortSignal.timeout(120000) });
+        const text = res.ok ? await res.text() : '';
+        const line = text.split('\n').find((l) => l.includes('|'));
+        if (res.ok && !text.includes('::error') && line) {
+          writeFileSync(file, line);
+          return line;
+        }
+        if (res.ok && text.includes('::error')) break; // SIMBAD answered, but not with this format
+      } catch {
+        // a dropped connection: retry
+      }
+      await new Promise((r) => setTimeout(r, 3000 * 2 ** attempt));
+    }
+  }
+  throw new Error(`SIMBAD couldn't resolve ${id}`);
+}
+const simbad = [];
+for (const f of FAMOUS) simbad.push(await simbadObject(f[0]));
 /** Catalogue designation in a comparable form: "Cl Melotte 20", "Mel 20" and "Melotte_20" all → "MELOTTE20". */
 const normId = (s) =>
   s.toUpperCase().replace(/^CL\s+/, '').replace(/^MEL\b/, 'MELOTTE').replace(/^CR\b/, 'COLLINDER').replace(/^TR\b/, 'TRUMPLER').replace(/[\s_]+/g, '').replace(/^([A-Z]+)0+(\d)/, '$1$2');
-const resolved = simbad.split('\n').filter((l) => l.includes('|')).map((l) => {
+const resolved = simbad.map((l) => {
   const [, coo, ids] = l.split('|');
   const [ra, dec] = coo.trim().split(/\s+/).map(Number);
   return { ...toGalactic(ra, dec), ids: new Set(ids.split(';').map(normId).filter(Boolean)) };

@@ -188,7 +188,8 @@ export function cosmosFacts(g: LocalGalaxy): [string, string][] {
   const facts: [string, string][] = [];
   const kind = g.kind ?? 'galaxy';
   const nucleus = g.agn ?? (g.cl ? { name: g.name, cl: g.cl, sp: g.sp ?? '' } : undefined);
-  if (kind === 'cluster') facts.push(['Type', 'Rich galaxy cluster (Abell)']);
+  if (g.label) facts.push(['Type', g.label]);
+  else if (kind === 'cluster') facts.push(['Type', 'Rich galaxy cluster (Abell)']);
   else if (kind === 'quasar' || kind === 'seyfert' || kind === 'blazar') facts.push(['Type', agnTypeLabel(g.cl ?? 'Q', g.sp ?? '')]);
   else if (g.agn) facts.push(['Type', `${form[0].toUpperCase()}${form.slice(1)} galaxy with a ${agnNucleusLabel(g.agn)}`]);
   else facts.push(['Type', `${form[0].toUpperCase()}${form.slice(1)} galaxy`]);

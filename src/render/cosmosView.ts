@@ -271,8 +271,8 @@ export class CosmosView {
       if (kind === 'cluster') {
         min = g.d * 0.04;
         far = g.d * 6;
-      } else if (g.note) {
-        // Record holders: signposts once the view is out at the cosmic-web scale.
+      } else if (g.note && g.d > 300) {
+        // Distant record holders: signposts once the view is out at the cosmic-web scale.
         min = 60;
         far = 1e9;
       }

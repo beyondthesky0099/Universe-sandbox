@@ -231,3 +231,38 @@ describe('moon systems include the real Sun', () => {
     expect(sun.radius * 149597870.7).toBeCloseTo(695700, -3); // real size
   });
 });
+
+describe('Ryugu, Earth’s companions and the comets of 2020 and 2024', () => {
+  /** JPL Horizons heliocentric vectors (ecliptic J2000, AU) on 2027-03-15 00:00 TDB. */
+  const HORIZONS: [string, number[]][] = [
+    ['Ryugu', [1.208197047764784, -0.1009427180147126, 0.1209012129085991]],
+    ['Kamoʻoalewa', [-1.07680565882354, 0.151207896147031, 0.1428916528894984]],
+    ['NEOWISE', [-12.98284235457322, -13.34640270062141, -6.036414761543866]],
+    ['Tsuchinshan–ATLAS', [0.1895028279720752, -7.657754419555333, 6.225027486462698]],
+  ];
+
+  it('propagates them, hyperbolic orbit included, to where Horizons puts them', () => {
+    expect(data.byName.get('Tsuchinshan–ATLAS')!.elements.e).toBeGreaterThan(1);
+    for (const [name, ref] of HORIZONS) {
+      const s = relativeState(data.byName.get(name)!, JD, muFor(name));
+      const err = Math.hypot(s.pos[0] - ref[0], s.pos[1] - ref[1], s.pos[2] - ref[2]);
+      expect(err, name).toBeLessThan(0.01);
+    }
+  });
+
+  it('turns hyperbolic elements into a state and back', () => {
+    const mu = G;
+    const s = stateFromElements(-2.5, 1.4, 0.7, 1.1, 2.3, 0.9, mu);
+    const k = elementsFromState(s, mu);
+    expect(k.a).toBeCloseTo(-2.5, 9);
+    expect(k.e).toBeCloseTo(1.4, 9);
+    expect(k.M).toBeCloseTo(0.9, 9);
+    // Energy says unbound: v² > 2μ/r.
+    const r = Math.hypot(...s.pos);
+    expect(Math.hypot(...s.vel) ** 2).toBeGreaterThan((2 * mu) / r);
+  });
+
+  it('keeps Earth’s Trojans on Earth’s orbit (a ≈ 1 AU)', () => {
+    for (const name of ['2010 TK7', '2020 XL5', 'Kamoʻoalewa']) expect(data.byName.get(name)!.elements.a, name).toBeCloseTo(1, 1);
+  });
+});

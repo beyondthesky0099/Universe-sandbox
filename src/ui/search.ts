@@ -13,7 +13,7 @@
 
 export type SearchAction =
   /** Fly to a point in the Milky Way map: galactic l, b (degrees), distance (kpc). */
-  | { type: 'map'; l: number; b: number; dKpc: number; sizePc?: number; pulsar?: string; blackHole?: string; object?: string; starSeed?: number }
+  | { type: 'map'; l: number; b: number; dKpc: number; sizePc?: number; pulsar?: string; blackHole?: string; object?: string; starSeed?: number; famous?: string }
   /** Turn the Sky tab to an ecliptic direction (unit vector). */
   | { type: 'sky'; v: [number, number, number]; radiusDeg?: number; body?: string }
   /** A galaxy in the Universe tab, by name. */
@@ -24,7 +24,8 @@ export type SearchAction =
   | { type: 'body'; id: number }
   /** Load a real exoplanet system, by host name. */
   | { type: 'exo'; host: string }
-  | { type: 'preset'; id: string }
+  /** A scenario; `focus` names a body in it to select and follow. */
+  | { type: 'preset'; id: string; focus?: string }
   | { type: 'lesson'; id: string }
   | { type: 'challenge'; id: string }
   | { type: 'gw'; index: number }
@@ -71,6 +72,9 @@ function normalizeWords(s: string): string {
     .replace(/[α-ω]/g, (c) => GREEK[c] ?? c)
     .normalize('NFD')
     .replace(/[̀-ͯ]/g, '')
+    // "Messier 2" and "M 2" are the word "m2" (but not Minkowski's planetary nebulae, "M 1-4").
+    .replace(/\bmessier\s*(?=\d)/g, 'm')
+    .replace(/\bm\s+(\d+)\b(?!\s*-)/g, 'm$1')
     .replace(/[^a-z0-9]+/g, ' ')
     .trim();
 }
@@ -141,7 +145,8 @@ export function nearWord(q: string, w: string): boolean {
 }
 
 /** A query word names a kind word when either starts with the other ("novae" ↔ "nova", "pulsars" ↔ "pulsar"). */
-const sameWord = (q: string, k: string) => k.startsWith(q) || (q.length >= 3 && q.startsWith(k));
+// (A kind's short words, "a" or "of", don't make every query that starts with them a match.)
+const sameWord = (q: string, k: string) => k.startsWith(q) || (q.length >= 3 && k.length >= 3 && q.startsWith(k));
 
 /** A prepared index: normalise the names once, search many times. */
 export class SearchIndex {
@@ -177,6 +182,9 @@ export class SearchIndex {
         else if (k.startsWith(q)) score = Math.max(score, 600 - Math.min(100, k.length - q.length));
         else if (k.includes(q)) score = Math.max(score, 200 - Math.min(100, k.length - q.length));
       });
+      // A catalogue number that is a whole word of the name ("m1" in "Crab Nebula (M1)") beats
+      // names that only start with it (M10, M100, …), however famous those are.
+      if (qWords.length === 1 && /\d/.test(q) && it.words.includes(qWords[0])) score = Math.max(score, 800);
       // Every query word starts some word of the name ("eta car" → "Eta Carinae").
       if (score < 400 && qWords.length && qWords.every((w) => it.words.some((x) => x.startsWith(w)))) score = Math.max(score, 400);
       // Or mixes the two ("hercules structure", "virgo cluster"): each word in the name or the kind.

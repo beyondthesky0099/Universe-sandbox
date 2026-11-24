@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { seedFromString } from '../procgen/rng';
 import { agnNucleusLabel, agnTypeLabel, displayName, type LocalGalaxy, GALAXY_CREDIT, galaxyForm, isActiveGalaxy, isFamous, loadLocalGalaxies, loadNamedGalaxies, loadUniverseObjects, loadUniverseRaw, loadWebGalaxies, markActiveHosts } from '../sim/galaxies';
+import { famousGalaxies, loadFamous } from '../sim/famous';
 import { loadActiveNucleus } from '../sim/presets';
 import { loadRadioLobes, radioAtlasUrl } from '../sim/radioLobes';
 import { loadLaniakea } from '../sim/laniakea';
@@ -38,10 +39,10 @@ export class CosmosUI {
       await this.app.fade(true);
       if (!this.app.cosmosLoaded) {
         try {
-          const [local, named, deep, raw] = await Promise.all([loadLocalGalaxies(), loadNamedGalaxies(), loadUniverseObjects(), loadUniverseRaw()]);
+          const [local, named, deep, raw, famous] = await Promise.all([loadLocalGalaxies(), loadNamedGalaxies(), loadUniverseObjects(), loadUniverseRaw(), loadFamous()]);
           // Named galaxies that are Seyferts, LINERs or blazars carry their nucleus (and black hole).
           markActiveHosts([...local, ...named], raw);
-          this.app.cosmos.setLocal([...local, ...named, ...deep]);
+          this.app.cosmos.setLocal([...local, ...named, ...deep, ...famousGalaxies(famous.cosmos)]);
           this.app.cosmos.setKindVisible('cluster', $<HTMLInputElement>('opt-cosmos-clusters').checked);
           this.app.cosmos.setKindVisible('quasar', $<HTMLInputElement>('opt-cosmos-quasars').checked);
           this.app.cosmos.setKindVisible('seyfert', $<HTMLInputElement>('opt-cosmos-seyferts').checked);
@@ -139,7 +140,7 @@ export class CosmosUI {
     setFacts($('cosmos-galaxy-facts'), cosmosFacts(g));
     $('btn-cosmos-visit').textContent = g.name === 'Milky Way' ? 'Back to the Milky Way →' : g.kind === 'quasar' || g.kind === 'seyfert' || g.kind === 'blazar' ? 'Visit host galaxy →' : 'Visit galaxy →';
     // A cluster is a place to fly to, not a galaxy to enter.
-    $('btn-cosmos-visit').classList.toggle('hidden', g.kind === 'cluster');
+    $('btn-cosmos-visit').classList.toggle('hidden', g.kind === 'cluster' || !!g.noVisit);
     $('btn-cosmos-nucleus').classList.toggle('hidden', !isActiveGalaxy(g));
     panel.classList.remove('hidden');
   }
@@ -147,7 +148,7 @@ export class CosmosUI {
   /** Go into a galaxy: the real Milky Way map, or a procedural stand-in shaped like the real galaxy. */
   async visitCosmosGalaxy(index: number): Promise<void> {
     const g = this.app.cosmos.local[index];
-    if (!g || this.app.transitioning || g.kind === 'cluster') return;
+    if (!g || this.app.transitioning || g.kind === 'cluster' || g.noVisit) return;
     this.app.transitioning = true;
     try {
       this.app.cosmos.flyTo(index, this.app.cosmos.viewDistance(index) * 0.08, 1.6);

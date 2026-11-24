@@ -208,6 +208,43 @@ Plan, in priority order:
 - BodyVisual adds it in applyDetail and updates it only when the planet is more than 14 px across
   and a star is present. Tests: tests/aurora.test.ts.
 
+### BJ. What we missed: Messier, galaxies, deep universe, around the Milky Way, stars, nebulae
+- [x] All 110 Messier objects can be found by M number (test in `tests/search.test.ts`):
+  - `build-clusters.mjs` names the 17 missing open clusters. It now asks SIMBAD one object at a
+    time and falls back to name and position when SIMBAD can't print an identifier list (M36).
+  - `build-galaxies.mjs` names anonymous or non-NGC 2MRS rows after an OpenNGC galaxy within 1′
+    (4,284 galaxies: the Antennae, NGC 4889/4874, …), keeps the survey name as a 10th field
+    (`surveyName`, so AGN hosts still match), and labels Messier galaxies with their M number.
+    When HyperLEDA is unreachable (it was, all day on 2026-11-24) it keeps the last build's
+    position angles.
+  - `COMMON` in `sim/galaxies.ts` is keyed by NGC number for Local Volume Messier galaxies.
+- [x] `scripts/build-famous-objects.mjs` → `public/data/famous-objects.json`, loaded by
+  `sim/famous.ts`:
+  - `map`: stars and objects, a labelled layer on the Galaxy Map (`showFamousOnMap`) with a card
+    (`showFamousCard`).
+  - `nebulae`: appended to `loadNebulae()`.
+  - `cosmos`: galaxies, clusters, the Einstein Cross and Earendel in the Universe tab, with
+    `label`, `aliases` and `noVisit` on `LocalGalaxy`.
+  - The low-velocity Virgo Messier galaxies (M59, M85, M86, M89, M90, M91, M98) sit at the
+    cluster's 16.5 Mpc.
+- [x] `COSMIC_STRUCTURES` gained `kind` and `note`: Sagittarius Stream, Gaia–Enceladus, Tarantula
+  Nebula, WOH G64, CMB Cold Spot.
+- [x] Search fixes:
+  - A catalogue number that is a whole word ("M1") beats prefixes (M10, M100).
+  - "M 2" reads as m2, but Minkowski's "M 1-4" stays as it is.
+  - Short kind words ("a") no longer match any query.
+  - Search closes stale cards.
+- [x] Retried once VizieR was back:
+  - `build-galaxies.mjs` ran with live HyperLEDA, and every angle matched the fallback.
+  - `build-deep-universe.mjs` attached 250 more AGN to their (newly named) host galaxies.
+- [x] Solar System, from Horizons in `build-solar-system.mjs`:
+  - Ryugu, Kamoʻoalewa, 2010 TK7, 2020 XL5, NEOWISE and Tsuchinshan–ATLAS.
+  - The last is hyperbolic (e = 1.0002): `stateFromElements`, `elementsFromState` and
+    `relativeState` now handle e > 1.
+  - Checked against Horizons vectors on 2027-03-15 (`tests/solarsystem.test.ts`).
+  - Named small bodies are searchable from anywhere (`smallBodyEntries`). The preset action's
+    `focus` selects and follows the body.
+
 ### BI. Close buttons, Sky-tab star search, the hidden star (Easter egg)
 - [x] ✕ on the Universe galaxy card (`cosmos-galaxy-close`) and the Galaxy map star card (`star-close`).
 - [x] Search from the Sky tab turns the sky to the object (`inSkyAction` in `ui/searchSources.ts`)

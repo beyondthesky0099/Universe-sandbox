@@ -948,7 +948,14 @@ function addInterstellar(sim: Simulation, data: SolarData, jd: number): string[]
   return added;
 }
 
-const NAMED_SMALL_BODIES = ['Pluto', 'Ceres', 'Eris', 'Haumea', 'Makemake', 'Vesta', 'Pallas', 'Hygiea', 'Apophis', 'Bennu', 'Halley', 'Encke', 'Churyumov–Gerasimenko', 'Hale–Bopp'];
+/** Dwarf planets, asteroids and comets added individually (with names) to the real Solar System. */
+export const NAMED_SMALL_BODIES = [
+  'Pluto', 'Ceres', 'Eris', 'Haumea', 'Makemake', 'Vesta', 'Pallas', 'Hygiea', 'Apophis', 'Bennu', 'Ryugu',
+  'Kamoʻoalewa', '2010 TK7', '2020 XL5', 'Halley', 'Encke', 'Churyumov–Gerasimenko', 'Hale–Bopp', 'NEOWISE', 'Tsuchinshan–ATLAS',
+];
+/** "1 Ceres", "134340 Pluto (1930 BM)", "706765 (2010 TK7)" → "ceres", "pluto", "2010 tk7" (and no ʻokina). */
+const smallBodyBase = (name: string) =>
+  name.replace(/^\d+\s+/, '').replace(/^\((.*)\)$/, '$1').replace(/\s*\(.*\)$/, '').replace(/[ʻ`']/g, '').toLowerCase();
 
 export function loadSolarSystemOnDate(sim: Simulation, date: Date, opts: { trueScale?: boolean } = {}): SceneSetup {
   const data = getSolarData();
@@ -982,11 +989,10 @@ export function loadSolarSystemOnDate(sim: Simulation, date: Date, opts: { trueS
   }
   addSpacecraft(sim, data, jd, opts.trueScale ? 'true' : 'enlarged');
   const visitors = addInterstellar(sim, data, jd);
-  const named = new Set(NAMED_SMALL_BODIES.map((n) => n.toLowerCase()));
+  const named = new Set(NAMED_SMALL_BODIES.map(smallBodyBase));
   for (const b of data.small) {
-    // "1 Ceres", "134340 Pluto (1930 BM)": skip bodies that are already added individually.
-    const base = b.name.replace(/^\d+\s+/, '').replace(/\s*\(.*\)$/, '').toLowerCase();
-    if (named.has(base)) continue;
+    // Skip bodies that are already added individually.
+    if (named.has(smallBodyBase(b.name))) continue;
     const s = smallBodyState(b, jd);
     const [x, y, z] = toScene(s.pos);
     const [vx, vy, vz] = toScene(s.vel);

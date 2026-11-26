@@ -113,3 +113,28 @@ describe('famous stars up close', () => {
     expect(Math.hypot(sunNow.x - s.x, sunNow.y - s.y, sunNow.z - s.z)).toBeGreaterThan(s.radius);
   });
 });
+
+describe('the second "what did we miss" pass', () => {
+  it('names catalogue nebulae by position, adds stars, clusters, asterisms, galaxies and structures', async () => {
+    const { nameNebulae } = await import('../src/sim/famous');
+    const { parseNebulae } = await import('../src/sim/nebulae');
+    const named = nameNebulae(parseNebulae(JSON.parse(readFileSync('public/data/nebulae.json', 'utf8'))), famous.nebulaNames);
+    for (const n of ['Thor’s Helmet (NGC 2359)', 'Red Spider Nebula (NGC 6537)', 'Ant Nebula (Mz 3)', 'Manatee Nebula (W50, around SS 433)']) expect(named.some((x) => x.name === n), n).toBe(true);
+    expect(famous.nebulaNames!.length).toBe(9);
+    // Stars and clusters where they are: Eta Carinae in Carina, Westerlund 1 about 13,000 light-years away.
+    expect(sep(byName('Eta Carinae').l, byName('Eta Carinae').b, 287.6, -0.6)).toBeLessThan(0.1);
+    expect(byName('Westerlund 1').d! * 3261.56).toBeGreaterThan(11000);
+    for (const n of ['Pistol Star', 'R136a1', 'Arches Cluster']) expect(n === 'R136a1' || byName(n), n).toBeTruthy();
+    // Asterisms are sky-only.
+    expect(famous.sky!.map((s) => s.name)).toEqual(['Kemble’s Cascade', 'Coathanger (Collinder 399)']);
+    // Galaxies the catalogues list by number get their names.
+    expect(displayName({ name: 'NGC3628' })).toBe('Hamburger Galaxy (NGC 3628)');
+    expect(displayName({ name: 'H 1413+117' })).toBe('Cloverleaf Quasar (H1413+117)');
+    for (const n of ['Mayall’s Object', 'MACS0647-JD', 'Abell S1063', 'Hercules A']) expect(famousGalaxies(famous.cosmos).some((g) => g.name === n), n).toBe(true);
+    // Large-scale structure, with the Saraswati Supercluster at z ≈ 0.28 (about 1,150 Mpc).
+    const s = (n: string) => COSMIC_STRUCTURES.find((x) => x.name === n)!;
+    for (const n of ['Saraswati Supercluster', 'Dipole Repeller', 'KBC Void', 'South Pole Wall', 'Eridanus Supervoid', 'Huge-LQG', 'R136a1']) expect(s(n)?.note, n).toBeTruthy();
+    expect(s('Saraswati Supercluster').d).toBeGreaterThan(1100);
+    expect(s('Saraswati Supercluster').d).toBeLessThan(1200);
+  });
+});

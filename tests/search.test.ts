@@ -147,7 +147,8 @@ describe('search by kind', () => {
     expect(agn.slice(0, 10).every((r) => /Quasar|Seyfert|LINER|Blazar|BL Lac|nucleus/i.test(r.kind))).toBe(true);
     expect(agn.slice(0, 10).some((r) => /3C 273|M87|M77|Centaurus A/.test(r.name))).toBe(true);
     expect(index.search('quasars')[0].kind).toBe('Quasar');
-    expect(index.search('seyfert')[0].kind).toMatch(/Seyfert|nucleus/);
+    // (A name beats a kind, so "Seyfert's Sextet" may lead; Seyfert galaxies follow at once.)
+    expect(index.search('seyfert').slice(0, 3).some((r) => /Seyfert|nucleus/.test(r.kind))).toBe(true);
     // "novae" and "cataclysmic variables" both give the white-dwarf binaries, famous ones first.
     const cvs = names(['nova', 'cv']);
     expect(index.search('novae').slice(0, 8).every((r) => cvs.has(r.name))).toBe(true);

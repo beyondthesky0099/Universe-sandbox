@@ -15,7 +15,7 @@ import type { BrightStar, NearStar } from '../sim/stars';
 import { eclipticToGalactic } from '../sim/nebulae';
 import type { VoyagerEncounter } from '../sim/voyager';
 import { BHANU_PRAKASH_STAR } from '../procgen/galaxy';
-import type { FamousMapObject } from '../sim/famous';
+import type { FamousMapObject, FamousSkyObject } from '../sim/famous';
 import { lightYears, normalize, type SearchAction, type SearchEntry } from './search';
 
 const NEBULA_KIND: Record<Nebula['kind'], string> = { hii: 'HII region', pn: 'Planetary nebula', snr: 'Supernova remnant', dark: 'Dark nebula', refl: 'Reflection nebula' };
@@ -127,6 +127,18 @@ export function secretStarEntry(query: string): SearchEntry | undefined {
     rank: 1000,
     action: { type: 'map', l, b, dKpc, sizePc: 1, starSeed: seed },
   };
+}
+
+/** Asterisms (sim/famous.ts): chance alignments of stars, so they turn the Sky tab to them. */
+export function famousSkyEntries(list: FamousSkyObject[]): SearchEntry[] {
+  return list.map((f) => ({
+    name: f.name,
+    aliases: f.aliases,
+    kind: f.kind,
+    detail: `in the sky · ${f.note}`,
+    rank: 70,
+    action: { type: 'sky', v: galacticToEcliptic(f.l, f.b), radiusDeg: f.radiusDeg },
+  }));
 }
 
 /** Famous single objects on the Galaxy Map (sim/famous.ts): flying there opens their card. */

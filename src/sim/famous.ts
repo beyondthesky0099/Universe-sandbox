@@ -53,13 +53,44 @@ export interface FamousCosmos {
   ref: string;
 }
 
+/** A familiar name for a nebula already in the catalogues (matched by position in the build). */
+export interface NebulaName {
+  kind: NebulaKind;
+  id: string;
+  name: string;
+}
+
+/** An asterism: stars at different distances that only line up on the sky (found in the Sky tab). */
+export interface FamousSkyObject {
+  name: string;
+  aliases?: string[];
+  kind: string;
+  l: number;
+  b: number;
+  radiusDeg: number;
+  note: string;
+  ref: string;
+}
+
 export interface FamousObjects {
   map: FamousMapObject[];
   nebulae: FamousNebula[];
+  nebulaNames?: NebulaName[];
+  sky?: FamousSkyObject[];
   cosmos: FamousCosmos[];
 }
 
-const EMPTY: FamousObjects = { map: [], nebulae: [], cosmos: [] };
+const EMPTY: FamousObjects = { map: [], nebulae: [], nebulaNames: [], sky: [], cosmos: [] };
+
+/** Give catalogue nebulae their familiar names (Thor's Helmet, the Red Spider, …), in place. */
+export function nameNebulae(list: Nebula[], names: NebulaName[] = []): Nebula[] {
+  const byKey = new Map(names.map((n) => [`${n.kind}|${n.id}`, n.name]));
+  for (const n of list) {
+    const name = byKey.get(`${n.kind}|${n.id}`);
+    if (name) n.name = name;
+  }
+  return list;
+}
 
 let promise: Promise<FamousObjects> | undefined;
 /** The famous objects; empty (never an error) if the file can't be loaded. */

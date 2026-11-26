@@ -82,6 +82,9 @@ const FAMOUS = [
   ['M 18', 'M18'], ['M 21', 'M21'], ['M 23', 'M23'], ['M 25', 'M25'], ['M 26', 'M26'], ['M 29', 'M29'], ['M 34', 'M34'],
   ['M 36', 'Pinwheel Cluster (M36)'], ['M 37', 'M37'], ['M 38', 'Starfish Cluster (M38)'], ['M 39', 'M39'], ['M 46', 'M46'],
   ['M 48', 'M48'], ['M 50', 'M50'], ['M 52', 'M52'], ['M 93', 'M93'], ['M 103', 'M103'],
+  // (Westerlund 1 is too dust-hidden for the Gaia census, and the Coathanger is a chance
+  // alignment: both are in build-famous-objects.mjs instead.)
+  ['NGC 2264', 'Christmas Tree Cluster (NGC 2264)'], ['NGC 457', 'Owl Cluster (NGC 457)'], ['NGC 7789', 'Caroline’s Rose (NGC 7789)'],
   // Globular clusters: matched only against Harris's catalogue.
   ['NGC 5139', 'Omega Centauri', 'globular'], ['NGC 104', '47 Tucanae', 'globular'], ['M 13', 'Hercules Cluster (M13)', 'globular'],
   ['M 4', 'M4', 'globular'], ['M 22', 'M22', 'globular'], ['M 3', 'M3', 'globular'], ['M 15', 'M15', 'globular'], ['M 5', 'M5', 'globular'],

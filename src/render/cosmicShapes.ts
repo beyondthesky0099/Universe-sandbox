@@ -4,6 +4,7 @@ import { galacticToCosmos } from '../sim/galaxies';
 import { comovingDistance } from '../sim/cosmology';
 import { ConvexGeometry } from 'three/addons/geometries/ConvexGeometry.js';
 import { textSprite } from './galaxyView';
+import { dotTexture } from './textures';
 import { greatWallCount, HCB, inGreatWall, type Grb } from '../sim/grbs';
 import { bootesVoid, voidCensus } from '../sim/voids';
 import type { WebGalaxy } from '../sim/galaxies';
@@ -65,6 +66,62 @@ interface Shape {
   far: number;
   centre: THREE.Vector3;
   strength: number;
+}
+
+/** Prim's minimum spanning tree of the points, as line-segment pairs: the shortest links joining them all. */
+function spanningTree(p: THREE.Vector3[]): THREE.Vector3[] {
+  const inTree = [0];
+  const links: THREE.Vector3[] = [];
+  while (inTree.length < p.length) {
+    let best = Infinity, from = -1, to = -1;
+    for (const i of inTree)
+      for (let j = 0; j < p.length; j++) {
+        if (inTree.includes(j)) continue;
+        const d = p[i].distanceTo(p[j]);
+        if (d < best) [best, from, to] = [d, i, j];
+      }
+    links.push(p[from], p[to]);
+    inTree.push(to);
+  }
+  return links;
+}
+
+/** The convex hull of the points as a faint skin, brighter at its edges. */
+function hullSkin(p: THREE.Vector3[], rgb: [number, number, number]): THREE.Mesh {
+  const skin = new THREE.Mesh(
+    new ConvexGeometry(p),
+    new THREE.ShaderMaterial({
+      transparent: true,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+      blending: THREE.AdditiveBlending,
+      uniforms: { uOpacity: { value: 1 } },
+      vertexShader: /* glsl */ `
+        #include <common>
+        #include <logdepthbuf_pars_vertex>
+        varying vec3 vN;
+        varying vec3 vView;
+        void main() {
+          vec4 mv = modelViewMatrix * vec4(position, 1.0);
+          vN = normalize(normalMatrix * normal);
+          vView = normalize(-mv.xyz);
+          gl_Position = projectionMatrix * mv;
+          #include <logdepthbuf_vertex>
+        }`,
+      fragmentShader: /* glsl */ `
+        #include <logdepthbuf_pars_fragment>
+        uniform float uOpacity;
+        varying vec3 vN;
+        varying vec3 vView;
+        void main() {
+          #include <logdepthbuf_fragment>
+          float rim = pow(1.0 - abs(dot(normalize(vN), normalize(vView))), 2.0);
+          gl_FragColor = vec4(vec3(${rgb.map((c) => c.toFixed(3)).join(', ')}) * (0.03 + 0.22 * rim) * uOpacity, 1.0);
+        }`,
+    }),
+  );
+  skin.frustumCulled = false;
+  return skin;
 }
 
 export class CosmicShapes {
@@ -332,57 +389,14 @@ export class CosmicShapes {
   /** The Wall as its bursts trace it: their minimum spanning tree, convex hull and largest span. */
   private addWallShape(p: THREE.Vector3[]): void {
     if (p.length < 4 || !this.grbLayer) return;
-    // Prim's minimum spanning tree: the shortest set of links joining every burst.
-    const inTree = [0];
-    const links: THREE.Vector3[] = [];
-    while (inTree.length < p.length) {
-      let best = Infinity, from = -1, to = -1;
-      for (const i of inTree)
-        for (let j = 0; j < p.length; j++) {
-          if (inTree.includes(j)) continue;
-          const d = p[i].distanceTo(p[j]);
-          if (d < best) [best, from, to] = [d, i, j];
-        }
-      links.push(p[from], p[to]);
-      inTree.push(to);
-    }
+    // The minimum spanning tree: the shortest set of links joining every burst.
     const tree = new THREE.LineSegments(
-      new THREE.BufferGeometry().setFromPoints(links),
+      new THREE.BufferGeometry().setFromPoints(spanningTree(p)),
       new THREE.LineBasicMaterial({ color: 0xffd36b, transparent: true, opacity: 0.55, depthWrite: false, blending: THREE.AdditiveBlending }),
     );
     tree.frustumCulled = false;
     // Its skin: the convex hull of the bursts, faintly gold, brighter at its edges.
-    const skin = new THREE.Mesh(
-      new ConvexGeometry(p),
-      new THREE.ShaderMaterial({
-        transparent: true,
-        depthWrite: false,
-        side: THREE.DoubleSide,
-        blending: THREE.AdditiveBlending,
-        vertexShader: /* glsl */ `
-          #include <common>
-          #include <logdepthbuf_pars_vertex>
-          varying vec3 vN;
-          varying vec3 vView;
-          void main() {
-            vec4 mv = modelViewMatrix * vec4(position, 1.0);
-            vN = normalize(normalMatrix * normal);
-            vView = normalize(-mv.xyz);
-            gl_Position = projectionMatrix * mv;
-            #include <logdepthbuf_vertex>
-          }`,
-        fragmentShader: /* glsl */ `
-          #include <logdepthbuf_pars_fragment>
-          varying vec3 vN;
-          varying vec3 vView;
-          void main() {
-            #include <logdepthbuf_fragment>
-            float rim = pow(1.0 - abs(dot(normalize(vN), normalize(vView))), 2.0);
-            gl_FragColor = vec4(vec3(1.0, 0.78, 0.35) * (0.03 + 0.22 * rim), 1.0);
-          }`,
-      }),
-    );
-    skin.frustumCulled = false;
+    const skin = hullSkin(p, [1, 0.78, 0.35]);
     // Its size: the two bursts farthest apart.
     let span = 0;
     for (const a of p) for (const b of p) span = Math.max(span, a.distanceTo(b));
@@ -392,6 +406,42 @@ export class CosmicShapes {
     size.userData.priority = 880;
     this.grbLayer.add(skin, tree, size);
   }
+
+  /**
+   * The Saraswati Supercluster (sim/saraswati.ts): its galaxy clusters at their redshifts, the
+   * five of the bound core larger and gold, joined by their spanning tree inside a faint hull. It
+   * shows from a few thousand Mpc away.
+   */
+  setSaraswati(members: { l: number; b: number; z: number; core: boolean }[]): void {
+    if (members.length < 4) return;
+    const at = (m: (typeof members)[number]) => new THREE.Vector3(...galacticToCosmos(m.l, m.b, comovingDistance(m.z)));
+    const p = members.map(at);
+    const points = (list: THREE.Vector3[], color: number, size: number) => {
+      const pts = new THREE.Points(
+        new THREE.BufferGeometry().setFromPoints(list),
+        // Round, soft dots: each a galaxy cluster.
+        new THREE.PointsMaterial({ color, size, map: dotTexture(), sizeAttenuation: false, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending }),
+      );
+      pts.frustumCulled = false;
+      return pts;
+    };
+    const group = new THREE.Group();
+    const tree = new THREE.LineSegments(
+      new THREE.BufferGeometry().setFromPoints(spanningTree(p)),
+      new THREE.LineBasicMaterial({ color: 0xffc46b, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending }),
+    );
+    tree.frustumCulled = false;
+    const skin = hullSkin(p, [1, 0.7, 0.35]);
+    const centre = p.reduce((c, v) => c.add(v), new THREE.Vector3()).divideScalar(p.length);
+    const core = members.filter((m) => m.core).length;
+    const label = textSprite(`${members.length} galaxy clusters · gold: the ${core} of its core`, '#ffd59a', 0.65);
+    label.position.copy(centre).addScaledVector(centre.clone().normalize(), -60);
+    label.userData.priority = 875;
+    group.add(skin, tree, points(members.filter((m) => !m.core).map(at), 0xffb067, 10), points(members.filter((m) => m.core).map(at), 0xffe08a, 18), label);
+    this.saraswati = { group, centre };
+    this.group.add(group);
+  }
+  private saraswati?: { group: THREE.Group; centre: THREE.Vector3 };
 
   setGrbsVisible(on: boolean): void {
     this.grbsOn = on;
@@ -427,6 +477,16 @@ export class CosmicShapes {
         if (o instanceof THREE.Points) (o.material as THREE.PointsMaterial).opacity = 0.9 * g;
         else if (o instanceof THREE.LineSegments) (o.material as THREE.LineBasicMaterial).opacity = 0.55 * g;
         else o.visible = g > 0.5;
+      }
+    }
+    if (this.saraswati) {
+      const ds = camera.position.distanceTo(this.saraswati.centre);
+      const k = 1 - THREE.MathUtils.smoothstep(ds, 2500, 5000);
+      for (const o of this.saraswati.group.children) {
+        if (o instanceof THREE.Points) (o.material as THREE.PointsMaterial).opacity = 0.95 * k;
+        else if (o instanceof THREE.LineSegments) (o.material as THREE.LineBasicMaterial).opacity = 0.6 * k;
+        else if (o instanceof THREE.Mesh) ((o.material as THREE.ShaderMaterial).uniforms.uOpacity.value = k);
+        else o.visible = k > 0.5;
       }
     }
     for (const s of this.shapes) {

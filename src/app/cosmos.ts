@@ -6,6 +6,7 @@ import { loadActiveNucleus } from '../sim/presets';
 import { loadRadioLobes, radioAtlasUrl } from '../sim/radioLobes';
 import { loadLaniakea } from '../sim/laniakea';
 import { loadGrbs } from '../sim/grbs';
+import { loadSaraswati } from '../sim/saraswati';
 import { loadFrbs } from '../sim/frbs';
 import { MILKY_WAY_SEED } from '../procgen/galaxy';
 import { fmt } from '../sim/units';
@@ -57,6 +58,8 @@ export class CosmosUI {
             })
             .catch(() => undefined);
           // Gamma-ray bursts, and the claimed Great Wall they trace (sim/grbs.ts).
+          // The Saraswati Supercluster's member clusters (sim/saraswati.ts).
+          void loadSaraswati().then((members) => this.app.cosmos.setSaraswati(members));
           void loadGrbs()
             .then((bursts) => {
               this.app.cosmos.setGrbs(bursts);

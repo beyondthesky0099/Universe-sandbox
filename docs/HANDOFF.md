@@ -208,6 +208,18 @@ Plan, in priority order:
 - BodyVisual adds it in applyDetail and updates it only when the planet is more than 14 px across
   and a star is present. Tests: tests/aurora.test.ts.
 
+### BM. Visit the Saraswati Supercluster
+- [x] `scripts/build-saraswati.mjs` → `public/data/saraswati.json`:
+  - The paper's selection: WHL clusters, z_sp (else z_phot), |Dec| < 1.26°, within 90 Mpc of Abell
+    2631, using the paper's H0 = 70. That gives 49 clusters: all 48 of Table 1 plus one at the
+    edge. The core is the 5 within 20 Mpc.
+  - `CosmicShapes.setSaraswati` draws the clusters (core in gold), their spanning tree and a hull
+    skin. `spanningTree` and `hullSkin` are now shared with the HCB wall.
+  - Flying there stops 400 Mpc away.
+- Next for "visit everything": the other label-only structures (South Pole Wall, Huge-LQG, the
+  voids, the Sagittarius Stream, Gaia–Enceladus) could get the same treatment from their papers'
+  member lists, and the famous stars could all get "See it up close".
+
 ### BL. What we missed, second pass (stars, nebulae, clusters, galaxies, structures)
 - [x] `build-famous-objects.mjs`:
   - 13 more map objects (Eta Carinae, Rho Cas, the Pistol Star, WR 104, Zeta Oph, RR Lyrae, Chi

@@ -364,7 +364,9 @@ export const COSMIC_STRUCTURES: { name: string; l: number; b: number; d: number;
   // Saraswati (Bagchi et al. 2017, ApJ 844, 25): a wall-like supercluster at least 200 Mpc across
   // at z ≈ 0.28 in SDSS Stripe 82, found by Indian astronomers; labelled at its core cluster
   // Abell 2631 (RA 354.42°, Dec +0.28°).
-  { name: 'Saraswati Supercluster', l: 87.03, b: -57.36, d: comovingDistance(0.28), viewMpc: 1500, kind: 'Supercluster', note: 'One of the largest and most massive superclusters known, at least 650 million light-years across with some 20 million billion suns’ worth of matter. Discovered in 2017 by astronomers at IUCAA and IISER Pune, India.' },
+  // Its member clusters are drawn from public/data/saraswati.json (sim/saraswati.ts); the view
+  // stops 400 Mpc away, so the whole wall of clusters fills it.
+  { name: 'Saraswati Supercluster', l: 87.03, b: -57.36, d: comovingDistance(0.28), viewMpc: 400, kind: 'Supercluster', note: 'One of the largest and most massive superclusters known, at least 650 million light-years across with some 20 million billion suns’ worth of matter, in 43 or more galaxy clusters. Discovered in 2017 by astronomers at IUCAA and IISER Pune, India.' },
   // The Dipole Repeller (Hoffman et al. 2017, Nature Astronomy 1, 0036): an underdensity about
   // 16,000 km/s away, opposite the direction of our motion against the CMB (l 276°, b +30°).
   { name: 'Dipole Repeller', l: 96, b: -30, d: 16000 / 67.66, viewMpc: 600, kind: 'Void (repeller)', note: 'A region nearly empty of galaxies that pushes the Local Group away as strongly as the Shapley Concentration pulls it: the two together explain our 630 km/s motion. Direction approximate.' },

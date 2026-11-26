@@ -1146,6 +1146,9 @@ push and pull request.
   South Pole Wall, the Eridanus Supervoid, the Huge-LQG) are labelled from their discovery papers. Positions from SIMBAD (Wenger et
   al. 2000), except Stephenson 2-18, Dragonfly 44 and Earendel, whose discovery papers give them;
   distances and notes from the paper cited with each object, or from Gaia DR3 parallaxes.
+- The Saraswati Supercluster's galaxy clusters: the WHL catalogue (Wen, Han & Liu 2012, ApJS 199,
+  34; VizieR J/ApJS/199/34), chosen as Bagchi et al. 2017 (ApJ 844, 25) chose them: within 90 Mpc
+  of Abell 2631 in SDSS Stripe 82 (rebuild with `node scripts/build-saraswati.mjs`).
 - Star clusters: Hunt & Reffert 2023 ("Improving the open cluster census. II.", A&A 673, A114),
   based on ESA Gaia DR3, and the Harris catalogue of Milky Way globular clusters (VII/202), via
   VizieR (CDS); familiar names resolved with SIMBAD (rebuild with `node scripts/build-clusters.mjs`).

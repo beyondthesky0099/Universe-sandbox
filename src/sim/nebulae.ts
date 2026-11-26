@@ -6,7 +6,7 @@
  * al. 2020, where measured), and reflection nebulae from van den Bergh's. Positions are
  * galactic (l, b) in degrees.
  */
-import { famousNebulae, loadFamous } from './famous';
+import { famousNebulae, loadFamous, nameNebulae } from './famous';
 
 export type NebulaKind = 'hii' | 'pn' | 'snr' | 'dark' | 'refl';
 
@@ -73,7 +73,10 @@ export function loadNebulae(baseUrl = import.meta.env.BASE_URL): Promise<Nebula[
       return r.json() as Promise<RawCatalog>;
     })
     // Plus the famous nebulae no catalogue row stands for (Barnard's Loop, the Gum Nebula, …).
-    .then(async (raw) => [...parseNebulae(raw), ...famousNebulae((await loadFamous(baseUrl)).nebulae)]);
+    .then(async (raw) => {
+      const famous = await loadFamous(baseUrl);
+      return [...nameNebulae(parseNebulae(raw), famous.nebulaNames), ...famousNebulae(famous.nebulae)];
+    });
   return promise;
 }
 

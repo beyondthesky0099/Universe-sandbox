@@ -186,6 +186,17 @@ const COMMON: Record<string, string> = {
   NGC4258: 'M106',
   NGC3556: 'Surfboard Galaxy (M108)',
   NGC3379: 'M105',
+  // Famous galaxies that the catalogues list only by number.
+  NGC3628: 'Hamburger Galaxy (NGC 3628)',
+  NGC6946: 'Fireworks Galaxy (NGC 6946)',
+  NGC4676A: 'Mice Galaxies (NGC 4676)',
+  UGC10214: 'Tadpole Galaxy (UGC 10214)',
+  UGC02885: 'Rubin’s Galaxy (UGC 2885)',
+  NGC6872: 'Condor Galaxy (NGC 6872)',
+  UGC01810: 'Arp 273, the “Rose” (UGC 1810)',
+  NGC6027: 'Seyfert’s Sextet (NGC 6027)',
+  'H 1413+117': 'Cloverleaf Quasar (H1413+117)',
+  'Q 0957+561A': 'Twin Quasar (Q0957+561)',
   NGC1399: 'NGC 1399 (Fornax Cluster centre)',
 };
 
@@ -310,6 +321,9 @@ export const COSMIC_STRUCTURES: { name: string; l: number; b: number; d: number;
   // The Tarantula: RA 84.65°, Dec −69.09° (SIMBAD); Crowther et al. 2010, MNRAS 408, 731.
   { name: 'Tarantula Nebula', l: 279.45, b: -31.68, d: 0.0496, viewMpc: 0.03, aliases: ['30 Doradus', 'NGC 2070'], kind: 'Nebula (in the Large Magellanic Cloud)', note: 'The most active star-forming region in the Local Group, lit by the cluster R136, home of the most massive stars known.' },
   // WOH G64: RA 73.79°, Dec −68.34° (SIMBAD); Ohnaka et al. 2024, A&A 691, L15; Muñoz-Sanchez et al. 2024.
+  // R136a1 (RA 05h38m42.39s, Dec −69°06′02.9″; Crowther et al. 2010, MNRAS 408, 731; mass revised
+  // to about 200 M☉ by Kalari et al. 2022, ApJ 935, 162), in the Tarantula's central cluster.
+  { name: 'R136a1', l: 279.47, b: -31.67, d: 0.0496, viewMpc: 0.03, kind: 'Wolf–Rayet star (in the Large Magellanic Cloud)', note: 'The most massive star known, about 200 times the Sun’s mass and millions of times as luminous, in the cluster R136 at the heart of the Tarantula Nebula.' },
   { name: 'WOH G64', l: 279.53, b: -35.69, d: 0.0496, viewMpc: 0.03, kind: 'Red supergiant (in the Large Magellanic Cloud)', note: 'One of the largest stars known, about 1,500 times the width of the Sun, and the first star in another galaxy imaged up close (2024). It seems to be turning into a yellow hypergiant.' },
   // The Bullet Cluster (render/bulletCluster.ts): dark matter seen apart from the gas.
   { name: 'Bullet Cluster: dark matter', l: 266.0, b: -21.2, d: comovingDistance(0.296), viewMpc: 3.5 },
@@ -347,6 +361,25 @@ export const COSMIC_STRUCTURES: { name: string; l: number; b: number; d: number;
   // Claimed from a clustering of gamma-ray bursts at z ≈ 1.6–2.1 (Horváth, Hakkila & Bagoly 2014,
   // A&A 561, L12) at RA 17h, Dec +27.75°: perhaps 10 billion light-years long; debated.
   { name: 'Hercules–Corona Borealis Great Wall (claimed)', l: 49.0, b: 35.5, d: 5080, viewMpc: 11000, aliases: ['HCB Great Wall', 'Her–CrB Great Wall', 'largest structure in the universe'] },
+  // Saraswati (Bagchi et al. 2017, ApJ 844, 25): a wall-like supercluster at least 200 Mpc across
+  // at z ≈ 0.28 in SDSS Stripe 82, found by Indian astronomers; labelled at its core cluster
+  // Abell 2631 (RA 354.42°, Dec +0.28°).
+  { name: 'Saraswati Supercluster', l: 87.03, b: -57.36, d: comovingDistance(0.28), viewMpc: 1500, kind: 'Supercluster', note: 'One of the largest and most massive superclusters known, at least 650 million light-years across with some 20 million billion suns’ worth of matter. Discovered in 2017 by astronomers at IUCAA and IISER Pune, India.' },
+  // The Dipole Repeller (Hoffman et al. 2017, Nature Astronomy 1, 0036): an underdensity about
+  // 16,000 km/s away, opposite the direction of our motion against the CMB (l 276°, b +30°).
+  { name: 'Dipole Repeller', l: 96, b: -30, d: 16000 / 67.66, viewMpc: 600, kind: 'Void (repeller)', note: 'A region nearly empty of galaxies that pushes the Local Group away as strongly as the Shapley Concentration pulls it: the two together explain our 630 km/s motion. Direction approximate.' },
+  // The KBC Void (Keenan, Barger & Cowie 2013, ApJ 775, 62): we sit near the middle of an
+  // underdensity about 300 Mpc in radius.
+  { name: 'KBC Void', l: 0, b: -90, d: 150, size: 600, viewMpc: 1200, aliases: ['Local Hole'], kind: 'Void', note: 'We seem to sit near the middle of a region about 2 billion light-years across with fewer galaxies than average.' },
+  // The South Pole Wall (Pomarède et al. 2020, ApJ 897, 133): a filament across ~0.11c whose
+  // density peaks at the celestial South Pole (l 302.9°, b −27.1°) at about 12,000 km/s.
+  { name: 'South Pole Wall', l: 302.93, b: -27.13, d: 12000 / 67.66, viewMpc: 900, kind: 'Galaxy wall', note: 'A wall of galaxies about 1.4 billion light-years long, the largest connected structure in the nearby universe, hidden partly behind the Milky Way. Its densest part lies toward the celestial South Pole.' },
+  // The Eridanus supervoid (Szapudi et al. 2015, MNRAS 450, 288): R ≈ 220 h⁻¹ Mpc at z ≈ 0.22, in
+  // front of the CMB Cold Spot.
+  { name: 'Eridanus Supervoid', l: 209, b: -57, d: comovingDistance(0.22), viewMpc: 2500, aliases: ['Cold Spot supervoid'], kind: 'Void', note: 'A vast underdense region in front of the CMB Cold Spot, about 1.8 billion light-years across; it may explain part of the Cold Spot.' },
+  // The Huge-LQG (Clowes et al. 2013, MNRAS 429, 2910): 73 quasars at mean z = 1.27, 8.8° north of
+  // the Clowes–Campusano LQG (centre about RA 10h50m, Dec +14°).
+  { name: 'Huge-LQG', l: 231.68, b: 58.81, d: comovingDistance(1.27), viewMpc: 9000, aliases: ['Huge Large Quasar Group', 'U1.27'], kind: 'Large quasar group', note: 'A group of 73 quasars about 4 billion light-years long, among the largest structures claimed in the universe; whether it is a real structure is debated.' },
   // The CMB Cold Spot (Vielva et al. 2004, ApJ 609, 22; Cruz et al. 2005, MNRAS 356, 29), centred
   // at l = 209°, b = −57°, about 10° across, on the sphere of the cosmic microwave background.
   { name: 'CMB Cold Spot', l: 209, b: -57, d: CMB_DISTANCE_MPC * 0.995, viewMpc: 20000, aliases: ['Cold Spot', 'WMAP Cold Spot'], kind: 'Feature of the cosmic microwave background', note: 'An unusually large, cold patch of the cosmic microwave background, about 10° across. A giant void in front of it, a statistical fluke or something stranger: it is still debated.' },

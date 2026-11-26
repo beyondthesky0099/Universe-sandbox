@@ -1136,7 +1136,14 @@ push and pull request.
   SGR 1806−20, …), M24, M40, M73, the Smith Cloud, large nebulae (Barnard's Loop, the Gum Nebula,
   …), oddball galaxies (Hoag's Object, Malin 1, IC 1101, Dragonfly 44, the Cartwheel, Stephan's
   Quintet, Crater II, Antlia II), the Virgo Messier galaxies the redshift survey misplaces, El
-  Gordo, the Phoenix Cluster, the Einstein Cross and Earendel. Positions from SIMBAD (Wenger et
+  Gordo, the Phoenix Cluster, the Einstein Cross and Earendel. A second pass added Eta Carinae,
+  the Pistol Star, WR 104, Westerlund 1, the Arches and Quintuplet clusters and other stars;
+  about 20 more nebulae (Flame, Pelican, California, Boomerang, Red Rectangle, …) and familiar
+  names for 9 catalogue nebulae, matched by position (Thor's Helmet, the Red Spider, the Ant, …);
+  the asterisms Kemble's Cascade and the Coathanger in the Sky tab; and Mayall's Object,
+  I Zwicky 18, Markarian 421, Hercules A, MACS0647-JD, CR7, Abell S1063 and MACS J0717.
+  Large-scale structures (the Saraswati Supercluster, the Dipole Repeller, the KBC Void, the
+  South Pole Wall, the Eridanus Supervoid, the Huge-LQG) are labelled from their discovery papers. Positions from SIMBAD (Wenger et
   al. 2000), except Stephenson 2-18, Dragonfly 44 and Earendel, whose discovery papers give them;
   distances and notes from the paper cited with each object, or from Gaia DR3 parallaxes.
 - Star clusters: Hunt & Reffert 2023 ("Improving the open cluster census. II.", A&A 673, A114),

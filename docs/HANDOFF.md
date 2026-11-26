@@ -208,6 +208,30 @@ Plan, in priority order:
 - BodyVisual adds it in applyDetail and updates it only when the planet is more than 14 px across
   and a star is present. Tests: tests/aurora.test.ts.
 
+### BL. What we missed, second pass (stars, nebulae, clusters, galaxies, structures)
+- [x] `build-famous-objects.mjs`:
+  - 13 more map objects (Eta Carinae, Rho Cas, the Pistol Star, WR 104, Zeta Oph, RR Lyrae, Chi
+    Cyg, Hind's Crimson Star, the Garnet Star, Epsilon Lyrae, Arches, Quintuplet, Westerlund 1).
+  - 18 more standalone nebulae.
+  - `nebulaNames`: 9 catalogue rows named by SIMBAD position. Run after `build-nebulae.mjs`; the
+    app applies them with `nameNebulae`.
+  - `sky`: asterisms, searchable to the Sky tab (`famousSkyEntries`).
+  - 10 more Universe objects.
+- [x] `build-clusters.mjs` names the Christmas Tree, the Owl and Caroline's Rose. Westerlund 1 and
+  the Coathanger matched the wrong Gaia clusters, so they are in the famous list instead.
+- [x] `COMMON`: the Hamburger, Fireworks, Mice, Tadpole, Rubin's, Condor, Arp 273, Seyfert's
+  Sextet, and the Cloverleaf and Twin quasars.
+- [x] `COSMIC_STRUCTURES`: Saraswati, the Dipole Repeller, the KBC Void, the South Pole Wall,
+  Eridanus, the Huge-LQG and R136a1, with positions from the papers (arXiv is reachable).
+- Not done:
+  - The Fox Fur Nebula (no reliable position).
+  - The search-name gap: objects stored as "eps Eri", "51 Peg", "T CrB", pulsar numbers, "Fornax"
+    and so on aren't found by their usual names. Fix it with Bayer and constellation abbreviation
+    expansion in `ui/search.ts`, plus searchable scene bodies (moons, KBOs, interstellar objects,
+    spacecraft) and Galaxy-map features.
+  - The Solar System list (Chandrayaan-3, Aditya-L1, Mangalyaan, KBOs, comets).
+  - Thor's Helmet shows the WISE catalogue's kinematic distance (6.2 kpc), not WR 7's (~3.7 kpc).
+
 ### BK. Famous stars up close
 - [x] Famous map objects can have a `visit` block (`radiusSun`, `temperature`, `mass`, `ref`), set in
   `build-famous-objects.mjs`. So far: Stephenson 2-18 (2,150 R☉) and UY Scuti (1,140 R☉, at the

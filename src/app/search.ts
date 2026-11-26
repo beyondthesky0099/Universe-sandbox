@@ -17,7 +17,7 @@ import { $, escapeHtml, toast } from '../ui/dom';
 import { CHALLENGES } from '../game/challenges';
 import { LESSONS } from '../game/lessons';
 import { SearchIndex, type SearchEntry } from '../ui/search';
-import { activityEntries, clusterEntries, compactEntries, galacticObjectEntries, pulsarEntries, exoplanetEntries, famousMapEntries, galaxyEntries, smallBodyEntries, inSkyAction, nebulaEntries, secretStarEntry, skyBodyEntries, starEntries, structureEntries } from '../ui/searchSources';
+import { activityEntries, clusterEntries, compactEntries, galacticObjectEntries, pulsarEntries, exoplanetEntries, famousMapEntries, famousSkyEntries, galaxyEntries, smallBodyEntries, inSkyAction, nebulaEntries, secretStarEntry, skyBodyEntries, starEntries, structureEntries } from '../ui/searchSources';
 import { kindLabel } from './shared';
 import type { App } from '../app';
 
@@ -63,6 +63,7 @@ export class SearchUI {
       markActiveHosts([...local, ...named], universeRaw);
       index.add(galaxyEntries([...local, ...named, ...deep, ...famousGalaxies(famous.cosmos)]));
       index.add(famousMapEntries(famous.map));
+      index.add(famousSkyEntries(famous.sky ?? []));
       const solar = getSolarData();
       index.add(
         smallBodyEntries(

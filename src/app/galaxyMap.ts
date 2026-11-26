@@ -9,7 +9,7 @@ import { diameterPc, eclipticToGalactic, loadNebulae, NEBULA_COLORS } from '../s
 import { loadBrightStars, temperatureFromBV } from '../sim/stars';
 import { loadGalacticExtras } from '../sim/galacticExtras';
 import { loadFamous } from '../sim/famous';
-import { loadStarToScale } from '../sim/presets';
+import { loadRealCluster, loadStarToScale } from '../sim/presets';
 import { estimateStar } from '../sim/starSize';
 import type { UpCloseVisit } from '../sim/famous';
 
@@ -262,8 +262,8 @@ export class GalaxyMapUI {
     );
   }
 
-  /** The star whose card is open, for its "See it up close" button: its real (or estimated) size. */
-  upClose?: { name: string; note: string; visit: UpCloseVisit };
+  /** What the open card's main button does ("See it up close", "Enter the cluster"), if anything. */
+  cardAction?: () => Promise<void>;
 
   /** The card of a famous object: what it is, how far, why it matters and the paper. */
   async showFamousCard(name: string): Promise<void> {
@@ -281,7 +281,7 @@ export class GalaxyMapUI {
       ['Why it matters', f.note],
       ['Source', f.ref],
     ]);
-    this.showUpCloseButton(visit ? { name: f.name, note: f.note, visit } : undefined);
+    this.showCardButton(visit && 'See it up close →', visit && (() => this.visitUpClose({ name: f.name, note: f.note, visit })));
   }
 
   /**
@@ -302,31 +302,59 @@ export class GalaxyMapUI {
       ['Luminosity', `about ${Number(e.luminosity.toPrecision(2)).toLocaleString('en-US')} times the Sun’s`],
       ['Source', 'HYG v4.1 (brightness, colour, distance); size from the Flower/Torres bolometric correction'],
     ]);
-    this.showUpCloseButton({ name, note: `A ${e.type.toLowerCase()} ${Math.round(ly).toLocaleString('en-US')} light-years away.`, visit });
+    const note = `A ${e.type.toLowerCase()} ${Math.round(ly).toLocaleString('en-US')} light-years away.`;
+    this.showCardButton('See it up close →', () => this.visitUpClose({ name, note, visit }));
   }
 
-  private showUpCloseButton(target: { name: string; note: string; visit: UpCloseVisit } | undefined): void {
+  /** A real star cluster's card: its kind, distance, size, members and age, and "Enter the cluster". */
+  async showClusterCard(index: number): Promise<void> {
+    const c = (await loadClusters())[index];
+    if (!c) return;
+    const name = c.name ?? c.id;
+    const ly = (pc: number) => Math.round(pc * 3.26156).toLocaleString('en-US');
+    const age = c.kind === 'globular' ? 12e9 : c.logAge !== undefined ? 10 ** c.logAge : undefined;
+    $('star-name').textContent = name;
+    setFacts($('star-facts'), [
+      ['Type', c.kind === 'globular' ? 'Globular cluster' : c.kind === 'group' ? 'Moving group' : 'Open cluster'],
+      ...(c.distancePc ? ([['Distance', `${ly(c.distancePc)} light-years`]] as [string, string][]) : []),
+      ...(c.radiusPc ? ([['Size', `${ly(2 * c.radiusPc)} light-years across (half its ${c.kind === 'globular' ? 'light' : 'members'})`]] as [string, string][]) : []),
+      ...(c.members ? ([['Members', `${c.members.toLocaleString('en-US')} stars found by Gaia`]] as [string, string][]) : []),
+      ...(c.absMag !== undefined ? ([['Brightness', `about ${Number((10 ** (-0.4 * (c.absMag - 4.83))).toPrecision(2)).toLocaleString('en-US')} times the Sun`]] as [string, string][]) : []),
+      ...(age ? ([['Age', age >= 1e9 ? `about ${(age / 1e9).toFixed(1)} billion years` : `about ${Math.round(age / 1e6).toLocaleString('en-US')} million years`]] as [string, string][]) : []),
+      ['Source', c.kind === 'globular' ? 'Harris catalogue (VII/202)' : 'Hunt & Reffert 2023 (Gaia DR3)'],
+    ]);
+    this.showCardButton(
+      c.radiusPc ? 'Enter the cluster →' : undefined,
+      c.radiusPc ? () => this.enterScene(name, `A real ${c.kind === 'globular' ? 'globular' : 'open'} cluster.`, () => loadRealCluster(this.app.sim, c)) : undefined,
+    );
+  }
+
+  private showCardButton(label: string | undefined, action: (() => Promise<void>) | undefined): void {
     for (const id of ['btn-star-bookmark', 'btn-star-hear', 'btn-star-neighbourhood', 'btn-star-enter', 'btn-star-fly']) $(id).classList.add('hidden');
-    this.upClose = target;
-    if (target) {
-      $('btn-star-enter').textContent = 'See it up close →';
+    this.cardAction = label ? action : undefined;
+    if (label && action) {
+      $('btn-star-enter').textContent = label;
       $('btn-star-enter').classList.remove('hidden');
     }
     $('star-panel').classList.remove('hidden');
   }
 
   /** Into the Sandbox: the star of the open card at its real size, with the Sun beside it to scale. */
-  async visitUpClose(): Promise<void> {
-    const target = this.upClose;
-    if (!target || this.app.transitioning) return;
+  visitUpClose(target: { name: string; note: string; visit: UpCloseVisit }): Promise<void> {
+    return this.enterScene(target.name, target.note, () => loadStarToScale(this.app.sim, target));
+  }
+
+  /** Fade from the Galaxy Map into a Sandbox scene. */
+  private async enterScene(name: string, description: string, load: () => ReturnType<typeof loadStarToScale>): Promise<void> {
+    if (this.app.transitioning) return;
     this.app.transitioning = true;
     try {
       await this.app.fade(true);
-      this.app.loadScenario({ name: target.name, description: target.note, load: () => loadStarToScale(this.app.sim, target) }, { zoomFrom: 30 });
+      this.app.loadScenario({ name, description, load }, { zoomFrom: 30 });
       this.app.setView('system');
       await sleep(60);
       await this.app.fade(false);
-      toast(`Arrived at ${target.name}`);
+      toast(`Arrived at ${name}`);
     } finally {
       this.app.transitioning = false;
     }
@@ -567,7 +595,7 @@ export class GalaxyMapUI {
     const panel = $('star-panel');
     $('btn-star-hear').classList.toggle('hidden', !(typeof target === 'object' && 'psr' in target));
     // (A famous object's card hides these, or renames Enter; every real target has them.)
-    this.upClose = undefined;
+    this.cardAction = undefined;
     $('btn-star-enter').textContent = 'Enter system →';
     $('btn-star-enter').classList.remove('hidden');
     $('btn-star-fly').classList.remove('hidden');

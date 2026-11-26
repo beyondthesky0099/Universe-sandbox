@@ -222,7 +222,13 @@ Plan, in priority order:
   - Giant or star by radius.
   - The Sun on a circle clear of both surfaces.
   - Wording that fits small stars.
-- Next parts: enter star clusters; shapes for the label-only structures; enter galaxy clusters.
+- [x] Part 2, star clusters:
+  - Every catalogued cluster found by search opens a card (`showClusterCard`) with "Enter the
+    cluster". It runs `loadRealCluster`: a Plummer sphere with the real half-member radius, Gaia's
+    member count (up to 2,000) and the real age, so dead stars are already giants or white dwarfs.
+  - Globulars draw 2,000 stars, with `gravityScale` raised to their mass (M/L ≈ 2).
+  - `cardAction` replaces `upClose` and is shared by all card buttons.
+- Next parts: shapes for the label-only structures; enter galaxy clusters.
 
 ### BM. Visit the Saraswati Supercluster
 - [x] `scripts/build-saraswati.mjs` → `public/data/saraswati.json`:

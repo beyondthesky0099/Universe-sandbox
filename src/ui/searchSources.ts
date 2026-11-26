@@ -43,14 +43,14 @@ export function nebulaEntries(list: Nebula[]): SearchEntry[] {
 const CLUSTER_KIND: Record<StarCluster['kind'], string> = { open: 'Open cluster', group: 'Moving group', globular: 'Globular cluster' };
 
 export function clusterEntries(list: StarCluster[]): SearchEntry[] {
-  return list.map((c) => ({
+  return list.map((c, i) => ({
     name: c.name ?? c.id,
     aliases: c.name ? [c.id] : undefined,
     kind: CLUSTER_KIND[c.kind],
     detail: [c.distancePc ? `${lightYears(c.distancePc / 1000)} away` : undefined, c.members ? `${c.members.toLocaleString('en-US')} Gaia members` : undefined].filter(Boolean).join(' · '),
     rank: c.name ? 50 : c.kind === 'globular' ? 10 : 0,
     action: c.distancePc
-      ? { type: 'map', l: c.l, b: c.b, dKpc: c.distancePc / 1000, sizePc: c.radiusPc ? c.radiusPc * 2 : undefined }
+      ? { type: 'map', l: c.l, b: c.b, dKpc: c.distancePc / 1000, sizePc: c.radiusPc ? c.radiusPc * 2 : undefined, cluster: i }
       : { type: 'sky', v: galacticToEcliptic(c.l, c.b), radiusDeg: c.radiusDeg },
   }));
 }

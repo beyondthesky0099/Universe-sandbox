@@ -5,6 +5,7 @@ import { keplerToState, OrbitalElements } from './orbits';
 import type { Simulation } from './simulation';
 import { EARTH_MASS, G, JUPITER_MASS } from './units';
 import { mulberry32 } from '../procgen/rng';
+import type { StarCluster } from './clusters';
 import { rememberPulsar, spinDownPower } from './neutronStar';
 import { HULSE_TAYLOR } from './binaryPulsar';
 import type { CompactObject } from './compactObjects';
@@ -786,6 +787,87 @@ export function loadWhiteDwarfBinary(sim: Simulation, o: ({ kind: 'nova' } & Nov
       : '';
   const tip = `${describeObject(o)} ${describeTransfer(transfer)}${changes}${view}${notes.length ? ` Not measured, so typical values are shown for ${notes.join(', ')}.` : ''}`;
   return { cameraDistance: Math.max(a * 3.2, 2e-4), timeScale: years / 6, elevation: inclination !== undefined ? Math.PI / 2 - (inclination * Math.PI) / 180 : 0.5, tip };
+}
+
+/**
+ * A real star cluster from the catalogues (sim/clusters.ts), entered from the Galaxy Map: its
+ * stars in a Plummer sphere with the measured half-member (or half-light) radius, in virial
+ * equilibrium. Open clusters get as many stars as Gaia found members (up to 2,000) at the
+ * cluster's age, so the most massive have already become giants or white dwarfs; globular
+ * clusters are 12 billion years old and far too rich to draw, so 2,000 of their stars are shown
+ * and gravity is scaled up to the whole cluster's mass (from its luminosity, M/L ≈ 2).
+ */
+export function loadRealCluster(sim: Simulation, c: Pick<StarCluster, 'kind' | 'members' | 'logAge' | 'absMag' | 'radiusPc' | 'name' | 'id'>): SceneSetup {
+  const AU_PER_PC = 206264.8;
+  const name = c.name ?? c.id;
+  const short = name.replace(/\s*\(.*\)$/, '');
+  const globular = c.kind === 'globular';
+  const age = globular ? 12e9 : 10 ** (c.logAge ?? 8.5);
+  const shown = Math.max(60, Math.min(2000, globular ? 2000 : c.members ?? 200));
+  const rand = mulberry32(name.split('').reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) >>> 0, 5));
+  // Masses from a Kroupa-like initial mass function, 0.1–20 M☉: proposed evenly in log m, kept with
+  // probability (m/0.5)^−1.3 above 0.5 M☉, so dN/dm ∝ m^−2.3 there and ∝ m^−1 below.
+  const imf = () => {
+    for (;;) {
+      const m = 0.1 * Math.pow(200, rand());
+      if (m < 0.5 || rand() < Math.pow(m / 0.5, -1.3)) return m;
+    }
+  };
+  const stars: { mass: number; kind: Body['kind'] }[] = [];
+  for (let i = 0; i < shown; i++) {
+    const m = imf();
+    const life = mainSequenceLifetime(m);
+    // Past its main sequence: a giant for a short while, then a white dwarf.
+    stars.push(life > age ? { mass: m, kind: 'star' } : life > age * 0.9 ? { mass: m, kind: 'giant' } : { mass: Math.min(1.3, 0.5 + 0.08 * (m - 1)), kind: 'whitedwarf' });
+  }
+  const shownMass = stars.reduce((t, s) => t + s.mass, 0);
+  // The whole cluster's mass: Gaia's members (each about 0.6 M☉ on average, with as much again
+  // unseen) or, for a globular, twice its luminosity in V.
+  const totalMass = globular ? 2 * 10 ** (-0.4 * ((c.absMag ?? -7.5) - 4.83)) : Math.max(shownMass, 1.2 * (c.members ?? shown));
+  sim.gravityScale = totalMass / shownMass;
+  sim.collisions = false;
+  const a = ((c.radiusPc ?? 2) / 1.305) * AU_PER_PC; // Plummer scale radius from the half-mass radius
+  sim.softening = a * 0.02;
+  const g = G * sim.gravityScale;
+  for (let i = 0; i < shown; i++) {
+    // Plummer radius (cut at 10 a), isotropic direction; speed from the local escape speed
+    // with the Aarseth–Hénon–Wielen rejection method.
+    let r: number;
+    do r = a / Math.sqrt(Math.pow(rand() * 0.999 + 1e-6, -2 / 3) - 1);
+    while (r > 10 * a);
+    const u = 2 * rand() - 1, phi = 2 * Math.PI * rand(), s = Math.sqrt(1 - u * u);
+    const vesc = Math.sqrt((2 * g * shownMass) / Math.sqrt(r * r + a * a));
+    let q: number;
+    for (;;) {
+      q = rand();
+      if (0.1 * rand() < q * q * Math.pow(1 - q * q, 3.5)) break;
+    }
+    const v = q * vesc;
+    const u2 = 2 * rand() - 1, phi2 = 2 * Math.PI * rand(), s2 = Math.sqrt(1 - u2 * u2);
+    sim.addBody({
+      name: `${short} star ${i + 1}`,
+      kind: stars[i].kind,
+      mass: stars[i].mass,
+      age,
+      x: r * s * Math.cos(phi),
+      y: r * u,
+      z: r * s * Math.sin(phi),
+      vx: v * s2 * Math.cos(phi2),
+      vy: v * u2,
+      vz: v * s2 * Math.sin(phi2),
+    });
+  }
+  sim.recenter();
+  const ly = (x: number) => Math.round(x * 3.2616).toLocaleString('en-US');
+  const crossing = (2 * a) / Math.sqrt((g * shownMass) / a); // years
+  const evolved = stars.filter((s) => s.kind !== 'star').length;
+  const ageText = age >= 1e9 ? `${(age / 1e9).toFixed(age >= 1e10 ? 0 : 1)} billion` : `${Math.round(age / 1e6).toLocaleString('en-US')} million`;
+  return {
+    cameraDistance: a * 9,
+    timeScale: crossing / 40,
+    elevation: 0.5,
+    tip: `${name}: ${globular ? `2,000 of its stars, with gravity scaled up to the whole cluster’s ${Math.round(totalMass).toLocaleString('en-US')} solar masses` : `${shown.toLocaleString('en-US')} stars, as many as Gaia found`}, in a sphere ${ly(2 * (c.radiusPc ?? 2))} light-years across holding half of them. At ${ageText} years old${evolved ? `, ${evolved} of these have already become giants or white dwarfs` : ', every star is still young'}. The real size, star count and age; the stars' places are drawn from those, not measured one by one.`,
+  };
 }
 
 /**

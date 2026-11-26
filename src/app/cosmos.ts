@@ -3,6 +3,7 @@ import { seedFromString } from '../procgen/rng';
 import { agnNucleusLabel, agnTypeLabel, displayName, type LocalGalaxy, GALAXY_CREDIT, galaxyForm, isActiveGalaxy, isFamous, loadLocalGalaxies, loadNamedGalaxies, loadUniverseObjects, loadUniverseRaw, loadWebGalaxies, markActiveHosts } from '../sim/galaxies';
 import { famousGalaxies, loadFamous } from '../sim/famous';
 import { loadActiveNucleus } from '../sim/presets';
+import { clusterMembers, loadGalaxyCluster } from '../sim/galaxyCluster';
 import { loadRadioLobes, radioAtlasUrl } from '../sim/radioLobes';
 import { loadLaniakea } from '../sim/laniakea';
 import { loadGrbs } from '../sim/grbs';
@@ -141,9 +142,8 @@ export class CosmosUI {
     const g = this.app.cosmos.local[index];
     $('cosmos-galaxy-name').textContent = displayName(g);
     setFacts($('cosmos-galaxy-facts'), cosmosFacts(g));
-    $('btn-cosmos-visit').textContent = g.name === 'Milky Way' ? 'Back to the Milky Way →' : g.kind === 'quasar' || g.kind === 'seyfert' || g.kind === 'blazar' ? 'Visit host galaxy →' : 'Visit galaxy →';
-    // A cluster is a place to fly to, not a galaxy to enter.
-    $('btn-cosmos-visit').classList.toggle('hidden', g.kind === 'cluster' || !!g.noVisit);
+    $('btn-cosmos-visit').textContent = g.name === 'Milky Way' ? 'Back to the Milky Way →' : g.kind === 'cluster' ? 'Enter the cluster →' : g.kind === 'quasar' || g.kind === 'seyfert' || g.kind === 'blazar' ? 'Visit host galaxy →' : 'Visit galaxy →';
+    $('btn-cosmos-visit').classList.toggle('hidden', !!g.noVisit);
     $('btn-cosmos-nucleus').classList.toggle('hidden', !isActiveGalaxy(g));
     panel.classList.remove('hidden');
   }
@@ -151,7 +151,8 @@ export class CosmosUI {
   /** Go into a galaxy: the real Milky Way map, or a procedural stand-in shaped like the real galaxy. */
   async visitCosmosGalaxy(index: number): Promise<void> {
     const g = this.app.cosmos.local[index];
-    if (!g || this.app.transitioning || g.kind === 'cluster' || g.noVisit) return;
+    if (g?.kind === 'cluster') return this.enterGalaxyCluster(index);
+    if (!g || this.app.transitioning || g.noVisit) return;
     this.app.transitioning = true;
     try {
       this.app.cosmos.flyTo(index, this.app.cosmos.viewDistance(index) * 0.08, 1.6);
@@ -172,6 +173,25 @@ export class CosmosUI {
   }
 
   /** Into the nucleus itself: the black hole, its disc and clouds, the torus and the jets (presets.loadActiveNucleus). */
+  /** Into a galaxy cluster: its catalogued member galaxies in the Sandbox (sim/galaxyCluster.ts). */
+  async enterGalaxyCluster(index: number): Promise<void> {
+    const g = this.app.cosmos.local[index];
+    if (!g || this.app.transitioning || g.kind !== 'cluster') return;
+    this.app.transitioning = true;
+    try {
+      this.app.cosmos.flyTo(index, this.app.cosmos.viewDistance(index) * 0.3, 1.6);
+      await sleep(420);
+      await this.app.fade(true);
+      const members = clusterMembers(g, this.app.cosmos.local);
+      this.app.loadScenario({ name: displayName(g), load: () => loadGalaxyCluster(this.app.sim, g, members), origin: { kind: 'agn', galaxy: g } }, { zoomFrom: 8 });
+      this.app.setView('system');
+      await sleep(60);
+      await this.app.fade(false);
+    } finally {
+      this.app.transitioning = false;
+    }
+  }
+
   async visitNucleus(index: number): Promise<void> {
     const g = this.app.cosmos.local[index];
     if (!g || this.app.transitioning || !isActiveGalaxy(g)) return;

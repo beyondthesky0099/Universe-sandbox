@@ -228,7 +228,14 @@ Plan, in priority order:
     member count (up to 2,000) and the real age, so dead stars are already giants or white dwarfs.
   - Globulars draw 2,000 stars, with `gravityScale` raised to their mass (M/L ≈ 2).
   - `cardAction` replaces `upClose` and is shared by all card buttons.
-- Next parts: shapes for the label-only structures; enter galaxy clusters.
+- [x] Part 4, galaxy clusters:
+  - Every Universe-tab cluster now has "Enter the cluster" (`enterGalaxyCluster`).
+  - `sim/galaxyCluster.ts` picks catalogued members within 2 Mpc and ±3,000 km/s, with 3σ velocity
+    clipping. It places them at their real sky positions and line-of-sight speeds (depth drawn).
+    The virial mass comes from the Heisler–Tremaine–Bahcall projected estimator, split by K light.
+  - Clusters beyond the catalogues get an illustrative swarm. Coma checks out: σ ≈ 1,000 km/s,
+    M ≈ 10¹⁵ M☉.
+- Next part: shapes for the label-only structures.
 
 ### BM. Visit the Saraswati Supercluster
 - [x] `scripts/build-saraswati.mjs` → `public/data/saraswati.json`:

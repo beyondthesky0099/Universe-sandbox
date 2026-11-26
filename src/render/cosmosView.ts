@@ -327,6 +327,11 @@ export class CosmosView {
     this.cosmicShapes.setGrbs(bursts);
   }
 
+  /** The Saraswati Supercluster's galaxy clusters, drawn as its wall (render/cosmicShapes.ts). */
+  setSaraswati(members: { l: number; b: number; z: number; core: boolean }[]): void {
+    this.cosmicShapes.setSaraswati(members);
+  }
+
   setFrbs(bursts: [string, number, number, number, string?][]): void {
     this.cosmicShapes.setFrbs(bursts);
   }

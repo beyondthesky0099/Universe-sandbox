@@ -462,7 +462,7 @@ export class InputUI {
     $('btn-galaxy-random').addEventListener('click', () => this.app.galaxyMapUI.buildGalaxy(Math.floor(Math.random() * 1e9)));
     $('btn-star-fly').addEventListener('click', () => this.app.galaxy.selected !== -1 && this.app.travelUI.goGalaxyTarget(this.app.galaxy.selected));
     $('btn-star-enter').addEventListener('click', () => {
-      if (this.app.galaxyMapUI.famousShown) void this.app.galaxyMapUI.visitFamous(this.app.galaxyMapUI.famousShown);
+      if (this.app.galaxyMapUI.upClose) void this.app.galaxyMapUI.visitUpClose();
       else if (this.app.galaxy.selected !== -1) void this.app.enterTarget(this.app.galaxy.selected);
     });
     $('btn-star-bookmark').addEventListener('click', () => this.app.galaxyMapUI.toggleBookmark());

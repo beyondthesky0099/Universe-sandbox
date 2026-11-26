@@ -10,6 +10,13 @@ import { loadBrightStars, temperatureFromBV } from '../sim/stars';
 import { loadGalacticExtras } from '../sim/galacticExtras';
 import { loadFamous } from '../sim/famous';
 import { loadStarToScale } from '../sim/presets';
+import { estimateStar } from '../sim/starSize';
+import type { UpCloseVisit } from '../sim/famous';
+
+/** "2,150 times", "1.7 times", "0.15 times". */
+function sizeText(r: number): string {
+  return `${r >= 10 ? Math.round(r).toLocaleString('en-US') : r >= 1 ? r.toFixed(1) : r.toFixed(2)} times`;
+}
 import { kelvinToRgb } from '../sim/color';
 import { loadNebulaImages, NEBULA_IMAGE_CREDIT, nebulaAtlasUrl, nebulaHdUrl, nebulaKey, tileRect, type NebulaImageAtlas } from '../sim/nebulaImages';
 import type { Cloud } from '../render/nebulaClouds';
@@ -255,45 +262,71 @@ export class GalaxyMapUI {
     );
   }
 
-  /** The famous object whose card is open (its "See it up close" button visits it). */
-  famousShown?: string;
+  /** The star whose card is open, for its "See it up close" button: its real (or estimated) size. */
+  upClose?: { name: string; note: string; visit: UpCloseVisit };
 
   /** The card of a famous object: what it is, how far, why it matters and the paper. */
   async showFamousCard(name: string): Promise<void> {
     const f = (await loadFamous()).map.find((o) => o.name === name);
     if (!f) return;
     const ly = f.d * 3261.56;
+    // A measured size, or one estimated from its brightness, colour and distance.
+    const est = !f.visit && f.vmag !== undefined && f.bv !== undefined ? estimateStar(f.vmag, f.bv, f.d * 1000) : undefined;
+    const visit: UpCloseVisit | undefined = f.visit ?? (est && { radiusSun: Math.round(est.radius * 100) / 100, temperature: Math.round(est.temperature), mass: Math.round(est.mass * 10) / 10, ref: 'Size estimated from its brightness, colour and distance (SIMBAD photometry), not measured' });
     $('star-name').textContent = f.name;
     setFacts($('star-facts'), [
       ['Type', f.kind],
       ['Distance', `${f.approx ? 'about ' : ''}${ly < 100 ? ly.toFixed(2) : Math.round(ly).toLocaleString('en-US')} light-years`],
-      ...(f.visit ? ([['Size', `about ${f.visit.radiusSun.toLocaleString('en-US')} times the Sun’s width`]] as [string, string][]) : []),
+      ...(visit ? ([['Size', `about ${sizeText(visit.radiusSun)} the Sun’s width${f.visit ? '' : ' (estimated)'}`], ['Temperature', `${visit.temperature.toLocaleString('en-US')} K`]] as [string, string][]) : []),
       ['Why it matters', f.note],
       ['Source', f.ref],
     ]);
+    this.showUpCloseButton(visit ? { name: f.name, note: f.note, visit } : undefined);
+  }
+
+  /**
+   * The card of a named star (Betelgeuse, Vega, …): its size, temperature and luminosity estimated
+   * from its catalogued brightness, colour and distance (sim/starSize.ts), and "See it up close".
+   */
+  showStarCard(name: string, p: { vmag: number; bv: number; pc: number }): void {
+    const e = estimateStar(p.vmag, p.bv, p.pc);
+    const ly = p.pc * 3.26156;
+    const visit: UpCloseVisit = { radiusSun: Math.round(e.radius * 100) / 100, temperature: Math.round(e.temperature), mass: Math.round(e.mass * 10) / 10, ref: 'Size, temperature and luminosity estimated from its catalogued brightness, colour and distance (HYG v4.1); mass typical for its kind' };
+    $('star-name').textContent = name;
+    setFacts($('star-facts'), [
+      ['Type', `${e.type} (estimated)`],
+      ['Distance', `${ly < 100 ? ly.toFixed(1) : Math.round(ly).toLocaleString('en-US')} light-years`],
+      ['Brightness', `magnitude ${p.vmag.toFixed(2)}`],
+      ['Temperature', `about ${(Math.round(e.temperature / 50) * 50).toLocaleString('en-US')} K`],
+      ['Size', `about ${sizeText(e.radius)} the Sun’s width`],
+      ['Luminosity', `about ${Number(e.luminosity.toPrecision(2)).toLocaleString('en-US')} times the Sun’s`],
+      ['Source', 'HYG v4.1 (brightness, colour, distance); size from the Flower/Torres bolometric correction'],
+    ]);
+    this.showUpCloseButton({ name, note: `A ${e.type.toLowerCase()} ${Math.round(ly).toLocaleString('en-US')} light-years away.`, visit });
+  }
+
+  private showUpCloseButton(target: { name: string; note: string; visit: UpCloseVisit } | undefined): void {
     for (const id of ['btn-star-bookmark', 'btn-star-hear', 'btn-star-neighbourhood', 'btn-star-enter', 'btn-star-fly']) $(id).classList.add('hidden');
-    // A star with a measured size can be seen up close, at that size.
-    this.famousShown = f.visit ? f.name : undefined;
-    if (f.visit) {
+    this.upClose = target;
+    if (target) {
       $('btn-star-enter').textContent = 'See it up close →';
       $('btn-star-enter').classList.remove('hidden');
     }
     $('star-panel').classList.remove('hidden');
   }
 
-  /** Into the Sandbox: a famous star at its real size, with the Sun beside it to scale. */
-  async visitFamous(name: string): Promise<void> {
-    const f = (await loadFamous()).map.find((o) => o.name === name);
-    if (!f?.visit || this.app.transitioning) return;
-    const visit = f.visit;
+  /** Into the Sandbox: the star of the open card at its real size, with the Sun beside it to scale. */
+  async visitUpClose(): Promise<void> {
+    const target = this.upClose;
+    if (!target || this.app.transitioning) return;
     this.app.transitioning = true;
     try {
       await this.app.fade(true);
-      this.app.loadScenario({ name: f.name, description: f.note, load: () => loadStarToScale(this.app.sim, { ...f, visit }) }, { zoomFrom: 30 });
+      this.app.loadScenario({ name: target.name, description: target.note, load: () => loadStarToScale(this.app.sim, target) }, { zoomFrom: 30 });
       this.app.setView('system');
       await sleep(60);
       await this.app.fade(false);
-      toast(`Arrived at ${f.name}`);
+      toast(`Arrived at ${target.name}`);
     } finally {
       this.app.transitioning = false;
     }
@@ -534,7 +567,7 @@ export class GalaxyMapUI {
     const panel = $('star-panel');
     $('btn-star-hear').classList.toggle('hidden', !(typeof target === 'object' && 'psr' in target));
     // (A famous object's card hides these, or renames Enter; every real target has them.)
-    this.famousShown = undefined;
+    this.upClose = undefined;
     $('btn-star-enter').textContent = 'Enter system →';
     $('btn-star-enter').classList.remove('hidden');
     $('btn-star-fly').classList.remove('hidden');

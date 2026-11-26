@@ -798,19 +798,25 @@ export function loadStarToScale(sim: Simulation, f: { name: string; note: string
   const { radiusSun, temperature, mass, ref } = f.visit;
   setTrueScale(sim, true);
   const radius = radiusSun * R_SUN;
-  // Well into its supergiant phase, far from exploding (giants go at 1.1 × the main-sequence life).
-  const star = sim.addBody({ name: f.name, kind: 'giant', mass, radius, age: 1.02 * mainSequenceLifetime(mass), color: rgbToHex(kelvinToRgb(temperature)) });
-  addOrbiting(sim, star, { name: 'The Sun (to scale)', kind: 'star', mass: 1, age: 4.6e9 }, { a: radius * 1.6, e: 0, inc: 0, lan: 0, argp: 0, nu: 0 });
+  const giant = radiusSun >= 10;
+  // A giant well into its supergiant phase, far from exploding (giants go at 1.1 × the
+  // main-sequence life); a smaller star halfway through its main sequence.
+  const star = sim.addBody({ name: f.name, kind: giant ? 'giant' : 'star', mass, radius, age: (giant ? 1.02 : 0.5) * mainSequenceLifetime(mass), color: rgbToHex(kelvinToRgb(temperature)) });
+  // The Sun on a circle clear of both surfaces.
+  const a = 1.6 * (radius + R_SUN);
+  addOrbiting(sim, star, { name: 'The Sun (to scale)', kind: 'star', mass: 1, age: 4.6e9 }, { a, e: 0, inc: 0, lan: 0, argp: 0, nu: 0 });
   const sun = sim.bodies.find((b) => b.name === 'The Sun (to scale)');
   if (sun) sun.radius = R_SUN;
   sim.recenter();
-  const across = (2 * radius).toFixed(radius < 5 ? 1 : 0);
-  const period = Math.sqrt((radius * 1.6) ** 3 / (mass + 1));
+  const across = 2 * radius >= 0.5 ? `${(2 * radius).toFixed(2 * radius < 5 ? 1 : 0)} AU across` : `${Math.round(2 * radiusSun * 695700).toLocaleString('en-US')} km across`;
+  const period = Math.sqrt(a ** 3 / (mass + 1));
+  const size = radiusSun >= 10 ? Math.round(radiusSun).toLocaleString('en-US') : radiusSun >= 1 ? radiusSun.toFixed(1) : radiusSun.toFixed(2);
+  const sunNote = radiusSun > 3 ? 'The tiny dot circling it is the Sun, to the same scale.' : 'The star circling it is the Sun, to the same scale.';
   return {
-    cameraDistance: radius * 4.5,
+    cameraDistance: a * 2.6,
     timeScale: period / 30,
     elevation: 0.35,
-    tip: `${f.name} at its real size: about ${radiusSun.toLocaleString('en-US')} times the Sun’s width, ${across} AU across. The tiny dot circling it is the Sun, to the same scale. ${f.note} (${ref}.)`,
+    tip: `${f.name} at its real size: about ${size} times the Sun’s width, ${across}. ${sunNote} ${f.note} (${ref}.)`,
   };
 }
 

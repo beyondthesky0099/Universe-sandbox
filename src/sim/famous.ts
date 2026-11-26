@@ -8,6 +8,14 @@ import { comovingDistance } from './cosmology';
 import type { LocalGalaxy } from './galaxies';
 import type { Nebula, NebulaKind } from './nebulae';
 
+/** A star shown up close: radius (R☉), temperature (K), mass (M☉) and where they come from. */
+export interface UpCloseVisit {
+  radiusSun: number;
+  temperature: number;
+  mass: number;
+  ref: string;
+}
+
 /** A single object on the Galaxy Map: galactic l, b (degrees) and distance d (kpc). */
 export interface FamousMapObject {
   name: string;
@@ -20,7 +28,10 @@ export interface FamousMapObject {
   /** The distance is only roughly known. */
   approx?: boolean;
   /** A star that can be visited up close: its radius (R☉), temperature (K), mass (M☉) and their source. */
-  visit?: { radiusSun: number; temperature: number; mass: number; ref: string };
+  visit?: UpCloseVisit;
+  /** A star's V magnitude and B−V colour (SIMBAD), to estimate its size when no visit is given. */
+  vmag?: number;
+  bv?: number;
   note: string;
   ref: string;
 }

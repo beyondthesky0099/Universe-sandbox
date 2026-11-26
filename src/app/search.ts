@@ -147,6 +147,8 @@ export class SearchUI {
         if (hidden >= 0) this.app.galaxyMapUI.selectTarget(hidden);
         // A famous star or object: its card, with why it matters.
         if (a.famous) void this.app.galaxyMapUI.showFamousCard(a.famous);
+        // A named star: its card, with its size estimated from its brightness, colour and distance.
+        else if (a.star) this.app.galaxyMapUI.showStarCard(r.name, a.star);
         // A pulsar: open its panel, with the button to visit it.
         const psr = a.pulsar ? this.app.pulsarMapList.findIndex((p) => p.jname === a.pulsar) : -1;
         if (psr >= 0) this.app.galaxyMapUI.selectTarget({ psr });

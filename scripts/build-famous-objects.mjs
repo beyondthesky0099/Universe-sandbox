@@ -25,9 +25,9 @@ const MAP = [
   // `visit`: a star shown up close at its real size (mass in M☉ is illustrative where unmeasured).
   ['V* UY Sct', { name: 'UY Scuti', kind: 'Red supergiant', plx: true, visit: { radiusSun: 1140, temperature: 3365, mass: 10, ref: 'Radius 1,708 R☉ at 2.9 kpc (Arroyo-Torres et al. 2013), scaled to the Gaia distance; mass illustrative' }, note: 'One of the largest stars known: a red supergiant roughly 900 to 1,700 times the width of the Sun (its distance, and so its size, is uncertain). In the Sun’s place it would swallow the orbit of Mars.', ref: 'Arroyo-Torres et al. 2013, A&A 554, A76; distance from its Gaia DR3 parallax' }],
   [{ ra: '18 39 02.37', dec: '-06 05 10.5' }, { name: 'Stephenson 2-18', aliases: ['St2-18', 'Stephenson 2 DFK 1'], kind: 'Red supergiant', d: 5.8, visit: { radiusSun: 2150, temperature: 3200, mass: 15, ref: 'Radius from its luminosity (4.4 × 10⁵ L☉) and temperature (3,200 K), Davies et al. 2007; mass illustrative' }, note: 'A red supergiant in the young cluster Stephenson 2, perhaps around 2,000 times the width of the Sun: a candidate for the largest star known.', ref: 'Davies et al. 2007, ApJ 671, 781 (position and the cluster’s distance)' }],
-  ['KIC 8462852', { name: 'Tabby’s Star', aliases: ['Boyajian’s Star', 'KIC 8462852'], kind: 'F-type star with strange dimming', plx: true, note: 'It dims by up to 22% at irregular times, far more than any planet could cause. The likeliest explanation is uneven clumps of fine dust.', ref: 'Boyajian et al. 2016, MNRAS 457, 3988; distance from its Gaia DR3 parallax' }],
-  ['HD 101065', { name: 'Przybylski’s Star', aliases: ['HD 101065'], kind: 'Chemically peculiar star', plx: true, note: 'One of the strangest spectra of any star: rich in rare-earth elements such as holmium, with reported traces of short-lived heavy elements, and very little iron.', ref: 'Przybylski 1961, Nature 189, 739; Cowley et al. 2000, MNRAS 317, 299; distance from its Gaia DR3 parallax' }],
-  ['* eps Aur', { name: 'Epsilon Aurigae', aliases: ['ε Aurigae', 'Almaaz'], kind: 'Eclipsing binary', plx: true, note: 'Every 27 years its light dips for nearly two years, as a companion wrapped in a huge, dark disc of dust passes in front of it.', ref: 'Kloppenborg et al. 2010, Nature 464, 870; distance from its Gaia DR3 parallax' }],
+  ['KIC 8462852', { name: 'Tabby’s Star', star: true, aliases: ['Boyajian’s Star', 'KIC 8462852'], kind: 'F-type star with strange dimming', plx: true, note: 'It dims by up to 22% at irregular times, far more than any planet could cause. The likeliest explanation is uneven clumps of fine dust.', ref: 'Boyajian et al. 2016, MNRAS 457, 3988; distance from its Gaia DR3 parallax' }],
+  ['HD 101065', { name: 'Przybylski’s Star', star: true, aliases: ['HD 101065'], kind: 'Chemically peculiar star', plx: true, note: 'One of the strangest spectra of any star: rich in rare-earth elements such as holmium, with reported traces of short-lived heavy elements, and very little iron.', ref: 'Przybylski 1961, Nature 189, 739; Cowley et al. 2000, MNRAS 317, 299; distance from its Gaia DR3 parallax' }],
+  ['* eps Aur', { name: 'Epsilon Aurigae', star: true, aliases: ['ε Aurigae', 'Almaaz'], kind: 'Eclipsing binary', plx: true, note: 'Every 27 years its light dips for nearly two years, as a companion wrapped in a huge, dark disc of dust passes in front of it.', ref: 'Kloppenborg et al. 2010, Nature 464, 870; distance from its Gaia DR3 parallax' }],
   ['WISEA J085510.74-071442.5', { name: 'WISE 0855−0714', aliases: ['WISE 0855'], kind: 'Brown dwarf', plx: true, note: 'The coldest brown dwarf known, at about −25 °C, and the fourth-nearest system to the Sun. It may have clouds of water ice.', ref: 'Luhman 2014, ApJL 786, L18; distance from its parallax (SIMBAD)' }],
   ['NAME Scholz\'s star', { name: 'Scholz’s Star', aliases: ['WISE 0720−0846'], kind: 'Red dwarf and brown dwarf', plx: true, note: 'About 70,000 years ago this pair passed roughly 52,000 AU from the Sun, through the outer Oort cloud: the closest known flyby of another star.', ref: 'Mamajek et al. 2015, ApJL 800, L17; distance from its parallax (SIMBAD)' }],
   ['SGR 1806-20', { name: 'SGR 1806−20', aliases: ['SGR 1806-20'], kind: 'Magnetar', d: 8.7, note: 'A magnetar: a neutron star with a magnetic field about a thousand trillion times Earth’s. Its giant flare of 27 December 2004 was the brightest burst from beyond the Solar System ever recorded, and it disturbed Earth’s upper atmosphere.', ref: 'Hurley et al. 2005, Nature 434, 1098; distance: Bibby et al. 2008, MNRAS 386, L23' }],
@@ -39,15 +39,15 @@ const MAP = [
 
 // Added in the second "what did we miss" pass.
 MAP.push(
-  ['* eta Car', { name: 'Eta Carinae', aliases: ['η Carinae', 'Eta Car'], kind: 'Luminous blue variable (binary)', d: 2.35, note: 'One of the most massive and luminous stars known: a binary whose main star holds around 100 times the Sun’s mass. In its “Great Eruption” of the 1840s it became the second-brightest star in the sky and threw off the Homunculus Nebula.', ref: 'Smith 2006, ApJ 644, 1151 (distance)' }],
-  ['* rho Cas', { name: 'Rho Cassiopeiae', aliases: ['ρ Cassiopeiae'], kind: 'Yellow hypergiant', plx: true, approx: true, note: 'One of the rare yellow hypergiants, hundreds of thousands of times as luminous as the Sun. Every few decades it throws off a shell of gas and briefly fades.', ref: 'Lobel et al. 2003, ApJ 583, 923; distance from its Gaia DR3 parallax (uncertain)' }],
-  ['NAME Pistol Star', { name: 'Pistol Star', aliases: ['V4647 Sgr'], kind: 'Luminous blue variable', d: 8.0, approx: true, note: 'One of the most luminous stars in the Milky Way, near the Galactic Centre and hidden from the eye by dust. It has blown off the Pistol Nebula around itself.', ref: 'Figer et al. 1998, ApJ 506, 384' }],
+  ['* eta Car', { name: 'Eta Carinae', aliases: ['η Carinae', 'Eta Car'], kind: 'Luminous blue variable (binary)', d: 2.35, visit: { radiusSun: 800, temperature: 9400, mass: 100, ref: 'Radius of the photosphere of its wind, from its luminosity of about 5 million suns and 9,400 K (Davidson & Humphreys 1997, ARA&A 35, 1); the star inside is smaller and hotter' }, note: 'One of the most massive and luminous stars known: a binary whose main star holds around 100 times the Sun’s mass. In its “Great Eruption” of the 1840s it became the second-brightest star in the sky and threw off the Homunculus Nebula.', ref: 'Smith 2006, ApJ 644, 1151 (distance)' }],
+  ['* rho Cas', { name: 'Rho Cassiopeiae', aliases: ['ρ Cassiopeiae'], kind: 'Yellow hypergiant', plx: true, approx: true, visit: { radiusSun: 500, temperature: 6000, mass: 40, ref: 'From a luminosity of about 300,000 suns and 6,000 K (Lobel et al. 2003, ApJ 583, 923); uncertain' }, note: 'One of the rare yellow hypergiants, hundreds of thousands of times as luminous as the Sun. Every few decades it throws off a shell of gas and briefly fades.', ref: 'Lobel et al. 2003, ApJ 583, 923; distance from its Gaia DR3 parallax (uncertain)' }],
+  ['NAME Pistol Star', { name: 'Pistol Star', aliases: ['V4647 Sgr'], kind: 'Luminous blue variable', d: 8.0, approx: true, visit: { radiusSun: 306, temperature: 11800, mass: 27.5, ref: 'Najarro et al. 2009, ApJ 691, 1816' }, note: 'One of the most luminous stars in the Milky Way, near the Galactic Centre and hidden from the eye by dust. It has blown off the Pistol Nebula around itself.', ref: 'Figer et al. 1998, ApJ 506, 384' }],
   ['WR 104', { name: 'WR 104', aliases: ['Pinwheel star'], kind: 'Wolf–Rayet binary', d: 2.58, note: 'A “pinwheel”: dust made where the winds of two massive stars collide is spun into a spiral by their eight-month orbit.', ref: 'Tuthill et al. 2008, ApJ 675, 698' }],
-  ['* zet Oph', { name: 'Zeta Ophiuchi', aliases: ['ζ Ophiuchi'], kind: 'Runaway O-type star', plx: true, note: 'A hot, fast-spinning star racing through space, probably flung free when its companion exploded; its wind ploughs a glowing bow shock ahead of it.', ref: 'Hoogerwerf et al. 2001, A&A 365, 49; distance from its parallax (SIMBAD)' }],
-  ['V* RR Lyr', { name: 'RR Lyrae', aliases: ['RR Lyr'], kind: 'Pulsating variable star', plx: true, note: 'The prototype of the RR Lyrae stars: old stars that pulse about every half day with a known luminosity, used as standard candles for globular clusters and nearby galaxies.', ref: 'Distance from its Gaia DR3 parallax' }],
-  ['* chi Cyg', { name: 'Chi Cygni', aliases: ['χ Cygni'], kind: 'Mira variable', plx: true, note: 'A Mira variable whose brightness swings by more than 10,000 times every 408 days, from easily seen to telescopic: the largest range of any star.', ref: 'Distance from its Gaia DR3 parallax' }],
-  ['V* R Lep', { name: 'Hind’s Crimson Star', aliases: ['R Leporis', 'R Lep'], kind: 'Carbon star (Mira variable)', plx: true, approx: true, note: 'A carbon star so sooty that it glows a deep blood red, brightening and fading every 430 days or so.', ref: 'Hind 1845; distance from its Gaia DR3 parallax' }],
-  ['* mu. Cep', { name: 'Garnet Star', aliases: ['Mu Cephei', 'μ Cephei', 'Herschel’s Garnet Star'], kind: 'Red supergiant', d: 0.94, approx: true, note: 'One of the largest and reddest stars visible to the naked eye. William Herschel called it “a very fine deep garnet colour”.', ref: 'Herschel 1783; distance of its association, Cep OB2 (Gaia)' }],
+  ['* zet Oph', { name: 'Zeta Ophiuchi', star: true, aliases: ['ζ Ophiuchi'], kind: 'Runaway O-type star', plx: true, note: 'A hot, fast-spinning star racing through space, probably flung free when its companion exploded; its wind ploughs a glowing bow shock ahead of it.', ref: 'Hoogerwerf et al. 2001, A&A 365, 49; distance from its parallax (SIMBAD)' }],
+  ['V* RR Lyr', { name: 'RR Lyrae', aliases: ['RR Lyr'], kind: 'Pulsating variable star', visit: { radiusSun: 5.5, temperature: 6125, mass: 0.65, ref: 'Approximate published values for RR Lyrae stars (about 50 suns’ luminosity, 6,100 K, 0.65 M☉); its size swells and shrinks by about 10% each pulse' }, plx: true, note: 'The prototype of the RR Lyrae stars: old stars that pulse about every half day with a known luminosity, used as standard candles for globular clusters and nearby galaxies.', ref: 'Distance from its Gaia DR3 parallax' }],
+  ['* chi Cyg', { name: 'Chi Cygni', star: true, aliases: ['χ Cygni'], kind: 'Mira variable', plx: true, note: 'A Mira variable whose brightness swings by more than 10,000 times every 408 days, from easily seen to telescopic: the largest range of any star.', ref: 'Distance from its Gaia DR3 parallax' }],
+  ['V* R Lep', { name: 'Hind’s Crimson Star', star: true, aliases: ['R Leporis', 'R Lep'], kind: 'Carbon star (Mira variable)', plx: true, approx: true, note: 'A carbon star so sooty that it glows a deep blood red, brightening and fading every 430 days or so.', ref: 'Hind 1845; distance from its Gaia DR3 parallax' }],
+  ['* mu. Cep', { name: 'Garnet Star', aliases: ['Mu Cephei', 'μ Cephei', 'Herschel’s Garnet Star'], kind: 'Red supergiant', d: 0.94, approx: true, visit: { radiusSun: 1000, temperature: 3750, mass: 19, ref: 'Temperature from Levesque et al. 2005, ApJ 628, 973; radius about 1,000 R☉, uncertain with its distance' }, note: 'One of the largest and reddest stars visible to the naked eye. William Herschel called it “a very fine deep garnet colour”.', ref: 'Herschel 1783; distance of its association, Cep OB2 (Gaia)' }],
   [{ ra: '18 44 20.3', dec: '+39 40 12' }, { name: 'Epsilon Lyrae', aliases: ['Double Double', 'ε Lyrae'], kind: 'Quadruple star', d: 0.049, note: 'The “Double Double”: binoculars split it into two stars, and a telescope splits each of those into two again. All four are bound together.', ref: 'Hipparcos parallax (van Leeuwen 2007)' }],
   ['NAME Arches Cluster', { name: 'Arches Cluster', kind: 'Young massive cluster', d: 8.2, approx: true, note: 'The densest young star cluster known in the Milky Way, about 100 light-years from the Galactic Centre and hidden behind dust. It holds dozens of the most massive stars known.', ref: 'Figer et al. 2002, ApJ 581, 258' }],
   ['NAME Quintuplet Cluster', { name: 'Quintuplet Cluster', kind: 'Young massive cluster', d: 8.2, approx: true, note: 'A massive young cluster near the Galactic Centre, named for five bright infrared sources. The Pistol Star is one of its members.', ref: 'Figer et al. 1999, ApJ 525, 750' }],
@@ -169,6 +169,22 @@ async function simbad(id) {
   return { ra, dec, plx: Number(plx) || undefined };
 }
 
+/** V magnitude and B−V colour from SIMBAD, for a star whose size is estimated from them. Cached. */
+async function photometry(id) {
+  const file = join(cache, `flux-${id.replace(/[^A-Za-z0-9]+/g, '_')}.txt`);
+  let line = existsSync(file) ? readFileSync(file, 'utf8') : undefined;
+  if (!line) {
+    const script = ['output console=off script=off', 'format object "%IDLIST(1)|%FLUXLIST(V;F)|%FLUXLIST(B;F)"', id].join('\n');
+    const res = await fetch(`https://simbad.cfa.harvard.edu/simbad/sim-script?script=${encodeURIComponent(script)}`, { signal: AbortSignal.timeout(60000) });
+    line = (await res.text()).split('\n').find((l) => l.includes('|'));
+    if (!line) throw new Error(`SIMBAD: no photometry for ${id}`);
+    writeFileSync(file, line);
+  }
+  const [, v, b] = line.split('|').map((x) => (x.trim() === '' ? NaN : Number(x.trim())));
+  if (!(Number.isFinite(v) && Number.isFinite(b))) throw new Error(`SIMBAD: no V and B for ${id}`);
+  return { vmag: v, bv: round(b - v, 2) };
+}
+
 /** Galactic position (and parallax) of a source: a SIMBAD id, a paper's RA/Dec, or galactic l/b. */
 async function locate(src) {
   if (typeof src === 'string') {
@@ -185,7 +201,9 @@ async function build(list, fn) {
   const out = [];
   for (const [src, e] of list) {
     const at = await locate(src);
-    const { plx, ...rest } = e;
+    const { plx, star, ...rest } = e;
+    // Stars whose size is estimated in the app: their photometry.
+    if (star) Object.assign(rest, await photometry(src));
     let d = e.d;
     if (plx) {
       if (!at.plx) throw new Error(`${e.name}: no parallax in SIMBAD`);

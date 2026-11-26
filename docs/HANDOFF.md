@@ -208,6 +208,22 @@ Plan, in priority order:
 - BodyVisual adds it in applyDetail and updates it only when the planet is more than 14 px across
   and a star is present. Tests: tests/aurora.test.ts.
 
+### BN. Visit everything, part 1: stars up close
+- [x] `sim/starSize.ts`: `estimateStar(V, B−V, pc)` gives temperature (Ballesteros), luminosity
+  (Flower 1996 bolometric correction with the Torres 2010 coefficients), radius (Stefan–Boltzmann),
+  a typical mass and a type. Checked against published radii in `tests/star-size.test.ts`.
+- [x] Every named bright and nearby star found by search opens a card (`showStarCard`): its
+  estimated type, temperature, size and luminosity, and "See it up close".
+- [x] Famous stars:
+  - Estimated from SIMBAD V and B (`star: true` in `build-famous-objects.mjs`).
+  - Published values where dust spoils the estimate: Eta Carinae, the Pistol Star, the Garnet
+    Star, Rho Cas, plus RR Lyrae, which has no V in SIMBAD.
+- [x] `loadStarToScale`:
+  - Giant or star by radius.
+  - The Sun on a circle clear of both surfaces.
+  - Wording that fits small stars.
+- Next parts: enter star clusters; shapes for the label-only structures; enter galaxy clusters.
+
 ### BM. Visit the Saraswati Supercluster
 - [x] `scripts/build-saraswati.mjs` → `public/data/saraswati.json`:
   - The paper's selection: WHL clusters, z_sp (else z_phot), |Dec| < 1.26°, within 90 Mpc of Abell

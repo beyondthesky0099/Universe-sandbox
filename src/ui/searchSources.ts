@@ -80,14 +80,16 @@ export function exoplanetEntries(cat: ExoCatalog): SearchEntry[] {
  */
 export function starEntries(bright: BrightStar[], near: NearStar[]): SearchEntry[] {
   const out = new Map<string, SearchEntry>();
-  const onMap = (v: [number, number, number], pc: number): SearchAction => {
+  const onMap = (v: [number, number, number], pc: number): Extract<SearchAction, { type: 'map' }> => {
     const [l, b] = eclipticToGalactic(v);
     return { type: 'map', l, b, dKpc: pc / 1000, sizePc: 1 };
   };
-  for (const [x, y, z, mag, , name, pc] of bright) {
+  for (const [x, y, z, mag, bv, name, pc] of bright) {
     if (!name) continue;
     const detail = `${pc ? `${lightYears(pc / 1000)} away · ` : ''}magnitude ${mag.toFixed(1)}`;
-    out.set(name, { name, kind: 'Star', detail, rank: Math.max(0, 70 - mag * 10), action: pc ? onMap([x, y, z], pc) : { type: 'sky', v: [x, y, z] } });
+    // Named stars with a distance carry their photometry, so their card can say how big they are.
+    const action: SearchAction = pc ? { ...onMap([x, y, z], pc), star: { vmag: mag, bv, pc } } : { type: 'sky', v: [x, y, z] };
+    out.set(name, { name, kind: 'Star', detail, rank: Math.max(0, 70 - mag * 10), action });
   }
   for (const s of near) {
     if (!s.name || s.name === 'Sol' || s.name === 'Sun') continue;
@@ -95,7 +97,7 @@ export function starEntries(bright: BrightStar[], near: NearStar[]): SearchEntry
     if (d <= 0) continue;
     const prev = out.get(s.name);
     const detail = `${lightYears(d / 1000)} away${s.spect ? ` · ${s.spect}` : ''} · magnitude ${s.mag.toFixed(1)}`;
-    out.set(s.name, { name: s.name, kind: 'Star', detail, rank: prev?.rank ?? 30, action: onMap([s.xyz[0] / d, s.xyz[1] / d, s.xyz[2] / d], d) });
+    out.set(s.name, { name: s.name, kind: 'Star', detail, rank: prev?.rank ?? 30, action: { ...onMap([s.xyz[0] / d, s.xyz[1] / d, s.xyz[2] / d], d), star: { vmag: s.mag, bv: s.ci ?? 0.65, pc: d } } });
   }
   return [...out.values()];
 }

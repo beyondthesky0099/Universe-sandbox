@@ -1,13 +1,14 @@
 import * as THREE from 'three';
 import { equatorialToGalactic } from '../procgen/galaxy';
 import { galacticToCosmos } from '../sim/galaxies';
-import { comovingDistance } from '../sim/cosmology';
+import { CMB_DISTANCE_MPC, comovingDistance } from '../sim/cosmology';
+import { type LqgQuasar, VOIDS, WALLS, wallMembers } from '../sim/structures';
 import { ConvexGeometry } from 'three/addons/geometries/ConvexGeometry.js';
 import { textSprite } from './galaxyView';
 import { dotTexture } from './textures';
 import { greatWallCount, HCB, inGreatWall, type Grb } from '../sim/grbs';
 import { bootesVoid, voidCensus } from '../sim/voids';
-import type { WebGalaxy } from '../sim/galaxies';
+import type { LocalGalaxy, WebGalaxy } from '../sim/galaxies';
 
 /**
  * Shapes in the Universe view that labels alone can't show:
@@ -124,11 +125,68 @@ function hullSkin(p: THREE.Vector3[], rgb: [number, number, number]): THREE.Mesh
   return skin;
 }
 
+/** A void as a faint bubble, its rim brighter (it has no sharp edge: this only marks where it is). */
+function voidBubble(radius: number, rgb: [number, number, number]): THREE.Mesh {
+  const bubble = new THREE.Mesh(
+    new THREE.SphereGeometry(radius, 64, 32),
+    new THREE.ShaderMaterial({
+      transparent: true,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+      blending: THREE.AdditiveBlending,
+      uniforms: { uOpacity: { value: 0 } },
+      vertexShader: /* glsl */ `
+        #include <common>
+        #include <logdepthbuf_pars_vertex>
+        varying vec3 vN;
+        varying vec3 vView;
+        void main() {
+          vec4 mv = modelViewMatrix * vec4(position, 1.0);
+          vN = normalize(normalMatrix * normal);
+          vView = normalize(-mv.xyz);
+          gl_Position = projectionMatrix * mv;
+          #include <logdepthbuf_vertex>
+        }`,
+      fragmentShader: /* glsl */ `
+        #include <logdepthbuf_pars_fragment>
+        uniform float uOpacity;
+        varying vec3 vN;
+        varying vec3 vView;
+        void main() {
+          #include <logdepthbuf_fragment>
+          float rim = pow(1.0 - abs(dot(normalize(vN), normalize(vView))), 3.0);
+          gl_FragColor = vec4(vec3(${rgb.map((c) => c.toFixed(3)).join(', ')}) * rim * uOpacity, 1.0);
+        }`,
+    }),
+  );
+  bubble.frustumCulled = false;
+  return bubble;
+}
+
+/** Round, soft dots (each a cluster or quasar) that fade in with the shape. */
+function dots(list: THREE.Vector3[], color: number, size: number): THREE.Points {
+  const pts = new THREE.Points(
+    new THREE.BufferGeometry().setFromPoints(list),
+    new THREE.PointsMaterial({ color, size, map: dotTexture(), sizeAttenuation: false, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending }),
+  );
+  pts.frustumCulled = false;
+  return pts;
+}
+
+/** A structure traced by its members: shown within `fadeFrom`–`fadeTo` Mpc of its centre. */
+interface MemberShape {
+  group: THREE.Group;
+  centre: THREE.Vector3;
+  fadeFrom: number;
+  fadeTo: number;
+}
+
 export class CosmicShapes {
   readonly group = new THREE.Group();
   private readonly shapes: Shape[] = [];
   private readonly zoa: THREE.Mesh;
   private readonly zoaLabel: THREE.Sprite;
+  private readonly voids: THREE.Mesh[] = [];
 
   constructor() {
     // The Zone of Avoidance: two cones at b = ±10°, faint, fading outwards.
@@ -248,6 +306,28 @@ export class CosmicShapes {
       this.add(glowLine(outer, 0xffb347), 2000, 40000, 0.25);
       for (let k = 0; k < 96; k += 12) this.add(glowLine([inner[k], outer[k]], 0xffb347), 2000, 40000, 0.15);
     }
+
+    // The voids that were labels only (sim/structures.ts), as bubbles.
+    for (const v of VOIDS) {
+      const bubble = voidBubble(v.radius, [0.5, 0.62, 1]);
+      bubble.position.set(...galacticToCosmos(v.l, v.b, v.d));
+      this.voids.push(bubble);
+      this.group.add(bubble);
+    }
+
+    // The CMB Cold Spot: a ring 10° across (Cruz et al. 2005) on the sphere of last scattering.
+    {
+      const pole = new THREE.Vector3(...galacticToCosmos(209, -57, 1));
+      const side = new THREE.Vector3().crossVectors(pole, new THREE.Vector3(0, 1, 0)).normalize();
+      const up = new THREE.Vector3().crossVectors(side, pole).normalize();
+      const r = 5 * (Math.PI / 180);
+      const ring: THREE.Vector3[] = [];
+      for (let k = 0; k <= 96; k++) {
+        const a = (k / 96) * 2 * Math.PI;
+        ring.push(pole.clone().multiplyScalar(Math.cos(r)).addScaledVector(side, Math.sin(r) * Math.cos(a)).addScaledVector(up, Math.sin(r) * Math.sin(a)).multiplyScalar(CMB_DISTANCE_MPC * 0.99));
+      }
+      this.add(glowLine(ring, 0x8fd0ff), 4000, 40000, 0.8);
+    }
   }
 
   /** Gamma-ray bursts at their comoving distances; the Great Wall's in gold, with the counts. */
@@ -292,40 +372,8 @@ export class CosmicShapes {
   setVoid(galaxies: WebGalaxy[], H0: number): void {
     const { centre, radius } = bootesVoid(H0);
     const c = new THREE.Vector3(...centre);
-    const bubble = new THREE.Mesh(
-      new THREE.SphereGeometry(radius, 64, 32),
-      new THREE.ShaderMaterial({
-        transparent: true,
-        depthWrite: false,
-        side: THREE.DoubleSide,
-        blending: THREE.AdditiveBlending,
-        uniforms: { uOpacity: { value: 0 } },
-        vertexShader: /* glsl */ `
-          #include <common>
-          #include <logdepthbuf_pars_vertex>
-          varying vec3 vN;
-          varying vec3 vView;
-          void main() {
-            vec4 mv = modelViewMatrix * vec4(position, 1.0);
-            vN = normalize(normalMatrix * normal);
-            vView = normalize(-mv.xyz);
-            gl_Position = projectionMatrix * mv;
-            #include <logdepthbuf_vertex>
-          }`,
-        fragmentShader: /* glsl */ `
-          #include <logdepthbuf_pars_fragment>
-          uniform float uOpacity;
-          varying vec3 vN;
-          varying vec3 vView;
-          void main() {
-            #include <logdepthbuf_fragment>
-            float rim = pow(1.0 - abs(dot(normalize(vN), normalize(vView))), 3.0);
-            gl_FragColor = vec4(vec3(0.45, 0.65, 1.0) * rim * uOpacity, 1.0);
-          }`,
-      }),
-    );
+    const bubble = voidBubble(radius, [0.45, 0.65, 1]);
     bubble.position.copy(c);
-    bubble.frustumCulled = false;
     this.voidBubble = bubble;
     this.voidCentre = c;
     this.voidRadius = radius;
@@ -413,35 +461,65 @@ export class CosmicShapes {
    * shows from a few thousand Mpc away.
    */
   setSaraswati(members: { l: number; b: number; z: number; core: boolean }[]): void {
-    if (members.length < 4) return;
     const at = (m: (typeof members)[number]) => new THREE.Vector3(...galacticToCosmos(m.l, m.b, comovingDistance(m.z)));
-    const p = members.map(at);
-    const points = (list: THREE.Vector3[], color: number, size: number) => {
-      const pts = new THREE.Points(
-        new THREE.BufferGeometry().setFromPoints(list),
-        // Round, soft dots: each a galaxy cluster.
-        new THREE.PointsMaterial({ color, size, map: dotTexture(), sizeAttenuation: false, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending }),
+    const core = members.filter((m) => m.core).length;
+    this.addMembers(
+      members.map(at),
+      { line: 0xffc46b, skin: [1, 0.7, 0.35], label: `${members.length} galaxy clusters · gold: the ${core} of its core`, labelColor: '#ffd59a', fadeFrom: 2500, fadeTo: 5000, labelBack: 60 },
+      [dots(members.filter((m) => !m.core).map(at), 0xffb067, 10), dots(members.filter((m) => m.core).map(at), 0xffe08a, 18)],
+    );
+  }
+
+  /**
+   * The walls of galaxy clusters (sim/structures.ts): each wall's Abell clusters joined by their
+   * spanning tree inside a faint hull, the way the Saraswati Supercluster is drawn.
+   */
+  setWalls(galaxies: LocalGalaxy[]): void {
+    for (const wall of WALLS) {
+      const members = wallMembers(wall, galaxies);
+      if (members.length < 4) continue;
+      const p = members.map((g) => new THREE.Vector3(...galacticToCosmos(g.l, g.b, g.d)));
+      const color = new THREE.Color(...wall.rgb);
+      this.addMembers(
+        p,
+        { line: color.getHex(), skin: wall.rgb, label: `${wall.name}: ${members.length} Abell clusters with redshifts in its region`, labelColor: `#${color.getHexString()}`, fadeFrom: 1500, fadeTo: 3500, labelBack: 40 },
+        [dots(p, color.getHex(), 14)],
       );
-      pts.frustumCulled = false;
-      return pts;
-    };
+    }
+  }
+
+  /** The Huge-LQG (sim/structures.ts): its 73 quasars at their redshifts, joined the same way. */
+  setHugeLqg(quasars: LqgQuasar[]): void {
+    const p = quasars.map((q) => new THREE.Vector3(...galacticToCosmos(q.l, q.b, comovingDistance(q.z))));
+    this.addMembers(
+      p,
+      { line: 0xc9a0ff, skin: [0.75, 0.6, 1], label: `${quasars.length} quasars linked within 100 Mpc of each other (Clowes et al. 2013)`, labelColor: '#d9c2ff', fadeFrom: 9000, fadeTo: 20000, labelBack: 300 },
+      [dots(p, 0xd7b8ff, 9)],
+    );
+  }
+
+  private readonly memberShapes: MemberShape[] = [];
+  private addMembers(
+    p: THREE.Vector3[],
+    o: { line: number; skin: [number, number, number]; label: string; labelColor: string; fadeFrom: number; fadeTo: number; labelBack: number },
+    points: THREE.Points[],
+  ): void {
+    if (p.length < 4) return;
     const group = new THREE.Group();
     const tree = new THREE.LineSegments(
       new THREE.BufferGeometry().setFromPoints(spanningTree(p)),
-      new THREE.LineBasicMaterial({ color: 0xffc46b, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending }),
+      new THREE.LineBasicMaterial({ color: o.line, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending }),
     );
     tree.frustumCulled = false;
-    const skin = hullSkin(p, [1, 0.7, 0.35]);
     const centre = p.reduce((c, v) => c.add(v), new THREE.Vector3()).divideScalar(p.length);
-    const core = members.filter((m) => m.core).length;
-    const label = textSprite(`${members.length} galaxy clusters · gold: the ${core} of its core`, '#ffd59a', 0.65);
-    label.position.copy(centre).addScaledVector(centre.clone().normalize(), -60);
+    const label = textSprite(o.label, o.labelColor, 0.65);
+    // A little nearer than the middle, so the label isn't buried in the shape.
+    label.position.copy(centre).addScaledVector(centre.clone().normalize(), -o.labelBack);
     label.userData.priority = 875;
-    group.add(skin, tree, points(members.filter((m) => !m.core).map(at), 0xffb067, 10), points(members.filter((m) => m.core).map(at), 0xffe08a, 18), label);
-    this.saraswati = { group, centre };
+    group.add(hullSkin(p, o.skin), tree, ...points, label);
+    this.memberShapes.push({ group, centre, fadeFrom: o.fadeFrom, fadeTo: o.fadeTo });
     this.group.add(group);
   }
-  private saraswati?: { group: THREE.Group; centre: THREE.Vector3 };
 
   setGrbsVisible(on: boolean): void {
     this.grbsOn = on;
@@ -479,15 +557,24 @@ export class CosmicShapes {
         else o.visible = g > 0.5;
       }
     }
-    if (this.saraswati) {
-      const ds = camera.position.distanceTo(this.saraswati.centre);
-      const k = 1 - THREE.MathUtils.smoothstep(ds, 2500, 5000);
-      for (const o of this.saraswati.group.children) {
+    for (const m of this.memberShapes) {
+      const k = 1 - THREE.MathUtils.smoothstep(camera.position.distanceTo(m.centre), m.fadeFrom, m.fadeTo);
+      m.group.visible = k > 0.01;
+      for (const o of m.group.children) {
         if (o instanceof THREE.Points) (o.material as THREE.PointsMaterial).opacity = 0.95 * k;
         else if (o instanceof THREE.LineSegments) (o.material as THREE.LineBasicMaterial).opacity = 0.6 * k;
         else if (o instanceof THREE.Mesh) ((o.material as THREE.ShaderMaterial).uniforms.uOpacity.value = k);
         else o.visible = k > 0.5;
       }
+    }
+    for (const v of this.voids) {
+      // Shows from outside it (a few tenths of its radius beyond its edge) out to many radii.
+      const dv = camera.position.distanceTo(v.position);
+      const r = (v.geometry as THREE.SphereGeometry).parameters.radius;
+      const k = THREE.MathUtils.smoothstep(dv, r * 1.05, r * 1.6) * (1 - THREE.MathUtils.smoothstep(dv, r * 25, r * 60));
+      // The biggest (the KBC Void around us) faintest, so it doesn't drown what lies inside or behind it.
+      (v.material as THREE.ShaderMaterial).uniforms.uOpacity.value = (r > 250 ? 0.3 : 0.8) * k;
+      v.visible = k > 0.01;
     }
     for (const s of this.shapes) {
       const d = camera.position.distanceTo(s.centre);

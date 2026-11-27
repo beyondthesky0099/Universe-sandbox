@@ -1,17 +1,19 @@
 import * as THREE from 'three';
 import { seedFromString } from '../procgen/rng';
-import { agnNucleusLabel, agnTypeLabel, displayName, type LocalGalaxy, GALAXY_CREDIT, galaxyForm, isActiveGalaxy, isFamous, loadLocalGalaxies, loadNamedGalaxies, loadUniverseObjects, loadUniverseRaw, loadWebGalaxies, markActiveHosts } from '../sim/galaxies';
-import { famousGalaxies, loadFamous } from '../sim/famous';
-import { loadActiveNucleus } from '../sim/presets';
+import { COSMIC_STRUCTURES, agnNucleusLabel, agnTypeLabel, displayName, type LocalGalaxy, GALAXY_CREDIT, galaxyForm, isActiveGalaxy, isFamous, loadLocalGalaxies, loadNamedGalaxies, loadUniverseObjects, loadUniverseRaw, loadWebGalaxies, markActiveHosts } from '../sim/galaxies';
+import { famousGalaxies, loadFamous, type UpCloseVisit } from '../sim/famous';
+import { loadActiveNucleus, loadRealCluster, loadStarToScale } from '../sim/presets';
 import { clusterMembers, loadGalaxyCluster } from '../sim/galaxyCluster';
 import { loadRadioLobes, radioAtlasUrl } from '../sim/radioLobes';
 import { loadLaniakea } from '../sim/laniakea';
 import { loadGrbs } from '../sim/grbs';
 import { loadSaraswati } from '../sim/saraswati';
+import { loadHugeLqg } from '../sim/structures';
 import { loadFrbs } from '../sim/frbs';
 import { MILKY_WAY_SEED } from '../procgen/galaxy';
 import { fmt } from '../sim/units';
 import { $, escapeHtml, setFacts, toast } from '../ui/dom';
+import { lightYears } from '../ui/search';
 import { sleep, cosmosFacts } from './shared';
 import type { App } from '../app';
 
@@ -25,6 +27,45 @@ function cosmosKindText(g: LocalGalaxy): string {
   if (g.note) parts.push('record');
   return parts.join(' ').toLowerCase().replace(/\s+/g, '');
 }
+
+/** The stars among the structures, at their published sizes (presets.loadStarToScale). */
+const STAR_VISITS: Record<string, UpCloseVisit> = {
+  R136a1: { radiusSun: 35, temperature: 46000, mass: 200, ref: 'Crowther et al. 2010, MNRAS 408, 731; Brands et al. 2022, A&A 663, A36; Kalari et al. 2022, ApJ 935, 162' },
+  'WOH G64': { radiusSun: 1540, temperature: 3400, mass: 25, ref: 'as imaged in 2020: Ohnaka et al. 2024, A&A 691, L15; Levesque et al. 2009, AJ 137, 4744' },
+};
+
+/**
+ * R136, the Tarantula's central cluster: about 1.5 million years old, ~100,000 M☉ (Crowther et al.
+ * 2016, MNRAS 458, 624). Its real stars reach ~200 M☉; the Sandbox's star lifetimes (∝ M^−2.5) would
+ * already have killed anything above about 30 M☉ at this age, so the mass function stops there.
+ */
+const R136 = {
+  id: 'R136',
+  name: 'R136',
+  kind: 'open' as const,
+  members: 2000,
+  logAge: Math.log10(1.5e6),
+  radiusPc: 1.5,
+  totalMass: 1e5,
+  maxStarMass: 30,
+  about: 'the young cluster at the heart of the Tarantula Nebula, whose light and winds carve the nebula.',
+};
+
+/** How the Universe view draws each structure that is more than a label (render/cosmicShapes.ts, render/localStructures.ts). */
+const STRUCTURE_SHAPES: Record<string, string> = {
+  'Sloan Great Wall': 'Its Abell clusters with redshifts, joined by their shortest links inside a faint skin',
+  'Horologium–Reticulum Supercluster': 'Its Abell clusters with redshifts, joined by their shortest links inside a faint skin',
+  'South Pole Wall': 'The Abell clusters in its region, joined by their shortest links (the wall itself is mapped from galaxy motions)',
+  'Saraswati Supercluster': 'Its 49 galaxy clusters, the five of the core in gold',
+  'Huge-LQG': 'Its 73 quasars, found again from the SDSS catalogue exactly as the paper did',
+  'Dipole Repeller': 'A faint bubble marking where it is (it has no sharp edge)',
+  'KBC Void': 'A faint bubble 600 Mpc across around us: zoom out past it to see it',
+  'Eridanus Supervoid': 'A faint bubble at its published size, in front of the CMB Cold Spot',
+  'Boötes Void': 'A faint bubble, with the few survey galaxies inside it',
+  'CMB Cold Spot': 'A ring 10° across on the cosmic microwave background',
+  'Sagittarius Stream': 'Its stars wrapped around the Milky Way, through its measured farthest points',
+  'Gaia–Enceladus': 'A cloud of stars filling the inner halo (its stars’ places are illustrative)',
+};
 
 export class CosmosUI {
   constructor(private readonly app: App) {}
@@ -61,6 +102,8 @@ export class CosmosUI {
           // Gamma-ray bursts, and the claimed Great Wall they trace (sim/grbs.ts).
           // The Saraswati Supercluster's member clusters (sim/saraswati.ts).
           void loadSaraswati().then((members) => this.app.cosmos.setSaraswati(members));
+          // The Huge-LQG's 73 quasars (sim/structures.ts).
+          void loadHugeLqg().then((quasars) => this.app.cosmos.setHugeLqg(quasars));
           void loadGrbs()
             .then((bursts) => {
               this.app.cosmos.setGrbs(bursts);
@@ -132,8 +175,66 @@ export class CosmosUI {
       ' Up close, each galaxy is drawn at its measured tilt and position angle (HyperLEDA) with a bulge, disc, arms and dust to suit its type; the arm pattern and which edge is nearer are illustrative.';
   }
 
+  /** The open structure card's button, when it has one (sim/galaxies.ts COSMIC_STRUCTURES). */
+  structureAction?: () => Promise<void>;
+
+  /** A structure's card: what it is, how far, how big, and a way in where there is one. */
+  selectStructure(name: string): void {
+    const s = COSMIC_STRUCTURES.find((x) => x.name === name);
+    if (!s) return this.selectCosmos(-1);
+    this.selectCosmos(-1);
+    const facts: [string, string][] = [];
+    if (s.kind) facts.push(['Type', s.kind]);
+    facts.push(['Distance', s.d < 0.005 ? 'Around the Milky Way' : s.name === 'KBC Void' ? 'All around us' : lightYears(s.d * 1000)]);
+    if (s.size) facts.push(['Size', `${lightYears(s.size * 1000)} across`]);
+    if (s.note) facts.push(['About', s.note]);
+    const shape = STRUCTURE_SHAPES[s.name];
+    if (shape) facts.push(['Shown as', shape]);
+    $('cosmos-galaxy-name').textContent = s.name;
+    setFacts($('cosmos-galaxy-facts'), facts);
+    const visit = this.structureVisit(s.name);
+    this.structureAction = visit?.action;
+    $('btn-cosmos-visit').textContent = visit?.label ?? '';
+    $('btn-cosmos-visit').classList.toggle('hidden', !visit);
+    $('btn-cosmos-fly').classList.add('hidden');
+    $('btn-cosmos-nucleus').classList.add('hidden');
+    $('cosmos-galaxy-panel').classList.remove('hidden');
+  }
+
+  /** The structures with a scene of their own in the Sandbox. */
+  private structureVisit(name: string): { label: string; action: () => Promise<void> } | undefined {
+    const s = COSMIC_STRUCTURES.find((x) => x.name === name)!;
+    const star = STAR_VISITS[name];
+    if (star) return { label: 'See it up close →', action: () => this.enterStructure(name, s.note ?? '', () => loadStarToScale(this.app.sim, { name, note: s.note ?? '', visit: star })) };
+    if (name === 'Tarantula Nebula')
+      return {
+        label: 'Enter its cluster R136 →',
+        action: () => this.enterStructure('R136', s.note ?? '', () => loadRealCluster(this.app.sim, R136)),
+      };
+    return undefined;
+  }
+
+  /** Into the Sandbox from the Large Magellanic Cloud's structures; Back returns to the Universe. */
+  private async enterStructure(name: string, description: string, load: () => ReturnType<typeof loadStarToScale>): Promise<void> {
+    if (this.app.transitioning) return;
+    const lmc = this.app.cosmos.local[this.app.cosmos.indexOf('LMC')];
+    this.app.transitioning = true;
+    try {
+      await this.app.fade(true);
+      this.app.loadScenario({ name, description, load, ...(lmc ? { origin: { kind: 'agn' as const, galaxy: lmc } } : {}) }, { zoomFrom: 30 });
+      this.app.setView('system');
+      await sleep(60);
+      await this.app.fade(false);
+      toast(`Arrived at ${name}`);
+    } finally {
+      this.app.transitioning = false;
+    }
+  }
+
   selectCosmos(index: number): void {
     this.app.cosmos.select(index);
+    this.structureAction = undefined;
+    $('btn-cosmos-fly').classList.remove('hidden');
     const panel = $('cosmos-galaxy-panel');
     if (index === -1) {
       panel.classList.add('hidden');

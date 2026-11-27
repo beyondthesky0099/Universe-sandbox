@@ -69,6 +69,7 @@ export class InputUI {
           this.app.cosmosUI.selectCosmos(label.index);
           this.app.travelUI.goCosmosGalaxy(label.index);
         } else {
+          this.app.cosmosUI.selectStructure(label.name);
           this.app.travelUI.goCosmosPoint(label.pos, label.distance, label.name);
         }
         return;
@@ -356,7 +357,10 @@ export class InputUI {
     $('cosmos-galaxy-close').addEventListener('click', () => this.app.cosmosUI.selectCosmos(-1));
     $('star-close').addEventListener('click', () => this.app.galaxyMapUI.selectTarget(-1));
     $('btn-cosmos-fly').addEventListener('click', () => this.app.cosmos.selected !== -1 && this.app.travelUI.goCosmosGalaxy(this.app.cosmos.selected));
-    $('btn-cosmos-visit').addEventListener('click', () => this.app.cosmos.selected !== -1 && void this.app.cosmosUI.visitCosmosGalaxy(this.app.cosmos.selected));
+    $('btn-cosmos-visit').addEventListener('click', () => {
+      if (this.app.cosmosUI.structureAction) void this.app.cosmosUI.structureAction();
+      else if (this.app.cosmos.selected !== -1) void this.app.cosmosUI.visitCosmosGalaxy(this.app.cosmos.selected);
+    });
     $('btn-cosmos-nucleus').addEventListener('click', () => this.app.cosmos.selected !== -1 && void this.app.cosmosUI.visitNucleus(this.app.cosmos.selected));
     $('btn-cosmos-home').addEventListener('click', () => {
       const mw = this.app.cosmos.indexOf('Milky Way');

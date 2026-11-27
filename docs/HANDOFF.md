@@ -235,7 +235,24 @@ Plan, in priority order:
     The virial mass comes from the Heisler–Tremaine–Bahcall projected estimator, split by K light.
   - Clusters beyond the catalogues get an illustrative swarm. Coma checks out: σ ≈ 1,000 km/s,
     M ≈ 10¹⁵ M☉.
-- Next part: shapes for the label-only structures.
+- [x] Part 3, the label-only structures (`sim/structures.ts`, `render/cosmicShapes.ts`,
+  `render/localStructures.ts`):
+  - Every structure found by search or by its label opens a card (`selectStructure`): type,
+    distance, size, what it is and how it is drawn (`STRUCTURE_SHAPES` in `app/cosmos.ts`).
+  - Huge-LQG: `scripts/build-huge-lqg.mjs` links SDSS DR7 quasars (VII/260; 1.0 ≤ z ≤ 1.8,
+    i ≤ 19.1) at 100 Mpc from the paper's first quasar and gets exactly Clowes et al.'s 73.
+    VizieR reads a centre like `162 +15` as sexagesimal: write `162.0 +15.0`.
+  - Sloan Great Wall, Horologium–Reticulum, South Pole Wall: the Abell clusters with redshifts
+    in each one's published region, drawn like Saraswati (`addMembers`: spanning tree, hull, dots).
+  - Dipole Repeller, KBC Void, Eridanus Supervoid: bubbles (`voidBubble`, shared with Boötes).
+    The KBC bubble is drawn fainter so it doesn't drown what is inside it.
+  - CMB Cold Spot: a ring 10° across on the last-scattering sphere (it lands on the cold patch).
+  - Sagittarius Stream (Majewski 2003 frame, Belokurov 2014 apocentres) and Gaia–Enceladus
+    (an illustrative flattened r⁻³ cloud) are point clouds near the Milky Way.
+  - R136a1 and WOH G64 have "See it up close" (`loadStarToScale`). The Tarantula has "Enter its
+    cluster R136": `loadRealCluster` now takes `totalMass`, `maxStarMass` and `about`. Its mass
+    function stops at 30 M☉, because the app's lifetimes (∝ M^−2.5) would already have killed
+    heavier stars at 1.5 million years. Back returns to the LMC in the Universe tab.
 
 ### BM. Visit the Saraswati Supercluster
 - [x] `scripts/build-saraswati.mjs` → `public/data/saraswati.json`:

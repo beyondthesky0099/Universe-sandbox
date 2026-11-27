@@ -16,6 +16,15 @@ import { galacticToCosmos } from '../sim/galaxies';
  *   ahead, across the Galactic plane. Its distance along the sky is not measured: here it runs
  *   from the LMC's 50 kpc to 100 kpc at its tip, as models of the Clouds' first passage give
  *   (Besla et al. 2012, MNRAS 421, 2109); the Leading Arm stays near 50 kpc. Its gas thins along it.
+ * - The Sagittarius Stream: stars torn from the Sagittarius Dwarf, wrapped around the Galaxy along
+ *   the great circle of the Sagittarius coordinate system (pole at l = 273.75°, b = −13.46°,
+ *   longitude 0 at the dwarf; Majewski et al. 2003, ApJ 599, 1082). The leading arm runs north
+ *   over the Galactic pole, out to its apocentre at 48 kpc; the trailing arm runs south and out to
+ *   102 kpc (Belokurov et al. 2014, MNRAS 437, 116). The distances between are interpolated
+ *   through those, so the run is a sketch, not a map.
+ * - Gaia–Enceladus: the debris of a galaxy that merged with ours 8–11 billion years ago (Helmi et
+ *   al. 2018, Nature 563, 85; Belokurov et al. 2018, MNRAS 478, 611), a cloud of stars filling the
+ *   inner halo to about 30 kpc, flattened (axis ratio 0.7). Its stars' places are illustrative.
  */
 const DEG = Math.PI / 180;
 
@@ -36,6 +45,33 @@ export function magellanicToGalactic(L: number, B: number): [number, number] {
   return [((Math.atan2(d.y, d.x) / DEG) % 360 + 360) % 360, Math.asin(THREE.MathUtils.clamp(d.z, -1, 1)) / DEG];
 }
 
+/** Sagittarius longitude (degrees, positive along the leading arm) and latitude → galactic (l, b). */
+export function sagittariusToGalactic(L: number, B: number): [number, number] {
+  const pole = galUnit(273.75, -13.46);
+  const core = galUnit(5.57, -14.17);
+  const o = core.clone().addScaledVector(pole, -core.dot(pole)).normalize();
+  const q = new THREE.Vector3().crossVectors(pole, o);
+  const d = o
+    .multiplyScalar(Math.cos(B * DEG) * Math.cos(L * DEG))
+    .addScaledVector(q, Math.cos(B * DEG) * Math.sin(L * DEG))
+    .addScaledVector(pole, Math.sin(B * DEG));
+  return [((Math.atan2(d.y, d.x) / DEG) % 360 + 360) % 360, Math.asin(THREE.MathUtils.clamp(d.z, -1, 1)) / DEG];
+}
+
+/** Heliocentric distance (kpc) along the Sagittarius Stream: through the measured apocentres. */
+export function sagittariusDistance(L: number): number {
+  // [longitude, kpc]: the dwarf at 28 kpc, the leading apocentre 48 kpc at 71°, the trailing 102 kpc at −170°.
+  const track: [number, number][] = [[-220, 70], [-170, 102], [-140, 72], [-100, 42], [-50, 27], [0, 28], [40, 38], [71, 48], [110, 40], [150, 26], [200, 15]];
+  if (L <= track[0][0]) return track[0][1];
+  for (let i = 1; i < track.length; i++)
+    if (L <= track[i][0]) {
+      const [[a, da], [b, db]] = [track[i - 1], track[i]];
+      const t = (L - a) / (b - a);
+      return da + (db - da) * (t * t * (3 - 2 * t));
+    }
+  return track[track.length - 1][1];
+}
+
 export const HALO_R200_MPC = 0.217;
 const HALO_RS_MPC = HALO_R200_MPC / 10;
 
@@ -43,6 +79,8 @@ export class LocalStructures {
   readonly group = new THREE.Group();
   private readonly halo: THREE.Mesh;
   private readonly stream: THREE.Points;
+  private readonly sagittarius: THREE.Points;
+  private readonly enceladus: THREE.Points;
 
   constructor() {
     // The halo: a camera-facing disc whose shader draws the NFW projected density out to r200.
@@ -120,6 +158,45 @@ export class LocalStructures {
     this.stream = new THREE.Points(geo, new THREE.PointsMaterial({ size: 2.2, sizeAttenuation: false, vertexColors: true, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending }));
     this.stream.frustumCulled = false;
     this.group.add(this.stream);
+
+    // The Sagittarius Stream: old stars, warm white, densest near the dwarf.
+    const sgr = (count: number, make: (i: number) => [number, number, number, number]) => {
+      const p = new Float32Array(count * 3);
+      const c = new Float32Array(count * 3);
+      for (let i = 0; i < count; i++) {
+        const [x, y, z, k] = make(i);
+        p.set([x, y, z], i * 3);
+        c.set([1.0 * k, 0.86 * k, 0.62 * k], i * 3);
+      }
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.BufferAttribute(p, 3));
+      g.setAttribute('color', new THREE.BufferAttribute(c, 3));
+      const pts = new THREE.Points(g, new THREE.PointsMaterial({ size: 1.8, sizeAttenuation: false, vertexColors: true, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending }));
+      pts.frustumCulled = false;
+      this.group.add(pts);
+      return pts;
+    };
+    this.sagittarius = sgr(9000, () => {
+      const lead = rand() < 0.5;
+      const L = (lead ? 1 : -1) * 220 * rand() ** 1.3;
+      const [l, b] = sagittariusToGalactic(L, gauss() * 3);
+      const d = sagittariusDistance(L) * (1 + gauss() * 0.06);
+      const k = 0.35 * Math.exp(-Math.abs(L) / 160) * (0.6 + 0.4 * rand());
+      return [...galacticToCosmos(l, b, d / 1000), k] as [number, number, number, number];
+    });
+
+    // Gaia–Enceladus: a flattened cloud about the Galactic Centre, density falling as r⁻³ from 3 to 30 kpc.
+    const gc = new THREE.Vector3(...galacticToCosmos(0, 0, 0.0082));
+    const ex = new THREE.Vector3(...galacticToCosmos(0, 0, 1));
+    const ey = new THREE.Vector3(...galacticToCosmos(90, 0, 1));
+    const ez = new THREE.Vector3(...galacticToCosmos(0, 90, 1));
+    this.enceladus = sgr(5000, () => {
+      const r = (3 * (30 / 3) ** rand()) / 1000;
+      const u = 2 * rand() - 1, phi = 2 * Math.PI * rand(), sn = Math.sqrt(1 - u * u);
+      const v = gc.clone().addScaledVector(ex, r * sn * Math.cos(phi)).addScaledVector(ey, r * sn * Math.sin(phi)).addScaledVector(ez, 0.7 * r * u);
+      return [v.x, v.y, v.z, 0.22 * (0.6 + 0.4 * rand())];
+    });
+    (this.enceladus.material as THREE.PointsMaterial).color.setRGB(1, 0.7, 0.5);
   }
 
   setHaloVisible(on: boolean): void {
@@ -132,5 +209,8 @@ export class LocalStructures {
     const near = 1 - THREE.MathUtils.smoothstep(d, 1.2, 4);
     (this.halo.material as THREE.ShaderMaterial).uniforms.uOpacity.value = 0.55 * near * THREE.MathUtils.smoothstep(d, 0.05, 0.25);
     (this.stream.material as THREE.PointsMaterial).opacity = 0.9 * near * THREE.MathUtils.smoothstep(d, 0.02, 0.08);
+    (this.sagittarius.material as THREE.PointsMaterial).opacity = 0.9 * near * THREE.MathUtils.smoothstep(d, 0.015, 0.06);
+    // Gaia–Enceladus is inner-halo sized: it shows closer in, and fades sooner.
+    (this.enceladus.material as THREE.PointsMaterial).opacity = 0.9 * (1 - THREE.MathUtils.smoothstep(d, 0.15, 0.5)) * THREE.MathUtils.smoothstep(d, 0.006, 0.03);
   }
 }

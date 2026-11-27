@@ -344,8 +344,8 @@ export const COSMIC_STRUCTURES: { name: string; l: number; b: number; d: number;
   { name: 'Shapley Supercluster', l: 311.5, b: 32.3, d: 200 },
   // The Boötes Void (sim/voids.ts, render/cosmicShapes.ts): RA 14h50m, Dec +46°, 15,500 km/s.
   { name: 'Boötes Void', l: 79.7, b: 59.9, d: 229, viewMpc: 260, aliases: ['Great Void', 'Bootes void', 'the Great Nothing'] },
-  { name: 'Horologium–Reticulum Supercluster', l: 262.2, b: -53.8, d: 265 },
-  { name: 'Sloan Great Wall', l: 332.7, b: 59.4, d: 330 },
+  { name: 'Horologium–Reticulum Supercluster', l: 262.2, b: -53.8, d: 265, viewMpc: 350 },
+  { name: 'Sloan Great Wall', l: 332.7, b: 59.4, d: 330, viewMpc: 550 },
   // Quipu (Böhringer et al. 2025, A&A 695, A59): 428 Mpc of galaxy clusters at z ≈ 0.043, the largest
   // structure known in the nearby universe; labelled near the middle of its run (RA ~60°, Dec ~−5°).
   { name: 'Quipu superstructure', l: 195.3, b: -40.0, d: 189, viewMpc: 700 },
@@ -375,7 +375,7 @@ export const COSMIC_STRUCTURES: { name: string; l: number; b: number; d: number;
   { name: 'KBC Void', l: 0, b: -90, d: 150, size: 600, viewMpc: 1200, aliases: ['Local Hole'], kind: 'Void', note: 'We seem to sit near the middle of a region about 2 billion light-years across with fewer galaxies than average.' },
   // The South Pole Wall (Pomarède et al. 2020, ApJ 897, 133): a filament across ~0.11c whose
   // density peaks at the celestial South Pole (l 302.9°, b −27.1°) at about 12,000 km/s.
-  { name: 'South Pole Wall', l: 302.93, b: -27.13, d: 12000 / 67.66, viewMpc: 900, kind: 'Galaxy wall', note: 'A wall of galaxies about 1.4 billion light-years long, the largest connected structure in the nearby universe, hidden partly behind the Milky Way. Its densest part lies toward the celestial South Pole.' },
+  { name: 'South Pole Wall', l: 302.93, b: -27.13, d: 12000 / 67.66, viewMpc: 600, kind: 'Galaxy wall', note: 'A wall of galaxies about 1.4 billion light-years long, the largest connected structure in the nearby universe, hidden partly behind the Milky Way. Its densest part lies toward the celestial South Pole.' },
   // The Eridanus supervoid (Szapudi et al. 2015, MNRAS 450, 288): R ≈ 220 h⁻¹ Mpc at z ≈ 0.22, in
   // front of the CMB Cold Spot.
   { name: 'Eridanus Supervoid', l: 209, b: -57, d: comovingDistance(0.22), viewMpc: 2500, aliases: ['Cold Spot supervoid'], kind: 'Void', note: 'A vast underdense region in front of the CMB Cold Spot, about 1.8 billion light-years across; it may explain part of the Cold Spot.' },

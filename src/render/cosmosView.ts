@@ -23,6 +23,7 @@ import { LaniakeaView } from './laniakeaView';
 import { CosmicShapes } from './cosmicShapes';
 import type { Grb } from '../sim/grbs';
 import { LocalStructures } from './localStructures';
+import type { LqgQuasar } from '../sim/structures';
 import { BulletCluster } from './bulletCluster';
 import { dotTexture } from './textures';
 import type { Laniakea } from '../sim/laniakea';
@@ -198,6 +199,9 @@ export class CosmosView {
   /** Build the map from the catalogues: galaxies, rich clusters, quasars, Seyferts and blazars (and, once loaded, the redshift survey). */
   setLocal(galaxies: LocalGalaxy[]): void {
     this.local = galaxies;
+    // The walls of Abell clusters (render/cosmicShapes.ts), once.
+    if (!this.wallsDrawn) this.cosmicShapes.setWalls(galaxies);
+    this.wallsDrawn = true;
     const n = galaxies.length;
     this.positions = new Float32Array(n * 3);
     galaxies.forEach((g, i) => this.positions.set(localPosition(g), i * 3));
@@ -330,6 +334,12 @@ export class CosmosView {
   /** The Saraswati Supercluster's galaxy clusters, drawn as its wall (render/cosmicShapes.ts). */
   setSaraswati(members: { l: number; b: number; z: number; core: boolean }[]): void {
     this.cosmicShapes.setSaraswati(members);
+  }
+  private wallsDrawn = false;
+
+  /** The Huge-LQG's quasars (render/cosmicShapes.ts). */
+  setHugeLqg(quasars: LqgQuasar[]): void {
+    this.cosmicShapes.setHugeLqg(quasars);
   }
 
   setFrbs(bursts: [string, number, number, number, string?][]): void {

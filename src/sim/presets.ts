@@ -797,7 +797,17 @@ export function loadWhiteDwarfBinary(sim: Simulation, o: ({ kind: 'nova' } & Nov
  * clusters are 12 billion years old and far too rich to draw, so 2,000 of their stars are shown
  * and gravity is scaled up to the whole cluster's mass (from its luminosity, M/L ≈ 2).
  */
-export function loadRealCluster(sim: Simulation, c: Pick<StarCluster, 'kind' | 'members' | 'logAge' | 'absMag' | 'radiusPc' | 'name' | 'id'>): SceneSetup {
+export function loadRealCluster(
+  sim: Simulation,
+  c: Pick<StarCluster, 'kind' | 'members' | 'logAge' | 'absMag' | 'radiusPc' | 'name' | 'id'> & {
+    /** The whole cluster's mass (M☉), where a paper gives it (else from Gaia's count or the light). */
+    totalMass?: number;
+    /** The heaviest star the mass function reaches (M☉; default 20). */
+    maxStarMass?: number;
+    /** What the cluster is, for the tip. */
+    about?: string;
+  },
+): SceneSetup {
   const AU_PER_PC = 206264.8;
   const name = c.name ?? c.id;
   const short = name.replace(/\s*\(.*\)$/, '');
@@ -805,11 +815,12 @@ export function loadRealCluster(sim: Simulation, c: Pick<StarCluster, 'kind' | '
   const age = globular ? 12e9 : 10 ** (c.logAge ?? 8.5);
   const shown = Math.max(60, Math.min(2000, globular ? 2000 : c.members ?? 200));
   const rand = mulberry32(name.split('').reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) >>> 0, 5));
-  // Masses from a Kroupa-like initial mass function, 0.1–20 M☉: proposed evenly in log m, kept with
+  const mMax = c.maxStarMass ?? 20;
+  // Masses from a Kroupa-like initial mass function, 0.1–20 M☉ (or the given upper end): proposed evenly in log m, kept with
   // probability (m/0.5)^−1.3 above 0.5 M☉, so dN/dm ∝ m^−2.3 there and ∝ m^−1 below.
   const imf = () => {
     for (;;) {
-      const m = 0.1 * Math.pow(200, rand());
+      const m = 0.1 * Math.pow(mMax / 0.1, rand());
       if (m < 0.5 || rand() < Math.pow(m / 0.5, -1.3)) return m;
     }
   };
@@ -823,7 +834,7 @@ export function loadRealCluster(sim: Simulation, c: Pick<StarCluster, 'kind' | '
   const shownMass = stars.reduce((t, s) => t + s.mass, 0);
   // The whole cluster's mass: Gaia's members (each about 0.6 M☉ on average, with as much again
   // unseen) or, for a globular, twice its luminosity in V.
-  const totalMass = globular ? 2 * 10 ** (-0.4 * ((c.absMag ?? -7.5) - 4.83)) : Math.max(shownMass, 1.2 * (c.members ?? shown));
+  const totalMass = c.totalMass ?? (globular ? 2 * 10 ** (-0.4 * ((c.absMag ?? -7.5) - 4.83)) : Math.max(shownMass, 1.2 * (c.members ?? shown)));
   sim.gravityScale = totalMass / shownMass;
   sim.collisions = false;
   const a = ((c.radiusPc ?? 2) / 1.305) * AU_PER_PC; // Plummer scale radius from the half-mass radius
@@ -866,7 +877,7 @@ export function loadRealCluster(sim: Simulation, c: Pick<StarCluster, 'kind' | '
     cameraDistance: a * 9,
     timeScale: crossing / 40,
     elevation: 0.5,
-    tip: `${name}: ${globular ? `2,000 of its stars, with gravity scaled up to the whole cluster’s ${Math.round(totalMass).toLocaleString('en-US')} solar masses` : `${shown.toLocaleString('en-US')} stars, as many as Gaia found`}, in a sphere ${ly(2 * (c.radiusPc ?? 2))} light-years across holding half of them. At ${ageText} years old${evolved ? `, ${evolved} of these have already become giants or white dwarfs` : ', every star is still young'}. The real size, star count and age; the stars' places are drawn from those, not measured one by one.`,
+    tip: `${name}: ${c.about ? `${c.about} ` : ''}${globular || c.totalMass ? `${shown.toLocaleString('en-US')} of its stars, with gravity scaled up to the whole cluster’s ${Math.round(totalMass).toLocaleString('en-US')} solar masses` : `${shown.toLocaleString('en-US')} stars, as many as Gaia found`}, in a sphere ${ly(2 * (c.radiusPc ?? 2))} light-years across holding half of them. At ${ageText} years old${evolved ? `, ${evolved} of these have already become giants or white dwarfs` : ', every star is still young'}. The real size, ${c.totalMass ? 'mass' : 'star count'} and age; the stars' places are drawn from those, not measured one by one.`,
   };
 }
 

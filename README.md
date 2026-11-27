@@ -1149,6 +1149,16 @@ push and pull request.
 - The Saraswati Supercluster's galaxy clusters: the WHL catalogue (Wen, Han & Liu 2012, ApJS 199,
   34; VizieR J/ApJS/199/34), chosen as Bagchi et al. 2017 (ApJ 844, 25) chose them: within 90 Mpc
   of Abell 2631 in SDSS Stripe 82 (rebuild with `node scripts/build-saraswati.mjs`).
+- The Huge-LQG's 73 quasars: the SDSS DR7 quasar catalogue (Schneider et al. 2010, AJ 139, 2360;
+  VizieR VII/260), linked friends-of-friends at 100 Mpc as by Clowes et al. 2013 (MNRAS 429,
+  2910) (rebuild with `node scripts/build-huge-lqg.mjs`).
+- Structure shapes: the Sloan Great Wall (Gott et al. 2005; Einasto et al. 2011), the
+  Horologium–Reticulum Supercluster (Fleenor et al. 2005) and the South Pole Wall (Pomarède et al.
+  2020) traced by their Abell clusters; void sizes from Hoffman et al. 2017, Keenan, Barger &
+  Cowie 2013 and Szapudi et al. 2015; the CMB Cold Spot from Cruz et al. 2005; the Sagittarius
+  Stream from Majewski et al. 2003 and Belokurov et al. 2014; R136 from Crowther et al. 2016;
+  R136a1 from Crowther et al. 2010, Brands et al. 2022 and Kalari et al. 2022; WOH G64 from
+  Ohnaka et al. 2024 and Levesque et al. 2009.
 - Star clusters: Hunt & Reffert 2023 ("Improving the open cluster census. II.", A&A 673, A114),
   based on ESA Gaia DR3, and the Harris catalogue of Milky Way globular clusters (VII/202), via
   VizieR (CDS); familiar names resolved with SIMBAD (rebuild with `node scripts/build-clusters.mjs`).
